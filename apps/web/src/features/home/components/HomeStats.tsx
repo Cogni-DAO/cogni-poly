@@ -45,13 +45,7 @@ function Step({ num, title, desc, icon, delay }: StepProps): ReactElement {
     >
       {/* Timeline connector */}
       <div className="flex flex-col items-center">
-        <div
-          className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border/60"
-          style={{
-            background:
-              "linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--background)))",
-          }}
-        >
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-secondary">
           <span className="text-muted-foreground">{icon}</span>
         </div>
         <div className="w-px flex-1 bg-border/40" />
@@ -60,10 +54,7 @@ function Step({ num, title, desc, icon, delay }: StepProps): ReactElement {
       {/* Content */}
       <div className="pb-12">
         <div className="flex items-center gap-3">
-          <span
-            className="font-mono text-xs uppercase tracking-[0.2em]"
-            style={{ color: "hsl(45, 90%, 55%)" }}
-          >
+          <span className="font-mono text-primary text-xs uppercase tracking-widest">
             {num}
           </span>
           <h3 className="font-semibold text-foreground text-lg">{title}</h3>
@@ -87,7 +78,7 @@ function HowItWorks(): ReactElement {
     {
       num: "02",
       title: "Connect Resy",
-      desc: "One-time browser login on Resy's site. We store your encrypted session — never your password.",
+      desc: "One-time browser login on Resy\u2019s site. We store your encrypted session \u2014 never your password.",
       icon: <Utensils className="size-4" />,
     },
     {
@@ -99,7 +90,7 @@ function HowItWorks(): ReactElement {
     {
       num: "04",
       title: "We Claim in Seconds",
-      desc: "When a matching table opens, we react instantly through Resy's official booking flow. You get notified immediately.",
+      desc: "When a matching table opens, we react instantly through Resy\u2019s official booking flow. You get notified immediately.",
       icon: <Zap className="size-4" />,
     },
   ];
@@ -113,10 +104,7 @@ function HowItWorks(): ReactElement {
           viewport={{ once: true }}
           className="mb-16"
         >
-          <span
-            className="font-mono text-xs uppercase tracking-[0.25em]"
-            style={{ color: "hsl(45, 90%, 55%)" }}
-          >
+          <span className="font-mono text-primary text-xs uppercase tracking-widest">
             How it works
           </span>
           <h2 className="mt-3 font-bold text-3xl tracking-tight sm:text-4xl">
@@ -147,7 +135,7 @@ function TheProblem(): ReactElement {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <span className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+            <span className="font-mono text-muted-foreground text-xs uppercase tracking-widest">
               The problem
             </span>
             <h2 className="mt-3 font-bold text-3xl tracking-tight sm:text-4xl">
@@ -181,7 +169,7 @@ function TheProblem(): ReactElement {
             <div className="rounded-lg border border-border/60 p-6">
               <div className="mb-3 flex items-center gap-2">
                 <Clock className="size-4 text-destructive" />
-                <span className="font-mono text-xs uppercase tracking-[0.2em] text-destructive">
+                <span className="font-mono text-destructive text-xs uppercase tracking-widest">
                   Without us
                 </span>
               </div>
@@ -210,19 +198,10 @@ function TheProblem(): ReactElement {
             </div>
 
             {/* With */}
-            <div
-              className="rounded-lg border p-6"
-              style={{ borderColor: "hsl(45 90% 55% / 0.3)" }}
-            >
+            <div className="rounded-lg border border-primary/30 p-6">
               <div className="mb-3 flex items-center gap-2">
-                <Zap
-                  className="size-4"
-                  style={{ color: "hsl(45, 90%, 55%)" }}
-                />
-                <span
-                  className="font-mono text-xs uppercase tracking-[0.2em]"
-                  style={{ color: "hsl(45, 90%, 55%)" }}
-                >
+                <Zap className="size-4 text-primary" />
+                <span className="font-mono text-primary text-xs uppercase tracking-widest">
                   With us
                 </span>
               </div>
@@ -241,7 +220,7 @@ function TheProblem(): ReactElement {
                 </p>
                 <p>
                   <span className="text-muted-foreground/50">00:03.800</span>{" "}
-                  <span style={{ color: "hsl(45, 90%, 55%)" }}>
+                  <span className="text-primary">
                     Reserved. You&apos;re in.
                   </span>
                 </p>
@@ -272,13 +251,7 @@ function ValueCard({ icon, title, desc, delay }: ValueCardProps): ReactElement {
       transition={{ duration: 0.4, delay }}
       className="rounded-lg border border-border/40 bg-background p-6"
     >
-      <div
-        className="mb-4 flex size-10 items-center justify-center rounded-full border border-border/60"
-        style={{
-          background:
-            "linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--background)))",
-        }}
-      >
+      <div className="mb-4 flex size-10 items-center justify-center rounded-full border border-border/60 bg-secondary">
         <span className="text-muted-foreground">{icon}</span>
       </div>
       <h3 className="mb-2 font-semibold text-foreground">{title}</h3>
@@ -292,12 +265,12 @@ function Values(): ReactElement {
     {
       icon: <Shield className="size-4" />,
       title: "No scalping. Ever.",
-      desc: "One person, one account, one table. We help you eat — not flip reservations for profit.",
+      desc: "One person, one account, one table. We help you eat \u2014 not flip reservations for profit.",
     },
     {
       icon: <Bell className="size-4" />,
       title: "Official channels only",
-      desc: "We use Resy's own notification system and booking flow. No scraping, no reverse engineering, no TOS violations.",
+      desc: "We use Resy\u2019s own notification system and booking flow. No scraping, no reverse engineering, no TOS violations.",
     },
     {
       icon: <Eye className="size-4" />,
@@ -315,10 +288,7 @@ function Values(): ReactElement {
           viewport={{ once: true }}
           className="mb-12"
         >
-          <span
-            className="font-mono text-xs uppercase tracking-[0.25em]"
-            style={{ color: "hsl(45, 90%, 55%)" }}
-          >
+          <span className="font-mono text-primary text-xs uppercase tracking-widest">
             Our principles
           </span>
           <h2 className="mt-3 font-bold text-3xl tracking-tight sm:text-4xl">
@@ -347,15 +317,6 @@ function BottomCta(): ReactElement {
 
   return (
     <section className="relative w-full overflow-hidden border-border/40 border-t bg-background py-24 md:py-32">
-      {/* Ambient glow */}
-      <div
-        className="pointer-events-none absolute top-0 left-1/2 size-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-[0.06]"
-        style={{
-          background:
-            "radial-gradient(circle, hsl(45 90% 55%), transparent 70%)",
-        }}
-      />
-
       <div className="relative z-10 mx-auto max-w-2xl px-4 text-center sm:px-6">
         <h2 className="font-bold text-3xl tracking-tight sm:text-4xl">
           Ready to stop losing tables?
@@ -370,7 +331,7 @@ function BottomCta(): ReactElement {
             <ArrowRight className="ml-2 size-4" />
           </Button>
         </div>
-        <p className="mt-6 text-muted-foreground/60 text-xs uppercase tracking-[0.15em]">
+        <p className="mt-6 text-muted-foreground/60 text-xs uppercase tracking-widest">
           No subscription. No markup. Just your table.
         </p>
       </div>
