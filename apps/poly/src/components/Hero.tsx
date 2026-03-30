@@ -62,7 +62,7 @@ export function Hero(): ReactElement {
   return (
     <section
       className={cn(
-        "relative flex w-full flex-col items-center justify-center overflow-hidden bg-background px-4 pb-16 pt-28 sm:px-6 sm:pb-20 sm:pt-32"
+        "relative flex w-full flex-col items-center justify-center overflow-hidden bg-background px-4 pt-28 pb-16 sm:px-6 sm:pt-32 sm:pb-20"
       )}
     >
       {/* Three.js neural network background */}

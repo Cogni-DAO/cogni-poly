@@ -1,7 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, BrainCircuit, CheckCircle, Loader2, Search } from "lucide-react";
+import {
+  Activity,
+  BrainCircuit,
+  CheckCircle,
+  Loader2,
+  Search,
+} from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -20,25 +26,100 @@ interface StreamEvent {
 
 const STREAM_SEQUENCES: StreamEvent[][] = [
   [
-    { id: "a1", type: "thinking", text: "Checking macro calendar for upcoming catalysts...", timestamp: 0 },
-    { id: "a2", type: "searching", text: "Scanning Kalshi climate markets — 23 active contracts", timestamp: 1800 },
-    { id: "a3", type: "analyzing", text: "NOAA updated Gulf SST anomaly to +1.8C — comparing to hurricane model base rates", timestamp: 3400 },
-    { id: "a4", type: "signal", text: "Signal: \"Cat 5 hurricane hits US\" — Kalshi 41c, model says 46c. Moderate edge detected.", timestamp: 5600 },
-    { id: "a5", type: "done", text: "Scan complete. 1 signal generated, 23 markets reviewed.", timestamp: 7200 },
+    {
+      id: "a1",
+      type: "thinking",
+      text: "Checking macro calendar for upcoming catalysts...",
+      timestamp: 0,
+    },
+    {
+      id: "a2",
+      type: "searching",
+      text: "Scanning Kalshi climate markets — 23 active contracts",
+      timestamp: 1800,
+    },
+    {
+      id: "a3",
+      type: "analyzing",
+      text: "NOAA updated Gulf SST anomaly to +1.8C — comparing to hurricane model base rates",
+      timestamp: 3400,
+    },
+    {
+      id: "a4",
+      type: "signal",
+      text: 'Signal: "Cat 5 hurricane hits US" — Kalshi 41c, model says 46c. Moderate edge detected.',
+      timestamp: 5600,
+    },
+    {
+      id: "a5",
+      type: "done",
+      text: "Scan complete. 1 signal generated, 23 markets reviewed.",
+      timestamp: 7200,
+    },
   ],
   [
-    { id: "b1", type: "thinking", text: "Reviewing Fed futures curve vs Kalshi rate-cut pricing...", timestamp: 0 },
-    { id: "b2", type: "searching", text: "Pulling CME FedWatch probabilities and CPI trend data", timestamp: 2000 },
-    { id: "b3", type: "analyzing", text: "Kalshi \"June cut\" at 62c — FedWatch implies 68%. Spread: 6c mispricing.", timestamp: 3800 },
-    { id: "b4", type: "signal", text: "Signal: \"Fed cuts at June meeting\" — Buy Yes at 62c, target 68c. High confidence.", timestamp: 5400 },
-    { id: "b5", type: "done", text: "Scan complete. 1 signal generated, 8 markets reviewed.", timestamp: 6800 },
+    {
+      id: "b1",
+      type: "thinking",
+      text: "Reviewing Fed futures curve vs Kalshi rate-cut pricing...",
+      timestamp: 0,
+    },
+    {
+      id: "b2",
+      type: "searching",
+      text: "Pulling CME FedWatch probabilities and CPI trend data",
+      timestamp: 2000,
+    },
+    {
+      id: "b3",
+      type: "analyzing",
+      text: 'Kalshi "June cut" at 62c — FedWatch implies 68%. Spread: 6c mispricing.',
+      timestamp: 3800,
+    },
+    {
+      id: "b4",
+      type: "signal",
+      text: 'Signal: "Fed cuts at June meeting" — Buy Yes at 62c, target 68c. High confidence.',
+      timestamp: 5400,
+    },
+    {
+      id: "b5",
+      type: "done",
+      text: "Scan complete. 1 signal generated, 8 markets reviewed.",
+      timestamp: 6800,
+    },
   ],
   [
-    { id: "c1", type: "thinking", text: "Monitoring Polymarket tech category for new listings...", timestamp: 0 },
-    { id: "c2", type: "searching", text: "3 new markets detected — GPT-5, Apple AI, Anthropic funding round", timestamp: 1600 },
-    { id: "c3", type: "analyzing", text: "GPT-5 before July: 34c. No credible leaks. Historical AI release markets have 12% optimism bias.", timestamp: 3200 },
-    { id: "c4", type: "analyzing", text: "Anthropic $10B+ round: 78c. Multiple credible sources. Fair price — no actionable edge.", timestamp: 4800 },
-    { id: "c5", type: "done", text: "Scan complete. 0 signals — no edge detected in current tech markets.", timestamp: 6200 },
+    {
+      id: "c1",
+      type: "thinking",
+      text: "Monitoring Polymarket tech category for new listings...",
+      timestamp: 0,
+    },
+    {
+      id: "c2",
+      type: "searching",
+      text: "3 new markets detected — GPT-5, Apple AI, Anthropic funding round",
+      timestamp: 1600,
+    },
+    {
+      id: "c3",
+      type: "analyzing",
+      text: "GPT-5 before July: 34c. No credible leaks. Historical AI release markets have 12% optimism bias.",
+      timestamp: 3200,
+    },
+    {
+      id: "c4",
+      type: "analyzing",
+      text: "Anthropic $10B+ round: 78c. Multiple credible sources. Fair price — no actionable edge.",
+      timestamp: 4800,
+    },
+    {
+      id: "c5",
+      type: "done",
+      text: "Scan complete. 0 signals — no edge detected in current tech markets.",
+      timestamp: 6200,
+    },
   ],
 ];
 
@@ -100,12 +181,14 @@ export function AgentStream(): ReactElement {
     };
   }, [seqIdx]);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom when new events arrive
+  const eventCount = events.length;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: eventCount triggers scroll
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [events]);
+  }, [eventCount]);
 
   return (
     <motion.div
@@ -123,7 +206,7 @@ export function AgentStream(): ReactElement {
             ) : (
               <CheckCircle className="size-3 text-muted-foreground" />
             )}
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
               {isStreaming ? "Agent running" : "Scan complete"}
             </span>
           </div>
