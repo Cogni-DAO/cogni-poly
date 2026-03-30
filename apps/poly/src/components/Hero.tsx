@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
 
+import { AgentStream } from "./AgentStream";
 import { NeuralNetworkBackground } from "./NeuralNetwork";
 
 /** Oscillating sentiment counter: +1000 (green) ↔ -1000 (red) */
@@ -61,8 +62,7 @@ export function Hero(): ReactElement {
   return (
     <section
       className={cn(
-        "relative flex w-full flex-col items-center justify-center overflow-hidden bg-background px-4 pt-20 sm:px-6",
-        "min-h-dvh"
+        "relative flex w-full flex-col items-center justify-center overflow-hidden bg-background px-4 pb-16 pt-28 sm:px-6 sm:pb-20 sm:pt-32"
       )}
     >
       {/* Three.js neural network background */}
@@ -125,6 +125,9 @@ export function Hero(): ReactElement {
             Teach it. Guide it. Profit with it.
           </span>
         </motion.div>
+
+        {/* Live agent stream */}
+        <AgentStream />
       </div>
     </section>
   );
