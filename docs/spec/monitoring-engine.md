@@ -57,15 +57,16 @@ The design has four parts: federated awareness (where data lives), single ingest
           ┌────────────────────┴────────────────────┐
           ▼                                         ▼
    ActivityEvent                             ObservationEvent
-   (discrete human action)                   (continuous state sample)
+   (a discrete event happened)               (a state measurement was taken)
           │                                         │
           ▼                                         ▼
    ingestion_receipts                        observation_events
    (existing, append-only)                   (new, append-only)
-          │                                         │
-          ▼                                         ▼
-   Attribution pipeline                      AI Decision Plane
-   (epochs, allocations)                     (triggers → analysis → signals)
+          │         │                               │
+          │         └───────────────┐               │
+          ▼                         ▼               ▼
+   Attribution pipeline       AI Decision Plane (shared)
+   (selection → epochs)       (triggers → analysis → signals)
 ```
 
 **Principle:** External backends are the warehouse. We are the judgment layer. Store what the AI saw (compact snapshots), why it cared (triggers, analysis), what it concluded (signals), and how to drill back into the source (pointers). Do not mirror firehoses.
@@ -82,13 +83,48 @@ The design has four parts: federated awareness (where data lives), single ingest
 - **`hashCanonicalPayload()`** — SHA-256 provenance on every record
 - **StreamCursor / StreamDefinition** — same cursor model
 
-Two physical tables because `ingestion_receipts` has `platform_user_id NOT NULL` and attribution-specific columns. Observations have no human actor. Forcing them into one table would either break the attribution contract or require nullable columns that weaken it.
+Two physical tables because `ingestion_receipts` has `platform_user_id NOT NULL` and attribution-specific columns that don't apply to state measurements. Forcing them into one table would either break the attribution contract or require nullable columns that weaken it.
 
 **This is one logical substrate, not two parallel systems.** The shared PollAdapter, cursor, ID, and hash machinery is what makes it one spine.
 
-### ObservationEvent — new sibling record type
+### Two sibling record types — same base, different shapes
 
-Added to `ingestion-core` alongside `ActivityEvent`. Fields:
+The split is about the **kind of fact**, not the downstream use:
+
+- **ActivityEvent** = a discrete event happened (with or without a human actor)
+- **ObservationEvent** = a state measurement was taken at a point in time
+
+Both share: `id`, `source`, `metadata`, `payloadHash`, timestamp. They diverge on what additional fields they carry:
+
+|                        | ActivityEvent (existing) | ObservationEvent (new)                    |
+| ---------------------- | ------------------------ | ----------------------------------------- |
+| **Fact type**          | Something happened       | Something was measured                    |
+| **Has human actor**    | Often (platformUserId)   | No                                        |
+| **Has numeric values** | No                       | Yes (values: Record\<string, number\>)    |
+| **Has artifact**       | Often (artifactUrl)      | No (but metadata carries source pointers) |
+| **Has subject key**    | Implicit in id           | Explicit entityId                         |
+| **Persists to**        | ingestion_receipts       | observation_events                        |
+
+### Classification examples
+
+| Raw fact                  | Type             | Why                                             |
+| ------------------------- | ---------------- | ----------------------------------------------- |
+| PR #42 merged by user123  | ActivityEvent    | Discrete event, has human actor                 |
+| Deploy v1.2.3 started     | ActivityEvent    | Discrete event, has human actor                 |
+| Grafana alert fired       | ActivityEvent    | Discrete event (no human actor, still an event) |
+| Market resolved to YES    | ActivityEvent    | Discrete event                                  |
+| PostHog `capture()` event | ActivityEvent    | Discrete user action                            |
+| CPU = 92% at 12:00:00     | ObservationEvent | State measurement                               |
+| BTC probability = 62%     | ObservationEvent | State measurement                               |
+| p95 latency = 480ms       | ObservationEvent | State measurement                               |
+| Conversion rate = 3.2%    | ObservationEvent | State measurement                               |
+| Orderbook spread = 100bps | ObservationEvent | State measurement                               |
+
+**Attribution eligibility is a downstream concern.** The attribution pipeline's selection stage decides which discrete events enter an epoch — not the record type. An observation never gets attributed (it's a measurement, not an action), but a discrete event might or might not be attribution-eligible depending on selection policy.
+
+**Observations can trigger derived events.** "Price crossed 500bps threshold" (observation) may cause "alert fired" (activity event). The observation is the raw fact; the derived event is a separate record created downstream.
+
+### ObservationEvent fields
 
 | Field         | Type                      | Description                                                          |
 | ------------- | ------------------------- | -------------------------------------------------------------------- |
@@ -100,9 +136,9 @@ Added to `ingestion-core` alongside `ActivityEvent`. Fields:
 | `values`      | Record\<string, number\>  | Domain-specific numerics: `{ probabilityBps: 6200, spreadBps: 100 }` |
 | `metadata`    | Record\<string, unknown\> | Non-numeric context, source pointers for deep investigation          |
 | `payloadHash` | string                    | SHA-256 via `hashCanonicalPayload()` — same as ActivityEvent         |
-| `observedAt`  | Date                      | When the observation was taken at the source                         |
+| `observedAt`  | Date                      | When the measurement was taken at the source                         |
 
-**The adapter decides which type to produce.** GitHub → `ActivityEvent[]` (human work). Polymarket → `ObservationEvent[]` (market state). Social media → both (a post is an activity; its engagement metrics are observations).
+**The adapter decides which type to produce.** A source may emit both — a social media adapter produces `ActivityEvent` for posts (discrete actions) and `ObservationEvent` for engagement metrics (measurements). A market adapter produces `ObservationEvent` for prices and `ActivityEvent` when a market resolves.
 
 ---
 
@@ -186,20 +222,21 @@ Users see the same event stream the AI sees. **Transparency is the product.**
 
 ## Invariants
 
-| Rule                        | Constraint                                                                                                                                                      |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| SINGLE_INGESTION_SUBSTRATE  | Both ActivityEvent and ObservationEvent flow through ingestion-core PollAdapter. Same cursors, same ID helpers, same payloadHash. No parallel ingestion system. |
-| OWN_DECISIONS_NOT_TELEMETRY | External backends own raw data. Our DB stores compact snapshots + decision artifacts + source pointers. Never mirror firehoses.                                 |
-| OBSERVATION_APPEND_ONLY     | `observation_events` is append-only. DB trigger rejects UPDATE/DELETE. Same pattern as `ingestion_receipts`.                                                    |
-| OBSERVATION_IDEMPOTENT      | Observation IDs are deterministic via `buildEventId()`. Retries produce the same record.                                                                        |
-| NO_ENTITY_REGISTRY          | No `monitored_entities` table. `entityId` is a stable key on raw records and signals. Derived views materialize latest state when needed.                       |
-| CHEAP_BEFORE_EXPENSIVE      | Triggers are pure functions on derived state. The LLM never sees raw firehose. ~95% filtered before any AI call.                                                |
-| BUDGET_GATE                 | `prioritizeTriggers(triggers, budget, activeRuns)` caps concurrent analysis runs and LLM calls/hour. Triggers compete on priority.                              |
-| TEMPORAL_OWNS_IO            | All DB reads/writes and HTTP calls happen in Temporal Activities (per temporal-patterns-spec).                                                                  |
-| GRAPH_OWNS_THINKING         | LLM reasoning lives in a LangGraph graph invoked via Temporal Activity. The graph does zero I/O.                                                                |
-| WORKFLOW_PURE_ONLY          | Trigger evaluation and scoring run in Temporal Workflow code. Deterministic, replay-safe.                                                                       |
-| ACTION_LEVELS               | Every signal declares one of: `observe`, `alert`, `recommend`, `auto_act`, `escalate`.                                                                          |
-| CALIBRATION_LOOP            | When an entity resolves, an outcome is recorded. A calibration job compares signals to outcomes and updates base rates.                                         |
+| Rule                        | Constraint                                                                                                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| SINGLE_INGESTION_SUBSTRATE  | Both ActivityEvent and ObservationEvent flow through ingestion-core PollAdapter. Same cursors, same ID helpers, same payloadHash. No parallel ingestion system.                                        |
+| FACT_TYPE_NOT_USE_TYPE      | The ActivityEvent/ObservationEvent split describes the kind of fact (event vs measurement), not the downstream use. Attribution eligibility is decided by the selection stage, not by the record type. |
+| OWN_DECISIONS_NOT_TELEMETRY | External backends own raw data. Our DB stores compact snapshots + decision artifacts + source pointers. Never mirror firehoses.                                                                        |
+| OBSERVATION_APPEND_ONLY     | `observation_events` is append-only. DB trigger rejects UPDATE/DELETE. Same pattern as `ingestion_receipts`.                                                                                           |
+| OBSERVATION_IDEMPOTENT      | Observation IDs are deterministic via `buildEventId()`. Retries produce the same record.                                                                                                               |
+| NO_ENTITY_REGISTRY          | No `monitored_entities` table. `entityId` is a stable key on raw records and signals. Derived views materialize latest state when needed.                                                              |
+| CHEAP_BEFORE_EXPENSIVE      | Triggers are pure functions on derived state. The LLM never sees raw firehose. ~95% filtered before any AI call.                                                                                       |
+| BUDGET_GATE                 | `prioritizeTriggers(triggers, budget, activeRuns)` caps concurrent analysis runs and LLM calls/hour. Triggers compete on priority.                                                                     |
+| TEMPORAL_OWNS_IO            | All DB reads/writes and HTTP calls happen in Temporal Activities (per temporal-patterns-spec).                                                                                                         |
+| GRAPH_OWNS_THINKING         | LLM reasoning lives in a LangGraph graph invoked via Temporal Activity. The graph does zero I/O.                                                                                                       |
+| WORKFLOW_PURE_ONLY          | Trigger evaluation and scoring run in Temporal Workflow code. Deterministic, replay-safe.                                                                                                              |
+| ACTION_LEVELS               | Every signal declares one of: `observe`, `alert`, `recommend`, `auto_act`, `escalate`.                                                                                                                 |
+| CALIBRATION_LOOP            | When an entity resolves, an outcome is recorded. A calibration job compares signals to outcomes and updates base rates.                                                                                |
 
 ---
 
