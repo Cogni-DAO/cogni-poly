@@ -15,6 +15,7 @@ export {
   KalshiAdapter,
   type KalshiAdapterConfig,
 } from "./kalshi.adapter.js";
+export { normalizeKalshiMarket } from "./kalshi.normalizer.js";
 export {
   type KalshiRawMarket,
   KalshiRawMarketSchema,

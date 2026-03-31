@@ -15,6 +15,7 @@ export {
   PolymarketAdapter,
   type PolymarketAdapterConfig,
 } from "./polymarket.adapter.js";
+export { normalizePolymarketMarket } from "./polymarket.normalizer.js";
 export {
   type PolymarketRawMarket,
   PolymarketRawMarketSchema,

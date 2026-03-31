@@ -12,10 +12,10 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { normalizeKalshiMarket } from "../src/adapters/kalshi/kalshi.normalizer.js";
 import type { KalshiRawMarket } from "../src/adapters/kalshi/kalshi.types.js";
+import { normalizePolymarketMarket } from "../src/adapters/polymarket/polymarket.normalizer.js";
 import type { PolymarketRawMarket } from "../src/adapters/polymarket/polymarket.types.js";
-import { normalizeKalshiMarket } from "../src/domain/normalizers/kalshi.js";
-import { normalizePolymarketMarket } from "../src/domain/normalizers/polymarket.js";
 import { NormalizedMarketSchema } from "../src/domain/schemas.js";
 
 const polymarketFixture: PolymarketRawMarket = {
@@ -96,6 +96,20 @@ describe("normalizePolymarketMarket", () => {
     const result = normalizePolymarketMarket(polymarketFixture);
     expect(() => NormalizedMarketSchema.parse(result)).not.toThrow();
   });
+
+  it("throws with market ID on malformed outcomePrices", () => {
+    const bad = { ...polymarketFixture, outcomePrices: "not json" };
+    expect(() => normalizePolymarketMarket(bad)).toThrow(
+      /abc123.*malformed outcomePrices/
+    );
+  });
+
+  it("throws with market ID on malformed outcomes string", () => {
+    const bad = { ...polymarketFixture, outcomes: "{bad}" };
+    expect(() => normalizePolymarketMarket(bad)).toThrow(
+      /abc123.*malformed outcomes/
+    );
+  });
 });
 
 describe("normalizeKalshiMarket", () => {
@@ -137,6 +151,19 @@ describe("normalizeKalshiMarket", () => {
     const invertedSpread = { ...kalshiFixture, yes_bid: 64, yes_ask: 60 };
     const result = normalizeKalshiMarket(invertedSpread);
     expect(result.spreadBps).toBe(0);
+  });
+
+  it("produces deterministic updatedAt from raw fields", () => {
+    const a = normalizeKalshiMarket(kalshiFixture);
+    const b = normalizeKalshiMarket(kalshiFixture);
+    expect(a.updatedAt).toBe(b.updatedAt);
+    expect(a.updatedAt).toBe("2026-06-15T00:00:00Z"); // expiration_time
+  });
+
+  it("prefers close_time over expiration_time for updatedAt", () => {
+    const withClose = { ...kalshiFixture, close_time: "2026-06-10T00:00:00Z" };
+    const result = normalizeKalshiMarket(withClose);
+    expect(result.updatedAt).toBe("2026-06-10T00:00:00Z");
   });
 
   it("validates against NormalizedMarketSchema", () => {

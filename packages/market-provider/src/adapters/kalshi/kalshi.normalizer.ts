@@ -2,17 +2,17 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/market-provider/domain/normalizers/kalshi`
+ * Module: `@cogni/market-provider/adapters/kalshi/kalshi.normalizer`
  * Purpose: Pure normalizer — Kalshi Trading API response to NormalizedMarket.
- * Scope: Stateless transform. Does not perform I/O, fetch, or depend on adapter code.
+ * Scope: Stateless transform for Kalshi raw types. Does not perform I/O or fetch.
  * Invariants: OBSERVATION_IDEMPOTENT (deterministic IDs), PACKAGES_NO_ENV.
  * Side-effects: none
  * Links: work/items/task.0230.market-data-package.md
  * @public
  */
 
-import type { KalshiRawMarket } from "../../adapters/kalshi/kalshi.types.js";
-import type { NormalizedMarket } from "../schemas.js";
+import type { NormalizedMarket } from "../../domain/schemas.js";
+import type { KalshiRawMarket } from "./kalshi.types.js";
 
 /**
  * Normalize a Kalshi Trading API market to NormalizedMarket.
@@ -40,6 +40,6 @@ export function normalizeKalshiMarket(raw: KalshiRawMarket): NormalizedMarket {
     resolvesAt: raw.expiration_time,
     active: raw.status === "open",
     attributes: { eventTicker: raw.event_ticker },
-    updatedAt: new Date().toISOString(),
+    updatedAt: raw.close_time ?? raw.expiration_time,
   };
 }

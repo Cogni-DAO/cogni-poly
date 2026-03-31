@@ -11,9 +11,6 @@
  * @public
  */
 
-// Pure normalizers (no adapter deps)
-export { normalizeKalshiMarket } from "./domain/normalizers/kalshi.js";
-export { normalizePolymarketMarket } from "./domain/normalizers/polymarket.js";
 // Domain types
 export {
   type ListMarketsParams,

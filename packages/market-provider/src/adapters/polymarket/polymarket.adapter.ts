@@ -11,7 +11,6 @@
  * @public
  */
 
-import { normalizePolymarketMarket } from "../../domain/normalizers/polymarket.js";
 import type {
   ListMarketsParams,
   NormalizedMarket,
@@ -20,6 +19,7 @@ import type {
   MarketProviderConfig,
   MarketProviderPort,
 } from "../../port/market-provider.port.js";
+import { normalizePolymarketMarket } from "./polymarket.normalizer.js";
 import { PolymarketMarketsResponseSchema } from "./polymarket.types.js";
 
 const DEFAULT_GAMMA_BASE_URL = "https://gamma-api.polymarket.com";

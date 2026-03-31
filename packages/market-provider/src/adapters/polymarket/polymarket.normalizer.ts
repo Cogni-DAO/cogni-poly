@@ -2,17 +2,17 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/market-provider/domain/normalizers/polymarket`
+ * Module: `@cogni/market-provider/adapters/polymarket/polymarket.normalizer`
  * Purpose: Pure normalizer — Polymarket Gamma API response → NormalizedMarket.
- * Scope: Stateless transform. Does not perform I/O, fetch, or depend on adapter code.
+ * Scope: Stateless transform for Polymarket raw types. Does not perform I/O or fetch.
  * Invariants: OBSERVATION_IDEMPOTENT (deterministic IDs), PACKAGES_NO_ENV.
  * Side-effects: none
  * Links: work/items/task.0230.market-data-package.md
  * @public
  */
 
-import type { PolymarketRawMarket } from "../../adapters/polymarket/polymarket.types.js";
-import type { NormalizedMarket } from "../schemas.js";
+import type { NormalizedMarket } from "../../domain/schemas.js";
+import type { PolymarketRawMarket } from "./polymarket.types.js";
 
 /**
  * Normalize a Polymarket Gamma API market to NormalizedMarket.
@@ -24,13 +24,28 @@ import type { NormalizedMarket } from "../schemas.js";
 export function normalizePolymarketMarket(
   raw: PolymarketRawMarket
 ): NormalizedMarket {
-  const prices: number[] = JSON.parse(raw.outcomePrices);
+  let prices: number[];
+  try {
+    prices = JSON.parse(raw.outcomePrices) as number[];
+  } catch {
+    throw new Error(
+      `Polymarket market ${raw.id}: malformed outcomePrices: ${raw.outcomePrices}`
+    );
+  }
   const yesBps = Math.round((prices[0] ?? 0) * 10000);
 
-  const outcomes =
-    typeof raw.outcomes === "string"
-      ? (JSON.parse(raw.outcomes) as string[])
-      : raw.outcomes;
+  let outcomes: string[];
+  if (typeof raw.outcomes === "string") {
+    try {
+      outcomes = JSON.parse(raw.outcomes) as string[];
+    } catch {
+      throw new Error(
+        `Polymarket market ${raw.id}: malformed outcomes: ${raw.outcomes}`
+      );
+    }
+  } else {
+    outcomes = raw.outcomes;
+  }
 
   return {
     id: `prediction-market:polymarket:${raw.id}`,
