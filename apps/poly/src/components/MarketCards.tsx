@@ -23,6 +23,8 @@ interface Market {
   outcomes: MarketOutcome[];
   /** ISO date string for market resolution */
   resolves: string;
+  /** Link to the market on the source platform */
+  url: string | null;
 }
 
 /* ─── Empty initial state ──────────────────────────── */
@@ -116,9 +118,20 @@ function MarketCard({
               {market.platform}
             </span>
           </div>
-          <h3 className="font-semibold text-foreground text-sm leading-snug sm:text-base">
-            {market.title}
-          </h3>
+          {market.url ? (
+            <a
+              href={market.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-foreground text-sm leading-snug underline decoration-border/40 underline-offset-2 transition-colors hover:decoration-primary sm:text-base"
+            >
+              {market.title}
+            </a>
+          ) : (
+            <h3 className="font-semibold text-foreground text-sm leading-snug sm:text-base">
+              {market.title}
+            </h3>
+          )}
         </div>
         <div className="shrink-0 text-right">
           <div className="font-bold font-mono text-foreground text-lg tabular-nums sm:text-xl">

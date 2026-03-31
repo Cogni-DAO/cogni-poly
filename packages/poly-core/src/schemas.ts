@@ -85,6 +85,8 @@ export const MarketResponseSchema = z.object({
   outcomes: z.array(MarketOutcomeResponseSchema),
   /** ISO date string for market resolution */
   resolves: z.string(),
+  /** Link to the market on the source platform */
+  url: z.string().nullable(),
 });
 export type MarketResponse = z.infer<typeof MarketResponseSchema>;
 

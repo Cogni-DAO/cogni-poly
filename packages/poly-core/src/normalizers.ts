@@ -109,6 +109,12 @@ export function marketToResponse(
 ): MarketResponse {
   const platformMap = { polymarket: "Polymarket", kalshi: "Kalshi" } as const;
 
+  const urlMap: Record<string, (sourceId: string) => string> = {
+    polymarket: (id) => `https://polymarket.com/event/${id}`,
+    kalshi: (id) => `https://kalshi.com/markets/${id}`,
+  };
+  const buildUrl = urlMap[market.provider];
+
   return {
     id: market.id,
     title: market.title,
@@ -121,5 +127,6 @@ export function marketToResponse(
       change24h: change24h[i] ?? 0,
     })),
     resolves: market.resolvesAt,
+    url: buildUrl ? buildUrl(market.sourceId) : null,
   };
 }
