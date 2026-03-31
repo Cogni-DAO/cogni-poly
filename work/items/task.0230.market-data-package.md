@@ -2,7 +2,7 @@
 id: task.0230
 type: task
 title: "market-provider package — port, domain types, Polymarket + Kalshi adapters"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 1
 estimate: 3
