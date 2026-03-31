@@ -26,16 +26,22 @@ labels: [poly, prediction-markets, ai, langgraph, design, cogni-template]
 external_refs:
 ---
 
-# Cogni Poly — MVP Agent Workflows & Data Streams (v4)
+# Cogni Poly — Polymarket Domain Pack
 
-> Revision 3 — split into generic engine (Part A: cogni-template PR) and
-> domain pack (Part B: polymarket-specific, additive). The generic pattern
-> applies to Grafana, PostHog, social media, pricing — any data stream a
-> Cogni node needs to monitor, analyze, and act on.
+> Revision 4 — Part A (generic engine) moved to [monitoring-engine-spec](../../docs/spec/monitoring-engine.md).
+> This work item covers only the Polymarket domain pack that plugs into the generic engine.
+> The engine extends `ingestion-core` with `ObservationEvent` — no new substrate.
+
+## Generic Engine (spec link)
+
+See [docs/spec/monitoring-engine.md](../../docs/spec/monitoring-engine.md) for the shared backbone:
+`ObservationEvent` → `observation_events` (append-only) → derived state/features → triggers → analysis → signals → outcomes → calibration.
+
+This work item implements the first domain pack on top of that engine.
 
 ---
 
-# PART A — Generic Cogni Monitoring Engine (cogni-template PR)
+# ~~PART A~~ — Moved to [monitoring-engine-spec](../../docs/spec/monitoring-engine.md)
 
 > This part defines the reusable backbone. Every Cogni node gets this.
 > Domain-specific adapters, prompts, and scoring are plugged in on top.
