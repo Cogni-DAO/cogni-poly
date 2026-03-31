@@ -13,16 +13,30 @@
 
 import { PolymarketAdapter } from "@cogni/market-provider/adapters/polymarket";
 import { marketToResponse } from "@cogni/poly-core";
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 export const revalidate = 60; // ISR: cache for 60s then revalidate
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    const { searchParams } = request.nextUrl;
+    const limit = Math.min(
+      Math.max(Number(searchParams.get("limit") ?? "50"), 1),
+      500
+    );
+    const active = searchParams.get("active") !== "false"; // default true
+    const category = searchParams.get("category") ?? undefined;
+    const search = searchParams.get("search") ?? undefined;
+    const cursor = searchParams.get("cursor") ?? undefined;
+
     const polymarket = new PolymarketAdapter();
     const allMarkets = await polymarket.listMarkets({
-      limit: 50,
-      activeOnly: true,
+      limit,
+      activeOnly: active,
+      category,
+      search,
+      cursor,
     });
 
     // Convert to frontend MarketResponse shape
@@ -31,7 +45,7 @@ export async function GET(): Promise<NextResponse> {
 
     return NextResponse.json({
       markets,
-      nextCursor: null,
+      nextCursor: allMarkets.length === limit ? String(limit) : null,
     });
   } catch {
     return NextResponse.json(
