@@ -2,6 +2,7 @@
   "node_version": "20",
   "graphs": {
     "brain": "./src/graphs/brain/server.ts:brain",
+    "poly-brain": "./src/graphs/poly-brain/server.ts:polyBrain",
     "poet": "./src/graphs/poet/server.ts:poet",
     "ponderer": "./src/graphs/ponderer/server.ts:ponderer",
     "research": "./src/graphs/research/server.ts:research"
