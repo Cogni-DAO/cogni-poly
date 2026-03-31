@@ -1,416 +1,319 @@
 ---
 id: monitoring-engine-spec
 type: spec
-title: Cogni Monitoring Engine
+title: AI Awareness & Decision Plane
 status: draft
 spec_state: draft
 trust: draft
-summary: Extends ingestion-core with continuous observations, adds a thin AI decision plane (trigger → analysis → signal → action → outcome) on top of the existing append-only event pipeline.
-read_when: Building a new monitoring domain (prediction markets, infrastructure, analytics, social), or extending the trigger/analysis pipeline.
+summary: Extends ingestion-core with ObservationEvent for continuous data streams. Adds a thin AI decision layer — cheap triggers, budgeted analysis, scored signals, action routing, calibration — on top of the existing append-only ingestion spine.
+read_when: Adding a new data source (prediction markets, infra metrics, analytics, social), extending the trigger/analysis pipeline, or understanding how Cogni agents become aware of the world.
 implements:
 owner: derekg1729
 created: 2026-03-30
 verified:
-tags: [monitoring, temporal, langgraph, data-streams, cogni-template]
+tags: [awareness, temporal, langgraph, data-streams, cogni-template]
 ---
 
-# Cogni Monitoring Engine
+# AI Awareness & Decision Plane
 
-> A thin AI decision plane on top of the existing ingestion pipeline — not a new substrate.
+> Own decisions, not telemetry. External backends keep raw data. We keep what the AI noticed, why it cared, and what it decided.
 
 ### Key References
 
-|                    |                                                                              |                                            |
-| ------------------ | ---------------------------------------------------------------------------- | ------------------------------------------ |
-| **Ingestion Core** | [ingestion-core](../../packages/ingestion-core/AGENTS.md)                    | PollAdapter, ActivityEvent, cursor model   |
-| **Attribution**    | [attribution-ledger](../../packages/attribution-ledger/AGENTS.md)            | Epoch lifecycle consuming ingestion events |
-| **Temporal**       | [temporal-patterns](temporal-patterns-spec in cogni-template)                | Workflow/Activity/Graph boundaries         |
-| **First Domain**   | [task.0227](../../work/items/task.0227.poly-mvp-agent-workflows-and-taps.md) | Polymarket domain pack                     |
-
-## Design
-
-### What Already Exists
-
-`ingestion-core` provides a purpose-neutral event pipeline:
-
-```
-Source → PollAdapter.collect() → ActivityEvent[] → ingestion_receipts (append-only)
-                                                 → ingestion_cursors  (incremental state)
-```
-
-`attribution-ledger` consumes receipts: receipts → epoch selection → allocation → statement.
-
-This is the canonical substrate. **We do not replace it.**
-
-### What's Missing
-
-`ActivityEvent` models discrete human activities (PRs, reviews, messages) with `platformUserId` and `artifactUrl`. Continuous state observations of external systems (market prices, Grafana metrics, PostHog funnels) need a sibling model — same ingestion pattern, different shape.
-
-And: no existing system decides **"should we spend AI tokens analyzing this?"** or **"what action should we take?"**
-
-### The Extension
-
-```
-                     ┌─── ActivityEvent ──→ ingestion_receipts ──→ attribution pipeline
-                     │    (discrete human activities)
-PollAdapter.collect()┤
-                     │
-                     └─── ObservationEvent ──→ observation_events (append-only, new)
-                          (continuous state)         │
-                                                     ├──→ entity_state (derived: latest per entity)
-                                                     ├──→ feature_windows (derived: rolling aggregates)
-                                                     │
-                                              ┌──────┘
-                                              │
-                              Cheap triggers (pure functions on derived state)
-                                              │
-                                    Budget gate (prioritize, cap LLM spend)
-                                              │
-                              Analysis case (Temporal workflow + LangGraph child)
-                                              │
-                                   Signal → Action → Outcome → Calibrate
-```
-
-**The adapter decides which type to produce.** A GitHub adapter produces `ActivityEvent[]` (human work → attribution-eligible). A Polymarket adapter produces `ObservationEvent[]` (market state → monitoring only). A social media adapter could produce both — a post is an `ActivityEvent` (someone did something) and its engagement metrics are `ObservationEvent[]`.
+|                    |                                                                              |                                          |
+| ------------------ | ---------------------------------------------------------------------------- | ---------------------------------------- |
+| **Ingestion Core** | [ingestion-core AGENTS.md](../../packages/ingestion-core/)                   | PollAdapter, ActivityEvent, cursor model |
+| **Attribution**    | [attribution-ledger AGENTS.md](../../packages/attribution-ledger/)           | Epoch lifecycle consuming receipts       |
+| **Temporal**       | temporal-patterns-spec (cogni-template)                                      | Workflow/Activity/Graph boundaries       |
+| **First Domain**   | [task.0227](../../work/items/task.0227.poly-mvp-agent-workflows-and-taps.md) | Polymarket domain pack                   |
 
 ## Goal
 
-Enable Cogni nodes to autonomously monitor any data stream — prediction markets, infrastructure, analytics, social — using the same ingestion infrastructure that already exists for attribution, with a thin AI decision layer that controls when to spend tokens and what actions to take.
+Enable Cogni nodes to autonomously monitor any data stream — prediction markets, infrastructure metrics, product analytics, social signals — by extending the existing ingestion pipeline with a thin AI decision layer. Adding a new domain requires only edge adapters, trigger functions, an LLM prompt, and scoring logic. The engine handles scheduling, persistence, debounce, budget control, and calibration.
 
-## Non-Goals
+## Design
 
-- Replacing `ingestion-core` or `attribution-ledger` — we extend, not fork
-- Real-time WebSocket streaming (upgrade path, not MVP)
-- Multi-tenant isolation (single-node MVP)
-- Building a bespoke "monitoring engine" substrate — this is a decision plane on an existing pipeline
+The design has four parts: federated awareness (where data lives), single ingestion spine (how it enters), AI decision layers (how it's processed), and human visibility (what users see).
+
+### Federated Awareness Model
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    EXTERNAL BACKENDS (own raw telemetry)         │
+│                                                                  │
+│  Grafana/Mimir    PostHog       Polymarket API    Twitter/Reddit │
+│  (metrics, logs)  (funnels,     (markets, prices) (posts, trends)│
+│                    events)                                       │
+└──────┬───────────────┬──────────────┬──────────────┬────────────┘
+       │               │              │              │
+       ▼               ▼              ▼              ▼
+┌──────────────────────────────────────────────────────────────────┐
+│              EDGE ADAPTERS (PollAdapter / WebhookNormalizer)     │
+│              One per source. Thin. Fetch → normalize → emit.    │
+│              Each adapter carries a source_ref: a pointer back   │
+│              to the external system for deep investigation.      │
+└──────────────────────────────┬───────────────────────────────────┘
+                               │
+          ┌────────────────────┴────────────────────┐
+          ▼                                         ▼
+   ActivityEvent                             ObservationEvent
+   (discrete human action)                   (continuous state sample)
+          │                                         │
+          ▼                                         ▼
+   ingestion_receipts                        observation_events
+   (existing, append-only)                   (new, append-only)
+          │                                         │
+          ▼                                         ▼
+   Attribution pipeline                      AI Decision Plane
+   (epochs, allocations)                     (triggers → analysis → signals)
+```
+
+**Principle:** External backends are the warehouse. We are the judgment layer. Store what the AI saw (compact snapshots), why it cared (triggers, analysis), what it concluded (signals), and how to drill back into the source (pointers). Do not mirror firehoses.
+
+---
+
+## Single Ingestion Spine
+
+`ingestion-core` is already purpose-neutral. Both record types share:
+
+- **PollAdapter** port — cursor-based incremental sync
+- **ingestion_cursors** table — checkpoint state between polls
+- **`buildEventId()`** — deterministic IDs from source data
+- **`hashCanonicalPayload()`** — SHA-256 provenance on every record
+- **StreamCursor / StreamDefinition** — same cursor model
+
+Two physical tables because `ingestion_receipts` has `platform_user_id NOT NULL` and attribution-specific columns. Observations have no human actor. Forcing them into one table would either break the attribution contract or require nullable columns that weaken it.
+
+**This is one logical substrate, not two parallel systems.** The shared PollAdapter, cursor, ID, and hash machinery is what makes it one spine.
+
+### ObservationEvent — new sibling record type
+
+Added to `ingestion-core` alongside `ActivityEvent`. Fields:
+
+| Field         | Type                      | Description                                                          |
+| ------------- | ------------------------- | -------------------------------------------------------------------- |
+| `id`          | string                    | Deterministic via `buildEventId(source, "obs", entityId, timestamp)` |
+| `source`      | string                    | Adapter source: `"polymarket"`, `"grafana"`, `"posthog"`             |
+| `entityId`    | string                    | Stable subject key: `"polymarket:market:abc123"`                     |
+| `entityTitle` | string                    | Human-readable: `"Fed cuts rates at June meeting?"`                  |
+| `category`    | string                    | Domain-specific: `"economics"`, `"api-latency"`, `"funnel"`          |
+| `values`      | Record\<string, number\>  | Domain-specific numerics: `{ probabilityBps: 6200, spreadBps: 100 }` |
+| `metadata`    | Record\<string, unknown\> | Non-numeric context, source pointers for deep investigation          |
+| `payloadHash` | string                    | SHA-256 via `hashCanonicalPayload()` — same as ActivityEvent         |
+| `observedAt`  | Date                      | When the observation was taken at the source                         |
+
+**The adapter decides which type to produce.** GitHub → `ActivityEvent[]` (human work). Polymarket → `ObservationEvent[]` (market state). Social media → both (a post is an activity; its engagement metrics are observations).
+
+---
+
+## AI Decision Layers
+
+```
+observation_events (append-only raw log)
+        │
+        ▼
+Derived state + features ─────────── domain-specific views/aggregates
+        │                            (latest per entity, rolling windows)
+        ▼                            NOT separate tables — queries on raw log
+Trigger evaluation ───────────────── pure functions in Temporal Workflow code
+        │                            ephemeral — not persisted
+        │
+    Budget gate ──────────────────── cap concurrent runs + LLM calls/hour
+        │
+        ▼
+analysis_runs (persisted) ────────── Temporal Workflow + LangGraph child
+        │
+        ▼
+analysis_signals (persisted) ─────── AI conclusions with action level
+        │
+        ▼
+Action routing ───────────────────── domain-specific: observe/alert/recommend/auto-act/escalate
+        │
+        ▼
+analysis_outcomes (persisted) ────── ground truth when entities resolve
+        │
+        ▼
+base_rates (updated) ────────────── calibration loop closes the feedback cycle
+```
+
+### Record Families
+
+| Family                 | Persisted?                 | Lifecycle                                 | Purpose                                                                |
+| ---------------------- | -------------------------- | ----------------------------------------- | ---------------------------------------------------------------------- |
+| **Raw observations**   | Yes — `observation_events` | Append-only, immutable                    | What the AI saw. Source of truth.                                      |
+| **Derived state**      | No — views on raw log      | Recomputed on read                        | Latest value per entity, rolling aggregates. Domain defines the views. |
+| **Trigger candidates** | No — ephemeral             | Evaluated in Workflow code, discarded     | Cheap filter: did anything change enough to warrant AI tokens?         |
+| **Analysis cases**     | Yes — `analysis_runs`      | Created on trigger, updated on completion | When and why AI was invoked. Temporal workflowId as PK.                |
+| **Signals**            | Yes — `analysis_signals`   | Created by analysis, immutable            | What the AI concluded. Action level determines routing.                |
+| **Outcomes**           | Yes — `analysis_outcomes`  | Created when entity resolves              | Ground truth. Compared against signals for calibration.                |
+
+**Key filtering principle:** ~95% of observations should be eliminated by cheap deterministic triggers before any LLM call. The budget gate caps the remaining 5% to prevent runaway token spend.
+
+---
+
+## What Humans See
+
+```
+┌─────────────────────────────────────┐
+│       Postgres (source of truth)    │
+│  observation_events + analysis_*    │
+└──────────────┬──────────────────────┘
+               │
+          INSERT triggers
+               │
+               ▼
+┌─────────────────────────────────────┐
+│     Redis Streams (live fan-out)    │
+│  obs:{domain}  signals:{domain}    │
+└──────────────┬──────────────────────┘
+               │
+            SSE/WS
+               │
+               ▼
+┌─────────────────────────────────────┐
+│         UI: AI Awareness Feed       │
+│                                     │
+│  "What the AI sees, as it sees it"  │
+│  Observations → Triggers → Signals  │
+└─────────────────────────────────────┘
+```
+
+Postgres is the durable log. Redis Streams fan out live events for the UI. The SSE endpoint replays recent history from Postgres on connect, then tails Redis for live updates. Same pattern as existing `apps/web` streaming.
+
+Users see the same event stream the AI sees. **Transparency is the product.**
+
+---
 
 ## Invariants
 
-| Rule                       | Constraint                                                                                                                                                                 |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| SINGLE_INGESTION_SUBSTRATE | Both `ActivityEvent` and `ObservationEvent` flow through `ingestion-core` PollAdapter. No parallel ingestion system.                                                       |
-| OBSERVATION_APPEND_ONLY    | `observation_events` is append-only (like `ingestion_receipts`). DB trigger rejects UPDATE/DELETE.                                                                         |
-| OBSERVATION_IDEMPOTENT     | Observation IDs are deterministic: `buildEventId(source, "obs", entityId, snapshotTimestamp)`. Same pattern as ActivityEvent.                                              |
-| OBSERVATION_PROVENANCE     | `payloadHash` required on every observation (same as ActivityEvent).                                                                                                       |
-| STATE_IS_DERIVED           | `entity_state` is materialized from latest observation per entity — not a separate source of truth.                                                                        |
-| FEATURES_ARE_DERIVED       | Rolling aggregates (change_24h, volume_avg, spread_history) are Timescale continuous aggregates or SQL views on `observation_events` — not maintained by application code. |
-| CHEAP_BEFORE_EXPENSIVE     | Triggers are deterministic pure functions on derived state. The LLM never sees raw firehose traffic. ~95% of observations should be filtered before any AI call.           |
-| BUDGET_GATE                | A `prioritizeTriggers(triggers, budget, activeRuns)` function caps concurrent analysis runs and LLM calls/hour.                                                            |
-| TEMPORAL_OWNS_IO           | All DB reads/writes, HTTP calls happen in Temporal Activities (per temporal-patterns-spec).                                                                                |
-| GRAPH_OWNS_THINKING        | LLM reasoning lives in a LangGraph graph invoked as a Temporal Activity child — the graph does zero I/O.                                                                   |
-| WORKFLOW_PURE_ONLY         | Trigger evaluation and scoring in Workflow code — deterministic, replay-safe.                                                                                              |
-| SIGNALS_IDEMPOTENT         | Signal IDs are deterministic: `signal:{entityId}:{runId}`.                                                                                                                 |
-| ACTION_LEVELS              | Every signal declares one of: `observe`, `alert`, `recommend`, `auto_act`, `escalate`.                                                                                     |
-| CALIBRATION_LOOP           | When an entity resolves, an outcome record is written; a calibration job updates base rates.                                                                               |
-| NOT_ALL_STREAMS_ATTRIBUTE  | ObservationEvents do NOT enter the attribution pipeline. Only ActivityEvents become ingestion_receipts → epoch selection → allocation.                                     |
-| SOME_STREAMS_DO_BOTH       | An adapter MAY produce both ActivityEvents (→ attribution) and ObservationEvents (→ monitoring) from the same source. The adapter decides.                                 |
+| Rule                        | Constraint                                                                                                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SINGLE_INGESTION_SUBSTRATE  | Both ActivityEvent and ObservationEvent flow through ingestion-core PollAdapter. Same cursors, same ID helpers, same payloadHash. No parallel ingestion system. |
+| OWN_DECISIONS_NOT_TELEMETRY | External backends own raw data. Our DB stores compact snapshots + decision artifacts + source pointers. Never mirror firehoses.                                 |
+| OBSERVATION_APPEND_ONLY     | `observation_events` is append-only. DB trigger rejects UPDATE/DELETE. Same pattern as `ingestion_receipts`.                                                    |
+| OBSERVATION_IDEMPOTENT      | Observation IDs are deterministic via `buildEventId()`. Retries produce the same record.                                                                        |
+| NO_ENTITY_REGISTRY          | No `monitored_entities` table. `entityId` is a stable key on raw records and signals. Derived views materialize latest state when needed.                       |
+| CHEAP_BEFORE_EXPENSIVE      | Triggers are pure functions on derived state. The LLM never sees raw firehose. ~95% filtered before any AI call.                                                |
+| BUDGET_GATE                 | `prioritizeTriggers(triggers, budget, activeRuns)` caps concurrent analysis runs and LLM calls/hour. Triggers compete on priority.                              |
+| TEMPORAL_OWNS_IO            | All DB reads/writes and HTTP calls happen in Temporal Activities (per temporal-patterns-spec).                                                                  |
+| GRAPH_OWNS_THINKING         | LLM reasoning lives in a LangGraph graph invoked via Temporal Activity. The graph does zero I/O.                                                                |
+| WORKFLOW_PURE_ONLY          | Trigger evaluation and scoring run in Temporal Workflow code. Deterministic, replay-safe.                                                                       |
+| ACTION_LEVELS               | Every signal declares one of: `observe`, `alert`, `recommend`, `auto_act`, `escalate`.                                                                          |
+| CALIBRATION_LOOP            | When an entity resolves, an outcome is recorded. A calibration job compares signals to outcomes and updates base rates.                                         |
+
+---
 
 ## Schema
 
-### Extension to `@cogni/ingestion-core`
+Existing tables (`ingestion_receipts`, `ingestion_cursors`) are unchanged. See attribution-ledger spec.
 
-New model type alongside `ActivityEvent`:
+### `observation_events` — raw observation log
 
-```typescript
-/** Continuous state observation of an external system — not a human activity */
-export interface ObservationEvent {
-  /** Deterministic: buildEventId(source, "obs", entityId, timestamp) */
-  readonly id: string;
-  readonly source: string; // "polymarket", "grafana", "posthog"
-  readonly entityId: string; // What's being observed: "polymarket:market:abc123"
-  readonly entityTitle: string; // Human-readable: "Fed cuts rates at June meeting?"
-  readonly category: string; // Domain-specific: "economics", "api-latency", "funnel"
-  /** Numeric values — domain-specific, flexible */
-  readonly values: Record<string, number>; // { probabilityBps: 6200, spreadBps: 100, volumeUsd: 42000 }
-  /** Non-numeric metadata */
-  readonly metadata: Record<string, unknown>;
-  readonly payloadHash: string; // SHA-256 (same as ActivityEvent)
-  readonly observedAt: Date; // When observation was taken
-}
-```
+| Column         | Type        | Constraints           | Description                                          |
+| -------------- | ----------- | --------------------- | ---------------------------------------------------- |
+| `id`           | text        | PK                    | Deterministic: `{source}:obs:{entityId}:{timestamp}` |
+| `node_id`      | uuid        | NOT NULL              | Tenant scope                                         |
+| `source`       | text        | NOT NULL              | Adapter source name                                  |
+| `entity_id`    | text        | NOT NULL              | Stable subject key                                   |
+| `entity_title` | text        | NOT NULL              | Human-readable label                                 |
+| `category`     | text        | NOT NULL              | Domain-specific category                             |
+| `values`       | jsonb       | NOT NULL              | Numeric fields (domain-specific)                     |
+| `metadata`     | jsonb       |                       | Non-numeric context, source pointers                 |
+| `payload_hash` | text        | NOT NULL              | SHA-256 provenance                                   |
+| `observed_at`  | timestamptz | NOT NULL              | When observed at source                              |
+| `ingested_at`  | timestamptz | NOT NULL, default now | When we stored it                                    |
 
-Same `PollAdapter` port, same `CollectResult` pattern. The adapter's `collect()` returns `ObservationEvent[]` instead of (or alongside) `ActivityEvent[]`. The `CollectResult` type broadens:
+Indexes: `(entity_id, observed_at)`, `source`, `category`, `(node_id, observed_at)`. TimescaleDB hypertable on `observed_at` when available.
 
-```typescript
-export interface CollectResult {
-  events: readonly ActivityEvent[];
-  observations?: readonly ObservationEvent[]; // NEW — optional
-  nextCursor: StreamCursor;
-}
-```
+### `analysis_runs` — when and why AI was invoked
 
-### New table: `observation_events` (in `@cogni/db-schema/attribution` or new slice)
+| Column              | Type        | Constraints         | Description                                     |
+| ------------------- | ----------- | ------------------- | ----------------------------------------------- |
+| `id`                | text        | PK                  | Temporal workflowId                             |
+| `node_id`           | uuid        | NOT NULL            |                                                 |
+| `domain`            | text        | NOT NULL            | `"prediction-market"`, `"infrastructure"`, etc. |
+| `trigger_type`      | text        | NOT NULL            | Domain-defined trigger type                     |
+| `trigger_detail`    | text        |                     | Human-readable context                          |
+| `entities_analyzed` | integer     | NOT NULL, default 0 |                                                 |
+| `signals_generated` | integer     | NOT NULL, default 0 |                                                 |
+| `status`            | text        | NOT NULL            | `running` / `completed` / `failed`              |
+| `started_at`        | timestamptz | NOT NULL            |                                                 |
+| `completed_at`      | timestamptz |                     |                                                 |
 
-```typescript
-export const observationEvents = pgTable(
-  "observation_events",
-  {
-    /** Deterministic: "{source}:obs:{entityId}:{timestamp}" */
-    id: text("id").primaryKey(),
-    nodeId: uuid("node_id").notNull(),
-    source: text("source").notNull(),
-    entityId: text("entity_id").notNull(),
-    entityTitle: text("entity_title").notNull(),
-    category: text("category").notNull(),
-    /** Domain-specific numeric values */
-    values: jsonb("values").$type<Record<string, number>>().notNull(),
-    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
-    payloadHash: text("payload_hash").notNull(),
-    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
-    ingestedAt: timestamp("ingested_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (t) => [
-    index("obs_events_entity_time_idx").on(t.entityId, t.observedAt),
-    index("obs_events_source_idx").on(t.source),
-    index("obs_events_category_idx").on(t.category),
-    index("obs_events_node_time_idx").on(t.nodeId, t.observedAt),
-  ]
-);
-// TimescaleDB: SELECT create_hypertable('observation_events', 'observed_at');
-```
+### `analysis_signals` — AI conclusions
 
-Append-only. Same pattern as `ingestion_receipts`.
+| Column           | Type    | Constraints        | Description                                   |
+| ---------------- | ------- | ------------------ | --------------------------------------------- |
+| `id`             | text    | PK                 | `signal:{entityId}:{runId}` — deterministic   |
+| `node_id`        | uuid    | NOT NULL           |                                               |
+| `entity_id`      | text    | NOT NULL           | Stable subject key (not FK — no entity table) |
+| `run_id`         | text    | FK → analysis_runs | Which run produced this                       |
+| `domain`         | text    | NOT NULL           |                                               |
+| `finding`        | text    | NOT NULL           | What was found                                |
+| `thesis`         | text    | NOT NULL           | LLM reasoning                                 |
+| `confidence_pct` | integer | NOT NULL           | 0–100                                         |
+| `action_level`   | text    | NOT NULL           | observe/alert/recommend/auto_act/escalate     |
+| `payload`        | jsonb   | NOT NULL           | Domain-specific structured data               |
+| `sources`        | jsonb   | NOT NULL           | Evidence references                           |
 
-### Derived state (views or Timescale continuous aggregates)
+### `analysis_outcomes` — ground truth for calibration
 
-**`entity_state`** — latest observation per entity:
+| Column        | Type        | Constraints | Description                          |
+| ------------- | ----------- | ----------- | ------------------------------------ |
+| `id`          | text        | PK          |                                      |
+| `entity_id`   | text        | NOT NULL    | What resolved                        |
+| `resolution`  | text        | NOT NULL    | What actually happened               |
+| `correct`     | boolean     |             | null until evaluated against signals |
+| `resolved_at` | timestamptz | NOT NULL    |                                      |
 
-```sql
--- Materialized view, refreshed on insert trigger or periodic
-CREATE MATERIALIZED VIEW entity_state AS
-SELECT DISTINCT ON (entity_id)
-  entity_id, entity_title, source, category, values, observed_at
-FROM observation_events
-ORDER BY entity_id, observed_at DESC;
-```
+### `base_rates` — historical frequencies for calibration
 
-**`feature_windows`** — rolling aggregates:
+| Column                 | Type         | Constraints | Description                        |
+| ---------------------- | ------------ | ----------- | ---------------------------------- |
+| `category_key`         | text         | PK          | `{domain}:{category}:{event_type}` |
+| `domain`               | text         | NOT NULL    |                                    |
+| `historical_frequency` | numeric(6,4) | NOT NULL    | 0.0000–1.0000                      |
+| `sample_size`          | integer      | NOT NULL    |                                    |
+| `source`               | text         | NOT NULL    | Where the rate came from           |
 
-```sql
--- Timescale continuous aggregate (auto-refreshed)
-CREATE MATERIALIZED VIEW feature_windows_1h
-WITH (timescaledb.continuous) AS
-SELECT
-  entity_id,
-  time_bucket('1 hour', observed_at) AS bucket,
-  first(values->>'probabilityBps', observed_at)::int AS open_bps,
-  last(values->>'probabilityBps', observed_at)::int AS close_bps,
-  max((values->>'probabilityBps')::int) AS high_bps,
-  min((values->>'probabilityBps')::int) AS low_bps,
-  count(*) AS sample_count
-FROM observation_events
-GROUP BY entity_id, time_bucket('1 hour', observed_at);
-```
+---
 
-These are domain-specific — the Polymarket pack defines its own continuous aggregates. The engine just provides the pattern.
+## Domain Pack Interface
 
-### Analysis pipeline tables (thin, generic)
+Each domain (prediction markets, infrastructure, analytics, social) provides:
 
-```typescript
-/** Analysis run ledger — tracks when and why AI was invoked */
-export const analysisRuns = pgTable(
-  "analysis_runs",
-  {
-    id: text("id").primaryKey(), // Temporal workflowId
-    nodeId: uuid("node_id").notNull(),
-    domain: text("domain").notNull(), // "prediction-market", "infrastructure"
-    triggerType: text("trigger_type").notNull(),
-    triggerDetail: text("trigger_detail"),
-    entitiesAnalyzed: integer("entities_analyzed").notNull().default(0),
-    signalsGenerated: integer("signals_generated").notNull().default(0),
-    status: text("status", {
-      enum: ["running", "completed", "failed"],
-    }).notNull(),
-    errorMessage: text("error_message"),
-    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-  },
-  (t) => [
-    index("analysis_runs_domain_idx").on(t.domain),
-    index("analysis_runs_started_idx").on(t.startedAt),
-  ]
-).enableRLS();
+| Slot              | What                                     | Example (Polymarket)                                        |
+| ----------------- | ---------------------------------------- | ----------------------------------------------------------- |
+| Edge adapter      | PollAdapter or WebhookNormalizer         | Gamma API + CLOB polling                                    |
+| Record type       | ActivityEvent, ObservationEvent, or both | ObservationEvent with `probabilityBps`, `spreadBps`         |
+| Source pointers   | URLs/queries for deep investigation      | Market URL, CLOB orderbook endpoint                         |
+| Derived features  | Domain-specific views on raw log         | 1h OHLC, 24h change, volume moving average                  |
+| Trigger functions | Pure: derived state → TriggerCheck[]     | Price move >5%, volume spike >2x, cross-platform spread >3% |
+| Enrichment        | Temporal Activity: fetch external refs   | GDELT news, Metaculus forecasts, base rates                 |
+| LLM prompt        | System prompt for synthesis graph        | Calibrated market analyst                                   |
+| Scoring function  | Pure: assessments → signals              | Edge scoring with liquidity discount                        |
+| Action routing    | Map action levels to domain actions      | observe/alert/recommend at confidence thresholds            |
+| Resolution logic  | How entities resolve → outcomes          | Market settles → outcome recorded                           |
+| Base rate seeds   | Initial calibration data                 | Historical event frequencies by category                    |
 
-/** Signals emitted by analysis — the AI's conclusions */
-export const analysisSignals = pgTable(
-  "analysis_signals",
-  {
-    id: text("id").primaryKey(), // "signal:{entityId}:{runId}"
-    nodeId: uuid("node_id").notNull(),
-    entityId: text("entity_id").notNull(),
-    runId: text("run_id")
-      .references(() => analysisRuns.id)
-      .notNull(),
-    domain: text("domain").notNull(),
-    finding: text("finding").notNull(),
-    thesis: text("thesis").notNull(),
-    confidencePct: integer("confidence_pct").notNull(),
-    actionLevel: text("action_level", {
-      enum: ["observe", "alert", "recommend", "auto_act", "escalate"],
-    }).notNull(),
-    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
-    sources: jsonb("sources").$type<string[]>().notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (t) => [
-    index("signals_entity_idx").on(t.entityId),
-    index("signals_run_idx").on(t.runId),
-    index("signals_created_idx").on(t.createdAt),
-  ]
-).enableRLS();
+---
 
-/** Outcomes for calibration — ground truth when entities resolve */
-export const analysisOutcomes = pgTable(
-  "analysis_outcomes",
-  {
-    id: text("id").primaryKey(),
-    nodeId: uuid("node_id").notNull(),
-    entityId: text("entity_id").notNull(),
-    resolution: text("resolution").notNull(),
-    correct: boolean("correct"), // null until evaluated against signals
-    resolvedAt: timestamp("resolved_at", { withTimezone: true }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (t) => [index("outcomes_entity_idx").on(t.entityId)]
-).enableRLS();
+## Non-Goals
 
-/** Base rates for calibration — historical frequencies by category */
-export const baseRates = pgTable(
-  "base_rates",
-  {
-    categoryKey: text("category_key").primaryKey(),
-    domain: text("domain").notNull(),
-    description: text("description").notNull(),
-    historicalFrequency: numeric("historical_frequency", {
-      precision: 6,
-      scale: 4,
-    }).notNull(),
-    sampleSize: integer("sample_size").notNull(),
-    source: text("source").notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (t) => [index("base_rates_domain_idx").on(t.domain)]
-);
-```
-
-### Temporal Workflow Patterns
-
-**Observation Ingestion** — extends existing `CollectSourceStreamWorkflow` pattern:
-
-```typescript
-// Same as existing attribution collection, but writes to observation_events
-export async function CollectObservationsWorkflow(
-  source: string,
-  streamId: string
-) {
-  const cursor = await loadCursorActivity(source, streamId);
-  const { observations, nextCursor } = await collectObservationsActivity(
-    source,
-    streamId,
-    cursor
-  );
-  await insertObservationsActivity(observations); // → observation_events
-  await saveCursorActivity(source, streamId, nextCursor);
-  // Evaluate triggers in next workflow (separation of concerns)
-}
-```
-
-**Trigger Evaluation** — scheduled, reads derived state:
-
-```typescript
-export async function EvaluateTriggersWorkflow(domain: string) {
-  const state = await loadEntityStateActivity(domain); // Read entity_state + feature_windows
-  const triggers = evaluateTriggers(state); // Pure function (in Workflow code)
-  const prioritized = prioritizeTriggers(triggers, budget, activeRuns); // Pure function
-  for (const trigger of prioritized) {
-    await startChild(AnalysisRunWorkflow, {
-      workflowId: `${domain}-analysis:${timeBucket5min}`, // Idempotent debounce
-      args: [{ trigger }],
-    });
-  }
-}
-```
-
-**Analysis Run** — per temporal-patterns-spec normative pattern:
-
-```typescript
-export async function AnalysisRunWorkflow(input: { trigger: TriggerCheck }) {
-  const runId = workflow.workflowInfo().workflowId;
-  await createRunRecord(runId, input.trigger); // Activity: DB write
-  const context = await loadContext(input.trigger); // Activity: DB read
-  const refs = await enrichContext(context); // Activity: HTTP (cached)
-  const assessments = await synthesize(context, refs); // Activity: LangGraph child
-  const signals = scoreAssessments(assessments, context); // Workflow: pure function
-  await persistSignals(runId, signals); // Activity: DB write (idempotent)
-}
-```
-
-### Where Domain Packs Plug In
-
-| Slot                      | What the domain provides                    | Example (Polymarket)                       |
-| ------------------------- | ------------------------------------------- | ------------------------------------------ |
-| `PollAdapter`             | Source-specific HTTP client + normalization | Gamma API + CLOB polling                   |
-| `ObservationEvent.values` | Domain-specific numeric fields              | `{ probabilityBps, spreadBps, volumeUsd }` |
-| Continuous aggregates     | Domain-specific rolling features            | 1h OHLC, 24h change, volume avg            |
-| `evaluateTriggers()`      | Pure function: state → TriggerCheck[]       | Price move >5%, volume spike >2x           |
-| `enrichContext()`         | Activity: fetch external references         | GDELT news, Metaculus forecasts            |
-| LangGraph prompt          | Domain-specific system prompt               | Calibrated market analyst                  |
-| `scoreAssessments()`      | Pure function: assessments → signals        | Edge scoring with liquidity discount       |
-| Action routing            | Domain-specific action logic                | observe/alert/recommend thresholds         |
-| Resolution                | How entities resolve                        | Market settles → outcome recorded          |
-| Base rate seeds           | Initial calibration data                    | Historical event frequencies               |
-
-### File Pointers
-
-| File                                         | Purpose                                                                                      |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `packages/ingestion-core/src/model.ts`       | Add `ObservationEvent` alongside `ActivityEvent`                                             |
-| `packages/ingestion-core/src/port.ts`        | Extend `CollectResult` with optional `observations`                                          |
-| `packages/db-schema/src/monitoring.ts`       | `observation_events`, `analysis_runs`, `analysis_signals`, `analysis_outcomes`, `base_rates` |
-| `packages/temporal-workflows/src/workflows/` | `CollectObservationsWorkflow`, `EvaluateTriggersWorkflow`, `AnalysisRunWorkflow`             |
-
-### Redis Streams — Live UI Fan-Out
-
-Postgres is the source of truth. Redis Streams provide live fan-out for the UI:
-
-```
-observation_events INSERT trigger → XADD to Redis Stream "obs:{domain}"
-analysis_signals INSERT trigger → XADD to Redis Stream "signals:{domain}"
-```
-
-The SSE endpoint tails the Redis Stream for live updates, with a replay window from Postgres for page load. This reuses the existing Redis Streams → SSE pattern from `apps/web`.
-
-Users see the same event stream the AI sees — observations flowing in, triggers firing, analysis running, signals emitted. Transparency is the product.
-
-### TimescaleDB
-
-`observation_events` uses a TimescaleDB hypertable on `observed_at`.
-
-- Docker image: `timescale/timescaledb:latest-pg16`
-- Migration: `CREATE EXTENSION IF NOT EXISTS timescaledb;`
-- Fallback: without TimescaleDB, regular table with composite index — functional for dev
-
-Continuous aggregates (domain-specific) auto-refresh incrementally.
+- Replacing `ingestion-core` or `attribution-ledger`
+- Cloning external backend data (Grafana/Mimir, PostHog)
+- Real-time WebSocket feeds (upgrade path, not MVP)
+- Multi-tenant isolation (single-node MVP)
 
 ## Open Questions
 
-- [ ] Should `observation_events` live in `db-schema/attribution` (same slice as `ingestion_receipts`) or a new `db-schema/monitoring` slice? Leaning toward same slice — they're siblings.
-- [ ] What is the right default budget? (maxConcurrentRuns, maxLlmCallsPerHour)
-- [ ] Should `auto_act` require governance approval before execution?
-- [ ] Exact shape of `CollectResult` extension — should adapters return a union type, or separate collect methods for events vs observations?
+- [ ] Should `observation_events` live in `db-schema/attribution` (sibling to `ingestion_receipts`) or a new `db-schema/awareness` slice?
+- [ ] Default budget values (maxConcurrentRuns, maxLlmCallsPerHour)?
+- [ ] Should `auto_act` require governance approval?
 
 ## Related
 
 - [Architecture](./architecture.md) — hexagonal layering
-- [Temporal Patterns](temporal-patterns-spec in cogni-template) — Workflow/Activity/Graph boundaries
 - [Ingestion Core](../../packages/ingestion-core/AGENTS.md) — PollAdapter, ActivityEvent
-- [Attribution Ledger](../../packages/attribution-ledger/AGENTS.md) — Epoch lifecycle
-- [task.0227](../../work/items/task.0227.poly-mvp-agent-workflows-and-taps.md) — Polymarket domain pack
+- [Attribution Ledger](../../packages/attribution-ledger/AGENTS.md) — epoch lifecycle
+- [task.0227](../../work/items/task.0227.poly-mvp-agent-workflows-and-taps.md) — Polymarket domain pack (first implementation)
