@@ -2,7 +2,7 @@
 id: spike.0229
 type: spike
 title: "Spike: semantic search over live prediction markets for observation matching"
-status: needs_triage
+status: needs_research
 priority: 1
 rank: 99
 estimate: 2

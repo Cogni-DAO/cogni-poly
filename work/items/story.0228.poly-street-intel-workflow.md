@@ -2,7 +2,7 @@
 id: story.0228
 type: story
 title: "Poly Street Intel — user-reported events matched to live prediction markets"
-status: needs_triage
+status: done
 priority: 1
 rank: 99
 estimate: 3
