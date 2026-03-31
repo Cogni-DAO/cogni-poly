@@ -163,13 +163,27 @@ function MarketCard({
 
 /* ─── Exported section ──────────────────────────── */
 
+const CATEGORIES = [
+  "All",
+  "Economics",
+  "Tech",
+  "Crypto",
+  "Climate",
+  "Politics",
+];
+
 export function MarketCards(): ReactElement {
   const [markets, setMarkets] = useState<Market[]>([]);
+  const [activeCategory, setActiveCategory] = useState("All");
 
   useEffect(() => {
     async function fetchMarkets(): Promise<void> {
       try {
-        const res = await fetch("/api/v1/poly/markets");
+        const params = new URLSearchParams({ limit: "20" });
+        if (activeCategory !== "All") {
+          params.set("search", activeCategory);
+        }
+        const res = await fetch(`/api/v1/poly/markets?${params.toString()}`);
         if (res.ok) {
           const data = (await res.json()) as { markets: Market[] };
           setMarkets(data.markets);
@@ -181,7 +195,7 @@ export function MarketCards(): ReactElement {
     void fetchMarkets();
     const interval = setInterval(() => void fetchMarkets(), 60_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeCategory]);
 
   return (
     <section id="markets" className="w-full bg-background py-20 md:py-28">
@@ -206,21 +220,20 @@ export function MarketCards(): ReactElement {
 
         {/* Category pills */}
         <div className="mb-6 flex flex-wrap gap-2">
-          {["All", "Economics", "Tech", "Crypto", "Climate", "Politics"].map(
-            (cat, i) => (
-              <button
-                key={cat}
-                type="button"
-                className={`rounded-full px-3 py-1 font-mono text-xs uppercase tracking-wider transition-colors ${
-                  i === 0
-                    ? "bg-primary/15 text-primary"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {cat}
-              </button>
-            )
-          )}
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setActiveCategory(cat)}
+              className={`rounded-full px-3 py-1 font-mono text-xs uppercase tracking-wider transition-colors ${
+                activeCategory === cat
+                  ? "bg-primary/15 text-primary"
+                  : "bg-secondary text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
         </div>
 
         {/* Market grid */}
