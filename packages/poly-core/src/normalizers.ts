@@ -14,11 +14,7 @@
  */
 
 import type { ObservationEvent } from "@cogni/ingestion-core";
-import {
-  buildEventId,
-  canonicalJson,
-  hashCanonicalPayload,
-} from "@cogni/ingestion-core";
+import { buildEventId, hashCanonicalPayload } from "@cogni/ingestion-core";
 import type { NormalizedMarket } from "@cogni/market-provider";
 
 import type { MarketResponse } from "./schemas.js";
@@ -66,16 +62,12 @@ export async function marketToObservation(
     observedAt.getTime().toString()
   );
 
-  const payloadHash = await hashCanonicalPayload(
-    JSON.parse(
-      canonicalJson({
-        id,
-        entityId,
-        values,
-        observedAt: observedAt.toISOString(),
-      })
-    ) as Record<string, unknown>
-  );
+  const payloadHash = await hashCanonicalPayload({
+    id,
+    entityId,
+    values,
+    observedAt: observedAt.toISOString(),
+  });
 
   return {
     id,

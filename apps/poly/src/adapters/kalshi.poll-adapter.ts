@@ -59,12 +59,18 @@ export class KalshiPollAdapter implements PollAdapter {
       markets.map((m) => marketToObservation(m, now))
     );
 
+    // Advance cursor: current offset + batch size
+    // Note: Kalshi API has opaque cursor pagination, but MarketProviderPort
+    // doesn't expose it yet. Use offset-based for now.
+    const currentOffset = Number(params.cursor?.value ?? "0");
+    const nextOffset = currentOffset + markets.length;
+
     return {
       events: [],
       observations,
       nextCursor: {
         streamId: params.streams[0] ?? "markets",
-        value: params.cursor?.value ?? "0",
+        value: String(nextOffset),
         retrievedAt: now,
       },
     };

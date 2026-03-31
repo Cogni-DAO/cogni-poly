@@ -19,6 +19,7 @@
 
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -194,7 +195,7 @@ export const analysisOutcomes = pgTable(
     /** What actually happened */
     resolution: text("resolution").notNull(),
     /** null until evaluated against signals */
-    correct: text("correct"),
+    correct: boolean("correct"),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

@@ -14,24 +14,22 @@
 import { PolymarketAdapter } from "@cogni/market-provider/adapters/polymarket";
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 30; // Cache for 30s
+export const revalidate = 30; // ISR: cache for 30s then revalidate
 
 export async function GET(): Promise<NextResponse> {
   try {
-    // Get live market count from Polymarket to show scanning activity
+    // Fetch a small batch to prove connectivity + get a real count
     const polymarket = new PolymarketAdapter();
     const markets = await polymarket.listMarkets({
-      limit: 1,
+      limit: 50,
       activeOnly: true,
     });
 
-    // When DB is wired (P5), this reads from analysis_runs.
-    // For now, return live status showing the pipeline is active.
+    // When DB is wired (P5), this reads from analysis_runs + observation_events.
     return NextResponse.json({
       status: {
         state: markets.length > 0 ? "scanning" : "idle",
-        marketsScanned: markets.length > 0 ? 100 : 0, // Placeholder until observation_events count is available
+        marketsScanned: markets.length,
         signalsGenerated: 0, // No signals until poly-synth is wired (P4)
         lastHeartbeat: new Date().toISOString(),
       },

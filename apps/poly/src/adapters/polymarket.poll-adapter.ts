@@ -59,12 +59,16 @@ export class PolymarketPollAdapter implements PollAdapter {
       markets.map((m) => marketToObservation(m, now))
     );
 
+    // Advance cursor: current offset + batch size
+    const currentOffset = Number(params.cursor?.value ?? "0");
+    const nextOffset = currentOffset + markets.length;
+
     return {
       events: [],
       observations,
       nextCursor: {
         streamId: params.streams[0] ?? "markets",
-        value: markets.length > 0 ? String(markets.length) : "0",
+        value: String(nextOffset),
         retrievedAt: now,
       },
     };

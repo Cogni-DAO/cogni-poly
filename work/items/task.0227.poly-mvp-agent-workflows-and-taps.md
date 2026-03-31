@@ -17,7 +17,7 @@ project: proj.poly-prediction-bot
 branch: feat/poly-data-pipeline
 pr:
 reviewer:
-revision: 4
+revision: 5
 blocked_by:
 deploy_verified: false
 created: 2026-03-30

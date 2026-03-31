@@ -15,22 +15,15 @@ import { PolymarketAdapter } from "@cogni/market-provider/adapters/polymarket";
 import { marketToResponse } from "@cogni/poly-core";
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 60; // Cache for 60s
+export const revalidate = 60; // ISR: cache for 60s then revalidate
 
 export async function GET(): Promise<NextResponse> {
   try {
     const polymarket = new PolymarketAdapter();
-
-    const [polymarketMarkets] = await Promise.allSettled([
-      polymarket.listMarkets({ limit: 50, activeOnly: true }),
-    ]);
-
-    const allMarkets = [
-      ...(polymarketMarkets.status === "fulfilled"
-        ? polymarketMarkets.value
-        : []),
-    ];
+    const allMarkets = await polymarket.listMarkets({
+      limit: 50,
+      activeOnly: true,
+    });
 
     // Convert to frontend MarketResponse shape
     // change24h is 0 for now — needs observation history to compute
