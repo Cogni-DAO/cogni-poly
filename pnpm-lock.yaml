@@ -297,6 +297,15 @@ importers:
 
   apps/poly:
     dependencies:
+      '@cogni/ingestion-core':
+        specifier: workspace:*
+        version: link:../../packages/ingestion-core
+      '@cogni/market-provider':
+        specifier: workspace:*
+        version: link:../../packages/market-provider
+      '@cogni/poly-core':
+        specifier: workspace:*
+        version: link:../../packages/poly-core
       '@react-three/drei':
         specifier: ^10.7.7
         version: 10.7.7(@react-three/fiber@9.5.0(@types/react@19.2.7)(immer@11.0.1)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(three@0.183.2))(@types/react@19.2.7)(@types/three@0.183.1)(immer@11.0.1)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(three@0.183.2)

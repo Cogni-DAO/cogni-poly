@@ -25,58 +25,7 @@ interface Market {
   resolves: string;
 }
 
-/* ─── Mock data (will be replaced by API) ────────── */
-
-const MOCK_MARKETS: Market[] = [
-  {
-    id: "1",
-    title: "Fed cuts rates at June meeting?",
-    category: "Economics",
-    platform: "Kalshi",
-    volume: "$4.2M",
-    resolves: "2026-06-18",
-    outcomes: [
-      { label: "Yes", probability: 62, change24h: 4 },
-      { label: "No", probability: 38, change24h: -4 },
-    ],
-  },
-  {
-    id: "2",
-    title: "GPT-5 released before July 2026?",
-    category: "Tech",
-    platform: "Polymarket",
-    volume: "$1.8M",
-    resolves: "2026-07-01",
-    outcomes: [
-      { label: "Yes", probability: 34, change24h: -2 },
-      { label: "No", probability: 66, change24h: 2 },
-    ],
-  },
-  {
-    id: "3",
-    title: "Bitcoin above $150k by EOY?",
-    category: "Crypto",
-    platform: "Polymarket",
-    volume: "$12.4M",
-    resolves: "2026-12-31",
-    outcomes: [
-      { label: "Yes", probability: 28, change24h: 7 },
-      { label: "No", probability: 72, change24h: -7 },
-    ],
-  },
-  {
-    id: "4",
-    title: "Category 5 hurricane hits US in 2026?",
-    category: "Climate",
-    platform: "Kalshi",
-    volume: "$890K",
-    resolves: "2026-11-30",
-    outcomes: [
-      { label: "Yes", probability: 41, change24h: -1 },
-      { label: "No", probability: 59, change24h: 1 },
-    ],
-  },
-];
+/* ─── Empty initial state ──────────────────────────── */
 
 /* ─── Probability bar (Polymarket-style) ─────────── */
 
@@ -220,6 +169,25 @@ function MarketCard({
 /* ─── Exported section ──────────────────────────── */
 
 export function MarketCards(): ReactElement {
+  const [markets, setMarkets] = useState<Market[]>([]);
+
+  useEffect(() => {
+    async function fetchMarkets(): Promise<void> {
+      try {
+        const res = await fetch("/api/v1/poly/markets");
+        if (res.ok) {
+          const data = (await res.json()) as { markets: Market[] };
+          setMarkets(data.markets);
+        }
+      } catch {
+        // Silently retry on next interval
+      }
+    }
+    void fetchMarkets();
+    const interval = setInterval(() => void fetchMarkets(), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <section id="markets" className="w-full bg-background py-20 md:py-28">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
@@ -262,7 +230,7 @@ export function MarketCards(): ReactElement {
 
         {/* Market grid */}
         <div className="grid gap-4 sm:grid-cols-2">
-          {MOCK_MARKETS.map((m, i) => (
+          {markets.map((m, i) => (
             <MarketCard key={m.id} market={m} delay={i * 0.08} />
           ))}
         </div>

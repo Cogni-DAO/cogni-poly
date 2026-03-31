@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `poly/adapters/polymarket.poll-adapter`
+ * Purpose: PollAdapter wrapping @cogni/market-provider PolymarketAdapter — fetches markets and converts to ObservationEvents.
+ * Scope: Thin glue between market-provider and ingestion-core. Does not contain raw HTTP logic.
+ * Invariants: SINGLE_INGESTION_SUBSTRATE, OBSERVATION_IDEMPOTENT.
+ * Side-effects: IO (delegates to MarketProviderPort)
+ * Links: docs/spec/monitoring-engine.md, work/items/task.0227.poly-mvp-agent-workflows-and-taps.md
+ * @public
+ */
+
+import type {
+  CollectParams,
+  CollectResult,
+  PollAdapter,
+  StreamDefinition,
+} from "@cogni/ingestion-core";
+import type { MarketProviderPort } from "@cogni/market-provider";
+import { marketToObservation } from "@cogni/poly-core";
+
+const STREAMS: StreamDefinition[] = [
+  {
+    id: "markets",
+    name: "Polymarket Markets",
+    cursorType: "token",
+    defaultPollInterval: 300, // 5 min
+  },
+  {
+    id: "prices",
+    name: "Polymarket Prices",
+    cursorType: "timestamp",
+    defaultPollInterval: 60, // 60 sec
+  },
+];
+
+/**
+ * PollAdapter for Polymarket — delegates API calls to MarketProviderPort,
+ * converts NormalizedMarket[] to ObservationEvent[] via poly-core.
+ */
+export class PolymarketPollAdapter implements PollAdapter {
+  constructor(private readonly provider: MarketProviderPort) {}
+
+  streams(): StreamDefinition[] {
+    return STREAMS;
+  }
+
+  async collect(params: CollectParams): Promise<CollectResult> {
+    const now = new Date();
+
+    const markets = await this.provider.listMarkets({
+      limit: params.limit ?? 100,
+      activeOnly: true,
+      cursor: params.cursor?.value ?? undefined,
+    });
+
+    const observations = await Promise.all(
+      markets.map((m) => marketToObservation(m, now))
+    );
+
+    return {
+      events: [],
+      observations,
+      nextCursor: {
+        streamId: params.streams[0] ?? "markets",
+        value: markets.length > 0 ? String(markets.length) : "0",
+        retrievedAt: now,
+      },
+    };
+  }
+}
