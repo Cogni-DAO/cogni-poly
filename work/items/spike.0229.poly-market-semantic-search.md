@@ -12,7 +12,7 @@ spec_refs:
   - task.0227
 assignees: derekg1729
 credit:
-project:
+project: proj.poly-prediction-bot
 branch:
 pr:
 reviewer:

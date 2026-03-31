@@ -13,7 +13,7 @@ spec_refs:
   - monitoring-engine-spec
 assignees: derekg1729
 credit:
-project:
+project: proj.poly-prediction-bot
 branch: staging
 pr:
 reviewer:

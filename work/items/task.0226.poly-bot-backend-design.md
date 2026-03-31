@@ -11,7 +11,7 @@ outcome: Architecture doc with API integration plan, signal pipeline design, hum
 spec_refs:
 assignees: derekg1729
 credit:
-project:
+project: proj.poly-prediction-bot
 branch:
 pr:
 reviewer:
