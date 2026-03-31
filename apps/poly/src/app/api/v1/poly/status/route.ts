@@ -14,14 +14,14 @@
 import { PolymarketAdapter } from "@cogni/market-provider/adapters/polymarket";
 import { NextResponse } from "next/server";
 
-export const revalidate = 30; // ISR: cache for 30s then revalidate
+export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<NextResponse> {
   try {
     // Fetch a small batch to prove connectivity + get a real count
     const polymarket = new PolymarketAdapter();
     const markets = await polymarket.listMarkets({
-      limit: 50,
+      limit: 10,
       activeOnly: true,
     });
 

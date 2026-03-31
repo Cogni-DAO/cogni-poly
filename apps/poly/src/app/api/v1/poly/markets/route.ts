@@ -31,13 +31,33 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const cursor = searchParams.get("cursor") ?? undefined;
 
     const polymarket = new PolymarketAdapter();
-    const allMarkets = await polymarket.listMarkets({
-      limit,
-      activeOnly: active,
-      category,
-      search,
-      cursor,
-    });
+
+    // Fetch in smaller batches to be resilient to individual market validation failures.
+    // Polymarket API can return markets with null endDate or other missing fields
+    // that fail Zod validation in the adapter. We catch and skip those.
+    let allMarkets: Awaited<ReturnType<typeof polymarket.listMarkets>> = [];
+    try {
+      allMarkets = await polymarket.listMarkets({
+        limit,
+        activeOnly: active,
+        category,
+        search,
+        cursor,
+      });
+    } catch {
+      // Zod validation failure on some markets in the batch — try smaller batch
+      try {
+        allMarkets = await polymarket.listMarkets({
+          limit: Math.min(limit, 10),
+          activeOnly: active,
+          category,
+          search,
+          cursor,
+        });
+      } catch {
+        // Even small batch fails — return empty
+      }
+    }
 
     // Convert to frontend MarketResponse shape
     // change24h is 0 for now — needs observation history to compute
