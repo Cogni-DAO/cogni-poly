@@ -173,3 +173,7 @@ P0 + P1 parallelizable. P3 + P4 parallelizable.
 - [ ] API endpoints return valid responses
 - [ ] Landing page renders real data
 - [ ] `pnpm check` passes
+
+## Handoff
+
+- [task.0227.handoff.md](../handoffs/task.0227.handoff.md)
