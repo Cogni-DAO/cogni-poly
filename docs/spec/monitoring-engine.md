@@ -94,6 +94,8 @@ The split is about the **kind of fact**, not the downstream use:
 - **ActivityEvent** = a discrete event happened (with or without a human actor)
 - **ObservationEvent** = a state measurement was taken at a point in time
 
+> **Naming note:** `ActivityEvent` is the existing name in `ingestion-core`. A clearer name would be `DiscreteEvent` — it removes the "human activity → attribution" implication. This rename is a future migration; the spec uses the existing name but the concept is "discrete event," not "human activity."
+
 Both share: `id`, `source`, `metadata`, `payloadHash`, timestamp. They diverge on what additional fields they carry:
 
 |                        | ActivityEvent (existing) | ObservationEvent (new)                    |
@@ -144,46 +146,49 @@ Both share: `id`, `source`, `metadata`, `payloadHash`, timestamp. They diverge o
 
 ## AI Decision Layers
 
+The decision plane consumes **both record types**. Observations are the primary input (continuous monitoring), but discrete events can also trigger analysis (e.g., "Grafana alert fired" → investigate, "market resolved" → record outcome).
+
 ```
-observation_events (append-only raw log)
-        │
-        ▼
-Derived state + features ─────────── domain-specific views/aggregates
-        │                            (latest per entity, rolling windows)
-        ▼                            NOT separate tables — queries on raw log
-Trigger evaluation ───────────────── pure functions in Temporal Workflow code
-        │                            ephemeral — not persisted
-        │
-    Budget gate ──────────────────── cap concurrent runs + LLM calls/hour
-        │
-        ▼
-analysis_runs (persisted) ────────── Temporal Workflow + LangGraph child
-        │
-        ▼
-analysis_signals (persisted) ─────── AI conclusions with action level
-        │
-        ▼
-Action routing ───────────────────── domain-specific: observe/alert/recommend/auto-act/escalate
-        │
-        ▼
-analysis_outcomes (persisted) ────── ground truth when entities resolve
-        │
-        ▼
-base_rates (updated) ────────────── calibration loop closes the feedback cycle
+observation_events ───┐
+                      ├──→ Derived state + features ── domain-specific views/aggregates
+ingestion_receipts ───┘    (latest per entity, rolling windows, recent events)
+                                    │
+                                    ▼
+                      Trigger evaluation ─────────── pure functions in Workflow code
+                                    │                 ephemeral — not persisted
+                                    │
+                          Budget gate ────────────── cap concurrent runs + LLM calls/hour
+                                    │
+                                    ▼
+                      analysis_runs (persisted) ──── Temporal Workflow + LangGraph child
+                                    │
+                                    ▼
+                      analysis_signals (persisted) ─ AI conclusions with action level
+                                    │
+                                    ▼
+                      Action routing ─────────────── domain-specific: observe/alert/recommend/auto-act/escalate
+                                    │
+                                    ▼
+                      analysis_outcomes (persisted) ─ ground truth when entities resolve
+                                    │
+                                    ▼
+                      base_rates (updated) ────────── calibration loop
 ```
+
+> **v1 scope:** The Polymarket domain pack triggers only on observations (price moves, volume spikes, cross-platform spreads). Triggering on discrete events (e.g., "market resolved" → calibration) is supported by the architecture but implemented incrementally.
 
 ### Record Families
 
-| Family                 | Persisted?                 | Lifecycle                                 | Purpose                                                                |
-| ---------------------- | -------------------------- | ----------------------------------------- | ---------------------------------------------------------------------- |
-| **Raw observations**   | Yes — `observation_events` | Append-only, immutable                    | What the AI saw. Source of truth.                                      |
-| **Derived state**      | No — views on raw log      | Recomputed on read                        | Latest value per entity, rolling aggregates. Domain defines the views. |
-| **Trigger candidates** | No — ephemeral             | Evaluated in Workflow code, discarded     | Cheap filter: did anything change enough to warrant AI tokens?         |
-| **Analysis cases**     | Yes — `analysis_runs`      | Created on trigger, updated on completion | When and why AI was invoked. Temporal workflowId as PK.                |
-| **Signals**            | Yes — `analysis_signals`   | Created by analysis, immutable            | What the AI concluded. Action level determines routing.                |
-| **Outcomes**           | Yes — `analysis_outcomes`  | Created when entity resolves              | Ground truth. Compared against signals for calibration.                |
+| Family                 | Persisted?                | Lifecycle                                 | Purpose                                                                  |
+| ---------------------- | ------------------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
+| **Raw facts**          | Yes — both tables         | Append-only, immutable                    | What the AI saw. Source of truth. Both observations and discrete events. |
+| **Derived state**      | No — views on raw log     | Recomputed on read                        | Latest value per entity, rolling aggregates. Domain defines the views.   |
+| **Trigger candidates** | No — ephemeral            | Evaluated in Workflow code, discarded     | Cheap filter: did anything change enough to warrant AI tokens?           |
+| **Analysis cases**     | Yes — `analysis_runs`     | Created on trigger, updated on completion | When and why AI was invoked. Temporal workflowId as PK.                  |
+| **Signals**            | Yes — `analysis_signals`  | Created by analysis, immutable            | What the AI concluded. Action level determines routing.                  |
+| **Outcomes**           | Yes — `analysis_outcomes` | Created when entity resolves              | Ground truth. Compared against signals for calibration.                  |
 
-**Key filtering principle:** ~95% of observations should be eliminated by cheap deterministic triggers before any LLM call. The budget gate caps the remaining 5% to prevent runaway token spend.
+**Key filtering principle:** ~95% of raw facts should be eliminated by cheap deterministic triggers before any LLM call. The budget gate caps the remaining 5% to prevent runaway token spend.
 
 ---
 
@@ -242,7 +247,9 @@ Users see the same event stream the AI sees. **Transparency is the product.**
 
 ## Schema
 
-Existing tables (`ingestion_receipts`, `ingestion_cursors`) are unchanged. See attribution-ledger spec.
+Existing tables (`ingestion_receipts`, `ingestion_cursors`) are unchanged — they remain in `db-schema/attribution` for now.
+
+New tables live in a **neutral `db-schema/ingestion` slice** — not under attribution. Observations and the AI decision pipeline have nothing to do with epoch-based credit allocation.
 
 ### `observation_events` — raw observation log
 
@@ -344,9 +351,10 @@ Each domain (prediction markets, infrastructure, analytics, social) provides:
 
 ## Open Questions
 
-- [ ] Should `observation_events` live in `db-schema/attribution` (sibling to `ingestion_receipts`) or a new `db-schema/awareness` slice?
+- [x] ~~Should `observation_events` live in `db-schema/attribution` or a new slice?~~ → New `db-schema/ingestion` slice. Attribution is a downstream consumer, not the owner of awareness data.
 - [ ] Default budget values (maxConcurrentRuns, maxLlmCallsPerHour)?
 - [ ] Should `auto_act` require governance approval?
+- [ ] When to rename `ActivityEvent` → `DiscreteEvent` in `ingestion-core`? (Breaking change, needs migration.)
 
 ## Related
 
