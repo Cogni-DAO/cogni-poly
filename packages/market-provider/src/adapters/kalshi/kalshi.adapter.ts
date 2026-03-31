@@ -24,10 +24,10 @@ import type {
 import { normalizeKalshiMarket } from "./kalshi.normalizer.js";
 import { KalshiMarketsResponseSchema } from "./kalshi.types.js";
 
-const DEFAULT_KALSHI_BASE_URL = "https://trading-api.kalshi.com/trade-api/v2";
+const DEFAULT_KALSHI_BASE_URL = "https://api.elections.kalshi.com/trade-api/v2";
 
 export interface KalshiAdapterConfig extends MarketProviderConfig {
-  /** Trading API base URL (default: https://trading-api.kalshi.com/trade-api/v2) */
+  /** Trading API base URL (default: https://api.elections.kalshi.com/trade-api/v2) */
   baseUrl?: string;
   /** Required — Kalshi requires auth for all endpoints */
   credentials: MarketCredentials;
@@ -97,9 +97,7 @@ export class KalshiAdapter implements MarketProviderPort {
     const url = new URL(`${this.baseUrl}/markets`);
     url.searchParams.set("limit", String(params?.limit ?? 100));
 
-    if (params?.activeOnly !== false) {
-      url.searchParams.set("status", "open");
-    }
+    // Kalshi API returns active markets by default (no status filter param)
     if (params?.cursor) {
       url.searchParams.set("cursor", params.cursor);
     }

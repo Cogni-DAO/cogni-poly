@@ -15,22 +15,26 @@ import { z } from "zod";
 
 /**
  * Raw market shape from Kalshi Trading API: GET /trade-api/v2/markets
- * Gotchas: Values in cents (0–100), multiply by 100 for bps.
- * All endpoints require API key auth (RSA-PSS signed).
+ * Prices are dollar strings (e.g. "0.6200") — parse to float, multiply by 100 for cents, then by 100 for bps.
+ * Status values: "active", "closed", "settled" (not "open").
  */
 export const KalshiRawMarketSchema = z.object({
   ticker: z.string(),
   title: z.string(),
-  category: z.string().optional().nullable(),
   event_ticker: z.string(),
-  yes_bid: z.number().default(0),
-  yes_ask: z.number().default(0),
-  no_bid: z.number().default(0),
-  no_ask: z.number().default(0),
-  volume: z.number().default(0),
   status: z.string(),
   expiration_time: z.string(),
   close_time: z.string().optional().nullable(),
+  /** Dollar-denominated string prices */
+  yes_bid_dollars: z.string().default("0.0000"),
+  yes_ask_dollars: z.string().default("0.0000"),
+  no_bid_dollars: z.string().default("0.0000"),
+  no_ask_dollars: z.string().default("0.0000"),
+  /** Dollar-denominated string volumes */
+  volume_fp: z.string().default("0.00"),
+  volume_24h_fp: z.string().default("0.00"),
+  /** Price format indicator */
+  response_price_units: z.string().optional(),
 });
 export type KalshiRawMarket = z.infer<typeof KalshiRawMarketSchema>;
 

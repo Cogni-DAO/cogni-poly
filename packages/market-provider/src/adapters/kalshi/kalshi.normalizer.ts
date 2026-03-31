@@ -15,30 +15,40 @@ import type { NormalizedMarket } from "../../domain/schemas.js";
 import type { KalshiRawMarket } from "./kalshi.types.js";
 
 /**
+ * Convert a dollar string (e.g. "0.6200") to basis points (6200).
+ * Kalshi API returns prices as dollar-denominated strings.
+ */
+function dollarsToBps(dollars: string): number {
+  return Math.round(Number.parseFloat(dollars) * 10000);
+}
+
+/**
  * Normalize a Kalshi Trading API market to NormalizedMarket.
  * Pure function — no I/O.
  *
- * Price conversion: Kalshi uses cents (0–100) → multiply by 100 for bps.
+ * Price conversion: Kalshi uses dollar strings (e.g. "0.62") → parse to float × 10000 for bps.
  */
 export function normalizeKalshiMarket(raw: KalshiRawMarket): NormalizedMarket {
-  const yesBps = raw.yes_bid * 100;
-  const spreadBps = (raw.yes_ask - raw.yes_bid) * 100;
+  const yesBidBps = dollarsToBps(raw.yes_bid_dollars);
+  const yesAskBps = dollarsToBps(raw.yes_ask_dollars);
+  const noBidBps = dollarsToBps(raw.no_bid_dollars);
+  const spreadBps = yesAskBps - yesBidBps;
 
   return {
     id: `prediction-market:kalshi:${raw.ticker}`,
     provider: "kalshi",
     sourceId: raw.ticker,
     title: raw.title,
-    category: raw.category ?? "Other",
-    probabilityBps: yesBps,
+    category: "Other",
+    probabilityBps: yesBidBps,
     spreadBps: Math.max(0, spreadBps),
-    volume: raw.volume,
+    volume: Number.parseFloat(raw.volume_fp),
     outcomes: [
-      { label: "Yes", probabilityBps: yesBps },
-      { label: "No", probabilityBps: raw.no_bid * 100 },
+      { label: "Yes", probabilityBps: yesBidBps },
+      { label: "No", probabilityBps: noBidBps },
     ],
     resolvesAt: raw.expiration_time,
-    active: raw.status === "open",
+    active: raw.status === "active",
     attributes: { eventTicker: raw.event_ticker },
     updatedAt: raw.close_time ?? raw.expiration_time,
   };
