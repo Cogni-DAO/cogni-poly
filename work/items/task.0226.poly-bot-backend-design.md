@@ -103,6 +103,12 @@ This task covers the backend research and architecture design needed before impl
 4. **Integration plan** — which existing cogni packages to reuse vs new packages needed
 5. **Spike PR** — proof-of-concept: langgraph graph that fetches market data from Polymarket + Kalshi, produces `MarketSignal[]` output, served via public API to `apps/poly` landing page
 
+## PR / Links
+
+- Landing page PR: [#12](https://github.com/Cogni-DAO/cogni-resy-helper/pull/12)
+- Handoff: [handoff](../handoffs/task.0226.handoff.md)
+- MVP Agent Workflows & Taps Design: [task.0227](task.0227.poly-mvp-agent-workflows-and-taps.md)
+
 ## Validation
 
 - [ ] Research doc covers all four platform APIs with auth model, rate limits, and data schemas

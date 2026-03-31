@@ -6,10 +6,11 @@ status: needs_implement
 priority: 1
 rank: 1
 estimate: 5
-summary: Design the generic Cogni monitoring engine (cogni-template PR) and the Polymarket domain pack (additive) — continuous data streams with threshold-triggered AI analysis.
-outcome: Two implementable specs — one generic monitoring backbone reusable across all Cogni nodes, one Polymarket-specific domain policy pack.
+summary: Polymarket domain pack — adapters, thresholds, scoring, LangGraph prompt, and API routes plugged into the generic monitoring engine.
+outcome: Working prediction market monitoring on the Cogni Poly node using the generic monitoring-engine spec as backbone.
 spec_refs:
   - task.0226
+  - monitoring-engine-spec
 assignees: derekg1729
 credit:
 project:
