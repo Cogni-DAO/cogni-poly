@@ -20,6 +20,7 @@ export type {
   ActivityEvent,
   CollectParams,
   CollectResult,
+  ObservationEvent,
   StreamCursor,
   StreamDefinition,
 } from "./model";

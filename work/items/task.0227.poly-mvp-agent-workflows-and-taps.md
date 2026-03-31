@@ -14,7 +14,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.poly-prediction-bot
-branch: staging
+branch: feat/poly-data-pipeline
 pr:
 reviewer:
 revision: 4

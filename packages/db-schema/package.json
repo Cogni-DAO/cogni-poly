@@ -60,6 +60,11 @@
       "types": "./dist/reservations.d.ts",
       "import": "./dist/reservations.js",
       "default": "./dist/reservations.js"
+    },
+    "./ingestion": {
+      "types": "./dist/ingestion.d.ts",
+      "import": "./dist/ingestion.js",
+      "default": "./dist/ingestion.js"
     }
   },
   "files": [
