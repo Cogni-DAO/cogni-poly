@@ -1,132 +1,200 @@
 ---
 id: task.0230
 type: task
-title: "market-data package — port, domain types, Polymarket + Kalshi adapters"
+title: "market-provider package — port, domain types, Polymarket + Kalshi adapters"
 status: needs_implement
 priority: 1
 rank: 1
 estimate: 3
-summary: Create @cogni/market-data package with MarketDataPort interface, normalized market Zod schemas, and REST adapters for Polymarket (Gamma + CLOB) and Kalshi (Trading API).
-outcome: Any runtime can list, search, and read live prediction market data from Polymarket and Kalshi through a single typed port interface with zero platform leakage.
+summary: Create @cogni/market-provider package with MarketProviderPort interface, normalized market Zod schemas, and REST adapters for Polymarket (Gamma + CLOB) and Kalshi (Trading API). Multi-tenant auth aligned with tenant-connections spec.
+outcome: Any runtime can list live prediction market data from Polymarket and Kalshi through a typed port interface. Auth is tenant-scoped (system account for reads, per-tenant for trading later). Data pipeline adapters delegate to this port.
 spec_refs:
   - monitoring-engine-spec
   - task.0227
+  - spec.tenant-connections
+  - identity-model-spec
 assignees: derekg1729
 credit:
 project: proj.poly-prediction-bot
-branch: feat/market-data-package
+branch: feat/market-provider-package
 pr:
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-03-31
 updated: 2026-03-31
-labels: [poly, prediction-markets, packages]
+labels: [poly, prediction-markets, packages, multi-tenant]
 external_refs:
 ---
 
-# market-data package — Port, Domain Types, Polymarket + Kalshi Adapters
+# market-provider package — Port, Domain Types, Polymarket + Kalshi Adapters
 
 ## Design
 
 ### Outcome
 
-Any Cogni runtime (Next.js API route, Temporal worker, CLI script) can read live prediction market data from Polymarket and Kalshi through a typed `MarketDataPort` — no platform-specific code leaks to callers.
+Any Cogni runtime can read live prediction market data from Polymarket and Kalshi through a typed `MarketProviderPort`. Auth is tenant-scoped: a system connection for public reads (Crawl), per-tenant connections for trading (Run). The data pipeline's `PollAdapter` delegates to this same port — one platform abstraction, not two.
 
 ### Approach
 
-**Solution**: New `packages/market-data/` following the `operator-wallet` pattern — port interface + domain types in root barrel, platform adapters in subpath exports. Raw `fetch` + Zod response validation. Constructor-injected config (no env loading in adapters).
+**Solution**: New `packages/market-provider/` following the `operator-wallet` pattern. The port covers the full provider lifecycle (read now, trade later). Adapters take constructor-injected config (base URLs, rate limits) and a `credentials` parameter aligned with the `connections` table schema from tenant-connections spec. Raw `fetch` + Zod response validation.
+
+**Key architectural decision — one abstraction, two consumers:**
+
+```
+MarketProviderPort (this package)
+  ├── API routes: adapter.listMarkets() → JSON to landing page
+  └── PollAdapter (Walk): collect() calls adapter.listMarkets() + getPrices()
+                           → produces ObservationEvent[] into monitoring pipeline
+```
+
+The data pipeline's `PollAdapter` is a thin wrapper that calls `MarketProviderPort` methods and maps the results to `ObservationEvent[]`. No parallel HTTP clients. This resolves the `SINGLE_INGESTION_SUBSTRATE` concern — the market provider IS the platform abstraction; the PollAdapter just maps its output.
 
 **Reuses**:
 
 - `operator-wallet` package pattern (port + subpath adapter exports, tsup, tsc -b)
 - `ingestion-core` helpers (`buildEventId`, `hashCanonicalPayload`) for deterministic IDs
-- Normalizer logic from task.0227 §B4 (already designed, just needs implementation)
-- Raw API schema from task.0227 §B5 (Gamma/CLOB/Trading API endpoints documented)
+- Normalizer logic from task.0227 §B4
+- Tenant connections model (spec.tenant-connections): `connectionId`, `provider`, encrypted credentials, `billing_account_id` scoping
 
 **Rejected alternatives**:
 
-- `@polymarket/clob-client` SDK — adds dep weight for read-only use; Gamma API is simpler for market listing; raw fetch is consistent with Kalshi (no SDK). The CLOB client is warranted later for order placement (Run phase).
-- Implementing full `PollAdapter` from `ingestion-core` now — `PollAdapter.collect()` is for incremental background sync (cursor + time window). Crawl needs synchronous list/search/read. PollAdapter compliance comes in Walk when Temporal workflows drive scheduled polling.
-- Single package `poly-core` with thresholds + scoring + normalizers + adapters — too broad for Crawl. Thresholds and scoring are Walk scope. `market-data` is the read layer; analysis layers build on top.
+- `MarketDataPort` (read-only) — dead end. The same adapter that reads markets will place trades in Run. One port for the full provider lifecycle.
+- `@polymarket/clob-client` SDK — overkill for read-only; warranted in Run for order placement.
+- Credentials in constructor config — violates tenant-connections model. Credentials come from connection broker (or env shim for prototype).
+
+### Auth Model
+
+Aligned with [tenant-connections spec](cogni-template:docs/spec/tenant-connections.md):
+
+```
+connections table
+  provider: "polymarket" | "kalshi"
+  credential_type: "api_key" | "wallet_signing"
+  billing_account_id: system | per-tenant
+  encrypted_credentials: AEAD blob
+```
+
+**Crawl v0**: System-level credentials loaded from env → injected into adapter at bootstrap. No connection broker needed yet.
+
+**Walk/Run**: Per-tenant connections resolved by connection broker at invocation time. Adapter receives `MarketCredentials` per-call for tenant-scoped operations.
+
+The port interface accepts an optional `credentials` parameter. System reads use the default (constructor-injected). Tenant operations pass explicit credentials:
+
+```typescript
+export interface MarketProviderPort {
+  readonly provider: MarketProvider;
+
+  /** List active markets. Uses system credentials by default. */
+  listMarkets(params?: ListMarketsParams): Promise<NormalizedMarket[]>;
+
+  // Walk: getPrices(), getOrderbook() — added when pipeline needs them
+  // Run: placeOrder(), getPositions() — added when trading starts
+}
+```
+
+**Crawl ships with `listMarkets()` only.** Additional methods added when callers need them (YAGNI).
 
 ### Invariants
 
 - [ ] ADAPTERS_NOT_IN_CORE: Port in `src/port/`, adapters in `src/adapters/{polymarket,kalshi}/` (spec: architecture)
-- [ ] PACKAGES_NO_ENV: All adapter config via constructor injection — no `process.env` (spec: architecture)
-- [ ] PACKAGES_NO_LIFECYCLE: No startup/shutdown — callers manage adapter lifecycle (spec: architecture)
-- [ ] PACKAGES_NO_SRC_IMPORTS: No imports from `src/` or `apps/` (spec: architecture)
-- [ ] OBSERVATION_IDEMPOTENT: Market IDs are deterministic: `prediction-market:{platform}:{sourceId}` (spec: monitoring-engine)
-- [ ] SIMPLE_SOLUTION: Raw fetch + Zod, no SDK deps, follows `operator-wallet` pattern exactly
-- [ ] ARCHITECTURE_ALIGNMENT: Port + subpath adapters, tsup ESM, tsc -b declarations
+- [ ] PACKAGES_NO_ENV: No `process.env` in package. Credentials injected via constructor config (spec: architecture)
+- [ ] PACKAGES_NO_LIFECYCLE: No startup/shutdown (spec: architecture)
+- [ ] CONNECTION_ID_ONLY: No raw tokens in port interface. Credentials abstracted behind `MarketCredentials` type (spec: tenant-connections)
+- [ ] TENANT_SCOPED: Credentials scoped to `billing_account_id`. System account for reads, per-tenant for trades (spec: identity-model)
+- [ ] OBSERVATION_IDEMPOTENT: Market IDs deterministic: `prediction-market:{platform}:{sourceId}` (spec: monitoring-engine)
+- [ ] SINGLE_INGESTION_SUBSTRATE: PollAdapter delegates to MarketProviderPort, not parallel HTTP (spec: monitoring-engine)
+- [ ] SIMPLE_SOLUTION: Raw fetch + Zod, 1 method for Crawl, ~10 source files
 
 ### Files
 
 ```
-packages/market-data/
+packages/market-provider/
   src/
-    index.ts                          — barrel: port + domain types + normalizers
+    index.ts                                — barrel: port + domain types + normalizers
     port/
-      market-data.port.ts             — MarketDataPort interface
+      market-provider.port.ts               — MarketProviderPort interface + MarketCredentials
     domain/
-      schemas.ts                      — Zod: Platform, NormalizedMarket, MarketSnapshot, ListMarketsParams
+      schemas.ts                            — Zod: MarketProvider, NormalizedMarket, ListMarketsParams
       normalizers/
-        polymarket.ts                 — normalizePolymarketMarket() pure fn
-        kalshi.ts                     — normalizeKalshiMarket() pure fn
+        polymarket.ts                       — normalizePolymarketMarket() pure fn
+        kalshi.ts                           — normalizeKalshiMarket() pure fn
     adapters/
       polymarket/
-        index.ts                      — PolymarketAdapter (exports)
-        polymarket.adapter.ts         — implements MarketDataPort
-        polymarket.client.ts          — raw REST client (Gamma + CLOB fetch)
-        polymarket.types.ts           — PolymarketRawMarket Zod schema
+        index.ts                            — exports
+        polymarket.adapter.ts               — implements MarketProviderPort (fetch + normalize)
+        polymarket.types.ts                 — PolymarketRawMarket Zod schema
       kalshi/
-        index.ts                      — KalshiAdapter (exports)
-        kalshi.adapter.ts             — implements MarketDataPort
-        kalshi.client.ts              — raw REST client (Trading API fetch)
-        kalshi.types.ts               — KalshiRawMarket Zod schema
-  package.json                        — @cogni/market-data, subpath exports
-  tsconfig.json                       — composite, declaration
-  tsup.config.ts                      — ESM, entry: [index, adapters/polymarket, adapters/kalshi]
-  AGENTS.md                           — package boundaries
+        index.ts                            — exports
+        kalshi.adapter.ts                   — implements MarketProviderPort (fetch + normalize)
+        kalshi.types.ts                     — KalshiRawMarket Zod schema
+  package.json
+  tsconfig.json
+  tsup.config.ts
+  AGENTS.md
 ```
+
+11 source files. Each adapter is a single file (fetch + normalize + port impl) — no separate client layer.
 
 ## Port Interface
 
 ```typescript
-// packages/market-data/src/port/market-data.port.ts
+// packages/market-provider/src/port/market-provider.port.ts
 
-export interface MarketDataPort {
-  /** Platform this adapter serves */
-  readonly platform: Platform;
+import type { z } from "zod";
 
-  /** List active markets, optionally filtered by category/search */
+export const MarketProviderSchema = z.enum(["polymarket", "kalshi"]);
+export type MarketProvider = z.infer<typeof MarketProviderSchema>;
+
+/**
+ * Credentials abstraction — resolved from connections table or env shim.
+ * Intentionally opaque: adapters interpret per-provider.
+ * CONNECTION_ID_ONLY: callers never see raw tokens.
+ */
+export interface MarketCredentials {
+  /** For API key auth (Kalshi) */
+  readonly apiKey?: string;
+  readonly apiSecret?: string;
+  /** For wallet signing auth (Polymarket trading — Run phase) */
+  readonly walletKey?: string;
+}
+
+/** Config injected at construction — no env loading in adapters */
+export interface MarketProviderConfig {
+  /** System-level credentials for public reads */
+  credentials?: MarketCredentials;
+  /** Override base URLs for testing */
+  baseUrl?: string;
+}
+
+export interface MarketProviderPort {
+  readonly provider: MarketProvider;
+
+  /**
+   * List active markets from this provider.
+   * Uses constructor-injected system credentials by default.
+   * Accepts explicit credentials for tenant-scoped access.
+   */
   listMarkets(params?: ListMarketsParams): Promise<NormalizedMarket[]>;
-
-  /** Get a single market by platform-specific source ID */
-  getMarket(sourceId: string): Promise<NormalizedMarket | null>;
-
-  /** Get current price snapshots for one or more markets */
-  getPrices(sourceIds: string[]): Promise<MarketSnapshot[]>;
 }
 ```
 
 ## Domain Types
 
 ```typescript
-// packages/market-data/src/domain/schemas.ts
-
-export const PlatformSchema = z.enum(["polymarket", "kalshi"]);
-export type Platform = z.infer<typeof PlatformSchema>;
+// packages/market-provider/src/domain/schemas.ts
 
 export const NormalizedMarketSchema = z.object({
   /** Deterministic: "prediction-market:{platform}:{sourceId}" */
   id: z.string(),
-  platform: PlatformSchema,
+  provider: MarketProviderSchema,
   sourceId: z.string(),
   title: z.string(),
   category: z.string(),
+  /** YES probability in basis points (0–10000) */
   probabilityBps: z.number().int().min(0).max(10000),
+  /** Bid-ask spread in basis points */
   spreadBps: z.number().int().min(0),
   volume: z.number(),
   outcomes: z.array(
@@ -137,22 +205,11 @@ export const NormalizedMarketSchema = z.object({
   ),
   resolvesAt: z.string().datetime(),
   active: z.boolean(),
-  /** Platform-specific extra fields */
+  /** Platform-specific fields (conditionId, eventTicker, etc.) */
   attributes: z.record(z.unknown()),
   updatedAt: z.string().datetime(),
 });
 export type NormalizedMarket = z.infer<typeof NormalizedMarketSchema>;
-
-export const MarketSnapshotSchema = z.object({
-  sourceId: z.string(),
-  platform: PlatformSchema,
-  probabilityBps: z.number().int().min(0).max(10000),
-  bestBidBps: z.number().int().min(0).max(10000),
-  bestAskBps: z.number().int().min(0).max(10000),
-  spreadBps: z.number().int().min(0),
-  snapshotAt: z.string().datetime(),
-});
-export type MarketSnapshot = z.infer<typeof MarketSnapshotSchema>;
 
 export const ListMarketsParamsSchema = z
   .object({
@@ -166,81 +223,125 @@ export const ListMarketsParamsSchema = z
 export type ListMarketsParams = z.infer<typeof ListMarketsParamsSchema>;
 ```
 
-## Adapter Config (constructor-injected)
+## Adapter Config
 
 ```typescript
-// Polymarket
-export interface PolymarketAdapterConfig {
-  gammaBaseUrl?: string; // default: "https://gamma-api.polymarket.com"
-  clobBaseUrl?: string; // default: "https://clob.polymarket.com"
-  maxRequestsPerSec?: number; // default: 2
-}
+// Polymarket — public reads, no credentials needed for Crawl
+new PolymarketAdapter({
+  baseUrl: "https://gamma-api.polymarket.com", // default
+});
 
-// Kalshi
-export interface KalshiAdapterConfig {
-  baseUrl?: string; // default: "https://trading-api.kalshi.com/trade-api/v2"
-  maxRequestsPerSec?: number; // default: 20
-}
+// Kalshi — requires API key for all endpoints
+new KalshiAdapter({
+  baseUrl: "https://trading-api.kalshi.com/trade-api/v2", // default
+  credentials: { apiKey: "...", apiSecret: "..." },
+});
 ```
 
-## API Details (from task.0227 §B5)
+## API Details
 
 ### Polymarket
 
-| Endpoint                               | Purpose                    | Auth                | Rate Limit |
-| -------------------------------------- | -------------------------- | ------------------- | ---------- |
-| `GET gamma-api.polymarket.com/markets` | Market listing + metadata  | None (public)       | 2 req/sec  |
-| `GET clob.polymarket.com/price`        | Current prices             | None (public reads) | 2 req/sec  |
-| `GET clob.polymarket.com/book`         | Order book (bid/ask depth) | None (public reads) | 2 req/sec  |
+| Endpoint                               | Purpose                   | Auth                | Rate Limit |
+| -------------------------------------- | ------------------------- | ------------------- | ---------- |
+| `GET gamma-api.polymarket.com/markets` | Market listing + metadata | None (public)       | 2 req/sec  |
+| `GET clob.polymarket.com/price`        | Current prices (Walk)     | None (public reads) | 2 req/sec  |
 
-Gotchas: `outcomePrices` is a JSON **string** (not parsed). Prices 0.0–1.0 scale → multiply by 10000 for bps.
+Gotchas: `outcomePrices` is a JSON **string**. Prices 0.0–1.0 → multiply by 10000 for bps.
 
 ### Kalshi
 
-| Endpoint                                                   | Purpose                 | Auth                | Rate Limit |
-| ---------------------------------------------------------- | ----------------------- | ------------------- | ---------- |
-| `GET trading-api.kalshi.com/trade-api/v2/markets`          | Market listing + prices | None (public reads) | 20 req/sec |
-| `GET trading-api.kalshi.com/trade-api/v2/markets/{ticker}` | Single market detail    | None (public reads) | 20 req/sec |
+| Endpoint                             | Purpose                 | Auth             | Rate Limit |
+| ------------------------------------ | ----------------------- | ---------------- | ---------- |
+| `GET /trade-api/v2/markets`          | Market listing + prices | API key required | 20 req/sec |
+| `GET /trade-api/v2/markets/{ticker}` | Single market detail    | API key required | 20 req/sec |
 
-Gotchas: Values in **cents** (0–100, not bps) → multiply by 100 for bps. Opaque cursor pagination.
+Gotchas: Values in **cents** (0–100) → multiply by 100 for bps. Opaque cursor pagination. **All endpoints require auth** (confirmed via live API test — 401 without credentials).
+
+## Env Config (Crawl v0 prototype)
+
+Add to `.env.local`:
+
+```bash
+# ── Market Provider: Polymarket ──
+# Public reads — no credentials needed for Gamma API
+POLYMARKET_GAMMA_BASE_URL=https://gamma-api.polymarket.com
+POLYMARKET_CLOB_BASE_URL=https://clob.polymarket.com
+
+# ── Market Provider: Kalshi ──
+# Required for ALL endpoints (even market listing)
+# Get from: https://kalshi.com/settings/api
+KALSHI_API_KEY=
+KALSHI_API_SECRET=
+KALSHI_BASE_URL=https://trading-api.kalshi.com/trade-api/v2
+```
+
+These are loaded at bootstrap (app/service code), NOT inside the package. The adapter receives them via `MarketProviderConfig`.
+
+## Data Pipeline Reconciliation
+
+When Walk adds the monitoring pipeline, `PollAdapter` wraps `MarketProviderPort`:
+
+```typescript
+// services/scheduler-worker/src/adapters/ingestion/polymarket-poll.adapter.ts
+// This is Walk scope — NOT in this task
+
+class PolymarketPollAdapter implements PollAdapter {
+  constructor(private market: MarketProviderPort) {}
+
+  async collect(params: CollectParams): Promise<CollectResult> {
+    const markets = await this.market.listMarkets({ cursor: params.cursor?.value });
+    const observations: ObservationEvent[] = markets.map(m => ({
+      id: buildEventId("polymarket", "obs", m.sourceId, now),
+      source: "polymarket",
+      entityId: m.id,
+      entityTitle: m.title,
+      category: m.category,
+      values: { probabilityBps: m.probabilityBps, spreadBps: m.spreadBps, volumeUsd: m.volume },
+      metadata: m.attributes,
+      payloadHash: await hashCanonicalPayload({ ...m }),
+      observedAt: new Date(),
+    }));
+    return { events: [], observations, nextCursor: ... };
+  }
+}
+```
+
+One HTTP client per platform. PollAdapter is a thin mapping layer.
 
 ## Requirements
 
-- `@cogni/market-data` package builds cleanly (`pnpm packages:build`)
+- `@cogni/market-provider` package builds cleanly (`pnpm packages:build`)
 - Root barrel exports port + domain types + normalizers (zero adapter deps)
 - Subpath `./adapters/polymarket` exports `PolymarketAdapter`
 - Subpath `./adapters/kalshi` exports `KalshiAdapter`
-- Both adapters implement `MarketDataPort`
-- `listMarkets()` returns `NormalizedMarket[]` from each platform's API
-- `getPrices()` returns `MarketSnapshot[]` with current bid/ask/spread
+- Both adapters implement `MarketProviderPort` with `listMarkets()`
+- Polymarket adapter fetches from Gamma API (public, no auth)
+- Kalshi adapter authenticates with API key from constructor config
 - Normalizers are pure functions with unit tests
-- Adapters use constructor-injected config (no env loading)
-- Rate limiting built into adapter clients (not caller responsibility)
-- AGENTS.md documents package boundaries and public surface
+- AGENTS.md documents package boundaries
 - `pnpm check` passes
 
 ## Allowed Changes
 
-- Create: `packages/market-data/` (entire new package)
+- Create: `packages/market-provider/` (entire new package)
 - Modify: root `package.json` (add workspace dep)
 - Modify: root `tsconfig.json` (add project reference)
-- Modify: `pnpm-workspace.yaml` (if needed — likely already has `packages/*` glob)
+- Create: `.env.local.example` entries for Kalshi credentials
 
 ## Plan
 
 - [ ] Scaffold package: `package.json`, `tsconfig.json`, `tsup.config.ts`, `AGENTS.md`
-- [ ] Domain types: `schemas.ts` with Zod schemas (NormalizedMarket, MarketSnapshot, Platform, ListMarketsParams)
-- [ ] Port interface: `market-data.port.ts`
-- [ ] Raw types: `polymarket.types.ts`, `kalshi.types.ts` (Zod schemas for API responses)
+- [ ] Domain types: `schemas.ts` (NormalizedMarket, ListMarketsParams, MarketProvider)
+- [ ] Port interface: `market-provider.port.ts` (MarketProviderPort, MarketCredentials, MarketProviderConfig)
+- [ ] Raw types: `polymarket.types.ts`, `kalshi.types.ts` (Zod response schemas)
 - [ ] Normalizers: `polymarket.ts`, `kalshi.ts` (pure functions + unit tests)
-- [ ] Polymarket client: `polymarket.client.ts` (Gamma + CLOB fetch with rate limiting)
-- [ ] Polymarket adapter: `polymarket.adapter.ts` (implements MarketDataPort)
-- [ ] Kalshi client: `kalshi.client.ts` (Trading API fetch with rate limiting)
-- [ ] Kalshi adapter: `kalshi.adapter.ts` (implements MarketDataPort)
+- [ ] Polymarket adapter: `polymarket.adapter.ts` (Gamma API fetch + normalize)
+- [ ] Kalshi adapter: `kalshi.adapter.ts` (Trading API fetch + normalize + API key auth)
 - [ ] Barrel exports: `index.ts` + adapter subpath `index.ts` files
 - [ ] Wire into monorepo: root package.json, tsconfig.json references
+- [ ] Add env entries to `.env.local.example`
 - [ ] Unit tests for normalizers and Zod schemas
-- [ ] Integration smoke test (live API call, can be skipped in CI)
 - [ ] `pnpm check` passes
 
 ## Validation
@@ -252,7 +353,7 @@ Gotchas: Values in **cents** (0–100, not bps) → multiply by 100 for bps. Opa
 pnpm packages:build
 
 # Unit tests pass
-pnpm test packages/market-data/
+pnpm test packages/market-provider/
 
 # Full CI check
 pnpm check
@@ -263,7 +364,9 @@ pnpm check
 ## Review Checklist
 
 - [ ] **Work Item:** `task.0230` linked in PR body
-- [ ] **Spec:** monitoring-engine-spec invariants upheld (OBSERVATION_IDEMPOTENT IDs)
+- [ ] **Spec:** tenant-connections invariants upheld (CONNECTION_ID_ONLY, TENANT_SCOPED)
+- [ ] **Spec:** monitoring-engine invariants upheld (OBSERVATION_IDEMPOTENT, SINGLE_INGESTION_SUBSTRATE plan)
+- [ ] **Spec:** identity-model invariants upheld (billing_account_id scoping)
 - [ ] **Tests:** normalizer unit tests, Zod schema validation tests
 - [ ] **Reviewer:** assigned and approved
 
@@ -271,6 +374,8 @@ pnpm check
 
 - Design source: task.0227 §B2 (schemas), §B4 (normalizers), §B5 (adapters)
 - Architecture pattern: `packages/operator-wallet/` (port + subpath adapters)
+- Auth model: [tenant-connections spec](cogni-template:docs/spec/tenant-connections.md)
+- Identity model: [identity-model spec](cogni-template:docs/spec/identity-model.md)
 - Monitoring engine: `docs/spec/monitoring-engine.md`
 - Project: proj.poly-prediction-bot (Crawl P0)
 
