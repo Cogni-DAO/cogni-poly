@@ -420,11 +420,130 @@ An awareness artifact becomes knowledge when at least one holds:
 
 ---
 
-## Dolt Operational Model (v1 Target)
+## Per-Node Knowledge Distribution
 
-When the knowledge plane migrates to Dolt:
+Each Cogni node has its own agent graphs package (domain logic) and its own knowledge store (domain expertise). The operator maintains base knowledge that new nodes inherit. This section designs how knowledge flows between operator and nodes across the lifecycle.
 
-### Branching
+### Three-Layer Cake
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  OPERATOR LAYER                                              │
+│  Maintains base knowledge: strategies, prompts, evidence     │
+│  Published as: @cogni/knowledge-seeds (v0) or DoltHub (v1)  │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ provision / upgrade
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│  NODE LAYER (per-node, sovereign)                            │
+│  Local knowledge tables (Postgres v0 / Dolt v1)             │
+│  Base knowledge + node-specific strategies, prompts, evals  │
+│  Node decides when to pull upstream updates                  │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ KnowledgeStorePort
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│  GRAPH LAYER (per-node agent graphs)                         │
+│  packages/langgraph-graphs/ reads from KnowledgeStorePort    │
+│  Doesn't know or care about distribution mechanism           │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Key separation:** The agent graphs package is **code** (the logic). The knowledge store is **data** (the expertise). The awareness plane is **operational data** (what's happening now). A node's graphs read strategies and prompts from its local knowledge store — they never import them as code constants.
+
+### v0: Knowledge Seeds (Postgres, zero new infra)
+
+The operator publishes a `@cogni/knowledge-seeds` package containing SQL seed files:
+
+```
+packages/knowledge-seeds/
+  src/
+    strategies/prediction-market.sql   ← base strategies for poly domain
+    strategies/infrastructure.sql      ← base strategies for infra domain
+    prompts/poly-synth.sql             ← system prompts for market analysis
+    evidence/base-refs.sql             ← evidence library
+    index.ts                           ← export seed paths for programmatic use
+```
+
+**At node provision** (`provisionNode` workflow):
+
+1. Node's Postgres database is created (existing step 4)
+2. Drizzle migrations create knowledge tables (from task.0231)
+3. Seed step runs: `pnpm knowledge:seed` imports base strategies + prompts
+
+**Upstream updates:**
+
+- Operator bumps `@cogni/knowledge-seeds` version
+- Node runs `pnpm upgrade @cogni/knowledge-seeds && pnpm knowledge:seed --upsert`
+- Seed script upserts new versions (existing rows untouched, new versions appended)
+- Node's `UPGRADE_AUTONOMY` preserved — it decides when to upgrade
+
+**Node customization:**
+
+- Node adds its own rows via `KnowledgeStorePort.addStrategyVersion()` etc.
+- Custom strategies have `domain` matching the node's domain
+- Custom prompts are tuned for the node's specific use case
+
+**This satisfies all invariants:**
+
+- `DATA_SOVEREIGNTY` — node's Postgres is source of truth
+- `FORK_FREEDOM` — seeds are in the package, no remote dependency at runtime
+- `DEPLOY_INDEPENDENCE` — `docker compose up` works, knowledge tables exist locally
+- `UPGRADE_AUTONOMY` — node decides when to pull new seeds
+
+### v1: Dolt Clone Model (when branching + sharing are needed)
+
+When the trigger conditions are met, knowledge migrates from Postgres to Dolt:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Operator (DoltHub or Dolt remote)                    │
+│                                                     │
+│  cogni-dao/knowledge-base                           │
+│    main branch: curated base knowledge              │
+│    strategies, prompts, evidence, playbooks         │
+└──────────┬──────────────────────┬───────────────────┘
+           │ dolt clone           │ dolt clone
+           ▼                     ▼
+┌────────────────────┐  ┌────────────────────┐
+│ Node A (poly)      │  │ Node B (infra)     │
+│ Local Dolt server  │  │ Local Dolt server  │
+│                    │  │                    │
+│ main (from oper.)  │  │ main (from oper.)  │
+│ + poly strategies  │  │ + infra strategies │
+│ + tuned prompts    │  │ + tuned prompts    │
+│ + local evals      │  │ + local evals      │
+│                    │  │                    │
+│ experiment/        │  │ experiment/        │
+│   prompt-v4        │  │   lower-thresholds │
+└────────────────────┘  └────────────────────┘
+```
+
+**At node provision** (`provisionNode` workflow, enhanced):
+
+1. Node's Postgres database created (awareness plane)
+2. Node's Dolt database cloned: `dolt clone cogni-dao/knowledge-base`
+3. Dolt server started in node's namespace/compose
+4. `KnowledgeStorePort` adapter switches from Drizzle → Dolt
+
+**Per-node Dolt server** (docker-compose addition):
+
+```yaml
+dolt:
+  image: dolthub/dolt-sql-server:1.x
+  restart: unless-stopped
+  volumes:
+    - dolt_data:/var/lib/dolt
+  ports:
+    - "127.0.0.1:3307:3306"
+  healthcheck:
+    test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
+    interval: 10s
+    timeout: 2s
+    retries: 3
+```
+
+**Branching for experimentation:**
 
 ```
 main                          ← production knowledge, consumed by live pipelines
@@ -434,22 +553,35 @@ main                          ← production knowledge, consumed by live pipelin
   └── review/user-submitted   ← human-submitted evidence pending review
 ```
 
-The live awareness pipeline reads from `main`. Experiments branch, eval, and merge when validated.
+**Upstream updates:**
 
-### Fork Inheritance
+```bash
+dolt pull origin    # pull operator's latest base knowledge
+dolt merge main     # merge into node's main (resolve conflicts)
+dolt commit -m "merged operator knowledge update 2026-04-15"
+```
 
-When a new node forks `cogni-template`:
+**Knowledge sharing (bidirectional):**
 
-1. `dolt clone operator/knowledge-template` — inherits full knowledge history
-2. Node adds domain-specific strategies, prompts, evidence
-3. Node can `dolt pull origin` to receive upstream knowledge updates
-4. Node can submit knowledge upstream via PR (cherry-pick model — operator reviews)
+```bash
+# Node pushes validated strategy to operator review branch
+dolt push origin node-abc123/validated-poly-strategy
+# Operator reviews, merges into their main if approved
+```
 
-This preserves **fork freedom** (ROADMAP invariant) while enabling **knowledge sharing**.
+### When to Trigger v1
+
+The concrete trigger for Dolt migration — **all three must hold:**
+
+1. **Multiple active nodes** — at least 2 nodes need to share/inherit knowledge
+2. **Active prompt experimentation** — version rows aren't sufficient; need branch-per-experiment
+3. **Proven v0 knowledge flow** — strategies and prompts are actually being read from the knowledge store (not hardcoded)
+
+Until then, Postgres + knowledge-seeds is simpler and sufficient. The `KnowledgeStorePort` makes the swap transparent to consumers.
 
 ### Pinning Analysis to Knowledge State
 
-Every analysis run in the awareness plane can record which knowledge version it used:
+Every analysis run in the awareness plane records which knowledge version it used:
 
 ```
 analysis_runs.knowledge_version = "v7"        -- v0: version string
@@ -501,7 +633,10 @@ This enables reproducibility: given the same observations + the same knowledge v
 
 - [Monitoring Engine Spec](./monitoring-engine.md) — awareness plane (Postgres)
 - [Architecture](./architecture.md) — hexagonal layering
-- [Node vs Operator Contract](./node-operator-contract.md) — fork freedom invariants
+- [Node vs Operator Contract](./node-operator-contract.md) — fork freedom, data sovereignty, upgrade autonomy
+- [Node Launch Spec](./node-launch.md) — `provisionNode` workflow, per-node infrastructure
+- [Node Formation Spec](./node-formation.md) — DAO creation, repo-spec output
 - spike.0137 (branch) — knowledge store research
 - proj.knowledge-store (branch) — prior Postgres-based design (refined here)
 - [proj.poly-prediction-bot](../../work/projects/proj.poly-prediction-bot.md) — first domain consuming both planes
+- task.0233 (cogni-template) — node-template extraction design
