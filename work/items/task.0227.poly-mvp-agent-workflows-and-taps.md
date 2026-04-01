@@ -15,7 +15,7 @@ assignees: derekg1729
 credit:
 project: proj.poly-prediction-bot
 branch: feat/poly-data-pipeline
-pr:
+pr: https://github.com/Cogni-DAO/cogni-resy-helper/pull/13
 reviewer:
 revision: 5
 blocked_by:
