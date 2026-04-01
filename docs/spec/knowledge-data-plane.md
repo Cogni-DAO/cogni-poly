@@ -1,11 +1,11 @@
 ---
 id: knowledge-data-plane-spec
 type: spec
-title: "Knowledge Data Plane — Versioned Expertise for Node-Template"
+title: "Knowledge Data Plane — Doltgres-Backed Expertise for Node-Template"
 status: draft
 spec_state: draft
 trust: draft
-summary: "Separates hot operational awareness (Postgres) from cold curated knowledge (versioned). The awareness plane owns what the AI sees and decides right now. The knowledge plane owns what the AI has learned — strategies, prompt versions, evaluations, evidence, playbooks. v0 uses Postgres behind a port abstraction; Dolt is the target backend when branching and fork inheritance are exercised."
+summary: "Separates hot operational awareness (Postgres) from cold curated knowledge (Doltgres). The awareness plane owns what the AI sees right now. The knowledge plane owns what the AI has learned — strategies, prompt versions, evaluations, evidence. Doltgres is a Postgres drop-in with git-like versioning (commit, log, diff). Same Drizzle schemas, same pg driver — just add commit/push/sync workflows."
 read_when: Designing a knowledge store for a Cogni node, choosing where data lives (awareness vs knowledge), understanding the promotion boundary, or forking the node-template.
 implements:
 owner: derekg1729
@@ -14,7 +14,7 @@ verified:
 tags: [knowledge, dolt, node-template, awareness, data-plane, cogni-template]
 ---
 
-# Knowledge Data Plane — Versioned Expertise for Node-Template
+# Knowledge Data Plane — Doltgres-Backed Expertise for Node-Template
 
 > Awareness is what you see. Knowledge is what you've learned. Don't store them in the same place.
 
@@ -56,7 +56,7 @@ This data is:
 - **Experimental** — you want to branch, test a new prompt on a branch, eval it, merge if it works
 - **Shareable** — validated knowledge can flow between nodes (operator → node, node → operator)
 
-Postgres can serve this with append-only version rows, but it gets clumsy at scale — manual `version` columns, `valid_from`/`valid_to` ranges, and audit triggers recreate what a version-controlled database gives you natively. The target architecture uses Dolt for this layer, but the port abstraction means we start with Postgres and swap when the Dolt-specific features (branching, fork inheritance) are actually exercised.
+Plain Postgres can serve this with append-only version rows, but it gets clumsy — manual `version` columns, `valid_from`/`valid_to` ranges, and audit triggers recreate what a version-controlled database gives you natively. **Doltgres** solves this: it's a Postgres-compatible drop-in with native git-like versioning (commit, log, diff, branch, merge). Same wire protocol, same Drizzle schemas, same `postgres` driver. The only additions are Dolt-specific SQL functions for versioning workflows.
 
 ---
 
@@ -83,7 +83,7 @@ Postgres can serve this with append-only version rows, but it gets clumsy at sca
                            │
                            ▼
 ┌────────────────────────────────────────────────────────┐
-│         KNOWLEDGE PLANE (Postgres v0 → Dolt v1)        │
+│              KNOWLEDGE PLANE (Doltgres)                 │
 │         "What the AI has learned over time"             │
 │                                                        │
 │  strategies            (named decision approaches)     │
@@ -96,79 +96,75 @@ Postgres can serve this with append-only version rows, but it gets clumsy at sca
 │  knowledge_claims      (curated assertions)            │
 │                                                        │
 │  Tempo: hours to days                                  │
-│  Mutability: versioned (append version rows in v0;     │
-│              branch/commit/merge/diff in v1 Dolt)      │
+│  Mutability: versioned (dolt_commit, dolt_log, diff)   │
 │  Owner: knowledge curation pipeline                    │
 └────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Phased Implementation
+## Why Doltgres
 
-The hexagonal architecture makes this a clean adapter swap. Consumers depend on `KnowledgeStorePort`, not on the storage backend. v0 ships value immediately on existing infrastructure; v1 adds Dolt when its unique capabilities are needed.
+Doltgres is a Postgres-compatible database with native git-like versioning. It's a **drop-in replacement** — same wire protocol, same SQL, same Drizzle ORM, same `postgres` driver. The only additions are Dolt-specific SQL functions for versioning.
 
-### v0 — Postgres (ships with task.0231)
+| Capability            | What Doltgres adds                                          |
+| --------------------- | ----------------------------------------------------------- |
+| Version history       | `SELECT * FROM dolt_log ORDER BY date DESC`                 |
+| Commit changes        | `SELECT dolt_commit('-Am', 'added poly strategy v2')`       |
+| Diff two versions     | `SELECT * FROM dolt_diff('HEAD~1', 'HEAD', 'strategies')`   |
+| Pin analysis to state | `SELECT hashof('HEAD')` → store as `knowledge_commit`       |
+| Audit by default      | Every commit has author + message + timestamp               |
+| Future: branching     | `SELECT dolt_checkout('-b', 'experiment/prompt-v4')`        |
+| Future: remotes       | `SELECT dolt_push('origin', 'main')` for cross-node sharing |
 
-- Knowledge tables in `packages/db-schema/knowledge/` (Drizzle, same patterns as existing slices)
-- `packages/knowledge-store/` with `KnowledgeStorePort` + `DrizzleKnowledgeStoreAdapter`
-- Versioning via append-only `strategy_versions` / `prompt_versions` rows with monotonic `version` column
-- Reuses existing Postgres, Drizzle, db-client, testcontainer, migration tooling — zero new infrastructure
-- `currentVersion()` returns latest version number (not a commit hash)
+**What stays the same:** Drizzle table definitions, `postgres` driver, existing Drizzle migration tooling, testcontainer patterns, `@cogni/db-client` factory. The knowledge schema is standard Postgres DDL.
 
-### v1 — Dolt (future task, when branching/forking is exercised)
+**What's new:** Workflows for committing, logging, and (future) pushing/syncing knowledge data. These are additional SQL calls, not a different database engine.
 
-- Add `dolt` service to docker-compose (MySQL-compatible)
-- New `DoltKnowledgeStoreAdapter` implementing same port
-- Migrate data from Postgres tables → Dolt
-- Branching, diffing, time-travel, fork inheritance become available
-- `currentVersion()` returns Dolt commit hash
-- `diffVersions()` and `checkoutBranch()` added to port
+### MVP Scope
 
-### When to trigger v1
+Single branch (`main`), commit-based versioning. Read, write, commit, log, diff. No branching, no remotes, no merge workflows. Get comfortable with Doltgres's commit model first.
 
-The concrete trigger for Dolt: **when any of these are actually needed:**
+### Versioning Workflows
 
-1. A second node forks and needs to inherit + share knowledge
-2. Prompt experimentation needs branch-per-experiment (not just version rows)
-3. Cross-node knowledge sharing is on the roadmap
+**After writes — commit:**
 
-Until then, Postgres version rows are simpler and sufficient.
+```sql
+-- Standard Drizzle INSERT (unchanged)
+INSERT INTO strategies (id, domain, name, ...) VALUES (...);
+INSERT INTO strategy_versions (id, strategy_id, version, ...) VALUES (...);
+-- Then commit the change
+SELECT dolt_commit('-Am', 'add calibrated market analyst strategy v1');
+```
 
----
+**Audit — log:**
 
-## Why Dolt (Target Architecture)
+```sql
+SELECT * FROM dolt_log ORDER BY date DESC LIMIT 10;
+```
 
-Dolt is a SQL database with git semantics — branch, commit, diff, merge, clone, push, pull — on tables instead of files. It speaks MySQL-compatible SQL with additional system tables and functions for version control.
+**Diff — what changed:**
 
-| Need                    | Postgres v0 workaround         | Dolt v1 native                                  |
-| ----------------------- | ------------------------------ | ----------------------------------------------- |
-| Version history         | Append-only version rows       | `dolt_log`, `dolt_diff()`, `AS OF` queries      |
-| Branch to experiment    | Copy rows + flag column        | `CALL dolt_checkout('-b', 'experiment/foo')`    |
-| Diff two versions       | Custom join on version columns | `SELECT * FROM dolt_diff('main', 'experiment')` |
-| Merge validated changes | Manual row-level merge         | `CALL dolt_merge('experiment')`                 |
-| Fork inheritance        | Drizzle seeds / pg_dump        | `dolt clone operator/knowledge-template`        |
-| Cross-node sharing      | Manual export/import           | `dolt pull origin`, `dolt push`                 |
-| Time-travel queries     | Query by version number        | `SELECT * FROM strategies AS OF 'HEAD~5'`       |
-| Audit by default        | Version rows have `created_at` | Every commit has author + message + timestamp   |
+```sql
+SELECT * FROM dolt_diff('HEAD~1', 'HEAD', 'prompt_versions');
+```
 
-**The key insight:** Awareness data is write-once (facts that happened). Knowledge data is write-many (expertise that evolves). These need fundamentally different storage semantics — but the port abstraction means we defer the infrastructure decision until the value justifies the cost.
+**Pin analysis to knowledge state:**
 
-### Relationship to Prior Work (spike.0137, proj.knowledge-store)
+```sql
+SELECT hashof('HEAD') as knowledge_commit;
+-- Store in analysis_runs.knowledge_commit for reproducibility
+```
 
-The spike.0137 research identified a three-layer architecture:
+### Relationship to Prior Work
 
-- **Layer 0** (raw archive) — `ingestion-core`, already exists
-- **Layer 1** (claims/evidence) — extracted assertions with provenance
-- **Layer 2** (canonical knowledge) — resolved entities, relations, observations
-
-The proj.knowledge-store design placed all three layers in Postgres. This spec **refines that design** by:
+The spike.0137 research identified a three-layer architecture (raw → claims → canonical). The proj.knowledge-store design placed all layers in plain Postgres. This spec refines that by:
 
 1. Clarifying the awareness/knowledge boundary (which the prior design blurred)
-2. Using a simpler schema for v0 (strategies/prompts/evaluations vs entities/relations/observations)
-3. Targeting Dolt as the v1 backend for Layers 1–2 when versioning demands justify it
+2. Using Doltgres for the knowledge layer (native versioning instead of manual version columns)
+3. Using a simpler schema (strategies/prompts/evaluations — the immediate need)
 
-Layer 0 (raw archive) stays in Postgres permanently — it's append-only, high-frequency, and benefits from Postgres's ecosystem (TimescaleDB, RLS, existing migrations).
+Layer 0 (raw archive) stays in plain Postgres — it's append-only and benefits from Postgres's ecosystem (TimescaleDB, RLS).
 
 ---
 
@@ -457,7 +453,7 @@ Each Cogni node has its own agent graphs package (domain logic) and its own know
 ┌──────────────────────────────────────────────────────────────┐
 │  OPERATOR BASE KNOWLEDGE                                     │
 │  Curated strategies, reference prompts, evidence library     │
-│  Published as: @cogni/knowledge-seeds (v0) or Dolt remote   │
+│  Published as: @cogni/knowledge-seeds or Doltgres remote    │
 │  Class: public/shared                                        │
 └──────────────────────────┬───────────────────────────────────┘
                            │ seed (v0) / pull (v1)
