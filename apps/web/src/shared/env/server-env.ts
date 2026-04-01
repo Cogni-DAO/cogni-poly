@@ -187,6 +187,11 @@ export const serverSchema = z.object({
   // Required for research graph web search capability
   TAVILY_API_KEY: z.string().min(1).optional(),
 
+  // Market Provider: Kalshi - Optional
+  // Required for Kalshi market data in poly-brain. Polymarket works without credentials.
+  KALSHI_API_KEY: z.string().min(1).optional(),
+  KALSHI_API_SECRET: z.string().min(1).optional(),
+
   // Temporal (Schedule orchestration) - Required
   // Per SCHEDULER_SPEC.md: Temporal is required infrastructure, no fallback
   // Start Temporal with: pnpm dev:infra
