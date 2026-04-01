@@ -2,7 +2,7 @@
 id: task.0226
 type: task
 title: "Cogni Poly — backend research, design & integration for prediction market bot"
-status: needs_research
+status: done
 priority: 1
 rank: 2
 estimate: 3
@@ -19,7 +19,7 @@ revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-03-30
-updated: 2026-03-30
+updated: 2026-04-01
 labels: [poly, prediction-markets, ai, research, design]
 external_refs:
 ---

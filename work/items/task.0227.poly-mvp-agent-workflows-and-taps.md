@@ -2,7 +2,7 @@
 id: task.0227
 type: task
 title: "Cogni Poly — Polymarket domain pack"
-status: needs_merge
+status: done
 priority: 1
 rank: 1
 estimate: 5
@@ -21,7 +21,7 @@ revision: 5
 blocked_by:
 deploy_verified: false
 created: 2026-03-30
-updated: 2026-03-31
+updated: 2026-04-01
 labels: [poly, prediction-markets, ai, langgraph]
 external_refs:
 ---

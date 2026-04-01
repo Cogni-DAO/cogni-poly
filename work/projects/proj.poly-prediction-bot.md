@@ -10,7 +10,7 @@ summary: Build an autonomous prediction market bot that ingests live market data
 outcome: A self-improving prediction market intelligence system — from read-only market access through autonomous analysis to simulated trading with tracked P&L.
 assignees: derekg1729
 created: 2026-03-31
-updated: 2026-03-31
+updated: 2026-04-01
 labels: [poly, prediction-markets, ai, langgraph, temporal]
 ---
 
@@ -26,31 +26,36 @@ Build a prediction market bot that starts by reading and searching live markets 
 
 **Goal:** Live market data flowing through the system. Users can browse and search active markets across platforms. The landing page shows real data instead of mocks.
 
-| Deliverable                                                              | Status      | Est | Work Item              |
-| ------------------------------------------------------------------------ | ----------- | --- | ---------------------- |
-| Backend research + API integration plan                                  | In Progress | 3   | task.0226              |
-| MVP agent workflows + data stream design                                 | In Progress | 5   | task.0227              |
-| `poly-core` package — Zod schemas, normalizers, threshold math           | Not Started | 2   | (create at impl start) |
-| `db-schema/poly` — market tables + TimescaleDB snapshots                 | Not Started | 2   | (create at impl start) |
-| Polymarket data adapter (REST polling, market normalization)             | Not Started | 3   | (create at impl start) |
-| Kalshi data adapter (REST polling, market normalization)                 | Not Started | 2   | (create at impl start) |
-| Market search API — browse, filter, full-text search over active markets | Not Started | 2   | (create at impl start) |
-| Landing page wired to live data (replace mocks)                          | Not Started | 2   | (create at impl start) |
+| Deliverable                                                                   | Status | Est | Work Item      |
+| ----------------------------------------------------------------------------- | ------ | --- | -------------- |
+| Backend research + API integration plan                                       | Done   | 3   | task.0226      |
+| Polymarket domain pack — adapters, normalizers, triggers, scoring, API routes | Done   | 5   | task.0227      |
+| `@cogni/market-provider` — port, Zod schemas, Polymarket + Kalshi adapters    | Done   | 3   | task.0230      |
+| `@cogni/poly-core` — domain types, normalizers, triggers, scoring             | Done   | 2   | (in task.0227) |
+| `db-schema/ingestion` — ObservationEvent table                                | Done   | 1   | (in task.0227) |
+| PollAdapters wrapping MarketProviderPort                                      | Done   | 1   | (in task.0227) |
+| Landing page APIs (`/markets`, `/signals`, `/status`)                         | Done   | 2   | (in task.0227) |
+| Landing page UI — live market cards, category filters, platform links         | Done   | 2   | (in task.0227) |
+| `core__market_list` AI tool + poly-brain LangGraph agent                      | Done   | 2   | (in task.0230) |
+| Live market capability wired into chat UI container                           | Done   | 1   | (in task.0230) |
 
 ### Walk (P1) — Intelligence Engine
 
-**Goal:** Continuous autonomous scanning with threshold-triggered AI analysis. Users receive signals with real edge. Street intel workflow turns user observations into market-matched alpha. The system builds expertise through calibration.
+**Goal:** Continuous autonomous scanning with threshold-triggered AI analysis. Redis live stream feeds the UI. Significant observations persist to Postgres. AI brain fires on triggers, not timers.
 
-| Deliverable                                                          | Status      | Est | Work Item            |
-| -------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Temporal data stream workflow (poll → snapshot → trigger)            | Not Started | 3   | (create at P1 start) |
-| `poly-synth` LangGraph reasoning graph                               | Not Started | 3   | (create at P1 start) |
-| Temporal analysis run workflow (context → LLM → score → persist)     | Not Started | 3   | (create at P1 start) |
-| Public signals API + brain status endpoint                           | Not Started | 2   | (create at P1 start) |
-| Semantic search spike — observation-to-market matching approach      | Not Started | 2   | spike.0229           |
-| Street intel workflow — user observations matched to live markets    | Not Started | 3   | story.0228           |
-| Calibration loop — outcomes → base rate updates → improving accuracy | Not Started | 3   | (create at P1 start) |
-| Enrichment sources — GDELT news, Metaculus expert forecasts          | Not Started | 2   | (create at P1 start) |
+| Deliverable                                                                 | Status      | Est | Work Item            |
+| --------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Redis 7 infrastructure (upstream merge from operator repo)                  | Blocked     | 1   | (upstream task.0174) |
+| Data streams spec — Redis live plane + selective Postgres persistence       | Done        | 1   | (data-streams-spec)  |
+| Knowledge data plane — strategy/prompt versioning for analysis graphs       | In Progress | 3   | task.0231            |
+| Temporal MarketStreamWorkflow (poll → Redis → triggers → selective persist) | Not Started | 3   | (create at P1 start) |
+| SSE endpoint — frontend tails Redis for live updates                        | Not Started | 2   | (create at P1 start) |
+| `poly-synth` LangGraph reasoning graph (structured analysis, not chat)      | Not Started | 3   | (create at P1 start) |
+| Temporal AnalysisRunWorkflow (context → LLM → score → persist)              | Not Started | 3   | (create at P1 start) |
+| Semantic search spike — observation-to-market matching                      | Not Started | 2   | spike.0229           |
+| Street intel workflow — user observations matched to live markets           | Not Started | 3   | story.0228           |
+| Calibration loop — outcomes → base rate updates                             | Not Started | 3   | (create at P1 start) |
+| Enrichment sources — GDELT news, Metaculus expert forecasts                 | Not Started | 2   | (create at P1 start) |
 
 ### Run (P2+) — Paper Trading & Treasury
 
@@ -79,23 +84,30 @@ Build a prediction market bot that starts by reading and searching live markets 
 ## Dependencies
 
 - [x] Landing page (`apps/poly`) — merged in PR #12
-- [ ] `packages/monitor-core` — generic monitoring backbone (Part A of task.0227)
-- [ ] `packages/db-schema/monitor` — generic tables (Part A of task.0227)
-- [ ] Temporal infrastructure in dev/preview environments
-- [ ] TimescaleDB extension available in Postgres
-- [ ] Polymarket API access (CLOB API key)
-- [ ] Kalshi API access (API key)
+- [x] Polymarket domain pack — merged in PR #13
+- [x] `@cogni/market-provider` package — on feat/market-provider-package branch
+- [x] Kalshi API access (API key + RSA private key in .env.local)
+- [x] Polymarket API access (public Gamma API, no key needed)
+- [ ] Redis 7 infrastructure — exists in operator repo (task.0174), needs upstream merge
+- [ ] Temporal scheduled workflows for continuous polling (Walk)
+- [ ] TimescaleDB extension (optional — plain table works without it)
 
 ## As-Built Specs
 
-- (none yet — specs created when code merges)
+- [AI Awareness & Decision Plane](../../docs/spec/monitoring-engine.md) — record types, decision layers, invariants
+- [Data Streams](../../docs/spec/data-streams.md) — Redis live plane, selective Postgres persistence, SSE
+- [Knowledge Data Plane](../../docs/spec/knowledge-data-plane.md) — versioned strategy/prompt expertise (draft)
 
 ## Design Notes
 
-- **Generic engine + domain pack split** (task.0227 v4): The monitoring backbone (`monitor-core`, `db-schema/monitor`, generic workflows) lives in cogni-template and is reusable across any Cogni node. The Polymarket-specific logic (`poly-core`, adapters, `poly-synth` graph) is additive on top. This means another node could build a Grafana monitor or social media monitor using the same backbone.
+- **Two-tier persistence** (data-streams-spec): Redis streams hold every poll sample (ephemeral, MAXLEN-trimmed). Only threshold crossings + hourly checkpoints persist to Postgres. ~100x reduction vs full firehose.
 
-- **Semantic search for street intel** (spike.0229): The hardest open question. Connecting "warehouse fire" to "CPI market" requires multi-hop reasoning. Spike will benchmark embeddings vs LLM-as-judge vs hybrid. This gates the Walk phase street intel deliverable.
+- **Market provider port** (task.0230): Single `MarketProviderPort` abstraction used by both the AI tool (`core__market_list`) and the data pipeline (`PollAdapter` wraps it). One HTTP client per platform, not two.
 
-- **Follow-a-wallet** (Run phase): Polymarket transactions are on-chain (Polygon). Can index top wallets' positions and backtest their strategies. Potential signal source: if a known-profitable wallet takes a large position, that's a trigger. Needs separate research spike when P2 starts.
+- **Poly-brain vs poly-synth**: Two distinct graphs. `poly-brain` is the chat agent (ReAct, tools, conversational). `poly-synth` is the autonomous analysis graph (structured input → assessment → scoring, no tools, Walk scope).
 
-- **Edge-first philosophy**: The bot doesn't just surface markets — it must demonstrate real edge. Calibration loop (outcomes → base rate updates) is critical to Walk. Paper trading in Run proves edge with tracked P&L before any DAO treasury commitment.
+- **Knowledge vs awareness split** (knowledge-data-plane-spec): Awareness = what the AI sees now (observations, triggers, signals). Knowledge = what the AI has learned (strategies, prompts, evaluations). Different lifecycles, different storage.
+
+- **Semantic search for street intel** (spike.0229): The hardest open question. Connecting "warehouse fire" to "CPI market" requires multi-hop reasoning. Spike will benchmark embeddings vs LLM-as-judge vs hybrid.
+
+- **Follow-a-wallet** (Run phase): Polymarket transactions are on-chain (Polygon). Can index top wallets' positions. Needs separate research spike when P2 starts.
