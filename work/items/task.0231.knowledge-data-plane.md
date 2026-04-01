@@ -15,7 +15,7 @@ assignees: derekg1729
 project: proj.poly-prediction-bot
 branch: feat/knowledge-data-plane
 created: 2026-03-31
-updated: 2026-03-31
+updated: 2026-04-01
 ---
 
 # Knowledge Data Plane — Port, Schema, Drizzle Adapter, Poly Seeds
@@ -44,7 +44,7 @@ Analysis graphs read strategy and prompt content from `KnowledgeStorePort` inste
 
 ### Approach
 
-**Solution**: Postgres knowledge tables behind a port abstraction, following existing Drizzle + db-schema patterns. One new capability package (`packages/knowledge-store/`), one new db-schema slice (`packages/db-schema/knowledge/`).
+**Solution**: Postgres knowledge tables behind a port abstraction, following existing Drizzle + db-schema patterns. One new capability package (`packages/knowledge-store/`), one new db-schema file (`packages/db-schema/src/knowledge.ts`).
 
 **Reuses**:
 
@@ -68,6 +68,7 @@ Analysis graphs read strategy and prompt content from `KnowledgeStorePort` inste
 
 - [ ] AWARENESS_HOT_KNOWLEDGE_COLD: Knowledge tables are separate from awareness tables (spec: knowledge-data-plane)
 - [ ] PORT_BEFORE_BACKEND: All access via `KnowledgeStorePort`, not direct Drizzle queries (spec: knowledge-data-plane)
+- [ ] KNOWLEDGE_SOVEREIGN_BY_DEFAULT: Node knowledge is local/private by default; sharing is explicit (spec: knowledge-data-plane)
 - [ ] SCHEMA_GENERIC_CONTENT_SPECIFIC: Domain specificity in `domain` column + `params` JSONB, not table structure (spec: knowledge-data-plane)
 - [ ] NO_PACKAGES_TO_SRC: Package cannot import from `src/**` (spec: architecture)
 - [ ] PACKAGES_BUILD_BEFORE_APP: Package builds before Next.js app (spec: build-architecture)
