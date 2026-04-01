@@ -78,10 +78,9 @@ Analysis graphs read strategy and prompt content from `KnowledgeStorePort` inste
 
 **Create:**
 
-- `packages/db-schema/knowledge/` — Drizzle table definitions (strategies, strategy_versions, prompt_defs, prompt_versions, strategy_evaluations, evidence_refs, playbooks, knowledge_claims)
+- `packages/db-schema/src/knowledge.ts` — Drizzle table definitions (flat file, matches existing pattern: `attribution.ts`, `billing.ts`, etc.). Tables: `strategies`, `strategyVersions`, `strategyEvaluations`, `promptDefs`, `promptVersions`. (`playbooks`, `evidenceRefs`, `knowledgeClaims` deferred — no producer/consumer in Crawl)
 - `packages/knowledge-store/src/port/knowledge-store.port.ts` — `KnowledgeStorePort` interface
-- `packages/knowledge-store/src/domain/schemas.ts` — Zod schemas for all knowledge types
-- `packages/knowledge-store/src/domain/types.ts` — TypeScript types inferred from Zod
+- `packages/knowledge-store/src/domain/schemas.ts` — Zod schemas for knowledge types
 - `packages/knowledge-store/src/adapters/drizzle.adapter.ts` — `DrizzleKnowledgeStoreAdapter`
 - `packages/knowledge-store/src/index.ts` — barrel export (port + domain)
 - `packages/knowledge-store/package.json`, `tsconfig.json`, `tsup.config.ts`
@@ -90,7 +89,8 @@ Analysis graphs read strategy and prompt content from `KnowledgeStorePort` inste
 
 **Modify:**
 
-- `packages/db-schema/` — add knowledge slice export
+- `packages/db-schema/src/index.ts` — add knowledge slice re-export
+- `packages/db-schema/package.json` — add `@cogni/db-schema/knowledge` subpath export
 - `package.json` (root) — add `@cogni/knowledge-store` workspace dependency
 - `tsconfig.json` (root) — add reference
 - Drizzle migration — new tables
@@ -98,8 +98,7 @@ Analysis graphs read strategy and prompt content from `KnowledgeStorePort` inste
 **Seed:**
 
 - Initial `prediction-market` strategy ("Calibrated Market Analyst")
-- Initial `poly-synth-prompt` prompt definition + version
-- Initial evidence refs (Polymarket API docs, Metaculus)
+- Initial `poly-synth-prompt` prompt definition + v1 with system prompt text
 
 ---
 
@@ -107,30 +106,30 @@ Analysis graphs read strategy and prompt content from `KnowledgeStorePort` inste
 
 ### P0 — Schema + Package Scaffold (1.5 days)
 
-| #   | Deliverable          | Description                                                                                                            |
-| --- | -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 1   | Drizzle schema slice | `packages/db-schema/knowledge/` — 8 tables per spec, Drizzle table definitions                                         |
-| 2   | Migration            | `pnpm db:generate` + `pnpm db:migrate` for new tables                                                                  |
-| 3   | Package scaffold     | `packages/knowledge-store/` — package.json, tsconfig, tsup, AGENTS.md                                                  |
-| 4   | Domain types + Zod   | Strategy, StrategyVersion, PromptDef, PromptVersion, StrategyEvaluation, EvidenceRef, Playbook, KnowledgeClaim schemas |
-| 5   | `KnowledgeStorePort` | Read + write interface per spec                                                                                        |
-| 6   | Root config          | Add workspace dep, tsconfig reference, biome override                                                                  |
+| #   | Deliverable          | Description                                                                                                                                                            |
+| --- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Drizzle schema       | `packages/db-schema/src/knowledge.ts` — 5 tables (strategies, strategyVersions, strategyEvaluations, promptDefs, promptVersions). Flat file matching existing pattern. |
+| 2   | Subpath export       | `@cogni/db-schema/knowledge` subpath in package.json exports                                                                                                           |
+| 3   | Migration            | `pnpm db:generate` + `pnpm db:migrate` for new tables                                                                                                                  |
+| 4   | Package scaffold     | `packages/knowledge-store/` — package.json, tsconfig, tsup, AGENTS.md                                                                                                  |
+| 5   | Domain types + Zod   | Strategy, StrategyVersion, PromptDef, PromptVersion, StrategyEvaluation schemas                                                                                        |
+| 6   | `KnowledgeStorePort` | Read + write interface per spec                                                                                                                                        |
+| 7   | Root config          | Add workspace dep, tsconfig reference, biome override                                                                                                                  |
 
 ### P1 — Adapter + Tests (1 day)
 
 | #   | Deliverable                    | Description                                                                                   |
 | --- | ------------------------------ | --------------------------------------------------------------------------------------------- |
-| 7   | `DrizzleKnowledgeStoreAdapter` | Implements `KnowledgeStorePort` using `@cogni/db-client`. Reads + writes all knowledge types. |
-| 8   | Unit tests                     | Schema validation (pure Zod), ID format tests                                                 |
-| 9   | Contract tests                 | Adapter against real Postgres (testcontainer or dev-stack)                                    |
+| 8   | `DrizzleKnowledgeStoreAdapter` | Implements `KnowledgeStorePort` using `@cogni/db-client`. Reads + writes all knowledge types. |
+| 9   | Unit tests                     | Schema validation (pure Zod), ID format tests                                                 |
+| 10  | Contract tests                 | Adapter against real Postgres (testcontainer or dev-stack)                                    |
 
 ### P2 — Seed Data (0.5 day)
 
 | #   | Deliverable        | Description                                                         |
 | --- | ------------------ | ------------------------------------------------------------------- |
-| 10  | Poly strategy seed | "Calibrated Market Analyst" strategy + v1 version with params       |
-| 11  | Poly prompt seed   | `poly-synth-prompt` definition + v1 with initial system prompt text |
-| 12  | Evidence refs seed | Polymarket API, Metaculus, GDELT as evidence sources                |
+| 11  | Poly strategy seed | "Calibrated Market Analyst" strategy + v1 version with params       |
+| 12  | Poly prompt seed   | `poly-synth-prompt` definition + v1 with initial system prompt text |
 
 ## Acceptance Criteria
 

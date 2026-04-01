@@ -491,83 +491,78 @@ packages/knowledge-seeds/
 - `DEPLOY_INDEPENDENCE` — `docker compose up` works, knowledge tables exist locally
 - `UPGRADE_AUTONOMY` — node decides when to pull new seeds
 
-### v1: Dolt Clone Model (when branching + sharing are needed)
+### v1: Shared Dolt Server, Branch-Per-Node
 
-When the trigger conditions are met, knowledge migrates from Postgres to Dolt:
+When the trigger conditions are met, knowledge migrates from Postgres to Dolt. Mirrors the existing Postgres model (one shared server, per-node isolation) — but with git-like branching instead of separate databases.
+
+**One server, one database, branch-per-node:**
 
 ```
-┌─────────────────────────────────────────────────────┐
-│ Operator (DoltHub or Dolt remote)                    │
-│                                                     │
-│  cogni-dao/knowledge-base                           │
-│    main branch: curated base knowledge              │
-│    strategies, prompts, evidence, playbooks         │
-└──────────┬──────────────────────┬───────────────────┘
-           │ dolt clone           │ dolt clone
-           ▼                     ▼
-┌────────────────────┐  ┌────────────────────┐
-│ Node A (poly)      │  │ Node B (infra)     │
-│ Local Dolt server  │  │ Local Dolt server  │
-│                    │  │                    │
-│ main (from oper.)  │  │ main (from oper.)  │
-│ + poly strategies  │  │ + infra strategies │
-│ + tuned prompts    │  │ + tuned prompts    │
-│ + local evals      │  │ + local evals      │
-│                    │  │                    │
-│ experiment/        │  │ experiment/        │
-│   prompt-v4        │  │   lower-thresholds │
-└────────────────────┘  └────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ Shared Dolt Server (one database: knowledge)             │
+│                                                         │
+│  main                     ← operator base knowledge     │
+│  ├── node/poly            ← poly node's working copy    │
+│  │   └── experiment/      ← poly's prompt experiments   │
+│  │       prompt-v4                                      │
+│  ├── node/infra           ← infra node's working copy   │
+│  │   └── experiment/      ← infra's experiments         │
+│  │       lower-thresholds                               │
+│  └── import/              ← external data imports       │
+│      metaculus-2026q1                                   │
+└─────────────────────────────────────────────────────────┘
 ```
+
+**Why branches, not per-node databases?** Nodes live in a monorepo (task.0244). They share infrastructure — one Postgres server, one Temporal server, one Dolt server. Branch-per-node gives isolation without operational overhead per node. `dolt_checkout` is session-scoped, so concurrent connections from different nodes each operate on their own branch.
 
 **At node provision** (`provisionNode` workflow, enhanced):
 
-1. Node's Postgres database created (awareness plane)
-2. Node's Dolt database cloned: `dolt clone cogni-dao/knowledge-base`
-3. Dolt server started in node's namespace/compose
-4. `KnowledgeStorePort` adapter switches from Drizzle → Dolt
+1. Node's Postgres database created (awareness plane — existing step)
+2. Dolt branch created: `CALL dolt_branch('node/{name}', 'main')`
+3. `KnowledgeStorePort` adapter connects with branch: `CALL dolt_checkout('node/{name}')`
 
-**Per-node Dolt server** (docker-compose addition):
+**Node adapter connection pattern:**
 
-```yaml
-dolt:
-  image: dolthub/dolt-sql-server:1.x
-  restart: unless-stopped
-  volumes:
-    - dolt_data:/var/lib/dolt
-  ports:
-    - "127.0.0.1:3307:3306"
-  healthcheck:
-    test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
-    interval: 10s
-    timeout: 2s
-    retries: 3
+```typescript
+// DoltKnowledgeStoreAdapter — sets branch per-session on connect
+async connect(): Promise<Connection> {
+  const conn = await this.pool.getConnection();
+  await conn.query(`CALL dolt_checkout('${this.nodeBranch}')`);
+  return conn;
+}
 ```
 
-**Branching for experimentation:**
+**Upstream updates** (operator pushes new base knowledge to `main`):
 
-```
-main                          ← production knowledge, consumed by live pipelines
-  ├── experiment/prompt-v4    ← testing a new system prompt
-  ├── experiment/lower-thresholds ← testing more aggressive triggers
-  ├── import/metaculus-2026q1 ← importing external calibration data
-  └── review/user-submitted   ← human-submitted evidence pending review
-```
-
-**Upstream updates:**
-
-```bash
-dolt pull origin    # pull operator's latest base knowledge
-dolt merge main     # merge into node's main (resolve conflicts)
-dolt commit -m "merged operator knowledge update 2026-04-15"
+```sql
+-- On the node's branch, merge operator updates
+CALL dolt_checkout('node/poly');
+CALL dolt_merge('main');
+CALL dolt_commit('-m', 'merged operator knowledge update 2026-04-15');
 ```
 
-**Knowledge sharing (bidirectional):**
+**Prompt experimentation** (branch off node, eval, merge back):
 
-```bash
-# Node pushes validated strategy to operator review branch
-dolt push origin node-abc123/validated-poly-strategy
-# Operator reviews, merges into their main if approved
+```sql
+CALL dolt_branch('experiment/poly/prompt-v4', 'node/poly');
+CALL dolt_checkout('experiment/poly/prompt-v4');
+-- ... modify prompts, run evals ...
+CALL dolt_checkout('node/poly');
+CALL dolt_merge('experiment/poly/prompt-v4');
+CALL dolt_commit('-m', 'prompt v4 merged — 12% calibration improvement');
 ```
+
+**Knowledge sharing** (node contributes back to operator base):
+
+```sql
+-- Operator reviews diff, merges validated knowledge into main
+SELECT * FROM dolt_diff('main', 'node/poly', 'strategies');
+CALL dolt_checkout('main');
+CALL dolt_merge('node/poly');  -- or cherry-pick specific commits
+CALL dolt_commit('-m', 'merged poly calibration strategy from node/poly');
+```
+
+**Self-hosted node exit path:** If a node leaves the monorepo (forks to self-host), it exports its branch: `dolt dump` or `dolt clone` from the shared server to a local instance. Fork freedom preserved.
 
 ### When to Trigger v1
 
@@ -626,8 +621,9 @@ This enables reproducibility: given the same observations + the same knowledge v
 - [ ] Should `knowledge_claims` use the same `entity_id` namespace as `observation_events`? (Likely yes — same stable key, different storage)
 - [ ] Should `analysis_runs.knowledge_version` be added in v0 or deferred?
 - [ ] Should the promotion gate be a Temporal workflow or a simpler cron-based batch?
-- [ ] Dolt driver maturity for Node.js (v1 concern) — mysql2 works, but Dolt-specific SQL extensions need verification
-- [ ] Dolt server resource footprint for small nodes (v1 concern) — acceptable alongside Postgres?
+- [ ] Dolt driver maturity for Node.js (v1 concern) — mysql2 works, but `dolt_checkout` / `dolt_merge` session semantics need verification through the driver
+- [ ] Dolt server resource footprint — acceptable alongside Postgres in shared cluster?
+- [ ] Branch naming convention — `node/{name}` vs `node/{short_id}`? Must be stable across renames.
 
 ## Related
 
