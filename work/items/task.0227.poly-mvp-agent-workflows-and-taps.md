@@ -2,7 +2,7 @@
 id: task.0227
 type: task
 title: "Cogni Poly — Polymarket domain pack"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 5

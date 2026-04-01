@@ -2,15 +2,15 @@
 id: monitoring-engine-spec
 type: spec
 title: AI Awareness & Decision Plane
-status: draft
-spec_state: draft
+status: active
+spec_state: proposed
 trust: draft
 summary: Extends ingestion-core with ObservationEvent for continuous data streams. Adds a thin AI decision layer — cheap triggers, budgeted analysis, scored signals, action routing, calibration — on top of the existing append-only ingestion spine.
 read_when: Adding a new data source (prediction markets, infra metrics, analytics, social), extending the trigger/analysis pipeline, or understanding how Cogni agents become aware of the world.
 implements:
 owner: derekg1729
 created: 2026-03-30
-verified:
+verified: 2026-03-31
 tags: [awareness, temporal, langgraph, data-streams, cogni-template]
 ---
 

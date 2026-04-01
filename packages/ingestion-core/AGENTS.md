@@ -9,7 +9,7 @@
 
 ## Purpose
 
-Pure domain types, port interface, and helpers for activity ingestion source adapters. Purpose-neutral — shared across ledger (→ curation → allocations) and governance (→ metrics, alerts, digests) consumers. No adapter deps, no I/O.
+Pure domain types, port interface, and helpers for activity ingestion source adapters. Purpose-neutral — shared across ledger (→ curation → allocations), governance (→ metrics, alerts, digests), and AI decision plane (→ triggers, analysis, signals) consumers. No adapter deps, no I/O.
 
 ## Pointers
 
@@ -43,8 +43,9 @@ Pure domain types, port interface, and helpers for activity ingestion source ada
   - `PollAdapter` — Port for Temporal activity-based cursor sync (replaces direct SourceAdapter usage)
   - `WebhookNormalizer` — Port for HTTP webhook verify + normalize to `ActivityEvent[]`
   - `SourceAdapter` — Deprecated type alias for backward compatibility
-  - `ActivityEvent` — Purpose-neutral raw activity event (no epoch/user/node fields)
-  - `StreamDefinition`, `StreamCursor`, `CollectParams`, `CollectResult` — Adapter I/O types
+  - `ActivityEvent` — Purpose-neutral raw discrete event (no epoch/user/node fields)
+  - `ObservationEvent` — Purpose-neutral raw state measurement (prices, latencies, metrics)
+  - `StreamDefinition`, `StreamCursor`, `CollectParams`, `CollectResult` — Adapter I/O types. `CollectResult` carries both `events` (discrete) and optional `observations` (measurements).
   - `buildEventId()` — Deterministic event ID construction
   - `canonicalJson()` — Sorted-key JSON for deterministic serialization
   - `hashCanonicalPayload()` — SHA-256 via Web Crypto
@@ -70,8 +71,10 @@ pnpm --filter @cogni/ingestion-core build
 
 - Pure functions and types only — no I/O, no framework deps
 - ACTIVITY_IDEMPOTENT: Deterministic event IDs from source data
-- PROVENANCE_REQUIRED: payloadHash (SHA-256) on every event
+- OBSERVATION_IDEMPOTENT: Deterministic observation IDs via buildEventId()
+- PROVENANCE_REQUIRED: payloadHash (SHA-256) on every event and observation
 - ActivityEvent is purpose-neutral: no epoch, receipt, payout, or node fields
+- ObservationEvent is purpose-neutral: no node fields. Captures state measurements
 
 ## Dependencies
 
