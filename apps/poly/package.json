@@ -8,6 +8,9 @@
     "start": "next start -p 3100"
   },
   "dependencies": {
+    "@cogni/ingestion-core": "workspace:*",
+    "@cogni/market-provider": "workspace:*",
+    "@cogni/poly-core": "workspace:*",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "class-variance-authority": "^0.7.1",

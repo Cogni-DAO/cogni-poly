@@ -2,15 +2,15 @@
 id: monitoring-engine-spec
 type: spec
 title: AI Awareness & Decision Plane
-status: draft
-spec_state: draft
+status: active
+spec_state: proposed
 trust: draft
 summary: Extends ingestion-core with ObservationEvent for continuous data streams. Adds a thin AI decision layer — cheap triggers, budgeted analysis, scored signals, action routing, calibration — on top of the existing append-only ingestion spine.
 read_when: Adding a new data source (prediction markets, infra metrics, analytics, social), extending the trigger/analysis pipeline, or understanding how Cogni agents become aware of the world.
 implements:
 owner: derekg1729
 created: 2026-03-30
-verified:
+verified: 2026-03-31
 tags: [awareness, temporal, langgraph, data-streams, cogni-template]
 ---
 
@@ -57,15 +57,16 @@ The design has four parts: federated awareness (where data lives), single ingest
           ┌────────────────────┴────────────────────┐
           ▼                                         ▼
    ActivityEvent                             ObservationEvent
-   (discrete human action)                   (continuous state sample)
+   (a discrete event happened)               (a state measurement was taken)
           │                                         │
           ▼                                         ▼
    ingestion_receipts                        observation_events
    (existing, append-only)                   (new, append-only)
-          │                                         │
-          ▼                                         ▼
-   Attribution pipeline                      AI Decision Plane
-   (epochs, allocations)                     (triggers → analysis → signals)
+          │         │                               │
+          │         └───────────────┐               │
+          ▼                         ▼               ▼
+   Attribution pipeline       AI Decision Plane (shared)
+   (selection → epochs)       (triggers → analysis → signals)
 ```
 
 **Principle:** External backends are the warehouse. We are the judgment layer. Store what the AI saw (compact snapshots), why it cared (triggers, analysis), what it concluded (signals), and how to drill back into the source (pointers). Do not mirror firehoses.
@@ -82,13 +83,50 @@ The design has four parts: federated awareness (where data lives), single ingest
 - **`hashCanonicalPayload()`** — SHA-256 provenance on every record
 - **StreamCursor / StreamDefinition** — same cursor model
 
-Two physical tables because `ingestion_receipts` has `platform_user_id NOT NULL` and attribution-specific columns. Observations have no human actor. Forcing them into one table would either break the attribution contract or require nullable columns that weaken it.
+Two physical tables because `ingestion_receipts` has `platform_user_id NOT NULL` and attribution-specific columns that don't apply to state measurements. Forcing them into one table would either break the attribution contract or require nullable columns that weaken it.
 
 **This is one logical substrate, not two parallel systems.** The shared PollAdapter, cursor, ID, and hash machinery is what makes it one spine.
 
-### ObservationEvent — new sibling record type
+### Two sibling record types — same base, different shapes
 
-Added to `ingestion-core` alongside `ActivityEvent`. Fields:
+The split is about the **kind of fact**, not the downstream use:
+
+- **ActivityEvent** = a discrete event happened (with or without a human actor)
+- **ObservationEvent** = a state measurement was taken at a point in time
+
+> **Naming note:** `ActivityEvent` is the existing name in `ingestion-core`. A clearer name would be `DiscreteEvent` — it removes the "human activity → attribution" implication. This rename is a future migration; the spec uses the existing name but the concept is "discrete event," not "human activity."
+
+Both share: `id`, `source`, `metadata`, `payloadHash`, timestamp. They diverge on what additional fields they carry:
+
+|                        | ActivityEvent (existing) | ObservationEvent (new)                    |
+| ---------------------- | ------------------------ | ----------------------------------------- |
+| **Fact type**          | Something happened       | Something was measured                    |
+| **Has human actor**    | Often (platformUserId)   | No                                        |
+| **Has numeric values** | No                       | Yes (values: Record\<string, number\>)    |
+| **Has artifact**       | Often (artifactUrl)      | No (but metadata carries source pointers) |
+| **Has subject key**    | Implicit in id           | Explicit entityId                         |
+| **Persists to**        | ingestion_receipts       | observation_events                        |
+
+### Classification examples
+
+| Raw fact                  | Type             | Why                                             |
+| ------------------------- | ---------------- | ----------------------------------------------- |
+| PR #42 merged by user123  | ActivityEvent    | Discrete event, has human actor                 |
+| Deploy v1.2.3 started     | ActivityEvent    | Discrete event, has human actor                 |
+| Grafana alert fired       | ActivityEvent    | Discrete event (no human actor, still an event) |
+| Market resolved to YES    | ActivityEvent    | Discrete event                                  |
+| PostHog `capture()` event | ActivityEvent    | Discrete user action                            |
+| CPU = 92% at 12:00:00     | ObservationEvent | State measurement                               |
+| BTC probability = 62%     | ObservationEvent | State measurement                               |
+| p95 latency = 480ms       | ObservationEvent | State measurement                               |
+| Conversion rate = 3.2%    | ObservationEvent | State measurement                               |
+| Orderbook spread = 100bps | ObservationEvent | State measurement                               |
+
+**Attribution eligibility is a downstream concern.** The attribution pipeline's selection stage decides which discrete events enter an epoch — not the record type. An observation never gets attributed (it's a measurement, not an action), but a discrete event might or might not be attribution-eligible depending on selection policy.
+
+**Observations can trigger derived events.** "Price crossed 500bps threshold" (observation) may cause "alert fired" (activity event). The observation is the raw fact; the derived event is a separate record created downstream.
+
+### ObservationEvent fields
 
 | Field         | Type                      | Description                                                          |
 | ------------- | ------------------------- | -------------------------------------------------------------------- |
@@ -100,54 +138,57 @@ Added to `ingestion-core` alongside `ActivityEvent`. Fields:
 | `values`      | Record\<string, number\>  | Domain-specific numerics: `{ probabilityBps: 6200, spreadBps: 100 }` |
 | `metadata`    | Record\<string, unknown\> | Non-numeric context, source pointers for deep investigation          |
 | `payloadHash` | string                    | SHA-256 via `hashCanonicalPayload()` — same as ActivityEvent         |
-| `observedAt`  | Date                      | When the observation was taken at the source                         |
+| `observedAt`  | Date                      | When the measurement was taken at the source                         |
 
-**The adapter decides which type to produce.** GitHub → `ActivityEvent[]` (human work). Polymarket → `ObservationEvent[]` (market state). Social media → both (a post is an activity; its engagement metrics are observations).
+**The adapter decides which type to produce.** A source may emit both — a social media adapter produces `ActivityEvent` for posts (discrete actions) and `ObservationEvent` for engagement metrics (measurements). A market adapter produces `ObservationEvent` for prices and `ActivityEvent` when a market resolves.
 
 ---
 
 ## AI Decision Layers
 
+The decision plane consumes **both record types**. Observations are the primary input (continuous monitoring), but discrete events can also trigger analysis (e.g., "Grafana alert fired" → investigate, "market resolved" → record outcome).
+
 ```
-observation_events (append-only raw log)
-        │
-        ▼
-Derived state + features ─────────── domain-specific views/aggregates
-        │                            (latest per entity, rolling windows)
-        ▼                            NOT separate tables — queries on raw log
-Trigger evaluation ───────────────── pure functions in Temporal Workflow code
-        │                            ephemeral — not persisted
-        │
-    Budget gate ──────────────────── cap concurrent runs + LLM calls/hour
-        │
-        ▼
-analysis_runs (persisted) ────────── Temporal Workflow + LangGraph child
-        │
-        ▼
-analysis_signals (persisted) ─────── AI conclusions with action level
-        │
-        ▼
-Action routing ───────────────────── domain-specific: observe/alert/recommend/auto-act/escalate
-        │
-        ▼
-analysis_outcomes (persisted) ────── ground truth when entities resolve
-        │
-        ▼
-base_rates (updated) ────────────── calibration loop closes the feedback cycle
+observation_events ───┐
+                      ├──→ Derived state + features ── domain-specific views/aggregates
+ingestion_receipts ───┘    (latest per entity, rolling windows, recent events)
+                                    │
+                                    ▼
+                      Trigger evaluation ─────────── pure functions in Workflow code
+                                    │                 ephemeral — not persisted
+                                    │
+                          Budget gate ────────────── cap concurrent runs + LLM calls/hour
+                                    │
+                                    ▼
+                      analysis_runs (persisted) ──── Temporal Workflow + LangGraph child
+                                    │
+                                    ▼
+                      analysis_signals (persisted) ─ AI conclusions with action level
+                                    │
+                                    ▼
+                      Action routing ─────────────── domain-specific: observe/alert/recommend/auto-act/escalate
+                                    │
+                                    ▼
+                      analysis_outcomes (persisted) ─ ground truth when entities resolve
+                                    │
+                                    ▼
+                      base_rates (updated) ────────── calibration loop
 ```
+
+> **v1 scope:** The Polymarket domain pack triggers only on observations (price moves, volume spikes, cross-platform spreads). Triggering on discrete events (e.g., "market resolved" → calibration) is supported by the architecture but implemented incrementally.
 
 ### Record Families
 
-| Family                 | Persisted?                 | Lifecycle                                 | Purpose                                                                |
-| ---------------------- | -------------------------- | ----------------------------------------- | ---------------------------------------------------------------------- |
-| **Raw observations**   | Yes — `observation_events` | Append-only, immutable                    | What the AI saw. Source of truth.                                      |
-| **Derived state**      | No — views on raw log      | Recomputed on read                        | Latest value per entity, rolling aggregates. Domain defines the views. |
-| **Trigger candidates** | No — ephemeral             | Evaluated in Workflow code, discarded     | Cheap filter: did anything change enough to warrant AI tokens?         |
-| **Analysis cases**     | Yes — `analysis_runs`      | Created on trigger, updated on completion | When and why AI was invoked. Temporal workflowId as PK.                |
-| **Signals**            | Yes — `analysis_signals`   | Created by analysis, immutable            | What the AI concluded. Action level determines routing.                |
-| **Outcomes**           | Yes — `analysis_outcomes`  | Created when entity resolves              | Ground truth. Compared against signals for calibration.                |
+| Family                 | Persisted?                | Lifecycle                                 | Purpose                                                                  |
+| ---------------------- | ------------------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
+| **Raw facts**          | Yes — both tables         | Append-only, immutable                    | What the AI saw. Source of truth. Both observations and discrete events. |
+| **Derived state**      | No — views on raw log     | Recomputed on read                        | Latest value per entity, rolling aggregates. Domain defines the views.   |
+| **Trigger candidates** | No — ephemeral            | Evaluated in Workflow code, discarded     | Cheap filter: did anything change enough to warrant AI tokens?           |
+| **Analysis cases**     | Yes — `analysis_runs`     | Created on trigger, updated on completion | When and why AI was invoked. Temporal workflowId as PK.                  |
+| **Signals**            | Yes — `analysis_signals`  | Created by analysis, immutable            | What the AI concluded. Action level determines routing.                  |
+| **Outcomes**           | Yes — `analysis_outcomes` | Created when entity resolves              | Ground truth. Compared against signals for calibration.                  |
 
-**Key filtering principle:** ~95% of observations should be eliminated by cheap deterministic triggers before any LLM call. The budget gate caps the remaining 5% to prevent runaway token spend.
+**Key filtering principle:** ~95% of raw facts should be eliminated by cheap deterministic triggers before any LLM call. The budget gate caps the remaining 5% to prevent runaway token spend.
 
 ---
 
@@ -186,26 +227,29 @@ Users see the same event stream the AI sees. **Transparency is the product.**
 
 ## Invariants
 
-| Rule                        | Constraint                                                                                                                                                      |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| SINGLE_INGESTION_SUBSTRATE  | Both ActivityEvent and ObservationEvent flow through ingestion-core PollAdapter. Same cursors, same ID helpers, same payloadHash. No parallel ingestion system. |
-| OWN_DECISIONS_NOT_TELEMETRY | External backends own raw data. Our DB stores compact snapshots + decision artifacts + source pointers. Never mirror firehoses.                                 |
-| OBSERVATION_APPEND_ONLY     | `observation_events` is append-only. DB trigger rejects UPDATE/DELETE. Same pattern as `ingestion_receipts`.                                                    |
-| OBSERVATION_IDEMPOTENT      | Observation IDs are deterministic via `buildEventId()`. Retries produce the same record.                                                                        |
-| NO_ENTITY_REGISTRY          | No `monitored_entities` table. `entityId` is a stable key on raw records and signals. Derived views materialize latest state when needed.                       |
-| CHEAP_BEFORE_EXPENSIVE      | Triggers are pure functions on derived state. The LLM never sees raw firehose. ~95% filtered before any AI call.                                                |
-| BUDGET_GATE                 | `prioritizeTriggers(triggers, budget, activeRuns)` caps concurrent analysis runs and LLM calls/hour. Triggers compete on priority.                              |
-| TEMPORAL_OWNS_IO            | All DB reads/writes and HTTP calls happen in Temporal Activities (per temporal-patterns-spec).                                                                  |
-| GRAPH_OWNS_THINKING         | LLM reasoning lives in a LangGraph graph invoked via Temporal Activity. The graph does zero I/O.                                                                |
-| WORKFLOW_PURE_ONLY          | Trigger evaluation and scoring run in Temporal Workflow code. Deterministic, replay-safe.                                                                       |
-| ACTION_LEVELS               | Every signal declares one of: `observe`, `alert`, `recommend`, `auto_act`, `escalate`.                                                                          |
-| CALIBRATION_LOOP            | When an entity resolves, an outcome is recorded. A calibration job compares signals to outcomes and updates base rates.                                         |
+| Rule                        | Constraint                                                                                                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| SINGLE_INGESTION_SUBSTRATE  | Both ActivityEvent and ObservationEvent flow through ingestion-core PollAdapter. Same cursors, same ID helpers, same payloadHash. No parallel ingestion system.                                        |
+| FACT_TYPE_NOT_USE_TYPE      | The ActivityEvent/ObservationEvent split describes the kind of fact (event vs measurement), not the downstream use. Attribution eligibility is decided by the selection stage, not by the record type. |
+| OWN_DECISIONS_NOT_TELEMETRY | External backends own raw data. Our DB stores compact snapshots + decision artifacts + source pointers. Never mirror firehoses.                                                                        |
+| OBSERVATION_APPEND_ONLY     | `observation_events` is append-only. DB trigger rejects UPDATE/DELETE. Same pattern as `ingestion_receipts`.                                                                                           |
+| OBSERVATION_IDEMPOTENT      | Observation IDs are deterministic via `buildEventId()`. Retries produce the same record.                                                                                                               |
+| NO_ENTITY_REGISTRY          | No `monitored_entities` table. `entityId` is a stable key on raw records and signals. Derived views materialize latest state when needed.                                                              |
+| CHEAP_BEFORE_EXPENSIVE      | Triggers are pure functions on derived state. The LLM never sees raw firehose. ~95% filtered before any AI call.                                                                                       |
+| BUDGET_GATE                 | `prioritizeTriggers(triggers, budget, activeRuns)` caps concurrent analysis runs and LLM calls/hour. Triggers compete on priority.                                                                     |
+| TEMPORAL_OWNS_IO            | All DB reads/writes and HTTP calls happen in Temporal Activities (per temporal-patterns-spec).                                                                                                         |
+| GRAPH_OWNS_THINKING         | LLM reasoning lives in a LangGraph graph invoked via Temporal Activity. The graph does zero I/O.                                                                                                       |
+| WORKFLOW_PURE_ONLY          | Trigger evaluation and scoring run in Temporal Workflow code. Deterministic, replay-safe.                                                                                                              |
+| ACTION_LEVELS               | Every signal declares one of: `observe`, `alert`, `recommend`, `auto_act`, `escalate`.                                                                                                                 |
+| CALIBRATION_LOOP            | When an entity resolves, an outcome is recorded. A calibration job compares signals to outcomes and updates base rates.                                                                                |
 
 ---
 
 ## Schema
 
-Existing tables (`ingestion_receipts`, `ingestion_cursors`) are unchanged. See attribution-ledger spec.
+Existing tables (`ingestion_receipts`, `ingestion_cursors`) are unchanged — they remain in `db-schema/attribution` for now.
+
+New tables live in a **neutral `db-schema/ingestion` slice** — not under attribution. Observations and the AI decision pipeline have nothing to do with epoch-based credit allocation.
 
 ### `observation_events` — raw observation log
 
@@ -307,9 +351,10 @@ Each domain (prediction markets, infrastructure, analytics, social) provides:
 
 ## Open Questions
 
-- [ ] Should `observation_events` live in `db-schema/attribution` (sibling to `ingestion_receipts`) or a new `db-schema/awareness` slice?
+- [x] ~~Should `observation_events` live in `db-schema/attribution` or a new slice?~~ → New `db-schema/ingestion` slice. Attribution is a downstream consumer, not the owner of awareness data.
 - [ ] Default budget values (maxConcurrentRuns, maxLlmCallsPerHour)?
 - [ ] Should `auto_act` require governance approval?
+- [ ] When to rename `ActivityEvent` → `DiscreteEvent` in `ingestion-core`? (Breaking change, needs migration.)
 
 ## Related
 

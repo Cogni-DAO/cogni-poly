@@ -47,6 +47,9 @@ importers:
       '@cogni/langgraph-graphs':
         specifier: workspace:*
         version: link:packages/langgraph-graphs
+      '@cogni/market-provider':
+        specifier: workspace:*
+        version: link:packages/market-provider
       '@cogni/operator-wallet':
         specifier: workspace:*
         version: link:packages/operator-wallet
@@ -294,6 +297,15 @@ importers:
 
   apps/poly:
     dependencies:
+      '@cogni/ingestion-core':
+        specifier: workspace:*
+        version: link:../../packages/ingestion-core
+      '@cogni/market-provider':
+        specifier: workspace:*
+        version: link:../../packages/market-provider
+      '@cogni/poly-core':
+        specifier: workspace:*
+        version: link:../../packages/poly-core
       '@react-three/drei':
         specifier: ^10.7.7
         version: 10.7.7(@react-three/fiber@9.5.0(@types/react@19.2.7)(immer@11.0.1)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(three@0.183.2))(@types/react@19.2.7)(@types/three@0.183.1)(immer@11.0.1)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(three@0.183.2)
@@ -837,6 +849,19 @@ importers:
         specifier: ^5
         version: 5.9.3
 
+  packages/market-provider:
+    dependencies:
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(@swc/core@1.15.10)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.3)
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
   packages/operator-wallet:
     dependencies:
       viem:
@@ -849,6 +874,25 @@ importers:
       '@privy-io/node':
         specifier: ^0.10.1
         version: 0.10.1(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(@swc/core@1.15.10)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.3)
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/poly-core:
+    dependencies:
+      '@cogni/ingestion-core':
+        specifier: workspace:*
+        version: link:../ingestion-core
+      '@cogni/market-provider':
+        specifier: workspace:*
+        version: link:../market-provider
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+    devDependencies:
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(@swc/core@1.15.10)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.3)

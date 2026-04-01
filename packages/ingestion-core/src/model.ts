@@ -3,16 +3,57 @@
 
 /**
  * Module: `@cogni/ingestion-core/model`
- * Purpose: Domain types for activity ingestion — purpose-neutral, shared across ledger and governance consumers.
+ * Purpose: Domain types for ingestion — purpose-neutral, shared across ledger, governance, and AI decision consumers.
  * Scope: Pure types. Does not contain I/O, business logic, or adapter deps.
  * Invariants:
  * - ActivityEvent is purpose-neutral: no epoch, user, node, receipt, or payout fields.
+ * - ObservationEvent is purpose-neutral: no node fields. Captures state measurements.
  * - Adapter-side type only — mapping to DB tables (which add node_id) is the workflow/store's job.
  * - payloadHash is PROVENANCE_REQUIRED (SHA-256 of canonical payload).
  * Side-effects: none
  * Links: docs/spec/attribution-ledger.md#source-adapter-interface
  * @public
  */
+
+/**
+ * Raw observation (state measurement) from an external source.
+ * Purpose-neutral — consumed by the AI decision plane (triggers → analysis → signals).
+ * The adapter produces these; the workflow/store maps them to DB rows with node_id, etc.
+ *
+ * Unlike ActivityEvent (discrete events), ObservationEvent captures continuous
+ * state measurements: prices, latencies, conversion rates, etc.
+ */
+export interface ObservationEvent {
+  /**
+   * Deterministic from source data. Format: "{source}:obs:{entityId}:{timestamp}"
+   * Examples: "polymarket:obs:polymarket:market:abc123:1711843200000"
+   */
+  readonly id: string;
+
+  /** Source platform: "polymarket", "kalshi", "grafana", "posthog", etc. */
+  readonly source: string;
+
+  /** Stable subject key: "polymarket:market:abc123", "grafana:metric:cpu_usage" */
+  readonly entityId: string;
+
+  /** Human-readable label: "Fed cuts rates at June meeting?" */
+  readonly entityTitle: string;
+
+  /** Domain-specific category: "economics", "api-latency", "funnel" */
+  readonly category: string;
+
+  /** Domain-specific numeric fields: { probabilityBps: 6200, spreadBps: 100 } */
+  readonly values: Record<string, number>;
+
+  /** Non-numeric context, source pointers for deep investigation */
+  readonly metadata: Record<string, unknown>;
+
+  /** SHA-256 via hashCanonicalPayload() — same as ActivityEvent (PROVENANCE_REQUIRED) */
+  readonly payloadHash: string;
+
+  /** When the measurement was taken at the source */
+  readonly observedAt: Date;
+}
 
 /**
  * Raw activity event from an external source.
@@ -95,8 +136,11 @@ export interface CollectParams {
 
 /** Result of a collect() call. */
 export interface CollectResult {
-  /** Collected events (may be empty if no new activity) */
+  /** Collected discrete events (may be empty if no new activity) */
   readonly events: readonly ActivityEvent[];
+
+  /** Collected observations / state measurements (may be empty) */
+  readonly observations?: readonly ObservationEvent[];
 
   /** Updated cursor for next incremental fetch */
   readonly nextCursor: StreamCursor;

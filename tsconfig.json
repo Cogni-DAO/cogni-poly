@@ -17,6 +17,7 @@
     { "path": "./packages/attribution-ledger" },
     { "path": "./packages/attribution-pipeline-contracts" },
     { "path": "./packages/attribution-pipeline-plugins" },
+    { "path": "./packages/market-provider" },
     { "path": "./packages/operator-wallet" },
     { "path": "./packages/scheduler-core" },
     { "path": "./packages/repo-spec" },

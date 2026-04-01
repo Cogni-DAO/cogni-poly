@@ -23,60 +23,11 @@ interface Market {
   outcomes: MarketOutcome[];
   /** ISO date string for market resolution */
   resolves: string;
+  /** Link to the market on the source platform */
+  url: string | null;
 }
 
-/* ─── Mock data (will be replaced by API) ────────── */
-
-const MOCK_MARKETS: Market[] = [
-  {
-    id: "1",
-    title: "Fed cuts rates at June meeting?",
-    category: "Economics",
-    platform: "Kalshi",
-    volume: "$4.2M",
-    resolves: "2026-06-18",
-    outcomes: [
-      { label: "Yes", probability: 62, change24h: 4 },
-      { label: "No", probability: 38, change24h: -4 },
-    ],
-  },
-  {
-    id: "2",
-    title: "GPT-5 released before July 2026?",
-    category: "Tech",
-    platform: "Polymarket",
-    volume: "$1.8M",
-    resolves: "2026-07-01",
-    outcomes: [
-      { label: "Yes", probability: 34, change24h: -2 },
-      { label: "No", probability: 66, change24h: 2 },
-    ],
-  },
-  {
-    id: "3",
-    title: "Bitcoin above $150k by EOY?",
-    category: "Crypto",
-    platform: "Polymarket",
-    volume: "$12.4M",
-    resolves: "2026-12-31",
-    outcomes: [
-      { label: "Yes", probability: 28, change24h: 7 },
-      { label: "No", probability: 72, change24h: -7 },
-    ],
-  },
-  {
-    id: "4",
-    title: "Category 5 hurricane hits US in 2026?",
-    category: "Climate",
-    platform: "Kalshi",
-    volume: "$890K",
-    resolves: "2026-11-30",
-    outcomes: [
-      { label: "Yes", probability: 41, change24h: -1 },
-      { label: "No", probability: 59, change24h: 1 },
-    ],
-  },
-];
+/* ─── Empty initial state ──────────────────────────── */
 
 /* ─── Probability bar (Polymarket-style) ─────────── */
 
@@ -146,25 +97,7 @@ function MarketCard({
   market: Market;
   delay: number;
 }): ReactElement {
-  // Simulate subtle probability drift
-  const [outcomes, setOutcomes] = useState(market.outcomes);
-
-  useEffect(() => {
-    const interval = setInterval(
-      () => {
-        setOutcomes((prev) => {
-          const drift = Math.random() > 0.5 ? 1 : -1;
-          const newYes = Math.max(1, Math.min(99, prev[0].probability + drift));
-          return [
-            { ...prev[0], probability: newYes },
-            { ...prev[1], probability: 100 - newYes },
-          ];
-        });
-      },
-      4000 + Math.random() * 3000
-    );
-    return () => clearInterval(interval);
-  }, []);
+  const outcomes = market.outcomes;
 
   return (
     <motion.div
@@ -185,9 +118,20 @@ function MarketCard({
               {market.platform}
             </span>
           </div>
-          <h3 className="font-semibold text-foreground text-sm leading-snug sm:text-base">
-            {market.title}
-          </h3>
+          {market.url ? (
+            <a
+              href={market.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-foreground text-sm leading-snug underline decoration-border/40 underline-offset-2 transition-colors hover:decoration-primary sm:text-base"
+            >
+              {market.title}
+            </a>
+          ) : (
+            <h3 className="font-semibold text-foreground text-sm leading-snug sm:text-base">
+              {market.title}
+            </h3>
+          )}
         </div>
         <div className="shrink-0 text-right">
           <div className="font-bold font-mono text-foreground text-lg tabular-nums sm:text-xl">
@@ -219,7 +163,40 @@ function MarketCard({
 
 /* ─── Exported section ──────────────────────────── */
 
+const CATEGORIES = [
+  "All",
+  "Economics",
+  "Tech",
+  "Crypto",
+  "Climate",
+  "Politics",
+];
+
 export function MarketCards(): ReactElement {
+  const [markets, setMarkets] = useState<Market[]>([]);
+  const [activeCategory, setActiveCategory] = useState("All");
+
+  useEffect(() => {
+    async function fetchMarkets(): Promise<void> {
+      try {
+        const params = new URLSearchParams({ limit: "20" });
+        if (activeCategory !== "All") {
+          params.set("search", activeCategory);
+        }
+        const res = await fetch(`/api/v1/poly/markets?${params.toString()}`);
+        if (res.ok) {
+          const data = (await res.json()) as { markets: Market[] };
+          setMarkets(data.markets);
+        }
+      } catch {
+        // Silently retry on next interval
+      }
+    }
+    void fetchMarkets();
+    const interval = setInterval(() => void fetchMarkets(), 60_000);
+    return () => clearInterval(interval);
+  }, [activeCategory]);
+
   return (
     <section id="markets" className="w-full bg-background py-20 md:py-28">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
@@ -243,26 +220,25 @@ export function MarketCards(): ReactElement {
 
         {/* Category pills */}
         <div className="mb-6 flex flex-wrap gap-2">
-          {["All", "Economics", "Tech", "Crypto", "Climate", "Politics"].map(
-            (cat, i) => (
-              <button
-                key={cat}
-                type="button"
-                className={`rounded-full px-3 py-1 font-mono text-xs uppercase tracking-wider transition-colors ${
-                  i === 0
-                    ? "bg-primary/15 text-primary"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {cat}
-              </button>
-            )
-          )}
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setActiveCategory(cat)}
+              className={`rounded-full px-3 py-1 font-mono text-xs uppercase tracking-wider transition-colors ${
+                activeCategory === cat
+                  ? "bg-primary/15 text-primary"
+                  : "bg-secondary text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
         </div>
 
         {/* Market grid */}
         <div className="grid gap-4 sm:grid-cols-2">
-          {MOCK_MARKETS.map((m, i) => (
+          {markets.map((m, i) => (
             <MarketCard key={m.id} market={m} delay={i * 0.08} />
           ))}
         </div>

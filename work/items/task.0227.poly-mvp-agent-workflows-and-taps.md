@@ -2,7 +2,7 @@
 id: task.0227
 type: task
 title: "Cogni Poly — Polymarket domain pack"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 5
@@ -14,10 +14,10 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.poly-prediction-bot
-branch: staging
-pr:
+branch: feat/poly-data-pipeline
+pr: https://github.com/Cogni-DAO/cogni-resy-helper/pull/13
 reviewer:
-revision: 4
+revision: 5
 blocked_by:
 deploy_verified: false
 created: 2026-03-30
@@ -173,3 +173,7 @@ P0 + P1 parallelizable. P3 + P4 parallelizable.
 - [ ] API endpoints return valid responses
 - [ ] Landing page renders real data
 - [ ] `pnpm check` passes
+
+## Handoff
+
+- [task.0227.handoff.md](../handoffs/task.0227.handoff.md)

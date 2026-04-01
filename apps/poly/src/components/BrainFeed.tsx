@@ -33,68 +33,11 @@ interface BrainStatus {
   lastHeartbeat: string;
 }
 
-/* ─── Mock data (replaced by real langgraph output) ── */
-
-const MOCK_SIGNALS: MarketSignal[] = [
-  {
-    id: "s1",
-    market: "Fed cuts rates at June meeting?",
-    platform: "Kalshi",
-    category: "Economics",
-    probability: 62,
-    direction: "bullish",
-    confidence: 74,
-    thesis:
-      "CPI trend + Fed language shift in May minutes suggests high probability of 25bp cut. Market underpricing relative to futures curve.",
-    sources: ["Fed Minutes", "BLS CPI Report", "CME FedWatch"],
-    timestamp: "2m ago",
-  },
-  {
-    id: "s2",
-    market: "Category 5 hurricane hits US in 2026?",
-    platform: "Kalshi",
-    category: "Climate",
-    probability: 41,
-    direction: "bullish",
-    confidence: 61,
-    thesis:
-      "NOAA seasonal outlook + unusually warm Gulf SSTs tracking above 2005 analogs. Historical base rate ~15% but current conditions elevate to ~35-45%.",
-    sources: ["NOAA Outlook", "SST Data", "Historical Analogs"],
-    timestamp: "8m ago",
-  },
-  {
-    id: "s3",
-    market: "Bitcoin above $150k by EOY?",
-    platform: "Polymarket",
-    category: "Crypto",
-    probability: 28,
-    direction: "bearish",
-    confidence: 58,
-    thesis:
-      "On-chain metrics show distribution phase. ETF inflow momentum decelerating. 28c seems fair — no edge detected. Monitoring for re-entry below 20c.",
-    sources: ["Glassnode", "ETF Flow Data", "On-chain Analytics"],
-    timestamp: "14m ago",
-  },
-  {
-    id: "s4",
-    market: "GPT-5 released before July 2026?",
-    platform: "Polymarket",
-    category: "Tech",
-    probability: 34,
-    direction: "bearish",
-    confidence: 67,
-    thesis:
-      "No credible leak or announcement. OpenAI roadmap suggests H2 earliest. Current 34c likely overpriced — historical AI release prediction markets have systematic optimism bias.",
-    sources: ["OpenAI Blog", "Insider Reports", "Release History"],
-    timestamp: "21m ago",
-  },
-];
-
-const MOCK_STATUS: BrainStatus = {
-  state: "scanning",
-  marketsScanned: 2847,
-  signalsGenerated: 12,
-  lastHeartbeat: "now",
+const INITIAL_STATUS: BrainStatus = {
+  state: "idle",
+  marketsScanned: 0,
+  signalsGenerated: 0,
+  lastHeartbeat: "",
 };
 
 /* ─── Heartbeat indicator ───────────────────────── */
@@ -208,23 +151,43 @@ function SignalCard({
 /* ─── Exported section ──────────────────────────── */
 
 export function BrainFeed(): ReactElement {
-  const [status, setStatus] = useState(MOCK_STATUS);
+  const [status, setStatus] = useState<BrainStatus>(INITIAL_STATUS);
+  const [signals, setSignals] = useState<MarketSignal[]>([]);
   const [visibleSignals, setVisibleSignals] = useState(2);
 
-  // Simulate heartbeat
+  // Fetch status on interval
   useEffect(() => {
-    const interval = setInterval(() => {
-      setStatus((prev) => ({
-        ...prev,
-        marketsScanned: prev.marketsScanned + Math.floor(Math.random() * 5),
-        state:
-          Math.random() > 0.7
-            ? "analyzing"
-            : Math.random() > 0.3
-              ? "scanning"
-              : "idle",
-      }));
-    }, 3000);
+    async function fetchStatus(): Promise<void> {
+      try {
+        const res = await fetch("/api/v1/poly/status");
+        if (res.ok) {
+          const data = (await res.json()) as { status: BrainStatus };
+          setStatus(data.status);
+        }
+      } catch {
+        // Silently retry on next interval
+      }
+    }
+    void fetchStatus();
+    const interval = setInterval(() => void fetchStatus(), 10_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch signals
+  useEffect(() => {
+    async function fetchSignals(): Promise<void> {
+      try {
+        const res = await fetch("/api/v1/poly/signals");
+        if (res.ok) {
+          const data = (await res.json()) as { signals: MarketSignal[] };
+          setSignals(data.signals);
+        }
+      } catch {
+        // Silently retry on next interval
+      }
+    }
+    void fetchSignals();
+    const interval = setInterval(() => void fetchSignals(), 30_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -288,23 +251,23 @@ export function BrainFeed(): ReactElement {
         {/* Signal feed */}
         <div className="space-y-3">
           <AnimatePresence>
-            {MOCK_SIGNALS.slice(0, visibleSignals).map((signal, i) => (
+            {signals.slice(0, visibleSignals).map((signal, i) => (
               <SignalCard key={signal.id} signal={signal} index={i} />
             ))}
           </AnimatePresence>
         </div>
 
         {/* Show more */}
-        {visibleSignals < MOCK_SIGNALS.length && (
+        {visibleSignals < signals.length && (
           <motion.button
             type="button"
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
-            onClick={() => setVisibleSignals(MOCK_SIGNALS.length)}
+            onClick={() => setVisibleSignals(signals.length)}
             className="mt-4 flex w-full items-center justify-center gap-1 rounded-lg border border-border/40 bg-card py-3 font-mono text-muted-foreground text-xs uppercase tracking-wider transition-colors hover:border-border/80 hover:text-foreground"
           >
-            Show {MOCK_SIGNALS.length - visibleSignals} more signals
+            Show {signals.length - visibleSignals} more signals
             <ChevronRight className="size-3" />
           </motion.button>
         )}
