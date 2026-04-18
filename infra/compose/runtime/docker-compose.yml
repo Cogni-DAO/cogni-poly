@@ -351,20 +351,14 @@ services:
     networks:
       - internal
     environment:
-      PGPASSWORD: ${DOLTGRES_PASSWORD:-doltgres}
+      DOLTGRES_HOST: doltgres
+      DOLTGRES_PORT: 5432
+      DOLTGRES_PASSWORD: ${DOLTGRES_PASSWORD:-doltgres}
+      DOLTGRES_DB: knowledge_poly
     volumes:
+      - ./doltgres-init/seed-poly.sh:/app/seed.sh:ro
       - ./doltgres-init/seed-poly.sql:/seed.sql:ro
-    entrypoint:
-      - "/bin/bash"
-      - "-c"
-      - |
-        set -euo pipefail
-        # @@dolt_transaction_commit=1 makes INSERTs auto-Dolt-commit; the seed
-        # file's trailing SELECT dolt_commit() stamps a named commit for audit.
-        psql -h doltgres -p 5432 -U postgres -d knowledge_poly -v ON_ERROR_STOP=1 <<'EOSQL'
-        SET @@dolt_transaction_commit = 1;
-        \i /seed.sql
-        EOSQL
+    entrypoint: ["/bin/bash", "/app/seed.sh"]
     depends_on:
       doltgres-migrate-poly:
         condition: service_completed_successfully

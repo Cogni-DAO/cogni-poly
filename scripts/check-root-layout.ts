@@ -112,6 +112,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "config",
   "docs",
   "drizzle.config.ts",
+  "drizzle.poly.doltgres.config.ts",
   "e2e",
   "eslint",
   "eslint.config.mjs",

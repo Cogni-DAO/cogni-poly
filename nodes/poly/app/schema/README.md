@@ -26,21 +26,24 @@ Postgres-side poly-local tables (copy-trade, etc.) live sibling to this file per
 
 ## Migrating `knowledge_poly` (Doltgres)
 
-### The three-step incantation
+### The two-step pattern
 
-Doltgres is wire-compatible with Postgres, so drizzle-kit works — but Dolt's DDL statements don't honor MySQL/autocommit, so the migrator must commit DDL explicitly. Every migration run looks like:
+Doltgres is wire-compatible with Postgres, so drizzle-kit generates migrations normally — but DDL statements don't honor autocommit on Dolt (see [dolt#4843](https://github.com/dolthub/dolt/issues/4843)), so the migrator must stamp a Dolt commit explicitly after each migration. Every run is:
 
-```sql
-SET @@dolt_transaction_commit = 1;
--- drizzle-kit migrate (runs all pending migrations against knowledge_poly)
-SELECT dolt_commit('-Am', 'migration: <version>');
+```bash
+psql -h doltgres -p 5432 -U postgres -d knowledge_poly \
+     -v ON_ERROR_STOP=1 -f 0000_init_knowledge.sql
+psql -h doltgres -p 5432 -U postgres -d knowledge_poly \
+     -v ON_ERROR_STOP=1 \
+     -c "SELECT dolt_commit('-Am', 'migration: 0000_init_knowledge')"
 ```
 
-1. `SET @@dolt_transaction_commit = 1` — auto-commits every SQL transaction as a Dolt commit. Covers inserts and non-DDL statements. See [Dolt system variables](https://docs.dolthub.com/sql-reference/version-control/dolt-system-variables).
-2. drizzle-kit runs the migration SQL normally.
-3. `SELECT dolt_commit('-Am', ...)` catches any `CREATE`/`ALTER` statements that ignored autocommit. See [dolt#4843](https://github.com/dolthub/dolt/issues/4843) for the DDL wrinkle.
+1. `psql -f` applies the drizzle-kit-generated migration SQL under strict error stopping. Real errors fail the deploy; only `already exists` on re-runs is tolerated by the wrapper script (`migrate-poly.sh`).
+2. `SELECT dolt_commit('-Am', ...)` stages all working-set changes from the migration and stamps a named Dolt commit. `dolt_log` is then an auditable migration trail. Only `nothing to commit` on idempotent re-runs is tolerated.
 
-The migrator compose service (`doltgres-migrate-poly`) wraps this so contributors never hand-type the three steps. The Dolt commit message convention is `migration: <drizzle-version>` so `SELECT * FROM dolt_log` makes the migration trail auditable.
+Dolt also exposes [`@@dolt_transaction_commit`](https://docs.dolthub.com/sql-reference/version-control/dolt-system-variables) to auto-commit every SQL transaction boundary, but the `@@variable` MySQL syntax is not verified on Doltgres's pg wire protocol, and DDL would skip it per #4843 anyway. v0 skips it — the explicit trailing `dolt_commit` covers the full delta per migration.
+
+The migrator compose service (`doltgres-migrate-poly` → `migrate-poly.sh`) wraps both steps. The seeder (`doltgres-seed-poly` → `seed-poly.sh`) uses the identical pattern.
 
 ### Dolt's guidance
 

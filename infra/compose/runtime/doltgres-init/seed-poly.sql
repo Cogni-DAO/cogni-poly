@@ -48,7 +48,7 @@ VALUES
   )
 ON CONFLICT (id) DO NOTHING;
 
--- Capture the seed inserts as a Dolt commit. With @@dolt_transaction_commit=1
--- INSERTs auto-commit individually, but we explicitly stamp a named commit for
--- auditability in `dolt_log`.
-SELECT dolt_commit('-Am', 'seed: poly protocol facts v0') FROM (SELECT 1) AS _;
+-- Dolt commit is stamped by the wrapper script (seed-poly.sh), which knows
+-- how to tolerate "nothing to commit" on idempotent re-runs without masking
+-- real errors. Keeping dolt_commit out of the SQL file lets us use strict
+-- ON_ERROR_STOP=1 here.

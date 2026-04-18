@@ -798,8 +798,9 @@ if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^doltgres$'; then
   $RUNTIME_COMPOSE --profile bootstrap run --rm doltgres-migrate-poly
 
   log_info "[$(date -u +%H:%M:%S)] Seeding knowledge_poly (protocol facts v0)..."
-  $RUNTIME_COMPOSE --profile bootstrap run --rm doltgres-seed-poly || \
-    log_warn "doltgres-seed-poly returned non-zero (likely already seeded — idempotent by ON CONFLICT)"
+  # seed-poly.sh handles idempotent re-runs internally (nothing-to-commit tolerated);
+  # any non-zero exit here is a real failure and should block the deploy.
+  $RUNTIME_COMPOSE --profile bootstrap run --rm doltgres-seed-poly
 
   log_info "[$(date -u +%H:%M:%S)] Doltgres provision + migrate + seed complete"
   emit_deployment_event "infra_deployment.doltgres_complete" "success" "Doltgres knowledge plane ready"

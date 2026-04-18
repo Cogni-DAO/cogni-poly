@@ -5,14 +5,12 @@ set -euo pipefail
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
 # Module: infra/compose/doltgres-init/migrate-poly.sh
-# Purpose: Apply drizzle-kit-generated migrations to knowledge_poly with the
-#   three-step Dolt incantation (SET @@dolt_transaction_commit → apply SQL →
-#   trailing SELECT dolt_commit for DDL that ignored autocommit).
+# Purpose: Apply drizzle-kit-generated migrations to knowledge_poly and stamp
+#   each with a named Dolt commit so `dolt_log` is an auditable migration trail.
 # Scope: Executed by doltgres-migrate-poly compose service (bootstrap profile).
-# Invariants: Idempotent. CREATE TABLE IF NOT EXISTS is fine because the
-#   drizzle-kit output starts with CREATE TABLE (no IF NOT EXISTS); we catch
-#   duplicate errors and skip. Subsequent migrations MUST be written idempotent
-#   or guarded by a __drizzle_migrations__ lookup.
+# Invariants: Idempotent for the v0 initial migration via catch-and-match on
+#   "already exists". Once the schema evolves, switch to a __drizzle_migrations__
+#   tracking table or IF NOT EXISTS guards — do NOT weaken error handling.
 # Side-effects: IO (psql commands against Doltgres server)
 # Links: nodes/poly/app/schema/README.md
 #   Dolt guidance: https://www.dolthub.com/blog/2022-07-20-schema-migrations/
@@ -46,33 +44,54 @@ if [ ${#MIGRATIONS[@]} -eq 0 ]; then
   exit 0
 fi
 
-# Three-step incantation, per migration file:
-#   1. SET @@dolt_transaction_commit=1  (auto-Dolt-commit on SQL commit)
-#   2. apply the migration SQL
-#   3. SELECT dolt_commit(...)          (catches DDL ignored by autocommit)
+# Per migration file:
+#   1. psql -f with ON_ERROR_STOP=1 (strict — so real errors surface)
+#   2. If psql fails AND the output matches "already exists", treat as
+#      idempotent re-run; otherwise propagate failure.
+#   3. Stamp a named Dolt commit via SELECT dolt_commit('-Am', ...). Tolerate
+#      only the specific "nothing to commit" case — anything else propagates.
+#
+# We deliberately do NOT set @@dolt_transaction_commit. Dolt's MySQL-style
+# @@variable syntax is not guaranteed to work on Doltgres (pg wire protocol),
+# and the trailing explicit dolt_commit('-Am') already stages every change
+# from the migration batch. One Dolt commit per migration is cleaner than
+# one-per-DDL-statement anyway.
 for FILE in "${MIGRATIONS[@]}"; do
   NAME="$(basename "$FILE" .sql)"
   echo "🔧 Applying migration: $NAME"
 
-  # Apply; tolerate "already exists" on re-runs so the script stays idempotent
-  # without a drizzle migrations tracking table. Subsequent migrations must
-  # use IF NOT EXISTS / safe-by-construction DDL or add a tracking table.
-  {
-    echo "SET @@dolt_transaction_commit = 1;"
-    cat "$FILE"
-  } | PGPASSWORD="$DG_PASS" psql -h "$DG_HOST" -p "$DG_PORT" -U postgres -d "$DB" \
-        -v ON_ERROR_STOP=0 2>&1 | tee /tmp/migrate.out || true
-
-  if grep -qi "already exists" /tmp/migrate.out; then
-    echo "   (already applied — skipped)"
+  MIGRATE_LOG=$(mktemp)
+  if PGPASSWORD="$DG_PASS" psql -h "$DG_HOST" -p "$DG_PORT" -U postgres -d "$DB" \
+        -v ON_ERROR_STOP=1 -f "$FILE" >"$MIGRATE_LOG" 2>&1; then
+    cat "$MIGRATE_LOG"
+  else
+    cat "$MIGRATE_LOG"
+    if grep -qi "already exists" "$MIGRATE_LOG"; then
+      echo "   (already applied — skipped)"
+    else
+      echo "❌ Migration $NAME failed with unexpected error (see log above)"
+      rm -f "$MIGRATE_LOG"
+      exit 1
+    fi
   fi
+  rm -f "$MIGRATE_LOG"
 
-  # Trailing dolt_commit to capture any DDL that ignored autocommit.
-  # -Am includes all changes (schema + any seed rows from same file).
-  # Tolerate "nothing to commit" if the migration was a pure no-op on re-run.
-  PGPASSWORD="$DG_PASS" psql -h "$DG_HOST" -p "$DG_PORT" -U postgres -d "$DB" \
-    -v ON_ERROR_STOP=1 -c "SELECT dolt_commit('-Am', 'migration: $NAME')" 2>/dev/null \
-    || echo "   (dolt_commit: nothing to commit)"
+  # Stamp a named Dolt commit. Tolerate ONLY "nothing to commit" (idempotent
+  # re-run where no rows/schema changed). Any other error must propagate.
+  COMMIT_LOG=$(mktemp)
+  if PGPASSWORD="$DG_PASS" psql -h "$DG_HOST" -p "$DG_PORT" -U postgres -d "$DB" \
+        -v ON_ERROR_STOP=1 -c "SELECT dolt_commit('-Am', 'migration: $NAME')" \
+        >"$COMMIT_LOG" 2>&1; then
+    :
+  elif grep -qi "nothing to commit" "$COMMIT_LOG"; then
+    echo "   (dolt_commit: nothing to commit — migration was a no-op)"
+  else
+    cat "$COMMIT_LOG"
+    echo "❌ dolt_commit for migration $NAME failed"
+    rm -f "$COMMIT_LOG"
+    exit 1
+  fi
+  rm -f "$COMMIT_LOG"
 
   echo "   -> $NAME applied."
 done
