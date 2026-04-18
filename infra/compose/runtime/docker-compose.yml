@@ -266,6 +266,109 @@ services:
       postgres:
         condition: service_healthy
 
+  # =============================================================================
+  # Doltgres (Knowledge Data Plane)
+  # Per knowledge-data-plane spec + multi-node-tenancy (DB_PER_NODE):
+  # one Doltgres server, one database per node (knowledge_operator, knowledge_poly, ...).
+  # Schema is owned by drizzle-kit (nodes/<node>/app/schema/); provision.sh creates
+  # DBs + roles, migrate-<node>.sh applies drizzle-kit migrations with the Dolt
+  # three-step incantation (@@dolt_transaction_commit=1 → SQL → trailing dolt_commit).
+  # App pods read via DOLTGRES_URL_<NODE>; URL is optional — knowledge tools off when absent.
+  # =============================================================================
+
+  doltgres:
+    image: dolthub/doltgresql:latest
+    restart: unless-stopped
+    labels:
+      - "autoheal=true"
+    networks:
+      - internal
+    environment:
+      DOLTGRES_PASSWORD: ${DOLTGRES_PASSWORD:-doltgres}
+    # Host port 5435 (5432 is Postgres); k3s pods reach via EndpointSlice → node InternalIP:5435.
+    ports:
+      - "5435:5432"
+    volumes:
+      - doltgres_data:/var/lib/doltgres
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c 'echo > /dev/tcp/127.0.0.1/5432' 2>/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+      start_period: 15s
+
+  doltgres-provision:
+    image: postgres:15
+    profiles:
+      - bootstrap
+    restart: "no"
+    networks:
+      - internal
+    environment:
+      DOLTGRES_HOST: doltgres
+      DOLTGRES_PORT: 5432
+      DOLTGRES_PASSWORD: ${DOLTGRES_PASSWORD:-doltgres}
+      DOLTGRES_READER_PASSWORD: ${DOLTGRES_READER_PASSWORD:-knowledge_reader}
+      DOLTGRES_WRITER_PASSWORD: ${DOLTGRES_WRITER_PASSWORD:-knowledge_writer}
+      COGNI_NODE_DBS: ${COGNI_NODE_DBS}
+    volumes:
+      - ./doltgres-init/provision.sh:/app/provision.sh:ro
+    entrypoint: ["/bin/bash", "/app/provision.sh"]
+    depends_on:
+      doltgres:
+        condition: service_healthy
+
+  doltgres-migrate-poly:
+    image: postgres:15
+    profiles:
+      - bootstrap
+    restart: "no"
+    networks:
+      - internal
+    environment:
+      DOLTGRES_HOST: doltgres
+      DOLTGRES_PORT: 5432
+      DOLTGRES_PASSWORD: ${DOLTGRES_PASSWORD:-doltgres}
+      DOLTGRES_DB: knowledge_poly
+      MIGRATIONS_DIR: /migrations
+    volumes:
+      - ./doltgres-init/migrate-poly.sh:/app/migrate.sh:ro
+      - ../../../nodes/poly/app/src/adapters/server/db/doltgres-migrations:/migrations:ro
+    entrypoint: ["/bin/bash", "/app/migrate.sh"]
+    depends_on:
+      doltgres-provision:
+        condition: service_completed_successfully
+
+  doltgres-seed-poly:
+    image: postgres:15
+    profiles:
+      - bootstrap
+    restart: "no"
+    networks:
+      - internal
+    environment:
+      PGPASSWORD: ${DOLTGRES_PASSWORD:-doltgres}
+    volumes:
+      - ./doltgres-init/seed-poly.sql:/seed.sql:ro
+    entrypoint:
+      - "/bin/bash"
+      - "-c"
+      - |
+        set -euo pipefail
+        # @@dolt_transaction_commit=1 makes INSERTs auto-Dolt-commit; the seed
+        # file's trailing SELECT dolt_commit() stamps a named commit for audit.
+        psql -h doltgres -p 5432 -U postgres -d knowledge_poly -v ON_ERROR_STOP=1 <<'EOSQL'
+        SET @@dolt_transaction_commit = 1;
+        \i /seed.sql
+        EOSQL
+    depends_on:
+      doltgres-migrate-poly:
+        condition: service_completed_successfully
+
   repo-init:
     image: busybox:1.37
     user: "0:0"
@@ -632,6 +735,8 @@ networks:
 volumes:
   postgres_data:
     name: postgres_data
+  doltgres_data:
+    name: doltgres_data
   alloy_data:
     name: alloy_data
   temporal_postgres_data:

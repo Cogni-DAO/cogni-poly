@@ -645,6 +645,30 @@ printf '%s=%s\n' COGNI_NODE_ENDPOINTS "$LITELLM_NODE_ENDPOINTS" >> "$RUNTIME_ENV
 # Multi-node DB provisioning
 append_env_if_set "$RUNTIME_ENV" COGNI_NODE_DBS "${COGNI_NODE_DBS-}"
 
+# ── Doltgres (knowledge data plane) credentials ──────────────────────────
+# Derived deterministically from POSTGRES_ROOT_PASSWORD + salt so no new GitHub
+# Environment secrets are required. Rotating POSTGRES_ROOT_PASSWORD rotates
+# these. Doltgres has weak GRANT support so roles are near-permissive today;
+# derived secrets are still a least-privilege improvement over a shared root pw.
+derive_secret() {
+  local salt="$1"
+  # Cross-platform sha256 (Linux + macOS). Falls back to hardcoded dev default
+  # if neither tool is available — should never happen on CI runners.
+  if command -v openssl >/dev/null 2>&1; then
+    printf '%s:%s' "$salt" "${POSTGRES_ROOT_PASSWORD:-doltgres}" | openssl dgst -sha256 -hex | awk '{print $NF}' | cut -c1-32
+  elif command -v sha256sum >/dev/null 2>&1; then
+    printf '%s:%s' "$salt" "${POSTGRES_ROOT_PASSWORD:-doltgres}" | sha256sum | cut -c1-32
+  else
+    echo "dev-${salt}"
+  fi
+}
+DOLTGRES_PASSWORD="${DOLTGRES_PASSWORD:-$(derive_secret doltgres-root)}"
+DOLTGRES_READER_PASSWORD="${DOLTGRES_READER_PASSWORD:-$(derive_secret doltgres-reader)}"
+DOLTGRES_WRITER_PASSWORD="${DOLTGRES_WRITER_PASSWORD:-$(derive_secret doltgres-writer)}"
+printf '%s=%s\n' DOLTGRES_PASSWORD "$DOLTGRES_PASSWORD" >> "$RUNTIME_ENV"
+printf '%s=%s\n' DOLTGRES_READER_PASSWORD "$DOLTGRES_READER_PASSWORD" >> "$RUNTIME_ENV"
+printf '%s=%s\n' DOLTGRES_WRITER_PASSWORD "$DOLTGRES_WRITER_PASSWORD" >> "$RUNTIME_ENV"
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 2: Start edge stack (idempotent - only starts if not running)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -757,6 +781,33 @@ log_info "[$(date -u +%H:%M:%S)] DB provisioning complete"
 emit_deployment_event "infra_deployment.db_provision_complete" "success" "Database provisioned successfully"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 6a: Bring up Doltgres + provision DBs + apply drizzle migrations + seed
+# Parallel to postgres/db-provision above, but for the knowledge data plane.
+# Optional: if Doltgres is not in the compose file for this environment, the
+# `up` call no-ops. Provision/migrate/seed tolerate "not there" silently.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^doltgres$'; then
+  log_info "[$(date -u +%H:%M:%S)] Bringing up doltgres..."
+  emit_deployment_event "infra_deployment.doltgres_start" "in_progress" "Starting Doltgres knowledge data plane"
+  $RUNTIME_COMPOSE up -d doltgres
+
+  log_info "[$(date -u +%H:%M:%S)] Provisioning Doltgres DBs + roles..."
+  $RUNTIME_COMPOSE --profile bootstrap run --rm doltgres-provision
+
+  log_info "[$(date -u +%H:%M:%S)] Applying drizzle-kit migrations to knowledge_poly..."
+  $RUNTIME_COMPOSE --profile bootstrap run --rm doltgres-migrate-poly
+
+  log_info "[$(date -u +%H:%M:%S)] Seeding knowledge_poly (protocol facts v0)..."
+  $RUNTIME_COMPOSE --profile bootstrap run --rm doltgres-seed-poly || \
+    log_warn "doltgres-seed-poly returned non-zero (likely already seeded — idempotent by ON CONFLICT)"
+
+  log_info "[$(date -u +%H:%M:%S)] Doltgres provision + migrate + seed complete"
+  emit_deployment_event "infra_deployment.doltgres_complete" "success" "Doltgres knowledge plane ready"
+else
+  log_info "Doltgres not present in compose config — skipping knowledge plane bootstrap"
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 6.6: Start/update infra services (rolling update, no down)
 # Compose infra (Temporal, LiteLLM, Redis) must be up BEFORE k8s pods restart,
 # because k8s pods depend on these via EndpointSlice bridges.
@@ -768,8 +819,8 @@ emit_deployment_event "infra_deployment.stack_up_started" "in_progress" "Startin
 # (autoheal can restart a container between compose stop and remove)
 $RUNTIME_COMPOSE stop autoheal 2>/dev/null || true
 
-# Infra services only — excludes app, scheduler-worker, db-migrate
-INFRA_SERVICES="postgres litellm redis alloy temporal-postgres temporal temporal-ui autoheal repo-init git-sync"
+# Infra services only — excludes app, scheduler-worker, db-migrate, *-provision, *-migrate-*, *-seed-*
+INFRA_SERVICES="postgres doltgres litellm redis alloy temporal-postgres temporal temporal-ui autoheal repo-init git-sync"
 $RUNTIME_COMPOSE up -d --remove-orphans $INFRA_SERVICES
 
 # Sandbox-openclaw disabled — removed from k8s catalog and compose deploy path.
@@ -861,10 +912,19 @@ if command -v kubectl &>/dev/null; then
 
   # ── Per-node secrets (operator, poly, resy) ────────────────────────────────
   for node in operator poly resy; do
+    # Doltgres URL points to this node's own DB (knowledge_<node>).
+    # Poly reads DOLTGRES_URL_POLY in its Zod schema; others read generic DOLTGRES_URL.
+    DOLTGRES_URL_NODE="postgresql://knowledge_writer:${DOLTGRES_WRITER_PASSWORD}@${HOST_IP}:5435/knowledge_${node}?sslmode=disable"
+    if [ "$node" = "poly" ]; then
+      DOLTGRES_ENV_LINE="DOLTGRES_URL_POLY=${DOLTGRES_URL_NODE}"
+    else
+      DOLTGRES_ENV_LINE="DOLTGRES_URL=${DOLTGRES_URL_NODE}"
+    fi
     SECRET_FILE=$(mktemp)
     cat > "$SECRET_FILE" <<SECEOF
 DATABASE_URL=postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@${HOST_IP}:5432/cogni_${node}?sslmode=disable
 DATABASE_SERVICE_URL=postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@${HOST_IP}:5432/cogni_${node}?sslmode=disable
+${DOLTGRES_ENV_LINE}
 AUTH_SECRET=${AUTH_SECRET}
 LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY}

@@ -247,7 +247,9 @@
         "nodes/*/app/vitest.external-money.config.mts",
         "nodes/*/app/postcss.config.mjs",
         "nodes/*/app/next.config.ts",
-        "nodes/*/graphs/tsup.config.ts"
+        "nodes/*/graphs/tsup.config.ts",
+        "drizzle.config.ts",
+        "drizzle.poly.doltgres.config.ts"
       ],
       "linter": {
         "rules": {
