@@ -11,6 +11,8 @@ outcome: "knowledge_poly is ready for the brain to fill. The store contains only
 spec_refs:
   - knowledge-data-plane-spec
   - knowledge-syntropy
+  - multi-node-tenancy
+  - databases
 assignees: derekg1729
 project: proj.poly-prediction-bot
 created: 2026-04-15
@@ -45,6 +47,37 @@ Replace the 3 placeholder entries in `nodes/poly/packages/knowledge/src/seeds/po
 - Existing `@cogni/poly-knowledge` package and `NewKnowledge` type
 - Existing `scripts/db/seed-doltgres.mts`
 - Existing `createKnowledgeCapability().write()` flow
+
+### Per-Node DB Alignment (multi-node-tenancy.md)
+
+Doltgres is deployed as a **single server on Compose, one database per node** — the exact same model the Postgres tier uses. This is a deliberate, evidence-backed commitment; it mirrors the invariants in [multi-node-tenancy.md](../../docs/spec/multi-node-tenancy.md) and closes off the "shared schema leak" class of bug at day-one.
+
+| Invariant from `multi-node-tenancy.md`                             | How Doltgres satisfies it                                                                                     |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `DB_PER_NODE` — one DB per node on a shared server                 | `provision.sh` iterates `COGNI_NODE_DBS` and creates `knowledge_operator`, `knowledge_poly`, `knowledge_resy` |
+| `DB_IS_BOUNDARY` — the DB is the node boundary, no tenancy columns | No `node_id` column on `knowledge`; DB name IS the node                                                       |
+| `NO_CROSS_NODE_QUERIES`                                            | Each pod connects to its own knowledge DB via its own `DOLTGRES_URL_*`                                        |
+
+**Commit-history isolation** (Doltgres-specific): each `CREATE DATABASE` in Doltgres creates an independent Dolt repo with its own `dolt_log`. Poly's AI-slop commits never appear in operator's timeline. `SELECT dolt_log FROM knowledge_poly` and `SELECT dolt_log FROM knowledge_operator` are physically different histories. This is intrinsic to Doltgres's "database = Dolt repo" model — not something we implement, just something we preserve by keeping one DB per node.
+
+**Schema source-of-truth**: DDL lives in `infra/compose/runtime/doltgres-init/provision.sh` (lines 72–91), not drizzle-kit. Deliberate divergence from the Postgres tier because Doltgres's native migration model is SQL + `dolt_commit()`, and drizzle-kit's generated migrations would fight that (it would not call `dolt_commit` after each DDL change, breaking the audit trail). Schema changes land as new SQL blocks in `provision.sh` with their own `dolt_commit('-Am', 'schema: <change>')`. This is consistent with task.0322's direction (SQL-native migrations for stateful infra that ships its own history).
+
+**Per-node env convention**: `nodes/poly/app/src/shared/env/server-env.ts` already reads `DOLTGRES_URL_POLY` (per-node, mirrors `DATABASE_URL_POLY`). Operator and resy currently read generic `DOLTGRES_URL` — minor inconsistency, filed as follow-up but not a blocker for candidate-a/poly-first.
+
+**Connection string shape** (what deploy-infra.sh writes to the per-node k8s secret):
+
+```
+DOLTGRES_URL_POLY=postgresql://knowledge_writer:<pw>@poly-doltgres-external:5435/knowledge_poly
+```
+
+The DB name in the URL (`/knowledge_poly`) is what routes the connection to the right Dolt repo. No shared-DB fallback.
+
+**What's NOT addressed here (future work, explicitly out of scope):**
+
+- Per-node _schema_ divergence (poly's knowledge schema differing from operator's). Today every `knowledge_*` DB uses the same 10-column `knowledge` table baked into `provision.sh`. When poly needs prediction-market-specific columns/tables, that becomes a schema-split task — not this PR.
+- TS schema definitions for node-local knowledge tables living under `nodes/<node>/app/schema/` (the Postgres path). Not applicable until Doltgres needs drizzle-kit-managed tables, which it doesn't today.
+- Aligning `DOLTGRES_URL` → `DOLTGRES_URL_OPERATOR`/`DOLTGRES_URL_RESY` for consistency with poly.
+- Backups (follow the Postgres WAL-G path from proj.database-ops once that lands).
 
 ### Decision: seeds stay (almost) empty
 
