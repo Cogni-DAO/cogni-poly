@@ -8,10 +8,12 @@
  *   Privy app (SEPARATE_PRIVY_APP) — never the operator-wallet system app.
  * Scope: `provisionWithGrant` (atomic wallet + default-grant write under an
  *   advisory-lock, idempotent across retries), `resolve`, `getAddress`,
- *   `authorizeIntent` (scope + cap + active-grant checks; mints the branded
- *   `AuthorizedSigningContext`), `revoke` (cascades across `poly_wallet_grants`
- *   in the same tx). `withdrawUsdc` + `rotateClobCreds` remain stubbed until
- *   the Money-page + CLOB-rotation items land.
+ *   `getBalances` (DB address + optional Polygon RPC via `POLYGON_RPC_URL`
+ *   for USDC.e + POL display on the Money page), `authorizeIntent` (scope +
+ *   cap + active-grant checks; mints the branded `AuthorizedSigningContext`),
+ *   `revoke` (cascades across `poly_wallet_grants` in the same tx).
+ *   `withdrawUsdc` + `rotateClobCreds` remain stubbed until the Money-page
+ *   withdraw + CLOB-rotation items land.
  * Invariants:
  *   - SEPARATE_PRIVY_APP: constructor takes a PrivyClient built from
  *     PRIVY_USER_WALLETS_* env. The operator-wallet triple is never read here.
@@ -80,10 +82,27 @@ import {
   sum,
 } from "drizzle-orm";
 import type { Logger } from "pino";
-import { getAddress, type LocalAccount } from "viem";
+import {
+  createPublicClient,
+  formatUnits,
+  getAddress,
+  http,
+  type LocalAccount,
+  parseAbi,
+} from "viem";
+import { polygon } from "viem/chains";
 
 /** Provider identifier pinned into the AEAD AAD envelope. */
 const CREDENTIAL_PROVIDER = "polymarket_clob";
+
+/** USDC.e on Polygon mainnet — Polymarket's quote token. Pinned here so the */
+/* adapter never has to guess which stable it's reading. */
+const USDC_E_POLYGON = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" as const;
+const USDC_DECIMALS = 6;
+const POL_DECIMALS = 18;
+const ERC20_BALANCEOF_ABI = parseAbi([
+  "function balanceOf(address owner) view returns (uint256)",
+]);
 
 /**
  * Default scopes auto-issued alongside every new wallet. BUY + SELL so the
@@ -156,6 +175,13 @@ export interface PrivyPolyTraderWalletAdapterConfig {
    * under a follow-up commit that wires @polymarket/clob-client.
    */
   clobCredsFactory: (signer: LocalAccount) => Promise<PolyClobApiKeyCreds>;
+  /**
+   * Polygon RPC URL used by `getBalances`. Optional: when absent, `getBalances`
+   * returns the address with `null` USDC.e/POL and an RPC-unconfigured error
+   * instead of failing hard — keeps the Money page legible on pods that
+   * haven't wired Polygon RPC yet.
+   */
+  polygonRpcUrl?: string | undefined;
   logger: Logger;
 }
 
@@ -168,6 +194,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
   private readonly clobCredsFactory: (
     signer: LocalAccount
   ) => Promise<PolyClobApiKeyCreds>;
+  private readonly polygonRpcUrl: string | undefined;
   private readonly log: Logger;
 
   constructor(config: PrivyPolyTraderWalletAdapterConfig) {
@@ -179,6 +206,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
     this.encryptionKey = config.encryptionKey;
     this.encryptionKeyId = config.encryptionKeyId;
     this.clobCredsFactory = config.clobCredsFactory;
+    this.polygonRpcUrl = config.polygonRpcUrl;
     this.log = config.logger.child({
       component: "PrivyPolyTraderWalletAdapter",
     });
@@ -272,6 +300,54 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       return null;
     }
     return getAddress(row.address);
+  }
+
+  async getBalances(billingAccountId: string): Promise<{
+    address: `0x${string}`;
+    usdcE: number | null;
+    pol: number | null;
+    errors: readonly string[];
+  } | null> {
+    const address = await this.getAddress(billingAccountId);
+    if (!address) return null;
+
+    const errors: string[] = [];
+    const [usdcE, pol] = await this.readPolygonBalances(address, errors);
+    return { address, usdcE, pol, errors };
+  }
+
+  private async readPolygonBalances(
+    addr: `0x${string}`,
+    errors: string[]
+  ): Promise<[number | null, number | null]> {
+    if (!this.polygonRpcUrl) {
+      errors.push("polygon_rpc_unconfigured");
+      return [null, null];
+    }
+    try {
+      const client = createPublicClient({
+        chain: polygon,
+        transport: http(this.polygonRpcUrl),
+      });
+      const [usdcRaw, polRaw] = await Promise.all([
+        client.readContract({
+          address: USDC_E_POLYGON,
+          abi: ERC20_BALANCEOF_ABI,
+          functionName: "balanceOf",
+          args: [addr],
+        }),
+        client.getBalance({ address: addr }),
+      ]);
+      return [
+        Number(formatUnits(usdcRaw, USDC_DECIMALS)),
+        Number(formatUnits(polRaw, POL_DECIMALS)),
+      ];
+    } catch (err) {
+      errors.push(
+        `polygon_rpc: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return [null, null];
+    }
   }
 
   async provision(input: {

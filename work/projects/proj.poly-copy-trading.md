@@ -10,7 +10,7 @@ summary: "Autonomous mirror of selected Polymarket wallets from a Cogni-controll
 outcome: "A Cogni node autonomously mirrors N Polymarket target wallets onto M per-user operator wallets with sub-30s latency, RLS-enforced tenancy, at-most-once idempotency, and real-money caps enforced in code. DAO treasury earns measurable realized PnL tracked against a counterfactual baseline."
 assignees: derekg1729
 created: 2026-04-19
-updated: 2026-04-21
+updated: 2026-04-22
 labels: [poly, polymarket, copy-trading, mirror, privy, rls, multi-tenant]
 ---
 
@@ -56,6 +56,9 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 | Signing-backend decision (Safe+4337 vs Privy-per-user vs Turnkey) — resolved to Privy-per-user for v0  | Done           | 2   | (inline in task.0318)                                                     |
 | User-wallet orphan sweep for the dedicated Privy app (ops hygiene, not v0 trading path)                | Needs Design   | 2   | [task.0348](../items/task.0348.poly-wallet-orphan-sweep.md)               |
 | Per-tenant wallet preferences + copy-trade sizing config (retire hardcoded funding + caps)             | Needs Design   | 3   | [task.0347](../items/task.0347.poly-wallet-preferences-sizing-config.md)  |
+| Trading wallet withdrawal — `withdrawUsdc` adapter + route + dialog (replaces stubbed button on Money) | Needs Triage   | 3   | [task.0351](../items/task.0351.poly-trading-wallet-withdrawal.md)         |
+| Trading wallet one-click fund flow — Polygon in wagmi + `trading_wallet_funding` repo-spec + dialog    | Needs Design   | 3   | [task.0352](../items/task.0352.poly-trading-wallet-fund-flow.md)          |
+| Money page v0 — hybrid AI-credits + trading-wallet panel; nav label Money, route `/credits`            | Done           | 2   | [task.0353](../items/task.0353.poly-money-page-v0.md)                     |
 
 ### Phase 4 (P4) — Streaming + adversarial-robust ranking
 
@@ -95,12 +98,12 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 
 - [Poly Copy-Trade Phase 1](../../docs/spec/poly-copy-trade-phase1.md) — layer boundaries, invariants, fill_id shape (as-built v0)
 - [Poly Multi-Tenant Auth](../../docs/spec/poly-multi-tenant-auth.md) — tenant-scoped copy-trade tables, `CopyTradeTargetSource` port (Phase A); `PolyTraderWalletPort` + `poly_wallet_{connections,grants}` + `PolyTradeExecutorFactory` (Phase B3, as-built)
-- [Poly Trader Wallet Port](../../docs/spec/poly-trader-wallet-port.md) — port contract, `authorizeIntent` + branded `AuthorizedSigningContext`, Privy-app isolation, adapter lifecycle (Phase B3, as-built)
+- [Poly Trader Wallet Port](../../docs/spec/poly-trader-wallet-port.md) — port contract, `authorizeIntent` + branded `AuthorizedSigningContext`, read-only `getBalances` + HTTP `poly.wallet.balances.v1` (Money page surface), Privy-app isolation, adapter lifecycle (Phase B3, as-built)
 - [Polymarket Account Setup](../../docs/guides/polymarket-account-setup.md) — Privy operator onboarding runbook (guide, not spec)
 
 ## Design Notes
 
-- **Operator / target / test wallet roles**: three disjoint jobs. Operator places all autonomous mirror trades via Privy HSM. Target is the wallet being monitored (its trades flow through the mirror). Test is a raw-PK wallet in `.env.test` used for scripted validation — it doubles as a target in some flows. See `.claude/skills/poly-dev-expert/SKILL.md` for the full runbook.
+- **Operator / target / test wallet roles**: three disjoint jobs. Operator places all autonomous mirror trades via Privy HSM. Target is the wallet being monitored (its trades flow through the mirror). Test is a raw-PK wallet in `.env.test` used for scripted validation — it doubles as a target in some flows. See `.claude/skills/poly-dev-manager/SKILL.md` for the poly-node overview and routing to the specialty runbooks (copy-trading, market-data, auth/wallets).
 
 - **Two-approval onboarding**: a wallet that can BUY but not SELL is useless for copy-trading. USDC.e allowance on {Exchange, Neg-Risk Exchange, Neg-Risk Adapter} enables BUY. CTF `setApprovalForAll(operator, true)` on {Exchange, Neg-Risk Exchange} enables SELL. Skipping either is a latent bug that only surfaces on close-position.
 
