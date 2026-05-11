@@ -72,7 +72,7 @@ function generateSSHKey(env: string): string {
   console.log(`     ${pubKey}`);
   console.log("");
   console.log(
-    `     Save this to: infra/provision/cherry/base/keys/cogni_template_${env}_deploy.pub`
+    `     Save this to: infra/provision/cherry/base/keys/cogni_poly_${env}_deploy.pub`
   );
   console.log(`     Then run: tofu apply -var-file=terraform.${env}.tfvars`);
   console.log("");
@@ -328,8 +328,8 @@ const SECRETS: Secret[] = [
     category: "Database",
     source: "agent",
     description: "Application database name",
-    steps: ['Convention: "cogni_template"'],
-    generate: () => "cogni_template",
+    steps: ['Convention: "cogni_poly"'],
+    generate: () => "cogni_poly",
   },
   {
     name: "APP_DB_USER",
@@ -934,7 +934,7 @@ const SECRETS: Secret[] = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const REPO = "Cogni-DAO/node-template";
+const REPO = "Cogni-DAO/cogni-poly";
 /** Deploy environments. Secrets are set per-env, not repo-level. */
 const ENVIRONMENTS = ["candidate-a", "preview", "production"] as const;
 const LEGACY_ENV_ALIASES: Record<string, (typeof ENVIRONMENTS)[number]> = {
@@ -1071,7 +1071,7 @@ function buildDSNs(envs: readonly string[]): void {
   const appPw = dbPasswords.APP_DB_PASSWORD;
   const svcUser = dbPasswords.APP_DB_SERVICE_USER || "app_service";
   const svcPw = dbPasswords.APP_DB_SERVICE_PASSWORD;
-  const dbName = dbPasswords.APP_DB_NAME || "cogni_template";
+  const dbName = dbPasswords.APP_DB_NAME || "cogni_poly";
   const host = "postgres"; // Docker service name
 
   if (appPw) {
