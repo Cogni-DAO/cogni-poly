@@ -110,15 +110,9 @@ jobs:
           filters: |
             poly:
               - 'nodes/poly/**'
-            resy:
-              - 'nodes/resy/**'
-            node-template:
-              - 'nodes/node-template/**'
             operator:
               - '**'
               - '!nodes/poly/**'
-              - '!nodes/resy/**'
-              - '!nodes/node-template/**'
 
       # Intentionally inline — single-workflow gate, no logic duplicated across
       # workflows. SCRIPTS_ARE_THE_API targets cross-workflow drift, not unique

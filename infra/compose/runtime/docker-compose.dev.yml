@@ -7,7 +7,7 @@
 
 services:
   app:
-    image: ${APP_IMAGE:-cogni-template-local}
+    image: ${APP_IMAGE:-cogni-poly-local}
     build:
       context: ../../..
       dockerfile: ./nodes/operator/app/Dockerfile
@@ -416,7 +416,7 @@ services:
   db-migrate:
     # task.0370 step 1: db-migrate runs the same runtime image as the app, invoking
     # the bundled migrate.mjs runner. No more separate migrator image / target.
-    image: ${APP_IMAGE:-cogni-template-local}
+    image: ${APP_IMAGE:-cogni-poly-local}
     build:
       context: ../../..
       dockerfile: ./nodes/operator/app/Dockerfile

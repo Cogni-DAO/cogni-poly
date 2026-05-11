@@ -37,7 +37,7 @@ discovery.relabel "docker_logs" {
 
   rule {
     target_label = "app"
-    replacement  = "cogni-template"
+    replacement  = "cogni-poly"
   }
 
   rule {
@@ -203,7 +203,7 @@ loki.process "k8s_pod_logs" {
 
   stage.static_labels {
     values = {
-      app    = "cogni-template",
+      app    = "cogni-poly",
       source = "k8s",
       env    = sys.env("DEPLOY_ENVIRONMENT"),
     }

@@ -71,7 +71,7 @@ function buildFullSpec(): RepoSpec {
       activity_sources: {
         github: {
           attribution_pipeline: "cogni-v0.0",
-          source_refs: ["cogni-dao/cogni-template"],
+          source_refs: ["cogni-dao/cogni-poly"],
         },
       },
     },
@@ -203,7 +203,7 @@ describe("extractLedgerConfig", () => {
     ]);
     expect(ledger?.activitySources.github).toEqual({
       attributionPipeline: "cogni-v0.0",
-      sourceRefs: ["cogni-dao/cogni-template"],
+      sourceRefs: ["cogni-dao/cogni-poly"],
     });
   });
 

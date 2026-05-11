@@ -24,7 +24,7 @@ describe("lint/style/noProcessEnv rule", () => {
   const env = process.env.NODE_ENV;
   return <div>{env}</div>;
 }`,
-      { virtualRepoPath: "nodes/operator/app/src/app/__biome_test__/page.tsx" }
+      { virtualRepoPath: "nodes/poly/app/src/app/__biome_test__/page.tsx" }
     );
 
     expect(
@@ -43,7 +43,7 @@ describe("lint/style/noProcessEnv rule", () => {
 }`,
       {
         virtualRepoPath:
-          "nodes/operator/app/src/components/__biome_test__/MyComponent.tsx",
+          "nodes/poly/app/src/components/__biome_test__/MyComponent.tsx",
       }
     );
 
@@ -61,7 +61,7 @@ describe("lint/style/noProcessEnv rule", () => {
 };`,
       {
         virtualRepoPath:
-          "nodes/operator/app/src/shared/env/__biome_test__/server.ts",
+          "nodes/poly/app/src/shared/env/__biome_test__/server.ts",
       }
     );
 
@@ -78,7 +78,7 @@ describe("lint/style/noProcessEnv rule", () => {
 };`,
       {
         virtualRepoPath:
-          "nodes/operator/app/src/shared/env/__biome_test__/client.ts",
+          "nodes/poly/app/src/shared/env/__biome_test__/client.ts",
       }
     );
 

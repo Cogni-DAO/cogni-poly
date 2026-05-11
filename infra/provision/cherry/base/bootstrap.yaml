@@ -139,7 +139,7 @@ write_files:
       echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Creating cogni-edge network..."
       docker network create cogni-edge || true
 
-      mkdir -p /opt/cogni-template-edge /opt/cogni-template-runtime
+      mkdir -p /opt/cogni-poly-edge /opt/cogni-poly-runtime
 
       # ── k3s (containerd) ─────────────────────────────────────
       # Coexists with Docker Compose (dockerd) on the same host.

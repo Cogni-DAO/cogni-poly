@@ -11,8 +11,8 @@ resources:
 namePrefix: poly-
 
 images:
-  - name: ghcr.io/cogni-dao/cogni-template
-    newName: ghcr.io/cogni-dao/cogni-template
+  - name: ghcr.io/cogni-dao/cogni-poly
+    newName: ghcr.io/cogni-dao/cogni-poly
     digest: "sha256:c18feaf648c48245fc1af5f921c83e1a90681f8f791fae2f48474dfe4ec18eda"
 
 patches:
@@ -82,7 +82,7 @@ patches:
         path: /spec/template/spec/initContainers/-
         value:
           name: migrate-doltgres
-          image: ghcr.io/cogni-dao/cogni-template:placeholder
+          image: ghcr.io/cogni-dao/cogni-poly:placeholder
           command:
             - /bin/sh
             - -c

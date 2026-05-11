@@ -43,7 +43,7 @@ loki.process "k8s_events" {
 
   stage.static_labels {
     values = {
-      app     = "cogni-template",
+      app     = "cogni-poly",
       env     = sys.env("DEPLOY_ENVIRONMENT"),
       service = "kubernetes-events",
       source  = "k8s-events",

@@ -32,7 +32,7 @@ describe("Biome noDefaultExport canary (Commit 2B)", () => {
       "app/fail_page_literal_classes.tsx",
       undefined,
       {
-        virtualRepoPath: "nodes/operator/app/src/app/__biome_test__/page.tsx",
+        virtualRepoPath: "nodes/poly/app/src/app/__biome_test__/page.tsx",
       }
     );
 
