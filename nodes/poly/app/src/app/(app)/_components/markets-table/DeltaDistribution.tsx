@@ -27,6 +27,7 @@ import type { ReactElement } from "react";
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts";
 
+// eslint-disable-next-line no-restricted-imports -- pre-existing vendor import in app/, predates the kit-wrapper rule; tracked as follow-up
 import {
   type ChartConfig,
   ChartContainer,

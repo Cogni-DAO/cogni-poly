@@ -97,23 +97,23 @@ on_fail() {
 
     echo ""
     echo "=== .env files (redacted) ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "head -5 /opt/cogni-template-runtime/.env 2>/dev/null | sed 's/=.*/=***/' || echo '(.env not found)'" || true
+    ssh $SSH_OPTS root@"$VM_HOST" "head -5 /opt/cogni-poly-runtime/.env 2>/dev/null | sed 's/=.*/=***/' || echo '(.env not found)'" || true
 
     echo ""
     echo "=== edge compose ps ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml ps 2>&1 || true" || true
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-edge -f /opt/cogni-poly-edge/docker-compose.yml ps 2>&1 || true" || true
 
     echo ""
     echo "=== runtime compose ps ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml ps 2>&1 || true" || true
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-poly-runtime/.env -f /opt/cogni-poly-runtime/docker-compose.yml ps 2>&1 || true" || true
 
     echo ""
     echo "=== logs: litellm ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 40 litellm 2>&1 || true" || true
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-poly-runtime/.env -f /opt/cogni-poly-runtime/docker-compose.yml logs --tail 40 litellm 2>&1 || true" || true
 
     echo ""
     echo "=== logs: alloy ==="
-    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 20 alloy 2>&1 || true" || true
+    ssh $SSH_OPTS root@"$VM_HOST" "docker compose --project-name cogni-runtime --env-file /opt/cogni-poly-runtime/.env -f /opt/cogni-poly-runtime/docker-compose.yml logs --tail 20 alloy 2>&1 || true" || true
 
     echo ""
     echo "=== healthcheck history (unhealthy/starting containers) ==="
@@ -175,7 +175,7 @@ emit_deployment_event() {
     '{
       streams: [{
         stream: {
-          app: "cogni-template",
+          app: "cogni-poly",
           env: $env,
           service: "infra-deployment",
           stream: "stdout"
@@ -464,8 +464,8 @@ else
 fi
 
 # Compose shortcuts (explicit project names, no global export)
-EDGE_COMPOSE="docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml"
-RUNTIME_COMPOSE="docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml"
+EDGE_COMPOSE="docker compose --project-name cogni-edge -f /opt/cogni-poly-edge/docker-compose.yml"
+RUNTIME_COMPOSE="docker compose --project-name cogni-runtime --env-file /opt/cogni-poly-runtime/.env -f /opt/cogni-poly-runtime/docker-compose.yml"
 
 log_info() {
     echo -e "\033[0;32m[INFO]\033[0m $1"
@@ -505,7 +505,7 @@ emit_deployment_event() {
     '{
       streams: [{
         stream: {
-          app: "cogni-template",
+          app: "cogni-poly",
           env: $env,
           service: "infra-deployment",
           stream: "stdout"
@@ -600,19 +600,19 @@ docker network create cogni-edge 2>/dev/null || true
 log_info "Creating environment files..."
 
 # Edge env (minimal - just domain for Caddyfile)
-cat > /opt/cogni-template-edge/.env << ENV_EOF
+cat > /opt/cogni-poly-edge/.env << ENV_EOF
 DOMAIN=${DOMAIN}
 ENV_EOF
 
 # LiteLLM image is built from infra/images/litellm/ and pushed to GHCR.
 # Content-hash tag so it only changes when Dockerfile or callbacks change.
 # To rebuild: docker buildx build --platform linux/amd64 --push \
-#   --tag ghcr.io/cogni-dao/cogni-template:litellm-$(find infra/images/litellm -type f ! -name 'AGENTS.md' | sort | xargs cat | shasum -a 256 | cut -c1-12) \
+#   --tag ghcr.io/cogni-dao/cogni-poly:litellm-$(find infra/images/litellm -type f ! -name 'AGENTS.md' | sort | xargs cat | shasum -a 256 | cut -c1-12) \
 #   infra/images/litellm/
-LITELLM_IMAGE=${LITELLM_IMAGE:-ghcr.io/cogni-dao/cogni-template:litellm-b6e4e942cb23}
+LITELLM_IMAGE=${LITELLM_IMAGE:-ghcr.io/cogni-dao/cogni-poly:litellm-b6e4e942cb23}
 
 # Runtime env (full config — compose validates all vars even for services we don't start)
-RUNTIME_ENV=/opt/cogni-template-runtime/.env
+RUNTIME_ENV=/opt/cogni-poly-runtime/.env
 cat > "$RUNTIME_ENV" << ENV_EOF
 # Required vars
 DOMAIN=${DOMAIN}
@@ -646,7 +646,7 @@ POSTHOG_API_KEY=${POSTHOG_API_KEY}
 POSTHOG_HOST=${POSTHOG_HOST}
 # App/worker images — not started by infra deploy, but compose validates all vars.
 # Use placeholder values; k8s/Argo manages the real images.
-APP_IMAGE=${APP_IMAGE:-cogni-template-local}
+APP_IMAGE=${APP_IMAGE:-cogni-poly-local}
 MIGRATOR_IMAGE=${MIGRATOR_IMAGE:-unused-by-infra-deploy}
 SCHEDULER_WORKER_IMAGE=${SCHEDULER_WORKER_IMAGE:-unused-by-infra-deploy}
 # LiteLLM image — set above from GHCR content-hash tag.
@@ -766,7 +766,7 @@ else
   log_info "Edge stack already running"
   # Check for Caddyfile changes and restart if needed
   HASH_DIR="/var/lib/cogni"
-  CADDYFILE="/opt/cogni-template-edge/configs/Caddyfile.tmpl"
+  CADDYFILE="/opt/cogni-poly-edge/configs/Caddyfile.tmpl"
   CADDY_HASH_FILE="$HASH_DIR/caddyfile.sha256"
 
   if [[ -f "$CADDYFILE" ]]; then
@@ -941,7 +941,7 @@ fi
 log_info "[$(date -u +%H:%M:%S)] Infra stack up complete"
 emit_deployment_event "infra_deployment.stack_up_complete" "success" "Infrastructure services started"
 
-ALLOY_CONFIG="/opt/cogni-template-runtime/configs/alloy-config.metrics.alloy"
+ALLOY_CONFIG="/opt/cogni-poly-runtime/configs/alloy-config.metrics.alloy"
 ALLOY_HASH_FILE="/var/lib/cogni/alloy-config.sha256"
 if [[ -f "$ALLOY_CONFIG" ]]; then
   mkdir -p /var/lib/cogni
@@ -972,9 +972,9 @@ After=docker.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/opt/cogni-template-runtime
-ExecStart=${DOCKER_BIN} compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml --profile backup up --force-recreate --no-deps --abort-on-container-exit --exit-code-from db-backup db-backup
-ExecStartPost=-${DOCKER_BIN} compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml --profile backup rm -f db-backup
+WorkingDirectory=/opt/cogni-poly-runtime
+ExecStart=${DOCKER_BIN} compose --project-name cogni-runtime --env-file /opt/cogni-poly-runtime/.env -f /opt/cogni-poly-runtime/docker-compose.yml --profile backup up --force-recreate --no-deps --abort-on-container-exit --exit-code-from db-backup db-backup
+ExecStartPost=-${DOCKER_BIN} compose --project-name cogni-runtime --env-file /opt/cogni-poly-runtime/.env -f /opt/cogni-poly-runtime/docker-compose.yml --profile backup rm -f db-backup
 TimeoutStartSec=2h
 SYSTEMD_SERVICE_EOF
 
@@ -1028,7 +1028,7 @@ emit_deployment_event "infra_deployment.db_backup_scheduled" "success" "db-backu
 # Step 6.6a: Checksum-gated restart for LiteLLM config changes
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HASH_DIR="/var/lib/cogni"
-LITELLM_CONFIG="/opt/cogni-template-runtime/configs/litellm.config.yaml"
+LITELLM_CONFIG="/opt/cogni-poly-runtime/configs/litellm.config.yaml"
 LITELLM_HASH_FILE="$HASH_DIR/litellm-config.sha256"
 
 if [[ ! -f "$LITELLM_CONFIG" ]]; then
@@ -1254,7 +1254,7 @@ fi
 # | apply -f -` pattern as Step 7's per-node secrets — ksops is retired (task.0284).
 #
 # The Argo CD Image Updater kustomize tree was rsynced to
-# /opt/cogni-template-argocd-updater/ by the caller. The full Argo CD tree
+# /opt/cogni-poly-argocd-updater/ by the caller. The full Argo CD tree
 # (ApplicationSets etc.) is still reconciled by promote-and-deploy.yml /
 # candidate-flight.yml via SCP + `kubectl apply -f`; this step is scoped to
 # the image-updater subtree only — the bootstrap that bug.0344 owns.
@@ -1296,12 +1296,12 @@ if command -v kubectl &>/dev/null; then
 
     log_info "  argocd-image-updater-ghcr + argocd-image-updater-git-creds applied"
 
-    if [[ -d /opt/cogni-template-argocd-updater ]]; then
+    if [[ -d /opt/cogni-poly-argocd-updater ]]; then
       # `kubectl kustomize | apply` matches the one-shot pattern used to
       # bootstrap Argo CD itself in infra/k8s/argocd/kustomization.yaml —
       # resolves the https:// pin to the upstream v0.15.2 install manifest
       # and applies the config-patch overlay in one go.
-      kubectl kustomize /opt/cogni-template-argocd-updater/ | kubectl apply -f -
+      kubectl kustomize /opt/cogni-poly-argocd-updater/ | kubectl apply -f -
 
       # Force controller reload so any rotated secret values are picked up
       # (the controller caches creds on startup per upstream v0.15.2 docs).
@@ -1312,7 +1312,7 @@ if command -v kubectl &>/dev/null; then
       log_info "  argocd-image-updater controller reconciled (pinned v0.15.2)"
       emit_deployment_event "infra_deployment.image_updater_complete" "success" "Image updater bootstrap complete"
     else
-      log_warn "/opt/cogni-template-argocd-updater missing on VM — skipping controller kustomize apply (secrets still upserted)"
+      log_warn "/opt/cogni-poly-argocd-updater missing on VM — skipping controller kustomize apply (secrets still upserted)"
     fi
   fi
 fi
@@ -1356,9 +1356,9 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo "Ref:                $REF (SHA: $REF_SHA)"
     echo "Source worktree:    $SRC_WORKTREE"
     echo "Rsync targets:"
-    echo "    $REPO_ROOT/infra/compose/edge/                → root@$VM_HOST:/opt/cogni-template-edge/"
-    echo "    $REPO_ROOT/infra/compose/runtime/             → root@$VM_HOST:/opt/cogni-template-runtime/"
-    echo "    $REPO_ROOT/infra/k8s/argocd/image-updater/    → root@$VM_HOST:/opt/cogni-template-argocd-updater/  (bug.0344)"
+    echo "    $REPO_ROOT/infra/compose/edge/                → root@$VM_HOST:/opt/cogni-poly-edge/"
+    echo "    $REPO_ROOT/infra/compose/runtime/             → root@$VM_HOST:/opt/cogni-poly-runtime/"
+    echo "    $REPO_ROOT/infra/k8s/argocd/image-updater/    → root@$VM_HOST:/opt/cogni-poly-argocd-updater/  (bug.0344)"
     echo "Remote script:      $ARTIFACT_DIR/deploy-infra-remote.sh → /tmp/deploy-infra-remote.sh"
     echo "Infra services managed by remote script: postgres, litellm, temporal, alloy, caddy (plus db-backup timer and healthchecks)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1370,17 +1370,17 @@ fi
 # Deploy bundles to VM via rsync
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Deploying edge and runtime bundles to VM..."
-ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-template-edge /opt/cogni-template-runtime /opt/cogni-template-argocd-updater"
+ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-poly-edge /opt/cogni-poly-runtime /opt/cogni-poly-argocd-updater"
 
 # Upload edge bundle (rarely changes - Caddy config only)
 rsync -av -e "ssh $SSH_OPTS" \
   "$REPO_ROOT/infra/compose/edge/" \
-  root@"$VM_HOST":/opt/cogni-template-edge/
+  root@"$VM_HOST":/opt/cogni-poly-edge/
 
 # Upload runtime bundle (infra stack config)
 rsync -av -e "ssh $SSH_OPTS" \
   "$REPO_ROOT/infra/compose/runtime/" \
-  root@"$VM_HOST":/opt/cogni-template-runtime/
+  root@"$VM_HOST":/opt/cogni-poly-runtime/
 
 # Upload Argo CD Image Updater kustomize tree (bug.0344 — consumed by Step 7b
 # in the remote script). Scoped to the image-updater subtree only; the rest
@@ -1389,7 +1389,7 @@ rsync -av -e "ssh $SSH_OPTS" \
 if [[ -d "$REPO_ROOT/infra/k8s/argocd/image-updater" ]]; then
   rsync -av --delete -e "ssh $SSH_OPTS" \
     "$REPO_ROOT/infra/k8s/argocd/image-updater/" \
-    root@"$VM_HOST":/opt/cogni-template-argocd-updater/
+    root@"$VM_HOST":/opt/cogni-poly-argocd-updater/
 fi
 
 # OpenClaw config/workspace uploads removed — sandbox-openclaw disabled.
@@ -1425,7 +1425,7 @@ log_info "deploy-infra-remote.sh verified on VM (sha256 match)"
 # Execute remote script with env vars
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' DATABASE_URL='$DATABASE_URL' DATABASE_SERVICE_URL='$DATABASE_SERVICE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_SERVICE_USER='$APP_DB_SERVICE_USER' APP_DB_SERVICE_PASSWORD='$APP_DB_SERVICE_PASSWORD' APP_DB_READONLY_USER='${APP_DB_READONLY_USER:-}' APP_DB_READONLY_PASSWORD='${APP_DB_READONLY_PASSWORD:-}' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' POLYGON_RPC_URL='$POLYGON_RPC_URL' TEMPORAL_DB_USER='$TEMPORAL_DB_USER' TEMPORAL_DB_PASSWORD='$TEMPORAL_DB_PASSWORD' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN:-}' BILLING_INGEST_TOKEN='${BILLING_INGEST_TOKEN:-}' INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN:-}' WORK_ITEMS_NOTION_TOKEN='${WORK_ITEMS_NOTION_TOKEN:-}' WORK_ITEMS_NOTION_DATA_SOURCE_ID='${WORK_ITEMS_NOTION_DATA_SOURCE_ID:-}' WORK_ITEMS_NOTION_VERSION='${WORK_ITEMS_NOTION_VERSION:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' PROMETHEUS_QUERY_URL='${PROMETHEUS_QUERY_URL:-}' PROMETHEUS_READ_USERNAME='${PROMETHEUS_READ_USERNAME:-}' PROMETHEUS_READ_PASSWORD='${PROMETHEUS_READ_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COGNI_REPO_URL='$COGNI_REPO_URL' COGNI_REPO_REF='$COGNI_REPO_REF' GIT_READ_USERNAME='$GIT_READ_USERNAME' GIT_READ_TOKEN='$GIT_READ_TOKEN' OPENCLAW_GATEWAY_TOKEN='$OPENCLAW_GATEWAY_TOKEN' OPENCLAW_GITHUB_RW_TOKEN='${OPENCLAW_GITHUB_RW_TOKEN:-}' GRAFANA_URL='${GRAFANA_URL:-}' GRAFANA_SERVICE_ACCOUNT_TOKEN='${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}' GRAFANA_PDC_SIGNING_TOKEN='${GRAFANA_PDC_SIGNING_TOKEN:-}' GRAFANA_PDC_HOSTED_GRAFANA_ID='${GRAFANA_PDC_HOSTED_GRAFANA_ID:-}' GRAFANA_PDC_CLUSTER='${GRAFANA_PDC_CLUSTER:-}' GRAFANA_PDC_NETWORK_ID='${GRAFANA_PDC_NETWORK_ID:-}' GRAFANA_PDC_NETWORK_UUID='${GRAFANA_PDC_NETWORK_UUID:-}' POSTHOG_API_KEY='$POSTHOG_API_KEY' POSTHOG_HOST='$POSTHOG_HOST' TAVILY_API_KEY='${TAVILY_API_KEY:-}' DISCORD_BOT_TOKEN='${DISCORD_BOT_TOKEN:-}' GH_OAUTH_CLIENT_ID='${GH_OAUTH_CLIENT_ID:-}' GH_OAUTH_CLIENT_SECRET='${GH_OAUTH_CLIENT_SECRET:-}' DISCORD_OAUTH_CLIENT_ID='${DISCORD_OAUTH_CLIENT_ID:-}' DISCORD_OAUTH_CLIENT_SECRET='${DISCORD_OAUTH_CLIENT_SECRET:-}' GOOGLE_OAUTH_CLIENT_ID='${GOOGLE_OAUTH_CLIENT_ID:-}' GOOGLE_OAUTH_CLIENT_SECRET='${GOOGLE_OAUTH_CLIENT_SECRET:-}' GH_REVIEW_APP_ID='${GH_REVIEW_APP_ID:-}' GH_REVIEW_APP_PRIVATE_KEY_BASE64='${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}' GH_REPOS='${GH_REPOS:-}' GH_WEBHOOK_SECRET='${GH_WEBHOOK_SECRET:-}' PRIVY_APP_ID='${PRIVY_APP_ID:-}' PRIVY_APP_SECRET='${PRIVY_APP_SECRET:-}' PRIVY_SIGNING_KEY='${PRIVY_SIGNING_KEY:-}' PRIVY_USER_WALLETS_APP_ID='${PRIVY_USER_WALLETS_APP_ID:-}' PRIVY_USER_WALLETS_APP_SECRET='${PRIVY_USER_WALLETS_APP_SECRET:-}' PRIVY_USER_WALLETS_SIGNING_KEY='${PRIVY_USER_WALLETS_SIGNING_KEY:-}' POLY_WALLET_AEAD_KEY_HEX='${POLY_WALLET_AEAD_KEY_HEX:-}' POLY_WALLET_AEAD_KEY_ID='${POLY_WALLET_AEAD_KEY_ID:-}' POLY_CLOB_GEO_BLOCK_TOKEN='${POLY_CLOB_GEO_BLOCK_TOKEN:-}' CONNECTIONS_ENCRYPTION_KEY='${CONNECTIONS_ENCRYPTION_KEY:-}' COGNI_NODE_DBS='${COGNI_NODE_DBS:-}' ACTIONS_AUTOMATION_BOT_PAT='${ACTIONS_AUTOMATION_BOT_PAT:-}' LITELLM_IMAGE='${LITELLM_IMAGE:-ghcr.io/cogni-dao/cogni-template:litellm-b6e4e942cb23}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-infra-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' DATABASE_URL='$DATABASE_URL' DATABASE_SERVICE_URL='$DATABASE_SERVICE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_SERVICE_USER='$APP_DB_SERVICE_USER' APP_DB_SERVICE_PASSWORD='$APP_DB_SERVICE_PASSWORD' APP_DB_READONLY_USER='${APP_DB_READONLY_USER:-}' APP_DB_READONLY_PASSWORD='${APP_DB_READONLY_PASSWORD:-}' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' POLYGON_RPC_URL='$POLYGON_RPC_URL' TEMPORAL_DB_USER='$TEMPORAL_DB_USER' TEMPORAL_DB_PASSWORD='$TEMPORAL_DB_PASSWORD' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN:-}' BILLING_INGEST_TOKEN='${BILLING_INGEST_TOKEN:-}' INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN:-}' WORK_ITEMS_NOTION_TOKEN='${WORK_ITEMS_NOTION_TOKEN:-}' WORK_ITEMS_NOTION_DATA_SOURCE_ID='${WORK_ITEMS_NOTION_DATA_SOURCE_ID:-}' WORK_ITEMS_NOTION_VERSION='${WORK_ITEMS_NOTION_VERSION:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' PROMETHEUS_QUERY_URL='${PROMETHEUS_QUERY_URL:-}' PROMETHEUS_READ_USERNAME='${PROMETHEUS_READ_USERNAME:-}' PROMETHEUS_READ_PASSWORD='${PROMETHEUS_READ_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COGNI_REPO_URL='$COGNI_REPO_URL' COGNI_REPO_REF='$COGNI_REPO_REF' GIT_READ_USERNAME='$GIT_READ_USERNAME' GIT_READ_TOKEN='$GIT_READ_TOKEN' OPENCLAW_GATEWAY_TOKEN='$OPENCLAW_GATEWAY_TOKEN' OPENCLAW_GITHUB_RW_TOKEN='${OPENCLAW_GITHUB_RW_TOKEN:-}' GRAFANA_URL='${GRAFANA_URL:-}' GRAFANA_SERVICE_ACCOUNT_TOKEN='${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}' GRAFANA_PDC_SIGNING_TOKEN='${GRAFANA_PDC_SIGNING_TOKEN:-}' GRAFANA_PDC_HOSTED_GRAFANA_ID='${GRAFANA_PDC_HOSTED_GRAFANA_ID:-}' GRAFANA_PDC_CLUSTER='${GRAFANA_PDC_CLUSTER:-}' GRAFANA_PDC_NETWORK_ID='${GRAFANA_PDC_NETWORK_ID:-}' GRAFANA_PDC_NETWORK_UUID='${GRAFANA_PDC_NETWORK_UUID:-}' POSTHOG_API_KEY='$POSTHOG_API_KEY' POSTHOG_HOST='$POSTHOG_HOST' TAVILY_API_KEY='${TAVILY_API_KEY:-}' DISCORD_BOT_TOKEN='${DISCORD_BOT_TOKEN:-}' GH_OAUTH_CLIENT_ID='${GH_OAUTH_CLIENT_ID:-}' GH_OAUTH_CLIENT_SECRET='${GH_OAUTH_CLIENT_SECRET:-}' DISCORD_OAUTH_CLIENT_ID='${DISCORD_OAUTH_CLIENT_ID:-}' DISCORD_OAUTH_CLIENT_SECRET='${DISCORD_OAUTH_CLIENT_SECRET:-}' GOOGLE_OAUTH_CLIENT_ID='${GOOGLE_OAUTH_CLIENT_ID:-}' GOOGLE_OAUTH_CLIENT_SECRET='${GOOGLE_OAUTH_CLIENT_SECRET:-}' GH_REVIEW_APP_ID='${GH_REVIEW_APP_ID:-}' GH_REVIEW_APP_PRIVATE_KEY_BASE64='${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}' GH_REPOS='${GH_REPOS:-}' GH_WEBHOOK_SECRET='${GH_WEBHOOK_SECRET:-}' PRIVY_APP_ID='${PRIVY_APP_ID:-}' PRIVY_APP_SECRET='${PRIVY_APP_SECRET:-}' PRIVY_SIGNING_KEY='${PRIVY_SIGNING_KEY:-}' PRIVY_USER_WALLETS_APP_ID='${PRIVY_USER_WALLETS_APP_ID:-}' PRIVY_USER_WALLETS_APP_SECRET='${PRIVY_USER_WALLETS_APP_SECRET:-}' PRIVY_USER_WALLETS_SIGNING_KEY='${PRIVY_USER_WALLETS_SIGNING_KEY:-}' POLY_WALLET_AEAD_KEY_HEX='${POLY_WALLET_AEAD_KEY_HEX:-}' POLY_WALLET_AEAD_KEY_ID='${POLY_WALLET_AEAD_KEY_ID:-}' POLY_CLOB_GEO_BLOCK_TOKEN='${POLY_CLOB_GEO_BLOCK_TOKEN:-}' CONNECTIONS_ENCRYPTION_KEY='${CONNECTIONS_ENCRYPTION_KEY:-}' COGNI_NODE_DBS='${COGNI_NODE_DBS:-}' ACTIONS_AUTOMATION_BOT_PAT='${ACTIONS_AUTOMATION_BOT_PAT:-}' LITELLM_IMAGE='${LITELLM_IMAGE:-ghcr.io/cogni-dao/cogni-poly:litellm-b6e4e942cb23}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-infra-remote.sh"
 
 emit_deployment_event "infra_deployment.complete" "success" "Infrastructure deployment completed"
 log_info "Infrastructure deployment complete!"

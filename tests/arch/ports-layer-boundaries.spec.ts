@@ -50,7 +50,7 @@ function runDepCruise(probeDirs: string[]): {
 describe("Ports layer boundaries", () => {
   it("allows ports to import from core", () => {
     const { exitCode, stderr } = runDepCruise([
-      "nodes/operator/app/src/ports/__arch_probes__",
+      "nodes/poly/app/src/ports/__arch_probes__",
     ]);
     if (exitCode !== 0) {
       console.error("STDERR:", stderr);
@@ -60,8 +60,8 @@ describe("Ports layer boundaries", () => {
 
   it("blocks ports from importing adapters", () => {
     const { exitCode, stdout } = runDepCruise([
-      "nodes/operator/app/src/ports/__arch_probes__",
-      "nodes/operator/app/src/adapters/__arch_probes__",
+      "nodes/poly/app/src/ports/__arch_probes__",
+      "nodes/poly/app/src/adapters/__arch_probes__",
     ]);
     if (exitCode === 0) {
       console.log("STDOUT:", stdout);
@@ -72,8 +72,8 @@ describe("Ports layer boundaries", () => {
 
   it("blocks ports from importing features", () => {
     const { exitCode, stdout } = runDepCruise([
-      "nodes/operator/app/src/ports/__arch_probes__",
-      "nodes/operator/app/src/features/__arch_probes__",
+      "nodes/poly/app/src/ports/__arch_probes__",
+      "nodes/poly/app/src/features/__arch_probes__",
     ]);
     if (exitCode === 0) {
       console.log("STDOUT:", stdout);

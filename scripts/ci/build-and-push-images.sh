@@ -20,7 +20,7 @@ TARGETS=${TARGETS:-}
 # GHCR package; the producer now picks the push repo per-target via
 # image_name_for_target. IMAGE_NAME is preserved as the APP-repo override
 # knob (back-compat with existing workflow env; it feeds IMAGE_NAME_APP).
-IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-template}
+IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-poly}
 export IMAGE_NAME_APP=${IMAGE_NAME_APP:-$IMAGE_NAME}
 export IMAGE_NAME_MIGRATOR=${IMAGE_NAME_MIGRATOR:-${IMAGE_NAME_APP}-migrate}
 IMAGE_TAG=${IMAGE_TAG:-}
@@ -103,60 +103,17 @@ build_target() {
   local tag="$2"
 
   case "$target" in
-    operator)
-      docker buildx build \
-        --platform "$PLATFORM" \
-        --file nodes/operator/app/Dockerfile \
-        --target runner \
-        --build-arg "BUILD_SHA=${git_sha}" \
-        --label "org.opencontainers.image.source=https://github.com/cogni-dao/cogni-template" \
-        --label "org.opencontainers.image.revision=${git_sha}" \
-        --label "org.opencontainers.image.created=${build_timestamp}" \
-        --cache-from "type=gha,scope=build-operator" \
-        --cache-to "type=gha,mode=max,scope=build-operator" \
-        --tag "$tag" \
-        --push \
-        .
-      ;;
     poly)
       docker buildx build \
         --platform "$PLATFORM" \
         --file nodes/poly/app/Dockerfile \
         --target runner \
         --build-arg "BUILD_SHA=${git_sha}" \
-        --label "org.opencontainers.image.source=https://github.com/cogni-dao/cogni-template" \
+        --label "org.opencontainers.image.source=https://github.com/cogni-dao/cogni-poly" \
         --label "org.opencontainers.image.revision=${git_sha}" \
         --label "org.opencontainers.image.created=${build_timestamp}" \
         --cache-from "type=gha,scope=build-poly" \
         --cache-to "type=gha,mode=max,scope=build-poly" \
-        --tag "$tag" \
-        --push \
-        .
-      ;;
-    resy)
-      docker buildx build \
-        --platform "$PLATFORM" \
-        --file nodes/resy/app/Dockerfile \
-        --target runner \
-        --build-arg "BUILD_SHA=${git_sha}" \
-        --label "org.opencontainers.image.source=https://github.com/cogni-dao/cogni-template" \
-        --label "org.opencontainers.image.revision=${git_sha}" \
-        --label "org.opencontainers.image.created=${build_timestamp}" \
-        --cache-from "type=gha,scope=build-resy" \
-        --cache-to "type=gha,mode=max,scope=build-resy" \
-        --tag "$tag" \
-        --push \
-        .
-      ;;
-    scheduler-worker)
-      docker buildx build \
-        --platform "$PLATFORM" \
-        --file services/scheduler-worker/Dockerfile \
-        --label "org.opencontainers.image.source=https://github.com/cogni-dao/cogni-template" \
-        --label "org.opencontainers.image.revision=${git_sha}" \
-        --label "org.opencontainers.image.created=${build_timestamp}" \
-        --cache-from "type=gha,scope=build-scheduler-worker" \
-        --cache-to "type=gha,mode=max,scope=build-scheduler-worker" \
         --tag "$tag" \
         --push \
         .

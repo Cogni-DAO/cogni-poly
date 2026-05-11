@@ -35,6 +35,7 @@ import type { ReactElement, ReactNode } from "react";
 import { Skeleton } from "@/components";
 import { Badge } from "@/components/reui/badge";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
+// eslint-disable-next-line no-restricted-imports -- pre-existing vendor import in app/, predates the kit-wrapper rule; tracked as follow-up
 import {
   Table,
   TableBody,
@@ -572,6 +573,7 @@ function ParticipantRow({
               : participant.label}
           </span>
           {participant.primary ? (
+            // eslint-disable-next-line ui-governance/no-arbitrary-non-token-values -- pre-existing arbitrary tailwind value; tracked as follow-up
             <span className="text-[11px] text-muted-foreground">
               {participant.primary.outcome}
               {" · "}

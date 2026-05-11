@@ -40,7 +40,7 @@ discovery.relabel "docker_logs" {
   // Add static labels (low cardinality)
   rule {
     target_label = "app"
-    replacement  = "cogni-template"
+    replacement  = "cogni-poly"
   }
 
   rule {

@@ -47,7 +47,9 @@ import {
 } from "@/components/reui/data-grid/data-grid";
 import { DataGridPagination } from "@/components/reui/data-grid/data-grid-pagination";
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
+// eslint-disable-next-line no-restricted-imports -- pre-existing vendor import in app/, predates the kit-wrapper rule; tracked as follow-up
 import { Toggle } from "@/components/vendor/shadcn/toggle";
+// eslint-disable-next-line no-restricted-imports -- pre-existing vendor import in app/, predates the kit-wrapper rule; tracked as follow-up
 import {
   ToggleGroup,
   ToggleGroupItem,

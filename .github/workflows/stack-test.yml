@@ -57,7 +57,7 @@ jobs:
       POSTGRES_DB: cogni_template_test
       COGNI_NODE_DBS: cogni_template_test
       # Image naming base (APP_IMAGE derived in step below)
-      IMAGE_NAME: cogni-template-ci
+      IMAGE_NAME: cogni-poly-ci
       IMAGE_TAG: ${{ github.sha }}
       DOMAIN: localhost
       LITELLM_MASTER_KEY: test-key
@@ -146,7 +146,7 @@ jobs:
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: .
-          file: ./nodes/operator/app/Dockerfile
+          file: ./nodes/poly/app/Dockerfile
           target: runner
           tags: ${{ env.APP_IMAGE }}
           load: true

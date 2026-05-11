@@ -133,7 +133,7 @@ fi
 # env=ci is locked to prevent accidental production labeling from CI
 STREAM_LABELS=$(jq -n \
   --argjson custom "$CUSTOM_LABELS" \
-  --arg app "cogni-template" \
+  --arg app "cogni-poly" \
   --arg env "ci" \
   --arg job "$JOB_NAME" \
   '($custom | del(.env, .app, .job)) + {app: $app, env: $env, job: $job}')

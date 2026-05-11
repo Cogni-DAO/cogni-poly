@@ -202,7 +202,7 @@ jobs:
         run: |
           set +e
           SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new"
-          COMPOSE="docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml"
+          COMPOSE="docker compose --project-name cogni-runtime --env-file /opt/cogni-poly-runtime/.env -f /opt/cogni-poly-runtime/docker-compose.yml"
           echo "=== alloy-k8s-events ps ==="
           $SSH root@"$VM_HOST" "$COMPOSE ps alloy-k8s-events 2>&1 || true"
           echo

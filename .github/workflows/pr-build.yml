@@ -24,6 +24,7 @@ on:
 permissions:
   contents: read
   packages: write
+  pull-requests: read # detect job uses `gh api .../pulls/{N}/files`
 
 # Different concurrency keys per event type. Cross-event races (force-push to
 # an enqueued PR) are eliminated by the queue's eviction-on-push behavior.
@@ -32,7 +33,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: ghcr.io/cogni-dao/cogni-template
+  IMAGE_NAME: ghcr.io/cogni-dao/cogni-poly
 
 jobs:
   # task.0391: single source of truth for event-derived metadata.
