@@ -47,6 +47,11 @@ interface Secret {
   repoLevel?: boolean;
   /** Optional value transform before setting (e.g. append URL path) */
   transform?: (value: string) => string;
+  /** Legacy env-var names that map to this secret. On file read, alias keys are
+   * migrated to the canonical name; on write, only the canonical name is emitted.
+   * Use when a secret has been renamed and old .env.{env} files may still
+   * carry the legacy spelling. */
+  aliases?: string[];
 }
 
 // ── Generators ───────────────────────────────────────────────────────────────
@@ -72,7 +77,7 @@ function generateSSHKey(env: string): string {
   console.log(`     ${pubKey}`);
   console.log("");
   console.log(
-    `     Save this to: infra/provision/cherry/base/keys/cogni_template_${env}_deploy.pub`
+    `     Save this to: infra/provision/cherry/base/keys/cogni_poly_${env}_deploy.pub`
   );
   console.log(`     Then run: tofu apply -var-file=terraform.${env}.tfvars`);
   console.log("");
@@ -328,8 +333,8 @@ const SECRETS: Secret[] = [
     category: "Database",
     source: "agent",
     description: "Application database name",
-    steps: ['Convention: "cogni_template"'],
-    generate: () => "cogni_template",
+    steps: ['Convention: "cogni_poly"'],
+    generate: () => "cogni_poly",
   },
   {
     name: "APP_DB_USER",
@@ -644,6 +649,7 @@ const SECRETS: Secret[] = [
         ? base
         : `${base}/loki/api/v1/push`;
     },
+    aliases: ["LOKI_WRITE_URL"],
   },
   {
     name: "GRAFANA_CLOUD_LOKI_USER",
@@ -653,6 +659,7 @@ const SECRETS: Secret[] = [
     description: "Grafana Cloud Loki numeric user ID",
     url: "https://grafana.com/orgs",
     steps: ["Your stack -> Loki", "Copy User (numeric)"],
+    aliases: ["LOKI_USERNAME"],
   },
   {
     name: "GRAFANA_CLOUD_LOKI_API_KEY",
@@ -666,6 +673,7 @@ const SECRETS: Secret[] = [
       "Scope: logs:write",
       "Create token, copy it",
     ],
+    aliases: ["LOKI_PASSWORD"],
   },
   {
     name: "PROMETHEUS_REMOTE_WRITE_URL",
@@ -857,6 +865,18 @@ const SECRETS: Secret[] = [
   // stored AEAD-encrypted in `poly_wallet_connections.clob_api_key_ciphertext`.
   // See docs/spec/poly-trader-wallet-port.md.
 
+  // ── BYO-AI: Connection encryption (optional — BYO-AI disabled when unset) ──
+  {
+    name: "CONNECTIONS_ENCRYPTION_KEY",
+    required: false,
+    category: "BYO-AI",
+    source: "agent",
+    description:
+      "AES-256-GCM key for at-rest encryption of user-provided AI provider credentials",
+    steps: ["Auto-generated 32-byte hex key (openssl rand -hex 32)"],
+    generate: () => randHex(32),
+  },
+
   // ── Optional: WalletConnect ────────────────────────────────────────────
   {
     name: "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID",
@@ -934,7 +954,7 @@ const SECRETS: Secret[] = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const REPO = "Cogni-DAO/node-template";
+const REPO = "Cogni-DAO/cogni-poly";
 /** Deploy environments. Secrets are set per-env, not repo-level. */
 const ENVIRONMENTS = ["candidate-a", "preview", "production"] as const;
 const LEGACY_ENV_ALIASES: Record<string, (typeof ENVIRONMENTS)[number]> = {
@@ -1071,7 +1091,7 @@ function buildDSNs(envs: readonly string[]): void {
   const appPw = dbPasswords.APP_DB_PASSWORD;
   const svcUser = dbPasswords.APP_DB_SERVICE_USER || "app_service";
   const svcPw = dbPasswords.APP_DB_SERVICE_PASSWORD;
-  const dbName = dbPasswords.APP_DB_NAME || "cogni_template";
+  const dbName = dbPasswords.APP_DB_NAME || "cogni_poly";
   const host = "postgres"; // Docker service name
 
   if (appPw) {
@@ -1465,6 +1485,22 @@ async function main() {
         }
         if (/^[A-Z_][A-Z0-9_]*$/.test(key)) {
           existing[key] = val;
+        }
+      }
+    }
+
+    // Migrate legacy aliases — if an old .env file carries a renamed secret
+    // under its prior spelling (e.g. LOKI_WRITE_URL → GRAFANA_CLOUD_LOKI_URL),
+    // promote the value to the canonical name and drop the legacy key so the
+    // written file converges on one spelling.
+    for (const sec of SECRETS) {
+      if (!sec.aliases) continue;
+      for (const alias of sec.aliases) {
+        if (existing[alias] !== undefined) {
+          if (existing[sec.name] === undefined) {
+            existing[sec.name] = existing[alias];
+          }
+          delete existing[alias];
         }
       }
     }
