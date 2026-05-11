@@ -857,6 +857,18 @@ const SECRETS: Secret[] = [
   // stored AEAD-encrypted in `poly_wallet_connections.clob_api_key_ciphertext`.
   // See docs/spec/poly-trader-wallet-port.md.
 
+  // ── BYO-AI: Connection encryption (optional — BYO-AI disabled when unset) ──
+  {
+    name: "CONNECTIONS_ENCRYPTION_KEY",
+    required: false,
+    category: "BYO-AI",
+    source: "agent",
+    description:
+      "AES-256-GCM key for at-rest encryption of user-provided AI provider credentials",
+    steps: ["Auto-generated 32-byte hex key (openssl rand -hex 32)"],
+    generate: () => randHex(32),
+  },
+
   // ── Optional: WalletConnect ────────────────────────────────────────────
   {
     name: "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID",
