@@ -1,0 +1,55 @@
+name: Provision Grafana Postgres Datasource
+
+# One-shot: (re)create the `cogni-<env>-<node>-postgres` Grafana datasource
+# against the env's currently-registered PDC tunnel. Use after a VM rebuild
+# when the convention-named datasource was deleted to clear a stale tunnel.
+#
+# Runs ONLY scripts/ci/provision-grafana-postgres-datasources.sh — no images,
+# no migrations, no Compose redeploy. The PDC tunnel must already be up
+# (verify via `{env=<env>,service="pdc-agent"}` in Loki).
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target Grafana environment"
+        required: true
+        default: production
+        type: choice
+        options: [candidate-a, preview, production]
+      cogni_node_dbs:
+        description: "CSV of databases to provision (default: all). Set to a single DB name like `cogni_poly` to scope."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provision-grafana-postgres-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+      POSTGRES_ROOT_PASSWORD: ${{ secrets.POSTGRES_ROOT_PASSWORD }}
+      APP_DB_READONLY_USER: ${{ secrets.APP_DB_READONLY_USER }}
+      APP_DB_READONLY_PASSWORD: ${{ secrets.APP_DB_READONLY_PASSWORD }}
+      GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+      GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+      GRAFANA_PDC_SIGNING_TOKEN: ${{ secrets.GRAFANA_PDC_SIGNING_TOKEN }}
+      GRAFANA_PDC_HOSTED_GRAFANA_ID: ${{ secrets.GRAFANA_PDC_HOSTED_GRAFANA_ID }}
+      GRAFANA_PDC_CLUSTER: ${{ secrets.GRAFANA_PDC_CLUSTER }}
+      GRAFANA_PDC_NETWORK_ID: ${{ secrets.GRAFANA_PDC_NETWORK_ID }}
+      GRAFANA_PDC_NETWORK_UUID: ${{ secrets.GRAFANA_PDC_NETWORK_UUID }}
+      COGNI_NODE_DBS: ${{ inputs.cogni_node_dbs != '' && inputs.cogni_node_dbs || secrets.COGNI_NODE_DBS }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Provision Grafana Postgres datasources
+        run: bash scripts/ci/provision-grafana-postgres-datasources.sh
+      - name: Verify Grafana Postgres datasources
+        continue-on-error: true
+        run: bash scripts/ci/verify-grafana-postgres-datasources.sh
