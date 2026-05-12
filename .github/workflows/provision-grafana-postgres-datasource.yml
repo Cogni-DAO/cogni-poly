@@ -1,12 +1,16 @@
 name: Provision Grafana Postgres Datasource
 
 # One-shot: (re)create the `cogni-<env>-<node>-postgres` Grafana datasource
-# against the env's currently-registered PDC tunnel. Use after a VM rebuild
-# when the convention-named datasource was deleted to clear a stale tunnel.
+# against the env's PDC tunnel. Use after a VM rebuild or PDC-network change.
 #
-# Runs ONLY scripts/ci/provision-grafana-postgres-datasources.sh — no images,
-# no migrations, no Compose redeploy. The PDC tunnel must already be up
-# (verify via `{env=<env>,service="pdc-agent"}` in Loki).
+# Surgical scope (compared to promote-and-deploy.yml):
+#   - Optionally bootstraps pdc-agent on the VM (writes the 4 GRAFANA_PDC_*
+#     vars into the runtime .env, then `docker compose up -d pdc-agent`).
+#     Other services are untouched.
+#   - (Re)creates the datasource via the Grafana HTTP API.
+#   - Verifies with `select current_user`.
+#
+# No image build, no migrations, no Compose redeploy of app services.
 
 on:
   workflow_dispatch:
@@ -21,6 +25,12 @@ on:
         description: "CSV of databases to provision (default: all). Set to a single DB name like `cogni_poly` to scope."
         required: false
         default: ""
+      bootstrap_pdc_agent:
+        description: "SSH the VM and (re)write the 4 GRAFANA_PDC_* vars into runtime .env, then start pdc-agent. Skip when the tunnel is already healthy."
+        required: false
+        default: "false"
+        type: choice
+        options: ["true", "false"]
 
 permissions:
   contents: read
@@ -46,10 +56,66 @@ jobs:
       GRAFANA_PDC_NETWORK_ID: ${{ secrets.GRAFANA_PDC_NETWORK_ID }}
       GRAFANA_PDC_NETWORK_UUID: ${{ secrets.GRAFANA_PDC_NETWORK_UUID }}
       COGNI_NODE_DBS: ${{ inputs.cogni_node_dbs != '' && inputs.cogni_node_dbs || secrets.COGNI_NODE_DBS }}
+      VM_HOST: ${{ secrets.VM_HOST }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        if: inputs.bootstrap_pdc_agent == 'true'
+        run: |
+          if [ -z "$VM_HOST" ]; then
+            echo "❌ VM_HOST not set; cannot bootstrap pdc-agent over SSH"
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.SSH_DEPLOY_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 10 -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Bootstrap pdc-agent on VM
+        if: inputs.bootstrap_pdc_agent == 'true'
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key root@"$VM_HOST" \
+            "GRAFANA_PDC_SIGNING_TOKEN='$GRAFANA_PDC_SIGNING_TOKEN' \
+             GRAFANA_PDC_HOSTED_GRAFANA_ID='$GRAFANA_PDC_HOSTED_GRAFANA_ID' \
+             GRAFANA_PDC_CLUSTER='$GRAFANA_PDC_CLUSTER' \
+             GRAFANA_PDC_NETWORK_UUID='$GRAFANA_PDC_NETWORK_UUID' \
+             bash -s" <<'REMOTE'
+          set -euo pipefail
+          ENV_FILE=/opt/cogni-poly-runtime/.env
+          if [ ! -f "$ENV_FILE" ]; then
+            echo "❌ $ENV_FILE not found on VM"
+            exit 1
+          fi
+          # Idempotent upsert of the 4 PDC vars
+          for var in GRAFANA_PDC_SIGNING_TOKEN GRAFANA_PDC_HOSTED_GRAFANA_ID GRAFANA_PDC_CLUSTER GRAFANA_PDC_NETWORK_UUID; do
+            val="${!var}"
+            if grep -q "^${var}=" "$ENV_FILE"; then
+              # In-place replace; use a delimiter unlikely to appear in values
+              sed -i "s|^${var}=.*|${var}=${val}|" "$ENV_FILE"
+            else
+              echo "${var}=${val}" >> "$ENV_FILE"
+            fi
+            echo "wrote ${var} (len=${#val})"
+          done
+          cd /opt/cogni-poly-runtime
+          echo "--- starting pdc-agent ---"
+          docker compose -p cogni-runtime up -d pdc-agent
+          echo "--- pdc-agent logs (first 30 lines) ---"
+          for i in 1 2 3 4 5 6; do
+            sleep 5
+            docker compose -p cogni-runtime logs --tail=30 pdc-agent 2>&1 | tail -30 || true
+            if docker compose -p cogni-runtime logs pdc-agent 2>&1 | grep -q "Authenticated to private-datasource-connect"; then
+              echo "✅ pdc-agent authenticated"
+              break
+            fi
+          done
+          REMOTE
+
       - name: Provision Grafana Postgres datasources
         run: bash scripts/ci/provision-grafana-postgres-datasources.sh
+
       - name: Verify Grafana Postgres datasources
         continue-on-error: true
         run: bash scripts/ci/verify-grafana-postgres-datasources.sh
