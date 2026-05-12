@@ -131,6 +131,10 @@ Ask user to create A records. Verify with `dig +short <domain>`.
 
 **Gate:** `curl -I https://<domain>/readyz` returns 200 **AND** `kubectl -n cogni-<env> get pods | grep scheduler-worker` shows the real `@cogni/scheduler-worker-service` image `1/1 Running` (NOT an nginx stub). The `/readyz` probe does not exercise the Temporal path; without a real scheduler-worker, every `chat.completions` request hangs indefinitely. Also run the [agent-api-validation](../../../docs/guides/agent-api-validation.md) recipe — `chat.completions` must return < 30s with a real OpenAI response.
 
+### Phase 8: Agent-readable Postgres (Grafana datasource)
+
+Wire the new VM's Postgres into Grafana Cloud so agents can query DB state without SSH. If you re-used an env name (e.g. swapping `production` to a new VM), **delete the stale `cogni-<env>-<node>-postgres` datasource first** — its PDC tunnel still points at the old VM and silently returns stale data. Follow [grafana-postgres-readonly.md](../../../docs/runbooks/grafana-postgres-readonly.md).
+
 ## Done
 
 - [ ] Preview deployment green
