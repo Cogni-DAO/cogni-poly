@@ -35,7 +35,7 @@ Datasource UID for prod: `cogni-production-poly-postgres`. Helper: `scripts/graf
 **Schema gotchas to know up front:**
 
 - `poly_copy_trade_decisions.decided_at` (NOT `created_at`) is the timestamp column, **`timestamp with time zone`** — compare with `to_timestamp(<seconds>)`, not bare epoch ints.
-- `poly_copy_trade_decisions.target_id` is a UUIDv5 derived from `(billing_account_id, target_wallet)` and does NOT FK to `poly_copy_trade_targets.id`. Joining the two tables on `target_id` returns zero rows. To find decisions for swisstony, filter by `intent->>'target_wallet'` or grab the v5 id from a sample row first.
+- `poly_copy_trade_decisions.target_id` is a deterministic UUIDv5 derived from the **lowercased target wallet alone** (helper: `targetIdFromWallet(wallet)` in `nodes/poly/app/src/features/copy-trade/target-id.ts`), while `poly_copy_trade_targets.id` is a random UUIDv4. They do NOT join — the v5 is shared across all tenants tracking that wallet, the v4 is per-tenant. Joining the two tables on `target_id = id` returns zero rows. To find decisions for swisstony, filter by `intent->>'target_wallet'` or grab the v5 id from a sample row first. Full canonical note: [`docs/spec/poly-copy-trade-execution.md` § "Target identity in the decision/fill ledger"](../../../docs/spec/poly-copy-trade-execution.md#target-identity-in-the-decisionfill-ledger).
 - `intent->>'market_id'` has the form `prediction-market:polymarket:0xCONDITION_ID`, not the bare condition_id. `intent->>'position_token_id'` is often null on `new_entry` decisions; the actual token_id is in the `fill_id` string after the second `:`.
 - `poly_trader_wallets.kind`: `copy_target` for the wallets we mirror, `cogni_wallet` for our own.
 

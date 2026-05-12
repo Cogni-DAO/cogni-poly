@@ -758,6 +758,45 @@ Position-terminal states (`closed`, `redeemed`, `loser`, `dust`), action states 
 
 Migration 0041. Set once on insert (`DO UPDATE SET ... -- excluding first_observed_at`). `heldMinutes = capturedAt - first_observed_at`.
 
+### Target identity in the decision/fill ledger
+
+Two parallel id schemes coexist for "the wallet we're mirroring". Joining them naively returns zero rows — this is the most common cross-table-query trap and is responsible for "I JOIN'd it and got nothing" investigations dead-ending.
+
+| Column                                                                     | UUID kind              | Derived from                                                 | Lives in                                                                    |
+| -------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `poly_copy_trade_targets.id`                                               | **v4** (random)        | `randomUUID()` at row insert                                 | per-tenant target opt-in row PK; one row per `(billing_account, wallet)`    |
+| `poly_copy_trade_decisions.target_id`<br>`poly_copy_trade_fills.target_id` | **v5** (deterministic) | `uuidv5(wallet.toLowerCase(), POLY_TARGET_WALLET_NAMESPACE)` | decision + fill ledgers; **stable across all tenants tracking that wallet** |
+
+**Why two.** A single target wallet (e.g. `swisstony`) may be opted into by N tenants, each with their own `poly_copy_trade_targets` row (different `billing_account_id`, different random `id`). All N tenants' decisions/fills share the same `target_id` in the ledger because the v5 derivation depends only on the wallet address. This is what makes `client_order_id = clientOrderIdFor(target_id, fill_id)` collision-resistant across tenants on the same fill (`IDEMPOTENT_BY_CLIENT_ID`).
+
+**Helper.** `nodes/poly/app/src/features/copy-trade/target-id.ts::targetIdFromWallet(wallet)` is the only function that derives the v5. Namespace UUID is hard-pinned (`TARGET_ID_DETERMINISTIC`); never change it.
+
+**Joining decisions / fills back to a target row.**
+
+```sql
+-- WRONG — returns zero rows; v5 ≠ v4
+SELECT …
+FROM poly_copy_trade_decisions d
+JOIN poly_copy_trade_targets t ON d.target_id = t.id;
+
+-- RIGHT (preferred): filter via the intent payload
+SELECT …
+FROM poly_copy_trade_decisions
+WHERE intent->>'target_wallet' = '0xLOWERCASE_WALLET_HERE';
+
+-- ALSO RIGHT: derive the v5 in app code, then filter
+SELECT …
+FROM poly_copy_trade_decisions
+WHERE target_id = '<uuidv5(wallet.toLowerCase(), POLY_TARGET_WALLET_NAMESPACE)>';
+
+-- ALSO RIGHT for "what wallet does this v5 belong to?" — pull from a sample row
+SELECT DISTINCT intent->>'target_wallet'
+FROM poly_copy_trade_decisions
+WHERE target_id = '<v5_value>';
+```
+
+The same trap applies to `poly_copy_trade_fills.target_id` (also v5).
+
 ## Implementation pointers
 
 Trading layer (`features/trading/`):

@@ -58,6 +58,10 @@ Where this matters in practice:
 
 When in doubt, surface **both** and label which one drives the decision. Future agents should not have to redo the metric-shape analysis to know what they're looking at.
 
+## Schema gotchas
+
+- **`poly_copy_trade_decisions.target_id` and `poly_copy_trade_fills.target_id` are deterministic UUIDv5** of the lowercased target wallet, while `poly_copy_trade_targets.id` is random UUIDv4. Naively joining decisions/fills to the targets row on `target_id = id` returns zero rows. To go target-row → decisions, filter by `intent->>'target_wallet'` or derive the v5 via `targetIdFromWallet(wallet)`. Full canonical note: [`docs/spec/poly-copy-trade-execution.md` § "Target identity in the decision/fill ledger"](../../../docs/spec/poly-copy-trade-execution.md#target-identity-in-the-decisionfill-ledger). The Decision-coverage and Skip-by-reason KPIs below both depend on getting this right.
+
 ## KPIs the Research tab tracks
 
 When a new research view ships, its purpose is usually to answer one of the questions below. If your view doesn't fit any of these, ask before building it — we may already have a better surface for it.
