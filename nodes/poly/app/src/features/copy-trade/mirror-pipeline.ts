@@ -1141,11 +1141,27 @@ async function executeMirrorOrder(
     );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
+    const errDetails =
+      err && typeof err === "object" && "details" in err
+        ? ((err as { details?: unknown }).details ?? null)
+        : null;
+    const detailsObj = (
+      errDetails && typeof errDetails === "object" ? errDetails : {}
+    ) as Record<string, unknown>;
     const adapterErrorCode =
-      typeof (err as { details?: { error_code?: unknown } } | null)?.details
-        ?.error_code === "string"
-        ? (err as { details: { error_code: string } }).details.error_code
+      typeof detailsObj.error_code === "string"
+        ? (detailsObj.error_code as string)
         : undefined;
+    const adapterErrorReason =
+      typeof detailsObj.reason === "string"
+        ? (detailsObj.reason as string)
+        : null;
+    const adapterErrorClass =
+      typeof detailsObj.error_class === "string"
+        ? (detailsObj.error_class as string)
+        : err instanceof Error
+          ? err.constructor.name
+          : null;
     deps.metrics.incr(MIRROR_PIPELINE_METRICS.placementErrorsTotal, {});
     await deps.ledger.markError({ client_order_id, error: msg });
     emitDecisionMetric(
@@ -1172,6 +1188,8 @@ async function executeMirrorOrder(
         event: EVENT_NAMES.POLY_MIRROR_DECISION,
         outcome: "error",
         errorCode: adapterErrorCode ?? "placement_failed",
+        errorReason: adapterErrorReason,
+        errorClass: adapterErrorClass,
         reason: "placement_failed",
         source,
         fill_id: fill.fill_id,

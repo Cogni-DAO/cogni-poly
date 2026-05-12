@@ -116,6 +116,20 @@ export interface OpenOrderSummary {
 
 /** Thrown when close preconditions fail or the executor refuses to sign. */
 export class PolyTradeExecutorError extends Error {
+  /**
+   * Structured details shaped like `ClobFailureDetails` so the mirror-pipeline
+   * catch (`err.details.error_code`) surfaces this denial in Loki instead of
+   * falling back to the generic `placement_failed` bucket. `error_code` keeps
+   * the `authorize_denied` namespace distinct from CLOB-side codes
+   * (`insufficient_balance` etc.); `reason` carries the specific cause
+   * (`cap_exceeded_per_order`, `no_connection`, `trading_not_ready`, ...).
+   */
+  public readonly details: {
+    error_code: "authorize_denied" | "no_position_to_close";
+    reason: string | null;
+    error_class: "PolyTradeExecutorError";
+  };
+
   constructor(
     public readonly code: "no_position_to_close" | "not_authorized",
     message: string,
@@ -123,6 +137,12 @@ export class PolyTradeExecutorError extends Error {
   ) {
     super(message);
     this.name = "PolyTradeExecutorError";
+    this.details = {
+      error_code:
+        code === "not_authorized" ? "authorize_denied" : "no_position_to_close",
+      reason: reason ?? null,
+      error_class: "PolyTradeExecutorError",
+    };
   }
 }
 
