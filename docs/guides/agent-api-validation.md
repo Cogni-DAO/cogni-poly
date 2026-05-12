@@ -49,6 +49,15 @@ curl -s -X POST $BASE/api/v1/chat/completions \
 > virtual key that doesn't exist for newly registered agents. Routing via a named graph uses
 > the platform key instead. This is a known gap — see shortcomings below.
 
+> **If `chat.completions` hangs >30s with no body**, the deployment is missing a running
+> `scheduler-worker` pod. The route submits `GraphRunWorkflow` to Temporal queue
+> `scheduler-tasks-${nodeId}` and blocks on the first event from the Redis run-stream.
+> Without a real worker polling that queue, no events ever arrive. `/readyz` returning 200
+> does NOT cover this — only a true scheduler-worker `1/1 Running` does. Verify with:
+> `kubectl -n cogni-{env} get pods | grep scheduler-worker`. An nginx stub satisfying
+> `/readyz` is a known anti-pattern; the worker must be the real `@cogni/scheduler-worker-service`
+> image. See `.context/node-setup-gotchas.md` #38 for the full trace.
+
 ## Work items — the contribution ledger
 
 Every code change is tied to exactly one work item. **1 work item ≈ 1 PR.** Prefer adopting an existing item over creating one (anti-sprawl). Items stay lean — a one-line `outcome` describing successful E2E validation.

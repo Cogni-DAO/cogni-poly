@@ -32,6 +32,8 @@ manual /promote (production)    →  promote-and-deploy.yml     → write deploy
 
 Argo CD runs apps (operator, poly, resy, scheduler-worker) on k3s. Compose runs supporting infra (Postgres, Temporal, LiteLLM, Redis, Doltgres, Caddy) directly on the VM. The full pipeline contract lives in [`cd-pipeline-e2e.md`](../spec/cd-pipeline-e2e.md) and [`ci-cd.md`](../spec/ci-cd.md). Canary was retired in `bug.0312`; do not look for it.
 
+> **scheduler-worker is not optional.** Every `chat.completions` / `ai.chat` request submits a `GraphRunWorkflow` to a per-node Temporal queue (`scheduler-tasks-${nodeId}`) and blocks until the worker emits a result. Single-node forks (e.g. `cogni-poly`) need scheduler-worker just as much as multi-node forks. A `/readyz: 200` nginx stub will pass health checks and silently hang every user request — do not deploy one.
+
 ## 1. Provision VM (~5 min)
 
 One command per environment. Bootstraps Docker + k3s + Argo CD + Compose infra; provisions the Cherry Servers VM via OpenTofu; writes the SSH key + IP to `.local/`.

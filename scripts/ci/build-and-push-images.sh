@@ -118,6 +118,19 @@ build_target() {
         --push \
         .
       ;;
+    scheduler-worker)
+      docker buildx build \
+        --platform "$PLATFORM" \
+        --file services/scheduler-worker/Dockerfile \
+        --label "org.opencontainers.image.source=https://github.com/cogni-dao/cogni-poly" \
+        --label "org.opencontainers.image.revision=${git_sha}" \
+        --label "org.opencontainers.image.created=${build_timestamp}" \
+        --cache-from "type=gha,scope=build-scheduler-worker" \
+        --cache-to "type=gha,mode=max,scope=build-scheduler-worker" \
+        --tag "$tag" \
+        --push \
+        .
+      ;;
   esac
 }
 
