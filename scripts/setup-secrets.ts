@@ -77,7 +77,7 @@ function generateSSHKey(env: string): string {
   console.log(`     ${pubKey}`);
   console.log("");
   console.log(
-    `     Save this to: infra/provision/cherry/base/keys/cogni_poly_${env}_deploy.pub`
+    `     Save this to: infra/provision/cherry/base/keys/cogni_${env}_deploy.pub`
   );
   console.log(`     Then run: tofu apply -var-file=terraform.${env}.tfvars`);
   console.log("");
