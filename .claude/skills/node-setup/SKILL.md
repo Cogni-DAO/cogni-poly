@@ -129,7 +129,7 @@ Ask user to create A records. Verify with `dig +short <domain>`.
 3. On failure: check logs, fix, rerun
 4. **Checkpoint:** Preview green → repeat Phases 4-7 for production
 
-**Gate:** `curl -I https://<domain>/readyz` returns 200.
+**Gate:** `curl -I https://<domain>/readyz` returns 200 **AND** `kubectl -n cogni-<env> get pods | grep scheduler-worker` shows the real `@cogni/scheduler-worker-service` image `1/1 Running` (NOT an nginx stub). The `/readyz` probe does not exercise the Temporal path; without a real scheduler-worker, every `chat.completions` request hangs indefinitely. Also run the [agent-api-validation](../../../docs/guides/agent-api-validation.md) recipe — `chat.completions` must return < 30s with a real OpenAI response.
 
 ## Done
 
