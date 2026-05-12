@@ -10,7 +10,7 @@ resources:
 
 # Image digest — updated by manual PR for production promotion.
 images:
-  - name: ghcr.io/cogni-dao/cogni-template
+  - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
     digest: "sha256:40415b321e3ef629512da7ad6b741b7a6ecf57da2845158ec723f600c3c1cb52"
 
