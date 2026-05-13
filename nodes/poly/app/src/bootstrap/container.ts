@@ -828,8 +828,13 @@ function createContainer(): Container {
         // 2.39 does not recreate it, costing ~98% of events.
         const polygonWssUrl =
           env.POLYGON_RPC_WSS_URL ??
-          env.POLYGON_RPC_URL?.replace(/^https:\/\//, "wss://") ??
-          env.POLYGON_RPC_URL?.replace(/^http:\/\//, "ws://");
+          // `https://…` → `wss://…`, `http://…` → `ws://…`, anything else
+          // (already `ws://` or `wss://`) passes through. Replace's captured
+          // `(s?)` matches both schemes in one pass, so the assignment is a
+          // single nullish-safe expression rather than a chain with a dead
+          // branch (the prior chain's second `??` was unreachable because
+          // `.replace` always returns a string, not null).
+          env.POLYGON_RPC_URL?.replace(/^http(s?):\/\//, "ws$1://");
         if (!polygonWssUrl) {
           log.warn(
             {
