@@ -39,11 +39,13 @@ type OrderFilledArgs = {
   orderHash: `0x${string}`;
   maker: `0x${string}`;
   taker: `0x${string}`;
-  makerAssetId: bigint;
-  takerAssetId: bigint;
+  side: number;
+  tokenId: bigint;
   makerAmountFilled: bigint;
   takerAmountFilled: bigint;
   fee: bigint;
+  builder: `0x${string}`;
+  metadata: `0x${string}`;
 };
 
 function makeLog(args: OrderFilledArgs): Log<bigint, number, false> & {
@@ -66,25 +68,38 @@ function makeLog(args: OrderFilledArgs): Log<bigint, number, false> & {
     transactionIndex: 1,
     removed: false,
     args,
-    // eventName is added by viem at decode time; we synthesize a decoded log here.
   } as unknown as Log<bigint, number, false> & { args: OrderFilledArgs };
 }
 
-describe("decodeOrderFilledForTarget", () => {
-  it("target as maker buying outcome (makerAssetId=0): side=BUY, decodes price + size from amount ratio", () => {
-    // Target makers a BUY: gives USDC, receives outcome shares.
-    // 30 USDC for 50 shares → price 0.60
-    const log = makeLog({
-      orderHash: "0xorderhash" as `0x${string}`,
-      maker: TARGET,
-      taker: COUNTERPARTY,
-      makerAssetId: 0n,
-      takerAssetId: TOKEN_ID,
-      makerAmountFilled: 30_000_000n, // 30 USDC (6 dec)
-      takerAmountFilled: 50_000_000n, // 50 shares (6 dec)
-      fee: 0n,
-    });
+const ZERO32 =
+  "0x0000000000000000000000000000000000000000000000000000000000000000" as const satisfies `0x${string}`;
 
+function makerLog(
+  overrides: Partial<OrderFilledArgs>
+): ReturnType<typeof makeLog> {
+  return makeLog({
+    orderHash: "0xorderhash" as `0x${string}`,
+    maker: TARGET,
+    taker: COUNTERPARTY,
+    side: 0,
+    tokenId: TOKEN_ID,
+    makerAmountFilled: 30_000_000n,
+    takerAmountFilled: 50_000_000n,
+    fee: 0n,
+    builder: ZERO32,
+    metadata: ZERO32,
+    ...overrides,
+  });
+}
+
+describe("decodeOrderFilledForTarget", () => {
+  it("target as maker, side=BUY (0): target paid makerAmount USDC, received takerAmount shares", () => {
+    // 30 USDC out, 50 shares in → price 0.60
+    const log = makerLog({
+      side: 0,
+      makerAmountFilled: 30_000_000n,
+      takerAmountFilled: 50_000_000n,
+    });
     const decoded = decodeOrderFilledForTarget(log, TARGET);
     expect(decoded).not.toBeNull();
     expect(decoded?.side).toBe("BUY");
@@ -95,39 +110,13 @@ describe("decodeOrderFilledForTarget", () => {
     expect(decoded?.logIndex).toBe(7);
   });
 
-  it("target as taker buying outcome (takerAssetId=0): side=BUY", () => {
-    // Target market-buys: target = taker, taker gives USDC, gets outcome from maker.
-    const log = makeLog({
-      orderHash: "0xorderhash" as `0x${string}`,
-      maker: COUNTERPARTY,
-      taker: TARGET,
-      makerAssetId: TOKEN_ID,
-      takerAssetId: 0n,
-      makerAmountFilled: 100_000_000n, // 100 shares from maker
-      takerAmountFilled: 31_000_000n, // 31 USDC from taker
-      fee: 0n,
+  it("target as maker, side=SELL (1): target paid makerAmount shares, received takerAmount USDC", () => {
+    // 25 shares out, 15 USDC in → price 0.60
+    const log = makerLog({
+      side: 1,
+      makerAmountFilled: 25_000_000n,
+      takerAmountFilled: 15_000_000n,
     });
-
-    const decoded = decodeOrderFilledForTarget(log, TARGET);
-    expect(decoded?.side).toBe("BUY");
-    expect(decoded?.tokenId).toBe(TOKEN_ID.toString());
-    expect(decoded?.shares).toBe(100);
-    expect(decoded?.size_usdc).toBe(31);
-    expect(decoded?.price).toBeCloseTo(0.31, 6);
-  });
-
-  it("target as maker selling outcome (makerAssetId=tokenId): side=SELL", () => {
-    const log = makeLog({
-      orderHash: "0xorderhash" as `0x${string}`,
-      maker: TARGET,
-      taker: COUNTERPARTY,
-      makerAssetId: TOKEN_ID,
-      takerAssetId: 0n,
-      makerAmountFilled: 25_000_000n, // 25 shares
-      takerAmountFilled: 15_000_000n, // 15 USDC
-      fee: 0n,
-    });
-
     const decoded = decodeOrderFilledForTarget(log, TARGET);
     expect(decoded?.side).toBe("SELL");
     expect(decoded?.tokenId).toBe(TOKEN_ID.toString());
@@ -136,64 +125,59 @@ describe("decodeOrderFilledForTarget", () => {
     expect(decoded?.price).toBeCloseTo(0.6, 6);
   });
 
-  it("target on neither side returns null (defensive — filter should have prevented this)", () => {
-    const log = makeLog({
-      orderHash: "0xorderhash" as `0x${string}`,
-      maker: COUNTERPARTY,
-      taker: "0xCCcccccCCcCcCcCCcCcccCccCccCCcCcCccCCccc" as `0x${string}`,
-      makerAssetId: 0n,
-      takerAssetId: TOKEN_ID,
-      makerAmountFilled: 30_000_000n,
-      takerAmountFilled: 50_000_000n,
-      fee: 0n,
+  it("real swisstony tx 0x622ee0… maker leg decodes correctly (regression pin for bug.5049)", () => {
+    // Captured from Polygon mainnet receipt of tx
+    // 0x622ee0123a0dc9ca3f79c6d6638de7c1ffeebdae03f0a3f1a5fa091816e16c9f
+    // log index 17: maker=swisstony, taker=exchange-self, side=0 (BUY),
+    // makerAmountFilled=0x1f4fa0 USDC, takerAmountFilled=0x2b7cd0 shares.
+    const log = makerLog({
+      maker: "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      taker: "0xe111180000d2663c0091e4f400237545b87b996b",
+      side: 0,
+      tokenId:
+        0x20137719a380ef0487e15ed9a7853217eea6d8f4343a8e3b495fe59ab69a5e1fn,
+      makerAmountFilled: 0x1f4fa0n,
+      takerAmountFilled: 0x2b7cd0n,
     });
-
-    const decoded = decodeOrderFilledForTarget(log, TARGET);
-    expect(decoded).toBeNull();
-  });
-
-  it("both sides marked collateral (malformed match) returns null", () => {
-    const log = makeLog({
-      orderHash: "0xorderhash" as `0x${string}`,
-      maker: TARGET,
-      taker: COUNTERPARTY,
-      makerAssetId: 0n,
-      takerAssetId: 0n,
-      makerAmountFilled: 30_000_000n,
-      takerAmountFilled: 50_000_000n,
-      fee: 0n,
-    });
-    expect(decodeOrderFilledForTarget(log, TARGET)).toBeNull();
-  });
-
-  it("zero outcome amount returns null (defensive)", () => {
-    const log = makeLog({
-      orderHash: "0xorderhash" as `0x${string}`,
-      maker: TARGET,
-      taker: COUNTERPARTY,
-      makerAssetId: 0n,
-      takerAssetId: TOKEN_ID,
-      makerAmountFilled: 30_000_000n,
-      takerAmountFilled: 0n,
-      fee: 0n,
-    });
-    expect(decodeOrderFilledForTarget(log, TARGET)).toBeNull();
-  });
-
-  it("address comparison is case-insensitive", () => {
-    const lowerTarget = TARGET.toLowerCase() as `0x${string}`;
-    const log = makeLog({
-      orderHash: "0xorderhash" as `0x${string}`,
-      maker: lowerTarget,
-      taker: COUNTERPARTY,
-      makerAssetId: 0n,
-      takerAssetId: TOKEN_ID,
-      makerAmountFilled: 30_000_000n,
-      takerAmountFilled: 50_000_000n,
-      fee: 0n,
-    });
-    const decoded = decodeOrderFilledForTarget(log, TARGET);
+    const decoded = decodeOrderFilledForTarget(
+      log,
+      "0x204f72f35326db932158cba6adff0b9a1da95e14"
+    );
+    // 0x1f4fa0 = 2_052_000 (6-dec USDC) = $2.052
+    // 0x2b7cd0 = 2_850_000 (6-dec CTF shares) = 2.85
     expect(decoded?.side).toBe("BUY");
+    expect(decoded?.size_usdc).toBeCloseTo(2.052, 6);
+    expect(decoded?.shares).toBeCloseTo(2.85, 6);
+    expect(decoded?.price).toBeCloseTo(2.052 / 2.85, 6);
+  });
+
+  it("target is NOT the maker → null (defensive; filter should have prevented this)", () => {
+    const log = makerLog({
+      maker: COUNTERPARTY,
+      taker: TARGET, // target appears as taker — but we filter on maker only
+    });
+    expect(decodeOrderFilledForTarget(log, TARGET)).toBeNull();
+  });
+
+  it("invalid side value (>1) → null", () => {
+    const log = makerLog({ side: 2 });
+    expect(decodeOrderFilledForTarget(log, TARGET)).toBeNull();
+  });
+
+  it("zero outcome amount → null (defensive)", () => {
+    const log = makerLog({
+      side: 0,
+      takerAmountFilled: 0n, // would-be shares received = 0
+    });
+    expect(decodeOrderFilledForTarget(log, TARGET)).toBeNull();
+  });
+
+  it("maker address compare is case-insensitive", () => {
+    const log = makerLog({
+      maker: TARGET.toLowerCase() as `0x${string}`,
+      side: 0,
+    });
+    expect(decodeOrderFilledForTarget(log, TARGET)?.side).toBe("BUY");
   });
 });
 
@@ -261,8 +245,8 @@ function makeFakeLogger(): {
 function makeOrderFilledLog(args: {
   maker: `0x${string}`;
   taker: `0x${string}`;
-  makerAssetId: bigint;
-  takerAssetId: bigint;
+  side?: number;
+  tokenId?: bigint;
   makerAmountFilled: bigint;
   takerAmountFilled: bigint;
   blockNumber?: bigint;
@@ -288,11 +272,13 @@ function makeOrderFilledLog(args: {
         "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`,
       maker: args.maker,
       taker: args.taker,
-      makerAssetId: args.makerAssetId,
-      takerAssetId: args.takerAssetId,
+      side: args.side ?? 0,
+      tokenId: args.tokenId ?? TOKEN_ID,
       makerAmountFilled: args.makerAmountFilled,
       takerAmountFilled: args.takerAmountFilled,
       fee: 0n,
+      builder: ZERO32,
+      metadata: ZERO32,
     },
   } as unknown as Log<bigint, number, false>;
 }
@@ -421,16 +407,22 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     });
 
     // 4 subscriptions (V2 × {maker, taker} + NegRisk × {maker, taker})
-    expect(harness.subs).toHaveLength(4);
+    // V2 + NegRisk V2, both filtered on maker = target. Two subscriptions per
+    // target — was 4 before bug.5049 when we also subscribed taker-side.
+    expect(harness.subs).toHaveLength(2);
+    for (const s of harness.subs) {
+      expect(s.args.maker).toEqual([TARGET]);
+      expect(s.args.taker).toBeUndefined();
+    }
     await flushAsync(); // let the cold_start metadata refresh land
 
     // Fire one log on the V2 maker subscription (sub[0]).
-    harness.subs[0]!.onLogs([
+    harness.subs[0]?.onLogs([
       makeOrderFilledLog({
         maker: TARGET,
         taker: COUNTERPARTY,
-        makerAssetId: 0n,
-        takerAssetId: TOKEN_ID,
+        side: 0,
+        tokenId: TOKEN_ID,
         makerAmountFilled: 30_000_000n,
         takerAmountFilled: 50_000_000n,
         blockNumber,
@@ -441,7 +433,8 @@ describe("createPolymarketChainActivitySource — behavior", () => {
 
     const { fills, newSince } = await source.fetchSince(0);
     expect(fills).toHaveLength(1);
-    const f = fills[0]!;
+    const f = fills[0];
+    if (!f) throw new Error("expected one buffered fill");
     expect(f.source).toBe("chain");
     expect(f.side).toBe("BUY");
     expect(f.fill_id).toMatch(/^chain:0xabc123.*:7:BUY$/);
@@ -476,12 +469,12 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     });
     await flushAsync();
 
-    harness.subs[0]!.onLogs([
+    harness.subs[0]?.onLogs([
       makeOrderFilledLog({
         maker: TARGET,
         taker: COUNTERPARTY,
-        makerAssetId: 0n,
-        takerAssetId: TOKEN_ID,
+        side: 0,
+        tokenId: TOKEN_ID,
         makerAmountFilled: 30_000_000n,
         takerAmountFilled: 50_000_000n,
         blockNumber: 5_000_000n,
@@ -527,12 +520,12 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     });
     await flushAsync();
 
-    harness.subs[0]!.onLogs([
+    harness.subs[0]?.onLogs([
       makeOrderFilledLog({
         maker: TARGET,
         taker: COUNTERPARTY,
-        makerAssetId: 0n,
-        takerAssetId: TOKEN_ID,
+        side: 0,
+        tokenId: TOKEN_ID,
         makerAmountFilled: 30_000_000n,
         takerAmountFilled: 50_000_000n,
         blockNumber: 5_000_000n,
@@ -578,12 +571,12 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     await flushAsync();
 
     const tBefore = Math.floor(Date.now() / 1000);
-    harness.subs[0]!.onLogs([
+    harness.subs[0]?.onLogs([
       makeOrderFilledLog({
         maker: TARGET,
         taker: COUNTERPARTY,
-        makerAssetId: 0n,
-        takerAssetId: TOKEN_ID,
+        side: 0,
+        tokenId: TOKEN_ID,
         makerAmountFilled: 30_000_000n,
         takerAmountFilled: 50_000_000n,
         blockNumber: 5_000_000n,
@@ -595,7 +588,7 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     const { fills } = await source.fetchSince(0);
     expect(fills).toHaveLength(1);
     const observedSec = Math.floor(
-      new Date(fills[0]!.observed_at).getTime() / 1000
+      new Date(fills[0]?.observed_at).getTime() / 1000
     );
     expect(observedSec).toBeGreaterThanOrEqual(tBefore);
     expect(observedSec).toBeLessThanOrEqual(tAfter);
@@ -657,12 +650,12 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     source.subscribeWake?.(bad);
     source.subscribeWake?.(good);
 
-    harness.subs[0]!.onLogs([
+    harness.subs[0]?.onLogs([
       makeOrderFilledLog({
         maker: TARGET,
         taker: COUNTERPARTY,
-        makerAssetId: 0n,
-        takerAssetId: TOKEN_ID,
+        side: 0,
+        tokenId: TOKEN_ID,
         makerAmountFilled: 30_000_000n,
         takerAmountFilled: 50_000_000n,
         blockNumber: 5_000_000n,
