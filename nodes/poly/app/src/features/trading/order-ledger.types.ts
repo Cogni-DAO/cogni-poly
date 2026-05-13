@@ -195,7 +195,7 @@ export interface InsertPendingInput extends TenantBinding {
    * Optional atomic cap for active tenant × market intent. When present, the
    * DB adapter locks `(billing_account_id, market_id)`, re-sums active intent,
    * and rejects the insert with `PositionCapReachedError` if it would exceed
-   * this bound. Copy-trading passes `max_usdc_per_trade` here so concurrent
+   * this bound. Copy-trading passes `max_usdc_per_condition` here so concurrent
    * target pollers cannot race through the read-side pre-check.
    */
   max_market_intent_usdc?: number;

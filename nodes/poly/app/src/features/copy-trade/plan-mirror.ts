@@ -65,7 +65,7 @@ export function applySizingPolicy(
   if (!sized.ok) return sized;
   if (
     cumulativeIntentForMarket !== undefined &&
-    cumulativeIntentForMarket + sized.size_usdc > policy.max_usdc_per_trade
+    cumulativeIntentForMarket + sized.size_usdc > policy.max_usdc_per_condition
   ) {
     return { ok: false, reason: "position_cap_reached" };
   }
@@ -86,7 +86,7 @@ function sizeFromPolicy(
         price,
         minShares,
         minUsdcNotional,
-        policy.max_usdc_per_trade
+        policy.max_usdc_per_condition
       );
     }
     case "target_percentile": {
@@ -98,7 +98,7 @@ function sizeFromPolicy(
         price,
         minShares,
         minUsdcNotional,
-        policy.max_usdc_per_trade
+        policy.max_usdc_per_condition
       );
     }
     case "target_percentile_scaled": {
@@ -110,7 +110,7 @@ function sizeFromPolicy(
         price,
         minShares,
         minUsdcNotional,
-        policy.max_usdc_per_trade
+        policy.max_usdc_per_condition
       );
       if (!floor.ok) return floor;
       const denominator =
@@ -127,13 +127,14 @@ function sizeFromPolicy(
               )
             );
       const desiredSizeUsdc =
-        floor.size_usdc + (policy.max_usdc_per_trade - floor.size_usdc) * ratio;
+        floor.size_usdc +
+        (policy.max_usdc_per_condition - floor.size_usdc) * ratio;
       return applyMarketFloors(
         desiredSizeUsdc,
         price,
         minShares,
         minUsdcNotional,
-        policy.max_usdc_per_trade
+        policy.max_usdc_per_condition
       );
     }
   }
@@ -144,7 +145,7 @@ function applyMarketFloors(
   price: number,
   minShares: number | undefined,
   minUsdcNotional: number | undefined,
-  maxUsdcPerTrade: number
+  maxUsdcPerCondition: number
 ): SizingResult {
   // Fail closed when market constraints are unknown — without minUsdcNotional
   // we have no defensible "min" to bet.
@@ -161,7 +162,7 @@ function applyMarketFloors(
     rawFloorUsdc < minUsdcNotional ? minUsdcNotional : rawFloorUsdc;
   const size_usdc = Math.min(
     Math.max(desiredSizeUsdc, floorUsdc),
-    maxUsdcPerTrade
+    maxUsdcPerCondition
   );
   if (size_usdc < floorUsdc) {
     return { ok: false, reason: "below_market_min" };
@@ -740,7 +741,7 @@ function applyFollowupSizing(params: {
   cumulativeIntentForMarket: number | undefined;
 }): SizingResult {
   const maxUsdc = Math.min(
-    params.policy.max_usdc_per_trade,
+    params.policy.max_usdc_per_condition,
     params.maxFollowupUsdc
   );
   const sized = applyMarketFloors(
@@ -754,7 +755,7 @@ function applyFollowupSizing(params: {
   if (
     params.cumulativeIntentForMarket !== undefined &&
     params.cumulativeIntentForMarket + sized.size_usdc >
-      params.policy.max_usdc_per_trade
+      params.policy.max_usdc_per_condition
   ) {
     return { ok: false, reason: "position_cap_reached" };
   }

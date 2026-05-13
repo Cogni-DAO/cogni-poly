@@ -190,12 +190,14 @@ function buildSizingPolicy(params: {
   if (!snapshot) {
     return {
       kind: "min_bet",
-      max_usdc_per_trade: params.mirrorMaxUsdcPerTrade,
+      // DB column `mirror_max_usdc_per_trade` retained; v0 internal rename to
+      // `max_usdc_per_condition` (bug.5054, CAP_IS_PER_CONDITION_ID).
+      max_usdc_per_condition: params.mirrorMaxUsdcPerTrade,
     };
   }
   return {
     kind: "target_percentile_scaled",
-    max_usdc_per_trade: params.mirrorMaxUsdcPerTrade,
+    max_usdc_per_condition: params.mirrorMaxUsdcPerTrade,
     statistic: buildWalletStatistic(snapshot, params.mirrorFilterPercentile),
   };
 }

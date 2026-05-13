@@ -74,7 +74,7 @@ function buildTargetView(params: {
     target_id: params.id,
     target_wallet: params.targetWallet,
     mode: config.mode,
-    mirror_usdc: config.sizing.max_usdc_per_trade,
+    mirror_usdc: config.sizing.max_usdc_per_condition,
     mirror_filter_percentile: params.mirrorFilterPercentile,
     mirror_max_usdc_per_trade: params.mirrorMaxUsdcPerTrade,
     sizing_policy_kind: sizingPolicyKindForTargetWallet(params.targetWallet),

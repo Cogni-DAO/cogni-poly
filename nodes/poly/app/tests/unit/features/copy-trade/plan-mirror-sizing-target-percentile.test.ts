@@ -54,7 +54,7 @@ const CONFIG: MirrorTargetConfig = {
   mode: "live",
   sizing: {
     kind: "target_percentile",
-    max_usdc_per_trade: 5,
+    max_usdc_per_condition: 5,
     statistic: {
       wallet: TARGET_WALLET,
       label: "RN1",
@@ -166,7 +166,7 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile_scaled"
     ...CONFIG,
     sizing: {
       kind: "target_percentile_scaled",
-      max_usdc_per_trade: 9,
+      max_usdc_per_condition: 9,
       statistic: {
         wallet: TARGET_WALLET,
         label: "RN1",

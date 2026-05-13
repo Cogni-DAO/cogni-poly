@@ -58,7 +58,7 @@ type PlacementWire = "limit" | "market_fok";
  * caps and audit-log skip blobs. Per-fill size is computed in `plan-mirror`.
  */
 function nominalSizeUsdc(sizing: SizingPolicy): number {
-  return sizing.max_usdc_per_trade;
+  return sizing.max_usdc_per_condition;
 }
 
 /**
@@ -640,7 +640,9 @@ function buildDecisionLogFields(args: {
     vwap_tolerance: target.vwap_tolerance ?? null,
     wrong_side_holding_detected: wrongSideHoldingDetected ?? false,
     sizing_policy_kind: target.sizing.kind,
-    mirror_max_usdc_per_trade: target.sizing.max_usdc_per_trade,
+    // Field name retained for external observability (Grafana / Loki dashboards);
+    // internal type is `max_usdc_per_condition` (bug.5054).
+    mirror_max_usdc_per_trade: target.sizing.max_usdc_per_condition,
     sizing_percentile:
       "statistic" in target.sizing ? target.sizing.statistic.percentile : null,
     sizing_min_target_usdc:
@@ -1027,7 +1029,7 @@ async function executeMirrorOrder(
       observed_at: new Date(fill.observed_at),
       intent,
       ...(intent.side === "BUY"
-        ? { max_market_intent_usdc: deps.target.sizing.max_usdc_per_trade }
+        ? { max_market_intent_usdc: deps.target.sizing.max_usdc_per_condition }
         : {}),
     });
   } catch (err: unknown) {
