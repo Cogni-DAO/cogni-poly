@@ -6,12 +6,12 @@
  * Purpose: `WalletActivitySource` implementation that listens to Polygon `OrderFilled` events on Polymarket's CTF Exchange V2 + NegRisk Exchange V2 contracts, filtered at the RPC layer by indexed target-wallet topics. Replaces the `polymarket-ws-source` Data-API drain — the wake-up path was sub-second already, but `WS_NO_WALLET_IDENTITY` forced a ~5min `/trades` poll to attach wallet identity. Chain logs carry maker/taker as indexed event fields, so identity arrives with the data and the drain is gone.
  * Scope: One source instance per (target wallet). Holds 4 viem `watchContractEvent` subscriptions — 2 contracts × {maker = wallet, taker = wallet} — that viem multiplexes onto a single RPC transport. Decodes price/size/side from log fields alone; enriches `(condition_id, outcome, end_date)` from a `listUserPositions(wallet)` snapshot refreshed every `refreshAssetsIntervalMs`. Pushes via `subscribeWake` callbacks; `fetchSince` drains the in-memory ring buffer.
  * Invariants:
- *   - CHAIN_IS_AUTHORITATIVE — fills emitted from this source carry on-chain settlement data (txHash + logIndex + real `block.timestamp` fetched via `getBlock`). `observed_at` is the block timestamp, not wall-clock, so the task.5042 lag histogram measures actual target-fill → mirror-decision latency.
- *   - CHAIN_REORG_POLICY_V0 — `watchContractEvent` delivers logs with no confirmations buffer; reorg retractions arrive as `log.removed === true` on the next poll, are dropped + counted (`poly_mirror_chain_skip_total{reason="reorg"}`), but already-emitted Fills are NOT recalled. Orders placed on a reorged log rely on the downstream status-sync reconciler to expire/refund. v1 hardening: 1-block delay-buffer or `getLogs(toBlock: latest - N)`. task.5043 follow-up. The previously-claimed data-api 5-min reconciliation backstop does NOT apply — that drain was removed in this PR.
- *   - FILL_ID_SHAPE_CHAIN — `fill_id = "chain:" + txHash + ":" + logIndex + ":" + side + ":" + blockTs` where `blockTs` is the real `block.timestamp`. Deterministic from chain state: two readers of the same log produce the same `fill_id`, so `(target_id, fill_id)` unique-index dedupes correctly across replays and multi-pod. Cross-source collision with `data-api:` is structurally impossible (different prefix).
- *   - CURSOR_IS_MAX_TIMESTAMP — `newSince` semantics preserved (max `block.timestamp` seen this drain, unix seconds).
- *   - SHARED_RPC_TRANSPORT — all source instances share the caller-supplied `publicClient`. viem multiplexes the 4-per-target subscriptions onto one underlying RPC connection. A per-block `getBlock` is issued for timestamps (memoized → one call per unique block, not per log).
- *   - METADATA_FROM_POSITIONS — `(condition_id, outcome, end_date)` is enriched from `listUserPositions(wallet)`, refreshed every `refreshAssetsIntervalMs`. Cache miss on a chain log triggers an immediate refresh; if still missing OR if `outcome` is empty, the fill is skipped with `poly_mirror_chain_skip_total{reason="metadata_unresolved"}` + warn-log. Empty-outcome skip avoids wrong-side mirroring on NegRisk multi-outcome markets.
+ *   - FILL_ID_SHAPE_CHAIN — `fill_id = "chain:" + txHash + ":" + logIndex + ":" + side`. `(txHash, logIndex)` is a globally unique log coordinate, so the id is deterministic from chain state alone: two readers of the same log produce the same `fill_id` and `(target_id, fill_id)` unique-index dedupes correctly across replays + multi-pod. Cross-source collision with `data-api:` is structurally impossible (different prefix).
+ *   - OBSERVED_AT_IS_BLOCK_TIMESTAMP — `observed_at` is the Polygon `block.timestamp` (ISO-8601) — same semantic as the prior data-api source's `trade.timestamp`, so the task.5042 lag histogram measures actual target → mirror latency and remains comparable across sources. `block.timestamp` is fetched via memoized `getBlock` (one RPC per unique block; logs in the same block share the cached value). On `getBlock` failure we fall back to wall-clock with a warn log + `getBlockTimestampFallback` counter — fills are NEVER dropped for a transient RPC issue; lag histogram degrades to a ≤ ~2 s under-report rather than silently losing trades.
+ *   - CHAIN_REORG_POLICY_V0 — `watchContractEvent` delivers logs with no confirmations buffer; reorg retractions arrive as `log.removed === true` on the next poll, are dropped + counted (`poly_mirror_chain_skip_total{reason="reorg"}`), but already-emitted Fills are NOT recalled. Mirror orders placed on a reorged log sit on CLOB until the order-reconciler (`bootstrap/jobs/order-reconciler.job`) hits its `clob_not_found` grace window (default 900 s). v1 hardening: 1-block delay-buffer or `getLogs(toBlock: latest - N)`. task.5043 follow-up.
+ *   - CURSOR_IS_MAX_TIMESTAMP — `newSince` = max `block.timestamp` (unix seconds) emitted this drain.
+ *   - SHARED_RPC_TRANSPORT — all source instances share the caller-supplied `publicClient`. viem multiplexes the 4-per-target subscriptions onto one underlying RPC connection.
+ *   - METADATA_FROM_POSITIONS — `(condition_id, outcome, end_date)` enriched from `listUserPositions(wallet)`, refreshed every `refreshAssetsIntervalMs`. Cache miss triggers an immediate refresh + retry; still-missing OR empty-outcome → skip with `metadata_unresolved` + warn. Empty-outcome skip prevents wrong-leg mirroring on NegRisk multi-outcome markets.
  * Side-effects: opens 4 viem RPC subscriptions; HTTPS GETs to data-api.polymarket.com on each metadata refresh; logger + metrics; periodic heartbeat info log.
  * Links: docs/spec/poly-copy-trade-execution.md, work/items/task.5043, work/items/task.5042
  * @public
@@ -45,12 +45,15 @@ export const WALLET_WATCH_CHAIN_METRICS = {
   logsTotal: "poly_mirror_chain_logs_total",
   /** `poly_mirror_chain_fills_total` — decoded + enriched Fills emitted to the buffer. */
   fillsTotal: "poly_mirror_chain_fills_total",
-  /** `poly_mirror_chain_skip_total{reason}` — log dropped. Bounded reason enum: `reorg` | `decode_no_target_match` | `metadata_unresolved` | `block_timestamp_unresolved` | `schema_invalid`. */
+  /** `poly_mirror_chain_skip_total{reason}` — log dropped. Bounded reason enum: `reorg` | `decode_no_target_match` | `metadata_unresolved` | `schema_invalid`. */
   skipTotal: "poly_mirror_chain_skip_total",
   /** `poly_mirror_chain_metadata_refresh_total{trigger}` — listUserPositions refresh fires. Bounded trigger enum: `interval` | `cache_miss` | `cold_start`. */
   metadataRefreshTotal: "poly_mirror_chain_metadata_refresh_total",
   /** `poly_mirror_chain_metadata_refresh_duration_ms{trigger}` — round-trip + parse for the position snapshot. */
   metadataRefreshDurationMs: "poly_mirror_chain_metadata_refresh_duration_ms",
+  /** `poly_mirror_chain_block_timestamp_fallback_total` — `getBlock` failed; observed_at fell back to wall-clock. Non-zero → Polygon RPC degradation; lag histogram under-reports by ≤ ~2 s for the duration. */
+  blockTimestampFallbackTotal:
+    "poly_mirror_chain_block_timestamp_fallback_total",
 } as const;
 
 /** Default cadence for `listUserPositions` refresh. Matches the legacy WS source's `refreshAssetsIntervalMs`. */
@@ -208,14 +211,20 @@ export function decodeOrderFilledForTarget(
   };
 }
 
-/** `fill_id` shape for chain-sourced fills. */
+/**
+ * `fill_id` shape for chain-sourced fills. `(txHash, logIndex)` is a globally
+ * unique log coordinate on Polygon, so the id is fully deterministic from
+ * chain state — no block timestamp, no wall-clock. Side is included for
+ * human-readable log scanning; structurally redundant but cheap.
+ *
+ * @public exported for unit tests.
+ */
 export function chainFillId(parts: {
   txHash: `0x${string}`;
   logIndex: number;
   side: "BUY" | "SELL";
-  blockTs: number;
 }): string {
-  return `chain:${parts.txHash}:${parts.logIndex}:${parts.side}:${parts.blockTs}`;
+  return `chain:${parts.txHash}:${parts.logIndex}:${parts.side}`;
 }
 
 export function createPolymarketChainActivitySource(
@@ -359,17 +368,19 @@ export function createPolymarketChainActivitySource(
       return;
     }
 
-    // Real block.timestamp drives both `observed_at` (so the task.5042 lag
-    // histogram measures actual target → mirror latency, not pipe-internal
-    // ms) AND `fill_id` (deterministic from chain state — replay/multi-pod
-    // safe under the partial unique index). One `getBlock` per unique block,
-    // memoized; logs in the same block share the cached value.
-    const blockTs = await getBlockTimestamp(rawLog.blockNumber);
-    if (blockTs === null) {
-      deps.metrics.incr(WALLET_WATCH_CHAIN_METRICS.skipTotal, {
-        reason: "block_timestamp_unresolved",
-      });
-      return;
+    // `block.timestamp` drives `observed_at` so the task.5042 lag histogram
+    // measures actual target → mirror latency (same semantic as the prior
+    // data-api source's `trade.timestamp`). One memoized `getBlock` per
+    // unique block. Fallback on RPC failure: wall-clock. Lag histogram
+    // under-reports by ≤ ~2 s during fallback; fills are NEVER dropped for
+    // a transient RPC issue.
+    const fetchedBlockTs = await getBlockTimestamp(rawLog.blockNumber);
+    const blockTs = fetchedBlockTs ?? Math.floor(Date.now() / 1000);
+    if (fetchedBlockTs === null) {
+      deps.metrics.incr(
+        WALLET_WATCH_CHAIN_METRICS.blockTimestampFallbackTotal,
+        {}
+      );
     }
 
     let meta = tokenMeta.get(decoded.tokenId);
@@ -403,7 +414,6 @@ export function createPolymarketChainActivitySource(
         txHash: decoded.txHash,
         logIndex: decoded.logIndex,
         side: decoded.side,
-        blockTs,
       }),
       source: "chain" as const,
       market_id: `prediction-market:polymarket:${meta.conditionId}`,

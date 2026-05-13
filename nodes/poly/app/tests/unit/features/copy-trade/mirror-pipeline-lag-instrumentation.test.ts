@@ -195,6 +195,51 @@ describe("runMirrorTick — task.5042 lag observation + log field", () => {
     expect(decisionLog?.obj.lag_ms_total).toBe(5 * 60_000 + 33_000);
   });
 
+  it("labels the lag histogram with source='chain' when the fill source is the chain adapter", async () => {
+    const decidedAt = new Date("2026-05-12T12:22:59.002Z");
+    // 2s after settlement — matches the expected end-to-end latency from the
+    // chain-log source on Polygon.
+    const fill = makeFill({
+      source: "chain",
+      fill_id: "chain:0xabc123:7:BUY",
+      observed_at: "2026-05-12T12:22:57.000Z",
+    });
+
+    const ledger = new FakeOrderLedger({ initial: [] });
+    const metrics = createRecordingMetrics();
+    const { log } = createCapturingLogger();
+    const cid = clientOrderIdFor(TARGET_ID, fill.fill_id);
+    const placeIntent = vi.fn(
+      async (_intent: OrderIntent): Promise<OrderReceipt> =>
+        makeReceipt("0xnewlyplaced", cid)
+    );
+
+    let cursor: number | undefined;
+    await runMirrorTick({
+      source: makeSource([fill]),
+      ledger,
+      placeIntent,
+      target: BASE_TARGET,
+      getCursor: () => cursor,
+      setCursor: (since) => {
+        cursor = since;
+      },
+      logger: log,
+      metrics,
+      clock: () => decidedAt,
+    });
+
+    const hist = metrics.emissions.find(
+      (e) =>
+        e.kind === "duration" &&
+        e.name === MIRROR_PIPELINE_METRICS.decisionLagMs
+    );
+    expect(hist?.labels).toEqual({ source: "chain" });
+    expect(metrics.durations(MIRROR_PIPELINE_METRICS.decisionLagMs)).toEqual([
+      2002,
+    ]);
+  });
+
   it("emits one observation per fill across multiple fills in a single tick", async () => {
     const decidedAt = new Date("2026-05-12T13:00:00.000Z");
     const fillA = makeFill({
