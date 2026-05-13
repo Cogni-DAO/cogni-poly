@@ -74,7 +74,9 @@ function makeLog(args: OrderFilledArgs): Log<bigint, number, false> & {
 const ZERO32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const satisfies `0x${string}`;
 
-function makerLog(overrides: Partial<OrderFilledArgs>): ReturnType<typeof makeLog> {
+function makerLog(
+  overrides: Partial<OrderFilledArgs>
+): ReturnType<typeof makeLog> {
   return makeLog({
     orderHash: "0xorderhash" as `0x${string}`,
     maker: TARGET,
@@ -415,7 +417,7 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     await flushAsync(); // let the cold_start metadata refresh land
 
     // Fire one log on the V2 maker subscription (sub[0]).
-    harness.subs[0]!.onLogs([
+    harness.subs[0]?.onLogs([
       makeOrderFilledLog({
         maker: TARGET,
         taker: COUNTERPARTY,
@@ -431,7 +433,8 @@ describe("createPolymarketChainActivitySource — behavior", () => {
 
     const { fills, newSince } = await source.fetchSince(0);
     expect(fills).toHaveLength(1);
-    const f = fills[0]!;
+    const f = fills[0];
+    if (!f) throw new Error("expected one buffered fill");
     expect(f.source).toBe("chain");
     expect(f.side).toBe("BUY");
     expect(f.fill_id).toMatch(/^chain:0xabc123.*:7:BUY$/);
@@ -466,7 +469,7 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     });
     await flushAsync();
 
-    harness.subs[0]!.onLogs([
+    harness.subs[0]?.onLogs([
       makeOrderFilledLog({
         maker: TARGET,
         taker: COUNTERPARTY,
@@ -517,7 +520,7 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     });
     await flushAsync();
 
-    harness.subs[0]!.onLogs([
+    harness.subs[0]?.onLogs([
       makeOrderFilledLog({
         maker: TARGET,
         taker: COUNTERPARTY,
@@ -568,7 +571,7 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     await flushAsync();
 
     const tBefore = Math.floor(Date.now() / 1000);
-    harness.subs[0]!.onLogs([
+    harness.subs[0]?.onLogs([
       makeOrderFilledLog({
         maker: TARGET,
         taker: COUNTERPARTY,
@@ -585,7 +588,7 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     const { fills } = await source.fetchSince(0);
     expect(fills).toHaveLength(1);
     const observedSec = Math.floor(
-      new Date(fills[0]!.observed_at).getTime() / 1000
+      new Date(fills[0]?.observed_at).getTime() / 1000
     );
     expect(observedSec).toBeGreaterThanOrEqual(tBefore);
     expect(observedSec).toBeLessThanOrEqual(tAfter);
@@ -647,7 +650,7 @@ describe("createPolymarketChainActivitySource — behavior", () => {
     source.subscribeWake?.(bad);
     source.subscribeWake?.(good);
 
-    harness.subs[0]!.onLogs([
+    harness.subs[0]?.onLogs([
       makeOrderFilledLog({
         maker: TARGET,
         taker: COUNTERPARTY,
