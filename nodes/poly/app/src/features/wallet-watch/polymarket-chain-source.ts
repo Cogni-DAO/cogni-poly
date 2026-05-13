@@ -4,7 +4,7 @@
 /**
  * Module: `@features/wallet-watch/polymarket-chain-source`
  * Purpose: `WalletActivitySource` implementation that listens to Polygon `OrderFilled` events on Polymarket's CTF Exchange V2 + NegRisk Exchange V2 contracts, filtered at the RPC layer by indexed target-wallet topics. Replaces the `polymarket-ws-source` Data-API drain — the wake-up path was sub-second already, but `WS_NO_WALLET_IDENTITY` forced a ~5min `/trades` poll to attach wallet identity. Chain logs carry maker/taker as indexed event fields, so identity arrives with the data and the drain is gone.
- * Scope: One source instance per (target wallet). Holds 4 viem `watchContractEvent` subscriptions — 2 contracts × {maker = wallet, taker = wallet} — that viem multiplexes onto a single RPC transport. Decodes price/size/side from log fields alone; enriches `(condition_id, outcome, end_date)` from a `listUserPositions(wallet)` snapshot refreshed every `refreshAssetsIntervalMs`. Pushes via `subscribeWake` callbacks; `fetchSince` drains the in-memory ring buffer.
+ * Scope: One source instance per (target wallet). Holds 2 viem `watchContractEvent` subscriptions — one per exchange contract (V2 + NegRisk V2), filtered at the RPC layer by `maker = target_wallet`. Polymarket emits one `OrderFilled` per party per match, so the maker-only filter catches every target trade and the event's `side` field is target's side directly. Decodes price/size/side from log fields alone; enriches `(condition_id, outcome, end_date)` from a `listUserPositions(wallet)` snapshot refreshed every `refreshAssetsIntervalMs`. Pushes via `subscribeWake` callbacks; `fetchSince` drains the in-memory ring buffer.
  * Invariants:
  *   - FILL_ID_SHAPE_CHAIN — `fill_id = "chain:" + txHash + ":" + logIndex + ":" + side`. `(txHash, logIndex)` is a globally unique log coordinate, so the id is deterministic from chain state alone: two readers of the same log produce the same `fill_id` and `(target_id, fill_id)` unique-index dedupes correctly across replays + multi-pod. Cross-source collision with `data-api:` is structurally impossible (different prefix).
  *   - OBSERVED_AT_IS_BLOCK_TIMESTAMP — `observed_at` is the Polygon `block.timestamp` (ISO-8601) — same semantic as the prior data-api source's `trade.timestamp`, so the task.5042 lag histogram measures actual target → mirror latency and remains comparable across sources. `block.timestamp` is fetched via memoized `getBlock` (one RPC per unique block; logs in the same block share the cached value). On `getBlock` failure we fall back to wall-clock with a warn log + `getBlockTimestampFallback` counter — fills are NEVER dropped for a transient RPC issue; lag histogram degrades to a ≤ ~2 s under-report rather than silently losing trades.
@@ -101,24 +101,31 @@ type OrderFilledLog = Log<bigint, number, false> & {
     orderHash?: `0x${string}`;
     maker?: `0x${string}`;
     taker?: `0x${string}`;
-    makerAssetId?: bigint;
-    takerAssetId?: bigint;
+    side?: number;
+    tokenId?: bigint;
     makerAmountFilled?: bigint;
     takerAmountFilled?: bigint;
     fee?: bigint;
+    builder?: `0x${string}`;
+    metadata?: `0x${string}`;
   };
 };
 
 /**
- * Decode a single `OrderFilled` event for one target wallet. Returns a partial
- * Fill missing only the enrichment fields `(condition_id, outcome, attributes.*)`
- * — those come from the position cache. Returns `null` for malformed logs or
- * when the target isn't on either side (shouldn't happen if the topic filter
- * matched, but the function is defensive).
+ * Decode a single `OrderFilled` event for one target wallet (target must be
+ * the `maker` in this event). Returns a partial Fill missing only the
+ * enrichment fields `(condition_id, outcome, attributes.*)` — those come from
+ * the position cache.
  *
- * Polymarket convention: collateral side carries `assetId = 0`. The party
- * whose side has `assetId = 0` is the BUYER on this match — they paid USDC,
- * received the outcome token.
+ * Polymarket V2 CTF Exchange emits TWO `OrderFilled` events per match — one
+ * for each party — so filtering subscriptions on `maker = target_wallet`
+ * catches every target trade, and the event's `side` field is target's order
+ * side directly. The amount semantics are then:
+ *   - target BUY  → target spent `makerAmountFilled` USDC, received `takerAmountFilled` shares
+ *   - target SELL → target spent `makerAmountFilled` shares, received `takerAmountFilled` USDC
+ *
+ * Returns `null` for malformed logs or when `maker !== target` (shouldn't
+ * happen if the topic filter matched, but defensive).
  *
  * @public exported for unit tests.
  */
@@ -136,73 +143,36 @@ export function decodeOrderFilledForTarget(
 } | null {
   const a = log.args;
   if (!a) return null;
-  const {
-    maker,
-    taker,
-    makerAssetId,
-    takerAssetId,
-    makerAmountFilled,
-    takerAmountFilled,
-  } = a;
+  const { maker, side, tokenId, makerAmountFilled, takerAmountFilled } = a;
   if (
     !maker ||
-    !taker ||
-    makerAssetId === undefined ||
-    takerAssetId === undefined ||
+    side === undefined ||
+    tokenId === undefined ||
     makerAmountFilled === undefined ||
     takerAmountFilled === undefined
   ) {
     return null;
   }
 
-  const targetLower = target.toLowerCase();
-  const targetIsMaker = maker.toLowerCase() === targetLower;
-  const targetIsTaker = taker.toLowerCase() === targetLower;
-  if (!targetIsMaker && !targetIsTaker) return null;
+  // We subscribe with `args: { maker: [target] }`, but stay defensive.
+  if (maker.toLowerCase() !== target.toLowerCase()) return null;
+  if (side !== 0 && side !== 1) return null;
 
-  const makerIsCollateralSide = makerAssetId === 0n;
-  const takerIsCollateralSide = takerAssetId === 0n;
-  // Exactly one side must be the collateral side on any well-formed match.
-  if (makerIsCollateralSide === takerIsCollateralSide) return null;
+  const targetSide: "BUY" | "SELL" = side === 0 ? "BUY" : "SELL";
+  const usdcAmount =
+    targetSide === "BUY" ? makerAmountFilled : takerAmountFilled;
+  const shareAmount =
+    targetSide === "BUY" ? takerAmountFilled : makerAmountFilled;
 
-  let side: "BUY" | "SELL";
-  let tokenIdRaw: bigint;
-  let usdcAmount: bigint;
-  let outcomeAmount: bigint;
-
-  if (targetIsMaker && makerIsCollateralSide) {
-    // Target gave USDC → received outcome → BUY
-    side = "BUY";
-    tokenIdRaw = takerAssetId;
-    usdcAmount = makerAmountFilled;
-    outcomeAmount = takerAmountFilled;
-  } else if (targetIsMaker && !makerIsCollateralSide) {
-    // Target gave outcome → received USDC → SELL
-    side = "SELL";
-    tokenIdRaw = makerAssetId;
-    usdcAmount = takerAmountFilled;
-    outcomeAmount = makerAmountFilled;
-  } else if (targetIsTaker && takerIsCollateralSide) {
-    side = "BUY";
-    tokenIdRaw = makerAssetId;
-    usdcAmount = takerAmountFilled;
-    outcomeAmount = makerAmountFilled;
-  } else {
-    side = "SELL";
-    tokenIdRaw = takerAssetId;
-    usdcAmount = makerAmountFilled;
-    outcomeAmount = takerAmountFilled;
-  }
-
-  if (outcomeAmount === 0n) return null;
-  const shares = Number(outcomeAmount) / 1_000_000;
+  if (shareAmount === 0n) return null;
+  const shares = Number(shareAmount) / 1_000_000;
   const size_usdc = Number(usdcAmount) / 1_000_000;
   if (shares <= 0 || size_usdc <= 0) return null;
   const price = size_usdc / shares;
 
   return {
-    side,
-    tokenId: tokenIdRaw.toString(),
+    side: targetSide,
+    tokenId: tokenId.toString(),
     price,
     size_usdc,
     shares,
@@ -473,42 +443,31 @@ export function createPolymarketChainActivitySource(
   }
 
   function subscribeAll(): void {
-    const sides: Array<{
-      contract: `0x${string}`;
-      contractLabel: "exchange" | "neg_risk";
-      side: "maker" | "taker";
+    // Polymarket V2 emits OrderFilled twice per match (once per party). The
+    // taker-side event has `maker = target_wallet, taker = exchange_address`
+    // and carries target's order side directly in the `side` field — so a
+    // single `maker = [target]` filter per contract catches every target
+    // trade and we read `side` from the event payload. One subscription per
+    // exchange contract = 2 total per target (V2 + NegRisk V2).
+    const contracts: Array<{
+      address: `0x${string}`;
+      label: "exchange" | "neg_risk";
     }> = [
       {
-        contract: POLYGON_POLYMARKET_EXCHANGE_V2,
-        contractLabel: "exchange",
-        side: "maker",
+        address: POLYGON_POLYMARKET_EXCHANGE_V2,
+        label: "exchange",
       },
       {
-        contract: POLYGON_POLYMARKET_EXCHANGE_V2,
-        contractLabel: "exchange",
-        side: "taker",
-      },
-      {
-        contract: POLYGON_POLYMARKET_NEG_RISK_EXCHANGE_V2,
-        contractLabel: "neg_risk",
-        side: "maker",
-      },
-      {
-        contract: POLYGON_POLYMARKET_NEG_RISK_EXCHANGE_V2,
-        contractLabel: "neg_risk",
-        side: "taker",
+        address: POLYGON_POLYMARKET_NEG_RISK_EXCHANGE_V2,
+        label: "neg_risk",
       },
     ];
-    for (const s of sides) {
-      const args =
-        s.side === "maker"
-          ? { maker: [deps.wallet] }
-          : { taker: [deps.wallet] };
+    for (const c of contracts) {
       const unwatch = deps.publicClient.watchContractEvent({
-        address: s.contract,
+        address: c.address,
         abi: polymarketExchangeOrderFilledAbi,
         eventName: "OrderFilled",
-        args,
+        args: { maker: [deps.wallet] },
         onLogs: (logs) => {
           for (const lg of logs) {
             void onLog(lg as Log<bigint, number, false>);
@@ -519,8 +478,7 @@ export function createPolymarketChainActivitySource(
             {
               event: EVENT_NAMES.POLY_WALLET_WATCH_NORMALIZE_ERROR,
               phase: "watch_contract_event_error",
-              contract: s.contractLabel,
-              side: s.side,
+              contract: c.label,
               err: err instanceof Error ? err.message : String(err),
             },
             "polymarket-chain-source: watchContractEvent error (viem will retry)"

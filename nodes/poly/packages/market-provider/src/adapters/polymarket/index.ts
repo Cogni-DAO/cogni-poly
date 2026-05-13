@@ -109,6 +109,8 @@ export {
   polymarketNegRiskAdapterAbi,
 } from "./polymarket.neg-risk-adapter.js";
 export {
+  POLY_ORDERFILLED_TOPIC0,
+  POLY_ORDERFILLED_TOPIC0_COMPUTED,
   POLYGON_POLYMARKET_EXCHANGE_V2,
   POLYGON_POLYMARKET_NEG_RISK_EXCHANGE_V2,
   polymarketExchangeOrderFilledAbi,
