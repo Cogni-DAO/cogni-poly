@@ -34,11 +34,9 @@ export type PolymarketNormalizeResult =
   | { ok: false; reason: PolymarketNormalizeSkipReason };
 
 /**
- * Build the canonical `fill_id` for a Data-API trade. Format owned by this
- * helper (not by a DB constraint — the regex CHECK was removed in migration
- * 0048): `(target_id, fill_id)` uniqueness comes from the partial unique
- * index, and the source prefix string exists for log readability + cross-
- * source collision avoidance, not for runtime validation.
+ * Canonical `fill_id` for a Data-API trade. The source prefix exists for
+ * log readability and cross-source collision avoidance — `(target_id, fill_id)`
+ * uniqueness is enforced by a partial unique index, not by format validation.
  */
 export function polymarketDataApiFillId(
   trade: Pick<
