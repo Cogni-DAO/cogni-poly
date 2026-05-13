@@ -3,10 +3,10 @@
 
 /**
  * Module: `@tests/unit/bootstrap/jobs/trader-observation-watchdog`
- * Purpose: Verify the 120s watchdog around `runTraderObservationTick` so a
- *   single hung HTTP call or DB connection can never freeze the in-flight
- *   `running` flag for hours (which silently froze the dashboard's positions
- *   widget against a stale snapshot in prod on 2026-05-13).
+ * Purpose: Verify the watchdog around `runTraderObservationTick` releases the
+ *   `running` lock when the underlying tick exceeds `TICK_TIMEOUT_MS`, so a
+ *   single hung HTTP/DB call can't freeze the position read-model snapshot
+ *   that powers the dashboard.
  * Scope: Job-level only; mocks the tick function.
  * @internal
  */
@@ -21,12 +21,16 @@ vi.mock("@/features/wallet-analysis/server/trader-observation-service", () => ({
 }));
 
 describe("startTraderObservationJob — watchdog", () => {
+  const stops: Array<() => void> = [];
+
   beforeEach(() => {
     vi.useFakeTimers();
     mockRunTraderObservationTick.mockReset();
   });
 
   afterEach(() => {
+    for (const stop of stops) stop();
+    stops.length = 0;
     vi.useRealTimers();
   });
 
@@ -60,6 +64,7 @@ describe("startTraderObservationJob — watchdog", () => {
       metrics: noopMetrics,
       pollMs: 30_000,
     });
+    stops.push(stop);
 
     // Let the immediate tick start.
     await vi.advanceTimersByTimeAsync(0);
@@ -87,6 +92,5 @@ describe("startTraderObservationJob — watchdog", () => {
     );
 
     firstTickResolve();
-    stop();
   });
 });
