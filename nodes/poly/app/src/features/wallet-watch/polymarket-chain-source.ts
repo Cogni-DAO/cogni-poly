@@ -6,11 +6,12 @@
  * Purpose: `WalletActivitySource` implementation that listens to Polygon `OrderFilled` events on Polymarket's CTF Exchange V2 + NegRisk Exchange V2 contracts, filtered at the RPC layer by indexed target-wallet topics. Replaces the `polymarket-ws-source` Data-API drain — the wake-up path was sub-second already, but `WS_NO_WALLET_IDENTITY` forced a ~5min `/trades` poll to attach wallet identity. Chain logs carry maker/taker as indexed event fields, so identity arrives with the data and the drain is gone.
  * Scope: One source instance per (target wallet). Holds 4 viem `watchContractEvent` subscriptions — 2 contracts × {maker = wallet, taker = wallet} — that viem multiplexes onto a single RPC transport. Decodes price/size/side from log fields alone; enriches `(condition_id, outcome, end_date)` from a `listUserPositions(wallet)` snapshot refreshed every `refreshAssetsIntervalMs`. Pushes via `subscribeWake` callbacks; `fetchSince` drains the in-memory ring buffer.
  * Invariants:
- *   - CHAIN_IS_AUTHORITATIVE — fills emitted from this source carry on-chain settlement data (txHash + logIndex + block.timestamp). Two confirmations is not required; `confirmations: 1` is the default policy. Reorgs are absorbed via the data-api 5-min reconciliation backstop (deferred — see task.5043 follow-up).
- *   - FILL_ID_SHAPE_CHAIN — `fill_id = "chain:" + txHash + ":" + logIndex + ":" + side + ":" + blockTs`. Stable across replays (txHash+logIndex is a globally unique log coordinate). The existing partial unique index on `(target_id, fill_id)` already dedupes by `fill_id`; cross-source collision with `data-api:` is structurally impossible.
+ *   - CHAIN_IS_AUTHORITATIVE — fills emitted from this source carry on-chain settlement data (txHash + logIndex + real `block.timestamp` fetched via `getBlock`). `observed_at` is the block timestamp, not wall-clock, so the task.5042 lag histogram measures actual target-fill → mirror-decision latency.
+ *   - CHAIN_REORG_POLICY_V0 — `watchContractEvent` delivers logs with no confirmations buffer; reorg retractions arrive as `log.removed === true` on the next poll, are dropped + counted (`poly_mirror_chain_skip_total{reason="reorg"}`), but already-emitted Fills are NOT recalled. Orders placed on a reorged log rely on the downstream status-sync reconciler to expire/refund. v1 hardening: 1-block delay-buffer or `getLogs(toBlock: latest - N)`. task.5043 follow-up. The previously-claimed data-api 5-min reconciliation backstop does NOT apply — that drain was removed in this PR.
+ *   - FILL_ID_SHAPE_CHAIN — `fill_id = "chain:" + txHash + ":" + logIndex + ":" + side + ":" + blockTs` where `blockTs` is the real `block.timestamp`. Deterministic from chain state: two readers of the same log produce the same `fill_id`, so `(target_id, fill_id)` unique-index dedupes correctly across replays and multi-pod. Cross-source collision with `data-api:` is structurally impossible (different prefix).
  *   - CURSOR_IS_MAX_TIMESTAMP — `newSince` semantics preserved (max `block.timestamp` seen this drain, unix seconds).
- *   - SHARED_RPC_TRANSPORT — all source instances share the caller-supplied `publicClient`. viem multiplexes the 4-per-target subscriptions onto one underlying RPC connection.
- *   - METADATA_FROM_POSITIONS — `(condition_id, outcome, end_date)` is enriched from `listUserPositions(wallet)`, refreshed every `refreshAssetsIntervalMs`. Cache miss on a chain log triggers an immediate refresh; if still missing the fill is skipped with a metrics + log emission. New-market entries thus inherit at most one position-refresh of latency on the first fill.
+ *   - SHARED_RPC_TRANSPORT — all source instances share the caller-supplied `publicClient`. viem multiplexes the 4-per-target subscriptions onto one underlying RPC connection. A per-block `getBlock` is issued for timestamps (memoized → one call per unique block, not per log).
+ *   - METADATA_FROM_POSITIONS — `(condition_id, outcome, end_date)` is enriched from `listUserPositions(wallet)`, refreshed every `refreshAssetsIntervalMs`. Cache miss on a chain log triggers an immediate refresh; if still missing OR if `outcome` is empty, the fill is skipped with `poly_mirror_chain_skip_total{reason="metadata_unresolved"}` + warn-log. Empty-outcome skip avoids wrong-side mirroring on NegRisk multi-outcome markets.
  * Side-effects: opens 4 viem RPC subscriptions; HTTPS GETs to data-api.polymarket.com on each metadata refresh; logger + metrics; periodic heartbeat info log.
  * Links: docs/spec/poly-copy-trade-execution.md, work/items/task.5043, work/items/task.5042
  * @public
@@ -44,7 +45,7 @@ export const WALLET_WATCH_CHAIN_METRICS = {
   logsTotal: "poly_mirror_chain_logs_total",
   /** `poly_mirror_chain_fills_total` — decoded + enriched Fills emitted to the buffer. */
   fillsTotal: "poly_mirror_chain_fills_total",
-  /** `poly_mirror_chain_skip_total{reason}` — log dropped. Bounded reason enum: `reorg` | `decode_no_target_match` | `metadata_unresolved` | `schema_invalid`. */
+  /** `poly_mirror_chain_skip_total{reason}` — log dropped. Bounded reason enum: `reorg` | `decode_no_target_match` | `metadata_unresolved` | `block_timestamp_unresolved` | `schema_invalid`. */
   skipTotal: "poly_mirror_chain_skip_total",
   /** `poly_mirror_chain_metadata_refresh_total{trigger}` — listUserPositions refresh fires. Bounded trigger enum: `interval` | `cache_miss` | `cold_start`. */
   metadataRefreshTotal: "poly_mirror_chain_metadata_refresh_total",
@@ -233,6 +234,11 @@ export function createPolymarketChainActivitySource(
   const buffer: BufferedFill[] = [];
   const wakeListeners = new Set<() => void>();
   const tokenMeta = new Map<string, TokenMetadata>();
+  // blockNumber → unix-seconds block.timestamp. One `getBlock` per unique
+  // block; logs in the same block share the cached value. Entries are tiny
+  // (~80B) and rolling-forward keeps the working set bounded by recent block
+  // activity; we accept unbounded growth over a long-running process for v0.
+  const blockTsCache = new Map<bigint, number>();
   const unwatches: Unwatch[] = [];
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -241,8 +247,31 @@ export function createPolymarketChainActivitySource(
   let fillsEmittedWindow = 0;
   let lastLogAt: number | null = null;
   let refreshInFlight: Promise<void> | null = null;
-  // Cursor — max `block.timestamp` (seconds) emitted to a consumer this drain.
-  let highestEmittedBlockTs = 0;
+
+  async function getBlockTimestamp(
+    blockNumber: bigint | null | undefined
+  ): Promise<number | null> {
+    if (blockNumber === null || blockNumber === undefined) return null;
+    const cached = blockTsCache.get(blockNumber);
+    if (cached !== undefined) return cached;
+    try {
+      const block = await deps.publicClient.getBlock({ blockNumber });
+      const ts = Number(block.timestamp);
+      blockTsCache.set(blockNumber, ts);
+      return ts;
+    } catch (err) {
+      log.warn(
+        {
+          event: EVENT_NAMES.POLY_WALLET_WATCH_NORMALIZE_ERROR,
+          phase: "block_timestamp_fetch_failed",
+          block_number: blockNumber.toString(),
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "polymarket-chain-source: getBlock failed; fill will be skipped"
+      );
+      return null;
+    }
+  }
 
   async function refreshMetadata(
     trigger: "interval" | "cache_miss" | "cold_start"
@@ -297,8 +326,10 @@ export function createPolymarketChainActivitySource(
   async function onLog(rawLog: Log<bigint, number, false>): Promise<void> {
     if (stopped) return;
     if (rawLog.removed) {
-      // Reorg of a previously-emitted log. v0 relies on the data-api 5-min
-      // backstop for reorg reconciliation; we log + drop the retraction here.
+      // Reorg retraction of a previously-emitted log. v0 has no confirmations
+      // buffer so an order may already have been placed against this log;
+      // drop + count the retraction here, but reconciliation of the placed
+      // order is the status-sync reconciler's job. CHAIN_REORG_POLICY_V0.
       log.warn(
         {
           event: EVENT_NAMES.POLY_WALLET_WATCH_NORMALIZE_ERROR,
@@ -306,7 +337,7 @@ export function createPolymarketChainActivitySource(
           tx_hash: rawLog.transactionHash,
           log_index: rawLog.logIndex,
         },
-        "polymarket-chain-source: reorg drop — v0 ignores; data-api backstop handles"
+        "polymarket-chain-source: reorg retraction — log dropped; downstream order reconciliation via status-sync"
       );
       deps.metrics.incr(WALLET_WATCH_CHAIN_METRICS.skipTotal, {
         reason: "reorg",
@@ -316,15 +347,6 @@ export function createPolymarketChainActivitySource(
     logsReceivedWindow += 1;
     lastLogAt = Date.now();
     deps.metrics.incr(WALLET_WATCH_CHAIN_METRICS.logsTotal, {});
-
-    // Use callback-fire wall-clock as the fill timestamp. We deliberately do
-    // NOT issue `eth_getBlock` per log — that would put a per-event RPC back
-    // in the hot path (the exact thing this source exists to remove). viem's
-    // filter-poll cadence (set by `pollingInterval` on the publicClient) plus
-    // Polygon's ~2 s block time bound this to within a few seconds of
-    // chain-settlement reality, which is plenty for `observed_at` + the
-    // task.5042 lag histogram. task.5043.
-    const blockTs = Math.floor(Date.now() / 1000);
 
     const decoded = decodeOrderFilledForTarget(
       rawLog as OrderFilledLog,
@@ -337,12 +359,27 @@ export function createPolymarketChainActivitySource(
       return;
     }
 
+    // Real block.timestamp drives both `observed_at` (so the task.5042 lag
+    // histogram measures actual target → mirror latency, not pipe-internal
+    // ms) AND `fill_id` (deterministic from chain state — replay/multi-pod
+    // safe under the partial unique index). One `getBlock` per unique block,
+    // memoized; logs in the same block share the cached value.
+    const blockTs = await getBlockTimestamp(rawLog.blockNumber);
+    if (blockTs === null) {
+      deps.metrics.incr(WALLET_WATCH_CHAIN_METRICS.skipTotal, {
+        reason: "block_timestamp_unresolved",
+      });
+      return;
+    }
+
     let meta = tokenMeta.get(decoded.tokenId);
     if (!meta) {
       await refreshMetadata("cache_miss");
       meta = tokenMeta.get(decoded.tokenId);
     }
-    if (!meta) {
+    if (!meta || !meta.outcome) {
+      // Empty outcome → cannot safely mirror (NegRisk multi-outcome markets
+      // would otherwise default to "YES" and place on the wrong leg). Skip.
       deps.metrics.incr(WALLET_WATCH_CHAIN_METRICS.skipTotal, {
         reason: "metadata_unresolved",
       });
@@ -352,8 +389,10 @@ export function createPolymarketChainActivitySource(
           phase: "metadata_unresolved",
           token_id: decoded.tokenId,
           tx_hash: decoded.txHash,
+          has_meta: meta !== undefined,
+          outcome_empty: meta !== undefined && !meta.outcome,
         },
-        "polymarket-chain-source: tokenId not in position cache even after refresh — skipping"
+        "polymarket-chain-source: tokenId metadata unresolved (missing entry or empty outcome) — skipping"
       );
       return;
     }
@@ -368,7 +407,7 @@ export function createPolymarketChainActivitySource(
       }),
       source: "chain" as const,
       market_id: `prediction-market:polymarket:${meta.conditionId}`,
-      outcome: meta.outcome || "YES",
+      outcome: meta.outcome,
       side: decoded.side,
       price: decoded.price,
       size_usdc: decoded.size_usdc,
@@ -542,8 +581,6 @@ export function createPolymarketChainActivitySource(
       let newSince = since ?? 0;
       for (const b of drained) {
         if (b.blockTs > newSince) newSince = b.blockTs;
-        if (b.blockTs > highestEmittedBlockTs)
-          highestEmittedBlockTs = b.blockTs;
       }
       deps.metrics.observeDurationMs(
         WALLET_WATCH_METRICS.fetchDurationMs,
@@ -591,6 +628,7 @@ export function createPolymarketChainActivitySource(
       unwatches.length = 0;
       wakeListeners.clear();
       tokenMeta.clear();
+      blockTsCache.clear();
       buffer.length = 0;
       log.info(
         {
