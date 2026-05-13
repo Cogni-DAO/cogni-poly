@@ -820,30 +820,37 @@ function createContainer(): Container {
         const { PolymarketDataApiClient } = await import(
           "@cogni/poly-market-provider/adapters/polymarket"
         );
-        // task.5043 — Polygon `OrderFilled` chain logs are the wallet-watch
-        // source. The Polymarket-WS-wake + Data-API drain pair has been
-        // removed entirely; chain logs carry maker/taker identity inline so
-        // there is no need for the ~5 min `/trades` enrichment. Hard
-        // requirement: `POLYGON_RPC_URL`.
-        if (!env.POLYGON_RPC_URL) {
+        // task.5043 / bug.5049 — Polygon `OrderFilled` chain logs are the
+        // wallet-watch source. bug.5051: use a WebSocket transport so viem's
+        // `watchContractEvent` uses `eth_subscribe` (push, server-side
+        // filter). HTTP transport falls back to `eth_newFilter` +
+        // `eth_getFilterChanges` polling — Alchemy GCs the filter and viem
+        // 2.39 does not recreate it, costing ~98% of events.
+        const polygonWssUrl =
+          env.POLYGON_RPC_WSS_URL ??
+          // `https://…` → `wss://…`, `http://…` → `ws://…`, anything else
+          // (already `ws://` or `wss://`) passes through. Replace's captured
+          // `(s?)` matches both schemes in one pass, so the assignment is a
+          // single nullish-safe expression rather than a chain with a dead
+          // branch (the prior chain's second `??` was unreachable because
+          // `.replace` always returns a string, not null).
+          env.POLYGON_RPC_URL?.replace(/^http(s?):\/\//, "ws$1://");
+        if (!polygonWssUrl) {
           log.warn(
             {
               event: "poly.mirror.chain_source.disabled",
-              reason: "POLYGON_RPC_URL missing",
+              reason:
+                "POLYGON_RPC_WSS_URL (or derivable POLYGON_RPC_URL) missing",
             },
-            "copy-trade mirror not started — POLYGON_RPC_URL is required for the chain fill source"
+            "copy-trade mirror not started — Polygon WSS endpoint required for the chain fill source"
           );
           return;
         }
-        const { createPublicClient, http } = await import("viem");
+        const { createPublicClient, webSocket } = await import("viem");
         const { polygon } = await import("viem/chains");
         const chainPublicClient = createPublicClient({
           chain: polygon,
-          // viem's filter-poll for `watchContractEvent` uses this interval.
-          // 2 s gives roughly one Polygon-block worth of wake-up granularity
-          // without spamming the RPC.
-          pollingInterval: 2000,
-          transport: http(env.POLYGON_RPC_URL),
+          transport: webSocket(polygonWssUrl),
         });
         // noopMetrics for v0 — real prom-client wiring folds into a follow-up
         // once the `poly_mirror_*` series has a Grafana dashboard to back it.

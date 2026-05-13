@@ -182,6 +182,15 @@ export const serverSchema = z.object({
   // Mainnet app under the same account as EVM_RPC_URL.
   POLYGON_RPC_URL: z.string().url().optional(),
 
+  // Polygon WebSocket RPC for chain-log wallet-watch (bug.5051). viem's
+  // watchContractEvent over a WSS transport uses eth_subscribe (push,
+  // server-side filter) — no client-side filter to expire. HTTP transport
+  // falls back to filter polling, which Alchemy GCs and viem 2.39 does not
+  // recreate, costing ~98% of events. If unset, the chain source derives
+  // WSS from POLYGON_RPC_URL by replacing https:// with wss:// (Alchemy +
+  // most providers expose WSS at the same host on the same key).
+  POLYGON_RPC_WSS_URL: z.string().url().optional(),
+
   // Langfuse (AI observability) - Optional
   // Only required when Langfuse tracing is enabled
   LANGFUSE_PUBLIC_KEY: optionalString,
