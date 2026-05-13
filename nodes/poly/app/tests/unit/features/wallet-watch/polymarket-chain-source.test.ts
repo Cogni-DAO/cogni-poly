@@ -75,7 +75,7 @@ describe("decodeOrderFilledForTarget", () => {
       fee: 0n,
     });
 
-    const decoded = decodeOrderFilledForTarget(log, TARGET, 1778591324);
+    const decoded = decodeOrderFilledForTarget(log, TARGET);
     expect(decoded).not.toBeNull();
     expect(decoded?.side).toBe("BUY");
     expect(decoded?.tokenId).toBe(TOKEN_ID.toString());
@@ -98,7 +98,7 @@ describe("decodeOrderFilledForTarget", () => {
       fee: 0n,
     });
 
-    const decoded = decodeOrderFilledForTarget(log, TARGET, 1778591324);
+    const decoded = decodeOrderFilledForTarget(log, TARGET);
     expect(decoded?.side).toBe("BUY");
     expect(decoded?.tokenId).toBe(TOKEN_ID.toString());
     expect(decoded?.shares).toBe(100);
@@ -118,7 +118,7 @@ describe("decodeOrderFilledForTarget", () => {
       fee: 0n,
     });
 
-    const decoded = decodeOrderFilledForTarget(log, TARGET, 1778591324);
+    const decoded = decodeOrderFilledForTarget(log, TARGET);
     expect(decoded?.side).toBe("SELL");
     expect(decoded?.tokenId).toBe(TOKEN_ID.toString());
     expect(decoded?.shares).toBe(25);
@@ -138,7 +138,7 @@ describe("decodeOrderFilledForTarget", () => {
       fee: 0n,
     });
 
-    const decoded = decodeOrderFilledForTarget(log, TARGET, 1778591324);
+    const decoded = decodeOrderFilledForTarget(log, TARGET);
     expect(decoded).toBeNull();
   });
 
@@ -153,7 +153,7 @@ describe("decodeOrderFilledForTarget", () => {
       takerAmountFilled: 50_000_000n,
       fee: 0n,
     });
-    expect(decodeOrderFilledForTarget(log, TARGET, 1778591324)).toBeNull();
+    expect(decodeOrderFilledForTarget(log, TARGET)).toBeNull();
   });
 
   it("zero outcome amount returns null (defensive)", () => {
@@ -167,7 +167,7 @@ describe("decodeOrderFilledForTarget", () => {
       takerAmountFilled: 0n,
       fee: 0n,
     });
-    expect(decodeOrderFilledForTarget(log, TARGET, 1778591324)).toBeNull();
+    expect(decodeOrderFilledForTarget(log, TARGET)).toBeNull();
   });
 
   it("address comparison is case-insensitive", () => {
@@ -182,7 +182,7 @@ describe("decodeOrderFilledForTarget", () => {
       takerAmountFilled: 50_000_000n,
       fee: 0n,
     });
-    const decoded = decodeOrderFilledForTarget(log, TARGET, 1778591324);
+    const decoded = decodeOrderFilledForTarget(log, TARGET);
     expect(decoded?.side).toBe("BUY");
   });
 });

@@ -40,15 +40,15 @@ import {
 
 /** Counter / histogram names emitted by the chain source. */
 export const WALLET_WATCH_CHAIN_METRICS = {
-  /** `poly_mirror_chain_logs_total{contract,side}` — every raw log received before decode. */
+  /** `poly_mirror_chain_logs_total` — every raw `OrderFilled` log received from any subscription before decode. */
   logsTotal: "poly_mirror_chain_logs_total",
   /** `poly_mirror_chain_fills_total` — decoded + enriched Fills emitted to the buffer. */
   fillsTotal: "poly_mirror_chain_fills_total",
-  /** `poly_mirror_chain_skip_total{reason}` — log dropped (cache miss, decode failure). Bounded reason set. */
+  /** `poly_mirror_chain_skip_total{reason}` — log dropped. Bounded reason enum: `reorg` | `decode_no_target_match` | `metadata_unresolved` | `schema_invalid`. */
   skipTotal: "poly_mirror_chain_skip_total",
-  /** `poly_mirror_chain_metadata_refresh_total{trigger}` — listUserPositions refresh fires. Triggers: `interval`, `cache_miss`, `cold_start`. */
+  /** `poly_mirror_chain_metadata_refresh_total{trigger}` — listUserPositions refresh fires. Bounded trigger enum: `interval` | `cache_miss` | `cold_start`. */
   metadataRefreshTotal: "poly_mirror_chain_metadata_refresh_total",
-  /** `poly_mirror_chain_metadata_refresh_duration_ms` — round-trip + parse for the position snapshot. */
+  /** `poly_mirror_chain_metadata_refresh_duration_ms{trigger}` — round-trip + parse for the position snapshot. */
   metadataRefreshDurationMs: "poly_mirror_chain_metadata_refresh_duration_ms",
 } as const;
 
@@ -56,8 +56,6 @@ export const WALLET_WATCH_CHAIN_METRICS = {
 const DEFAULT_REFRESH_ASSETS_INTERVAL_MS = 60_000;
 /** Default heartbeat info-log cadence (ms). Loki absence-alert key. */
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
-/** Pollers ask this source to drain on a fixed cadence; with chain push we may have nothing to return. */
-const EMPTY_DRAIN_NEW_SINCE = 0;
 
 export interface PolymarketChainActivitySourceDeps {
   publicClient: PublicClient;
@@ -122,8 +120,7 @@ type OrderFilledLog = Log<bigint, number, false> & {
  */
 export function decodeOrderFilledForTarget(
   log: OrderFilledLog,
-  target: `0x${string}`,
-  blockTimestamp: number
+  target: `0x${string}`
 ): {
   side: "BUY" | "SELL";
   tokenId: string;
@@ -320,29 +317,18 @@ export function createPolymarketChainActivitySource(
     lastLogAt = Date.now();
     deps.metrics.incr(WALLET_WATCH_CHAIN_METRICS.logsTotal, {});
 
-    let blockTs = 0;
-    try {
-      const block = await deps.publicClient.getBlock({
-        blockNumber: rawLog.blockNumber,
-      });
-      blockTs = Number(block.timestamp);
-    } catch (err) {
-      log.warn(
-        {
-          event: EVENT_NAMES.POLY_WALLET_WATCH_NORMALIZE_ERROR,
-          phase: "block_lookup_failed",
-          block_number: rawLog.blockNumber?.toString(),
-          err: err instanceof Error ? err.message : String(err),
-        },
-        "polymarket-chain-source: block lookup failed — using receive time"
-      );
-      blockTs = Math.floor(Date.now() / 1000);
-    }
+    // Use callback-fire wall-clock as the fill timestamp. We deliberately do
+    // NOT issue `eth_getBlock` per log — that would put a per-event RPC back
+    // in the hot path (the exact thing this source exists to remove). viem's
+    // filter-poll cadence (set by `pollingInterval` on the publicClient) plus
+    // Polygon's ~2 s block time bound this to within a few seconds of
+    // chain-settlement reality, which is plenty for `observed_at` + the
+    // task.5042 lag histogram. task.5043.
+    const blockTs = Math.floor(Date.now() / 1000);
 
     const decoded = decodeOrderFilledForTarget(
       rawLog as OrderFilledLog,
-      deps.wallet,
-      blockTs
+      deps.wallet
     );
     if (!decoded) {
       deps.metrics.incr(WALLET_WATCH_CHAIN_METRICS.skipTotal, {
@@ -524,6 +510,18 @@ export function createPolymarketChainActivitySource(
   if (heartbeatIntervalMs > 0) {
     heartbeatTimer = setInterval(emitHeartbeat, heartbeatIntervalMs);
   }
+  log.info(
+    {
+      event: EVENT_NAMES.POLY_WALLET_WATCH_CHAIN_STARTED,
+      wallet: deps.wallet,
+      subscriptions: unwatches.length,
+      refresh_interval_ms: refreshIntervalMs,
+      heartbeat_interval_ms: heartbeatIntervalMs,
+      exchange_v2: POLYGON_POLYMARKET_EXCHANGE_V2,
+      neg_risk_exchange_v2: POLYGON_POLYMARKET_NEG_RISK_EXCHANGE_V2,
+    },
+    "polymarket-chain-source: started"
+  );
 
   return {
     async fetchSince(since?: number): Promise<NextFillsResult> {
@@ -535,7 +533,7 @@ export function createPolymarketChainActivitySource(
           Date.now() - start,
           {}
         );
-        return { fills: [], newSince: since ?? EMPTY_DRAIN_NEW_SINCE };
+        return { fills: [], newSince: since ?? 0 };
       }
       // Drain the buffer atomically — splice() empties under the same event
       // loop tick that emission occurs on, so we can't lose fills mid-drain.
@@ -582,6 +580,7 @@ export function createPolymarketChainActivitySource(
         clearInterval(heartbeatTimer);
         heartbeatTimer = null;
       }
+      const torndown = unwatches.length;
       for (const u of unwatches) {
         try {
           u();
@@ -593,6 +592,14 @@ export function createPolymarketChainActivitySource(
       wakeListeners.clear();
       tokenMeta.clear();
       buffer.length = 0;
+      log.info(
+        {
+          event: EVENT_NAMES.POLY_WALLET_WATCH_CHAIN_STOPPED,
+          wallet: deps.wallet,
+          torndown_subscriptions: torndown,
+        },
+        "polymarket-chain-source: stopped"
+      );
     },
   };
 }

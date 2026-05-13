@@ -840,6 +840,10 @@ function createContainer(): Container {
           const { polygon } = await import("viem/chains");
           return createPublicClient({
             chain: polygon,
+            // task.5043 — viem's filter-poll for `watchContractEvent` uses
+            // this interval. 2 s gives roughly one Polygon-block worth of
+            // wake-up granularity without spamming the RPC.
+            pollingInterval: 2000,
             transport: http(env.POLYGON_RPC_URL),
           });
         })();

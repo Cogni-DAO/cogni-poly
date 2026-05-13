@@ -45,6 +45,12 @@ export const EVENT_NAMES = {
   POLY_MIRROR_WAKE_TICK: "poly.mirror.wake_tick",
   POLY_WALLET_WATCH_WS_WAKE_CALLBACK_THREW:
     "poly.wallet_watch.ws.wake_callback_threw",
+
+  // Polygon chain-log wallet-watch source (task.5043). Heartbeat reuses
+  // POLY_WALLET_WATCH_WS_HEARTBEAT — same Loki absence-alert key applies, the
+  // `component` label disambiguates ws vs chain in the line body.
+  POLY_WALLET_WATCH_CHAIN_STARTED: "poly.wallet_watch.chain.started",
+  POLY_WALLET_WATCH_CHAIN_STOPPED: "poly.wallet_watch.chain.stopped",
 } as const;
 
 export type EventName = (typeof EVENT_NAMES)[keyof typeof EVENT_NAMES];
