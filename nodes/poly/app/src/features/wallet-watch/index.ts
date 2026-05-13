@@ -12,11 +12,13 @@
  */
 
 export {
-  createPolymarketWsActivitySource,
-  type PolymarketWsActivitySource,
-  type PolymarketWsActivitySourceDeps,
-  WALLET_WATCH_WS_METRICS,
-} from "./polymarket-ws-source";
+  chainFillId,
+  createPolymarketChainActivitySource,
+  decodeOrderFilledForTarget,
+  type PolymarketChainActivitySource,
+  type PolymarketChainActivitySourceDeps,
+  WALLET_WATCH_CHAIN_METRICS,
+} from "./polymarket-chain-source";
 export {
   type NextFillsResult,
   WALLET_WATCH_METRICS,

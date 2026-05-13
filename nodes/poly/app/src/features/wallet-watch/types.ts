@@ -3,7 +3,7 @@
 
 /**
  * Module: `@features/wallet-watch/types`
- * Purpose: Generic port shape + metric names for any source of Polymarket wallet activity. v0+ ships the WS-driven adapter (`polymarket-ws-source.ts`) as the only implementation; this module exists so the port is not coupled to one adapter.
+ * Purpose: Generic port shape + metric names for any source of Polymarket wallet activity. v0 ships the Polygon `OrderFilled` chain-log adapter (`polymarket-chain-source.ts`) as the sole implementation (task.5043); this module exists so the port is not coupled to one adapter.
  * Scope: Types + constants only. No IO, no env reads, no logger or metrics behavior.
  * Invariants: CURSOR_IS_MAX_TIMESTAMP — `newSince` is the max `trade.timestamp` (unix seconds) seen in the tick.
  * Side-effects: none

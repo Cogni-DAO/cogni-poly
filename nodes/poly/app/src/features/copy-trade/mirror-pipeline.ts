@@ -11,6 +11,7 @@
  *   - IDEMPOTENT_BY_CLIENT_ID — `client_order_id = clientOrderIdFor(target.target_id, fill.fill_id)`, pinned helper. Deterministic from the PK pair so re-runs dedupe.
  *   - RECORD_EVERY_DECISION — `order-ledger.recordDecision` fires for EVERY planMirrorFromFill() outcome (placed, skipped, or error). Supports divergence analysis without the fills ledger.
  *   - DECISIONS_TOTAL_HAS_SOURCE — `poly_mirror_decisions_total{outcome, reason, source, placement}` always carries `source` (v0 = `"data-api"`) AND `placement` (`"limit"` | `"market_fok"`).
+ *   - DECISION_LAG_OBSERVED_ONCE (task.5042) — every fill emits exactly one `poly_mirror_decision_lag_ms{source}` observation, measured as `decided_at - fill.observed_at`, clamped ≥0. The same `lag_ms_total` is attached as a logger-child field so every downstream decision log line (skip / placed / error / SELL-close) inherits it without per-site edits. Measurement-first lever for root-causing target-fill → mirror-decision lag before any fill-source rebuild.
  *   - WRONG_SIDE_HOLDING_COUNTER (bug.5048) — `poly_mirror_wrong_side_holding_total{target_id, condition_id}` fires once per option-C decision (wallet held a non-dominant leg from cross-target activity AND current target's dominant fill arrived). Co-emitted WARN log carries `wrong_side_holding_detected: true`, `our_minority_token_id`, `target_dominant_token_id`, `target_side_fraction`. Bounded cardinality; alertable at any non-zero rate above documented residue.
  *   - TENANT_INHERITED_FROM_TARGET — every `insertPending` and `recordDecision` writes `(billing_account_id, created_by_user_id)` taken from `deps.target` (`MirrorTargetConfig`). The pipeline never reads tenant from anywhere else.
  *   - CAPS_LIVE_IN_GRANT — daily / hourly caps are enforced by `authorizeIntent` inside the per-tenant `placeIntent` executor, not here.
@@ -107,10 +108,30 @@ export const MIRROR_PIPELINE_METRICS = {
   placementErrorsTotal: "poly_mirror_placement_errors_total",
   /** bug.5048 — `poly_mirror_wrong_side_holding_total{target_id}` fires when option C is taken (wallet held a non-dominant leg from cross-target activity at decision time). Bounded by tracked-targets table. Per-condition forensics live on the co-emitted WARN log (`market_id` field), not in the metric label. Alertable. */
   wrongSideHoldingTotal: "poly_mirror_wrong_side_holding_total",
+  /** task.5042 — `poly_mirror_decision_lag_ms{source}` — duration histogram of `decision_emit_ts - fill.observed_at` per fill. One observation per fill regardless of outcome; co-emitted `lag_ms_total` field on every downstream decision log line. Lets us see where the target-fill → mirror-decision lag actually accrues before rebuilding the fill source. */
+  decisionLagMs: "poly_mirror_decision_lag_ms",
 } as const;
 
+/**
+ * task.5042 — compute the end-to-end lag between when the target's trade was
+ * observed by the upstream source (`fill.observed_at`, ISO-8601 derived from
+ * Polymarket `trade.timestamp` at normalize time) and when the mirror pipeline
+ * decided on it (`decisionBase.decided_at`). Clamped to ≥0 to absorb tiny
+ * clock skew between the trade-side timestamp and the pod's wall clock. NaN
+ * on malformed `observed_at` collapses to 0 — surfaces as a heavy 0-bucket
+ * spike if the upstream contract drifts, which is the signal we want.
+ */
+export function computeFillToDecisionLagMs(
+  observedAtIso: string,
+  decidedAt: Date
+): number {
+  const observedMs = Date.parse(observedAtIso);
+  if (Number.isNaN(observedMs)) return 0;
+  return Math.max(0, decidedAt.getTime() - observedMs);
+}
+
 /** `Fill.source` values that land in `decisions_total{source}`. */
-export type DecisionSource = "data-api" | "clob-ws";
+export type DecisionSource = "data-api" | "clob-ws" | "chain";
 
 export interface MirrorPipelineDeps {
   /** Fill source — v0 is the Polymarket Data-API adapter. */
@@ -237,7 +258,7 @@ async function processFill(
   fill: import("@cogni/poly-market-provider").Fill,
   deps: MirrorPipelineDeps,
   clock: () => Date,
-  log: LoggerPort
+  parentLog: LoggerPort
 ): Promise<void> {
   const client_order_id = clientOrderIdFor(deps.target.target_id, fill.fill_id);
   const placement: PlacementWire =
@@ -256,6 +277,22 @@ async function processFill(
     created_by_user_id: deps.target.created_by_user_id,
     decided_at: clock(),
   };
+
+  // task.5042 — one observation + log-field per fill. The `lag_ms_total`
+  // child binding is inherited by every downstream decision log line
+  // (skip / placed / error / SELL-close branches) without touching each
+  // emission site. The histogram label set stays bounded to `source` so
+  // cardinality remains v0-safe.
+  const lag_ms_total = computeFillToDecisionLagMs(
+    fill.observed_at,
+    decisionBase.decided_at
+  );
+  deps.metrics.observeDurationMs(
+    MIRROR_PIPELINE_METRICS.decisionLagMs,
+    lag_ms_total,
+    { source }
+  );
+  const log = parentLog.child({ lag_ms_total });
 
   if (fill.side === "SELL") {
     await processSellFill({
