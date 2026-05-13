@@ -13,7 +13,7 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    digest: "sha256:2be09a0a26220706eb6e50e7d6f3fbb50950dd7284fe7266022c8e15d80165de"
+    digest: "sha256:4ed23fd00cf47ff117b1dea10067c29b81c234267527329b6a475bf2b65ccdd9"
 
 patches:
   # Node-specific ConfigMap values.
@@ -93,7 +93,7 @@ patches:
   # The current migrate digest points to the app image, which starts Next.js
   # instead of running migrations — blocking Argo PreSync indefinitely.
 
-  # bug.0295: VM discovery via DNS (production.vm.cognidao.org).
+  # bug.0295: VM discovery via DNS (poly.vm.cognidao.org).
   # Convert base headless Services → ExternalName; delete EndpointSlices.
   - target: { kind: Service, name: postgres-external }
     patch: |
