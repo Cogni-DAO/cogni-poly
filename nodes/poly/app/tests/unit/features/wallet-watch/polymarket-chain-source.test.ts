@@ -406,7 +406,6 @@ describe("createPolymarketChainActivitySource — behavior", () => {
       heartbeatIntervalMs: 0,
     });
 
-    // 4 subscriptions (V2 × {maker, taker} + NegRisk × {maker, taker})
     // V2 + NegRisk V2, both filtered on maker = target. Two subscriptions per
     // target — was 4 before bug.5049 when we also subscribed taker-side.
     expect(harness.subs).toHaveLength(2);

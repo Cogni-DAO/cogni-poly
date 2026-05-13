@@ -10,9 +10,9 @@
  *   - OBSERVED_AT_IS_BLOCK_TIMESTAMP — `observed_at` is the Polygon `block.timestamp` (ISO-8601) — same semantic as the prior data-api source's `trade.timestamp`, so the task.5042 lag histogram measures actual target → mirror latency and remains comparable across sources. `block.timestamp` is fetched via memoized `getBlock` (one RPC per unique block; logs in the same block share the cached value). On `getBlock` failure we fall back to wall-clock with a warn log + `getBlockTimestampFallback` counter — fills are NEVER dropped for a transient RPC issue; lag histogram degrades to a ≤ ~2 s under-report rather than silently losing trades.
  *   - CHAIN_REORG_POLICY_V0 — `watchContractEvent` delivers logs with no confirmations buffer; reorg retractions arrive as `log.removed === true` on the next poll, are dropped + counted (`poly_mirror_chain_skip_total{reason="reorg"}`), but already-emitted Fills are NOT recalled. Mirror orders placed on a reorged log sit on CLOB until the order-reconciler (`bootstrap/jobs/order-reconciler.job`) hits its `clob_not_found` grace window (default 900 s). v1 hardening: 1-block delay-buffer or `getLogs(toBlock: latest - N)`. task.5043 follow-up.
  *   - CURSOR_IS_MAX_TIMESTAMP — `newSince` = max `block.timestamp` (unix seconds) emitted this drain.
- *   - SHARED_RPC_TRANSPORT — all source instances share the caller-supplied `publicClient`. viem multiplexes the 4-per-target subscriptions onto one underlying RPC connection.
+ *   - SHARED_RPC_TRANSPORT — all source instances share the caller-supplied `publicClient`. viem multiplexes the 2-per-target subscriptions onto one underlying RPC connection.
  *   - METADATA_FROM_POSITIONS — `(condition_id, outcome, end_date)` enriched from `listUserPositions(wallet)`, refreshed every `refreshAssetsIntervalMs`. Cache miss triggers an immediate refresh + retry; still-missing OR empty-outcome → skip with `metadata_unresolved` + warn. Empty-outcome skip prevents wrong-leg mirroring on NegRisk multi-outcome markets.
- * Side-effects: opens 4 viem RPC subscriptions; HTTPS GETs to data-api.polymarket.com on each metadata refresh; logger + metrics; periodic heartbeat info log.
+ * Side-effects: opens 2 viem RPC subscriptions; HTTPS GETs to data-api.polymarket.com on each metadata refresh; logger + metrics; periodic heartbeat info log.
  * Links: docs/spec/poly-copy-trade-execution.md, work/items/task.5043, work/items/task.5042
  * @public
  */
@@ -246,7 +246,7 @@ export function createPolymarketChainActivitySource(
           block_number: blockNumber.toString(),
           err: err instanceof Error ? err.message : String(err),
         },
-        "polymarket-chain-source: getBlock failed; fill will be skipped"
+        "polymarket-chain-source: getBlock failed; observed_at will fall back to wall-clock for this fill"
       );
       return null;
     }
