@@ -284,6 +284,15 @@ export const serverSchema = z.object({
     .nonnegative()
     .default(900_000),
 
+  // Mirror fill source — selects which `WalletActivitySource` adapter the
+  // copy-trade mirror feeds from. `"data-api"` (default) keeps the legacy
+  // Polymarket Market-channel WS wake-up + Data-API /trades drain
+  // (~5min target-fill → mirror-decision lag). `"chain"` swaps in the
+  // Polygon `eth_subscribe('logs')` source filtered on indexed target-wallet
+  // maker/taker topics (~2s lag). Default-off to allow a soak before flip;
+  // staging/canary set to `"chain"` first, prod follows. task.5043.
+  POLY_MIRROR_FILL_SOURCE: z.enum(["data-api", "chain"]).default("data-api"),
+
   // Operator wallet top-up cap (USD)
   // Per operator-wallet.md: MAX_TOPUP_CAP — per-tx ceiling for OpenRouter top-ups.
   OPERATOR_MAX_TOPUP_USD: z.coerce.number().positive().default(500),

@@ -20,7 +20,7 @@ import { z } from "zod";
 import { MarketProviderSchema } from "./schemas.js";
 
 /** Fill observation source — composite key namespace for `Fill.fill_id`. */
-export const FillSourceSchema = z.enum(["data-api", "clob-ws"]);
+export const FillSourceSchema = z.enum(["data-api", "clob-ws", "chain"]);
 export type FillSource = z.infer<typeof FillSourceSchema>;
 
 /** Buy or sell side on a market outcome. */

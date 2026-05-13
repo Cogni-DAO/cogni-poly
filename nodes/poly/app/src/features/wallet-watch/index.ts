@@ -12,6 +12,14 @@
  */
 
 export {
+  chainFillId,
+  createPolymarketChainActivitySource,
+  decodeOrderFilledForTarget,
+  type PolymarketChainActivitySource,
+  type PolymarketChainActivitySourceDeps,
+  WALLET_WATCH_CHAIN_METRICS,
+} from "./polymarket-chain-source";
+export {
   createPolymarketWsActivitySource,
   type PolymarketWsActivitySource,
   type PolymarketWsActivitySourceDeps,

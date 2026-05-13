@@ -110,7 +110,7 @@ export const MIRROR_PIPELINE_METRICS = {
 } as const;
 
 /** `Fill.source` values that land in `decisions_total{source}`. */
-export type DecisionSource = "data-api" | "clob-ws";
+export type DecisionSource = "data-api" | "clob-ws" | "chain";
 
 export interface MirrorPipelineDeps {
   /** Fill source — v0 is the Polymarket Data-API adapter. */

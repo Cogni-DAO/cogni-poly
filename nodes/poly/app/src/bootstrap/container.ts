@@ -814,11 +814,45 @@ function createContainer(): Container {
     // client, Drizzle queries) don't run on pods without Polymarket creds.
     void (async () => {
       try {
-        const { createPolymarketWsActivitySource } = await import(
-          "@/features/wallet-watch"
-        );
+        const {
+          createPolymarketWsActivitySource,
+          createPolymarketChainActivitySource,
+        } = await import("@/features/wallet-watch");
         const { PolymarketDataApiClient, createPolymarketWsClient } =
           await import("@cogni/poly-market-provider/adapters/polymarket");
+        // task.5043 — selectable mirror fill source. Default keeps the legacy
+        // WS-wake + Data-API drain; `POLY_MIRROR_FILL_SOURCE=chain` swaps in
+        // the Polygon eth_subscribe(logs)-driven source (~2s lag).
+        const fillSourceMode = env.POLY_MIRROR_FILL_SOURCE;
+        const chainPublicClient = await (async () => {
+          if (fillSourceMode !== "chain") return null;
+          if (!env.POLYGON_RPC_URL) {
+            log.warn(
+              {
+                event: "poly.mirror.chain_source.disabled",
+                reason: "POLYGON_RPC_URL missing",
+              },
+              "POLY_MIRROR_FILL_SOURCE=chain requested but POLYGON_RPC_URL is unset — falling back to data-api source"
+            );
+            return null;
+          }
+          const { createPublicClient, http } = await import("viem");
+          const { polygon } = await import("viem/chains");
+          return createPublicClient({
+            chain: polygon,
+            transport: http(env.POLYGON_RPC_URL),
+          });
+        })();
+        const effectiveFillSourceMode: "data-api" | "chain" =
+          chainPublicClient !== null ? "chain" : "data-api";
+        log.info(
+          {
+            event: "poly.mirror.fill_source.selected",
+            mode: effectiveFillSourceMode,
+            requested: fillSourceMode,
+          },
+          "mirror fill source selected"
+        );
         // noopMetrics for v0 — real prom-client wiring folds into a follow-up
         // once the `poly_mirror_*` series has a Grafana dashboard to back it.
         const { noopMetrics } = await import("@cogni/poly-market-provider");
@@ -882,13 +916,22 @@ function createContainer(): Container {
               mirrorFilterPercentile: enumeratedTarget.mirrorFilterPercentile,
               mirrorMaxUsdcPerTrade: enumeratedTarget.mirrorMaxUsdcPerTrade,
             });
-            const source = createPolymarketWsActivitySource({
-              client: dataApiClient,
-              ws: sharedWsClient,
-              wallet: targetWallet,
-              logger: mirrorLogger,
-              metrics: noopMetrics,
-            });
+            const source =
+              effectiveFillSourceMode === "chain" && chainPublicClient !== null
+                ? createPolymarketChainActivitySource({
+                    publicClient: chainPublicClient,
+                    client: dataApiClient,
+                    wallet: targetWallet,
+                    logger: mirrorLogger,
+                    metrics: noopMetrics,
+                  })
+                : createPolymarketWsActivitySource({
+                    client: dataApiClient,
+                    ws: sharedWsClient,
+                    wallet: targetWallet,
+                    logger: mirrorLogger,
+                    metrics: noopMetrics,
+                  });
 
             // Build once per (tenant × target). Executor is cached across
             // ticks inside the factory keyed on billingAccountId.
