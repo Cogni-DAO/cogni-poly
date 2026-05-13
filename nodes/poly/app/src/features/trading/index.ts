@@ -24,6 +24,7 @@ export {
   isLedgerPositionClosed,
   isLedgerPositionStatus,
   isLedgerRestingOrder,
+  ledgerCountedIntentUsdc,
   ledgerCurrentValue,
   ledgerExecutedUsdc,
   ledgerHasPositionExposure,

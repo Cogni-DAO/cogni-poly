@@ -14,6 +14,7 @@
 import {
   isLedgerPositionClosed,
   isLedgerRestingOrder,
+  ledgerCountedIntentUsdc,
   ledgerExecutedUsdc,
   shouldCountLedgerMarketIntent,
   shouldCountLedgerTrade,
@@ -211,10 +212,7 @@ export class FakeOrderLedger implements OrderLedger {
         if (attrs?.market_id !== market_id) return false;
         return shouldCountLedgerMarketIntent(r);
       })
-      .reduce((sum, r) => {
-        const v = (r.attributes as Record<string, unknown> | null)?.size_usdc;
-        return sum + (typeof v === "number" ? v : 0);
-      }, 0);
+      .reduce((sum, r) => sum + ledgerCountedIntentUsdc(r), 0);
   }
 
   async insertPending(input: InsertPendingInput): Promise<void> {

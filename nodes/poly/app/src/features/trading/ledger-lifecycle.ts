@@ -144,8 +144,39 @@ export function shouldCountLedgerMarketIntent(row: LedgerRow): boolean {
   ) {
     return true;
   }
+  // bug.5050 — CAP_COUNTS_REALIZED_ON_CANCEL: a canceled order that filled
+  // any portion before cancel leaves those realized shares in our wallet;
+  // exposure persists past the order's terminal state. Count its realized
+  // (or pessimistic intent) component below in `ledgerCountedIntentUsdc`.
+  if (row.status === "canceled") {
+    return true;
+  }
   return (
     row.status === "error" &&
     readLedgerString(row, "placement") === "market_fok"
   );
+}
+
+/**
+ * USDC component of a ledger row that counts toward the per-market cap.
+ * Callers MUST gate with `shouldCountLedgerMarketIntent` first; this function
+ * assumes the row has already been accepted by that predicate.
+ *
+ * Status → component:
+ *   - pending, open, filled, partial          : `size_usdc` (full intent)
+ *   - error AND placement=market_fok          : `size_usdc` (broadcast race)
+ *   - canceled                                 : `filled_size_usdc` if present,
+ *                                                else `size_usdc` (pessimistic
+ *                                                fallback for legacy rows the
+ *                                                reconciler has not yet polled)
+ *
+ * @internal
+ */
+export function ledgerCountedIntentUsdc(row: LedgerRow): number {
+  if (row.status === "canceled") {
+    const filled = readLedgerNumber(row, "filled_size_usdc");
+    if (filled > 0) return filled;
+    return readLedgerNumber(row, "size_usdc");
+  }
+  return readLedgerNumber(row, "size_usdc");
 }
