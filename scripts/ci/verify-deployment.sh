@@ -16,15 +16,31 @@ DOMAIN="${DOMAIN:?DOMAIN is required}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-30}"
 SLEEP="${SLEEP:-15}"
 
+# Node-app list comes from infra/catalog (CATALOG_IS_SSOT, docs/spec/ci-cd.md
+# axiom 16). Adding/removing a node in catalog updates the health-poll set
+# automatically. Replaces a previously-hardcoded operator/poly/resy iteration
+# that was stale in both cogni and cogni-poly after the poly extraction
+# (bug.5052).
+_verify_deployment_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/image-tags.sh
+. "${_verify_deployment_dir}/lib/image-tags.sh"
+
 if [[ "$DOMAIN" == *.*.* ]]; then
   NODE_JOIN="-"
 else
   NODE_JOIN="."
 fi
 
-OPERATOR_URL="https://${DOMAIN}"
-POLY_URL="https://poly${NODE_JOIN}${DOMAIN}"
-RESY_URL="https://resy${NODE_JOIN}${DOMAIN}"
+# Hostname convention (mirrors verify-buildsha.sh): operator → DOMAIN directly;
+# every other node → ${node}${NODE_JOIN}${DOMAIN}.
+url_for_node() {
+  local node="$1"
+  if [ "$node" = "operator" ]; then
+    printf 'https://%s' "$DOMAIN"
+  else
+    printf 'https://%s%s%s' "$node" "$NODE_JOIN" "$DOMAIN"
+  fi
+}
 
 # ── Health polls ─────────────────────────────────────────────────────────────
 
@@ -48,18 +64,24 @@ poll_health() {
   return 1
 }
 
-# Poll all nodes in parallel
-poll_health "operator" "$OPERATOR_URL" &
-PID_OP=$!
-poll_health "poly" "$POLY_URL" &
-PID_POLY=$!
-poll_health "resy" "$RESY_URL" &
-PID_RESY=$!
+if [ "${#NODE_TARGETS[@]}" -eq 0 ]; then
+  echo "ℹ️  No node-apps in catalog — skipping health polls."
+  exit 0
+fi
+
+declare -a PIDS=()
+declare -a NAMES=()
+for node in "${NODE_TARGETS[@]}"; do
+  url=$(url_for_node "$node")
+  poll_health "$node" "$url" &
+  PIDS+=("$!")
+  NAMES+=("$node")
+done
 
 FAILED=0
-wait $PID_OP || FAILED=1
-wait $PID_POLY || FAILED=1
-wait $PID_RESY || FAILED=1
+for i in "${!PIDS[@]}"; do
+  wait "${PIDS[$i]}" || { echo "❌ ${NAMES[$i]} failed"; FAILED=1; }
+done
 
 if [ $FAILED -ne 0 ]; then
   echo "❌ One or more nodes failed health checks"
@@ -69,7 +91,8 @@ echo "✅ All nodes healthy"
 
 # ── Smoke tests ──────────────────────────────────────────────────────────────
 
-for url in "$OPERATOR_URL" "$POLY_URL" "$RESY_URL"; do
+for node in "${NODE_TARGETS[@]}"; do
+  url=$(url_for_node "$node")
   BODY=$(curl -sk "$url/livez" 2>/dev/null)
   echo "$url/livez → $BODY"
   if ! echo "$BODY" | grep -q '"status"'; then

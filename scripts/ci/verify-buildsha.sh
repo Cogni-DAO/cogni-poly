@@ -85,7 +85,16 @@ CUTOVER_SLEEP="${CUTOVER_SLEEP:-5}"
 # Only node-apps expose /version via HTTPS Ingress. scheduler-worker and
 # migrator are promoted-apps too but are in-cluster only — they're covered
 # by wait-for-in-cluster-services (kubectl rollout status) upstream.
-NODE_APPS="operator poly resy"
+#
+# Source from infra/catalog (CATALOG_IS_SSOT, docs/spec/ci-cd.md axiom 16) so
+# this script tracks the repo's actual node-apps automatically — adding or
+# removing a node in catalog updates the Ingress-probe set without a script
+# edit. Replaces a previously-hardcoded `"operator poly resy"` list that was
+# stale in both cogni and cogni-poly after the poly extraction (bug.5052).
+_verify_buildsha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/ci/lib/image-tags.sh
+. "${_verify_buildsha_dir}/lib/image-tags.sh"
+NODE_APPS="${NODE_TARGETS[*]}"
 
 declare -A EXPECTED_BY_NODE=()
 
