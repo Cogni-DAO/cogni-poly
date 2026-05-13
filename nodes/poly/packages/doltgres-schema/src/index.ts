@@ -12,3 +12,4 @@
  */
 
 export * from "./knowledge";
+export * from "./work-items";

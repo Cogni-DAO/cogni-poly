@@ -65,6 +65,24 @@ function createMockPort(): WorkItemQueryPort {
   };
 }
 
+/**
+ * Stub Doltgres work-items port that always throws DoltgresNotConfiguredError,
+ * forcing the facade onto the markdown fallback path so existing assertions
+ * about WorkItemQueryPort delegation still hold.
+ */
+function notConfiguredDoltgresStub() {
+  const err = new Error("Doltgres not configured (test stub)");
+  err.name = "DoltgresNotConfiguredError";
+  const fn = vi.fn().mockRejectedValue(err);
+  return {
+    get: fn,
+    list: fn,
+    create: fn,
+    patch: fn,
+    delete: fn,
+  };
+}
+
 describe("app/_facades/work/items.server", () => {
   let mockPort: ReturnType<typeof createMockPort>;
 
@@ -73,6 +91,7 @@ describe("app/_facades/work/items.server", () => {
     mockPort = createMockPort();
     mockGetContainer.mockReturnValue({
       workItemQuery: mockPort,
+      doltgresWorkItems: notConfiguredDoltgresStub(),
     } as never);
   });
 
@@ -172,14 +191,19 @@ describe("app/_facades/work/items.server", () => {
       expect(result.items).toEqual([]);
     });
 
-    it("passes through nextCursor", async () => {
+    it("omits nextCursor when Doltgres is not configured", async () => {
+      // Pagination is now Doltgres-driven. When DOLTGRES_URL_POLY is unset,
+      // the facade falls back to markdown and intentionally does not propagate
+      // markdown's cursor (markdown is finite and only contributes to page 1).
       vi.mocked(mockPort.list).mockResolvedValue({
         items: [],
         nextCursor: "cursor-xyz",
       });
 
       const result = await listWorkItems({});
-      expect(result.nextCursor).toBe("cursor-xyz");
+      expect(result.nextCursor).toBeUndefined();
+      expect(result.pageInfo.endCursor).toBeNull();
+      expect(result.pageInfo.hasMore).toBe(false);
     });
   });
 

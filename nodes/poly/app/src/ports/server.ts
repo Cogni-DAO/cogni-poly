@@ -59,3 +59,12 @@ export {
   type ScheduleWorkerPort,
   type UpdateScheduleInput,
 } from "@cogni/scheduler-core";
+
+// Work items Doltgres port — server-only because the concrete adapter
+// uses postgres.js (transitively pulls node: builtins).
+export type {
+  WorkItemsCreateInput,
+  WorkItemsDoltgresPort,
+  WorkItemsPatchInput,
+  WorkItemsPatchSet,
+} from "./work-items-doltgres.port";
