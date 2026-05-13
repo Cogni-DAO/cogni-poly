@@ -89,7 +89,7 @@ Three sibling slices under `nodes/poly/app/src/features/`. Each owns its vocabul
 1. **Autonomous 30s mirror poll** (`nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts`). Consumes all three layers. The mirror-pipeline tick is `runMirrorTick(deps)`.
 2. **Agent-callable tool** (`core__poly_place_trade` — `packages/ai-tools/src/tools/poly-place-trade.ts`). Consumes `trading/` only. Default placement = `market_fok` to preserve legacy semantics.
 
-The mirror-pipeline is the **only** file that imports from both `wallet-watch` and `trading`. The Phase-4 WebSocket fill ingester (task.0322) will replace `wallet-watch` as the fill source without touching `trading` or `plan-mirror`.
+The mirror-pipeline is the **only** file that imports from both `wallet-watch` and `trading`. The `wallet-watch` slice is the source-swap seam: today it's the Polygon `OrderFilled` chain-log source (task.5043 — replaced the original `polymarket-ws-source` + Data-API drain). Any future ingester (e.g. CLOB user-channel WebSocket) plugs in here without touching `trading` or `plan-mirror`.
 
 ## Position model
 
@@ -725,7 +725,7 @@ Code review criteria. Every invariant has a named owner file in the Implementati
 
 - **`BOUNDED_METRIC_RESULT`** — `result` label is one of `{ok, rejected, error}`. The `PolymarketClobAdapter` `poly_clob_place_*` counters additionally carry an `error_code` sub-label from `POLY_CLOB_ERROR_CODES` (`insufficient_balance`, `insufficient_allowance`, `stale_api_key`, `invalid_signature`, `invalid_price_or_tick`, `below_min_order_size`, `empty_response`, `http_error`, `unknown`) on non-ok results — bounded enum, dashboard-safe.
 - **`MIRROR_REASON_BOUNDED`** — `MirrorReason` is a closed enum. Used verbatim as a Prom label (`poly_mirror_decisions_total{outcome, reason}`). Keep small + stable.
-- **`DECISIONS_TOTAL_HAS_SOURCE`** — `poly_mirror_decisions_total{outcome, reason, source="data-api"}` always carries `source`. Forward-compatible values: `source ∈ {data-api, clob-ws}`.
+- **`DECISIONS_TOTAL_HAS_SOURCE`** — `poly_mirror_decisions_total{outcome, reason, source}` always carries `source`. Bounded enum: `source ∈ {data-api, clob-ws, chain}`. `chain` is the live value as of task.5043 (Polygon `OrderFilled` log source); `data-api` is the legacy pre-chain pipeline; `clob-ws` is reserved for a future direct CLOB stream.
 - **`DECISION_LOG_NAMES_VIEW`** — any decision branched on `state.position` must include `position_branch ∈ {none, hedge, layer, sell_close, new_entry}` + `position_qty_shares` + `position_token_id` on the structured Loki log.
 - **`TARGET_DOMINANCE_DRIVES_BRANCH`** (bug.5048) — when `config.min_target_side_fraction` is set AND `state.target_position` is available with non-zero total cost, branch selection is computed from `analyzeTargetDominance` (target's per-condition side fractions) FIRST, then routed by our position state per the branch table above. Minority-side fills always skip as `target_dominant_other_side` (master switch — applies to entry, layer, AND hedge). Our position is a downstream input, never the primary discriminator. When disabled (threshold unset or no target data), the planner falls back to legacy our-position routing for backward-compat with pre-bug.5048 tests.
 - **`NEVER_PAY_ABOVE_TARGET_VWAP`** (bug.5048) — when `config.vwap_tolerance` is set, the planner skips with `vwap_floor_breach` when `fill.price > target_vwap_for_fill_token + vwap_tolerance`. Asymmetric upward gate; we are happy to enter below target VWAP. Fails open when target VWAP is unknown.
