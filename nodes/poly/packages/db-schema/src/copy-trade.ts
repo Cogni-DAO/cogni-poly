@@ -187,10 +187,8 @@ export const polyCopyTradeFills = pgTable(
       table.billingAccountId,
       table.positionLifecycle
     ),
-    check(
-      "poly_copy_trade_fills_fill_id_shape",
-      sql`${table.fillId} ~ '^(data-api|clob-ws):.+'`
-    ),
+    // fill_id format is owned by per-source helpers in @cogni/poly-market-provider.
+    // Dedupe is enforced by the partial unique index on (target_id, fill_id).
     check(
       "poly_copy_trade_fills_status_check",
       sql`${table.status} IN ('pending','open','filled','partial','canceled','error')`

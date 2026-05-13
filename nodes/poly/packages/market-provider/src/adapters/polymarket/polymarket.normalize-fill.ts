@@ -34,9 +34,9 @@ export type PolymarketNormalizeResult =
   | { ok: false; reason: PolymarketNormalizeSkipReason };
 
 /**
- * Build the canonical `fill_id` for a Data-API trade.
- * Pinned — `poly_copy_trade_fills_fill_id_shape` CHECK and the composite-PK
- * invariant depend on this shape. If you need to change it, write a migration.
+ * Canonical `fill_id` for a Data-API trade. The source prefix exists for
+ * log readability and cross-source collision avoidance — `(target_id, fill_id)`
+ * uniqueness is enforced by a partial unique index, not by format validation.
  */
 export function polymarketDataApiFillId(
   trade: Pick<
