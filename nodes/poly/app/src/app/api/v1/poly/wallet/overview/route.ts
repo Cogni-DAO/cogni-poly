@@ -198,8 +198,11 @@ export const GET = wrapRouteHandlerWithLogging(
         message: err instanceof Error ? err.message : String(err),
       });
     }
+    // Cash is live RPC; positionsMtm is a DB cache. A stale cache + live cash
+    // mis-attributes new mirror buys (cash debited, position not yet in DB) as
+    // wallet shrinkage. Null > stale, so the dashboard degrades to "—".
     const positionsMtm =
-      currentPositionSummary !== null
+      currentPositionSummary !== null && !currentPositionSummary.stale
         ? roundToCents(currentPositionSummary.positionsMtm)
         : null;
 

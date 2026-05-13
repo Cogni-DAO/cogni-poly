@@ -478,6 +478,42 @@ describe("poly wallet dashboard DB read routes", () => {
     );
   });
 
+  it("overview nulls positions_mtm + total when the position read-model is stale", async () => {
+    mockReadCurrentWalletPositionModel.mockResolvedValue({
+      positions: [],
+      summary: {
+        positionsMtm: 716.97,
+        syncedAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
+        syncAgeMs: 3 * 60 * 60_000,
+        stale: true,
+        activeRows: 1,
+      },
+      warnings: [
+        {
+          code: "current_positions_stale",
+          message:
+            "Current positions are from a partial upstream position poll.",
+        },
+      ],
+    });
+    const { GET } = await import("@/app/api/v1/poly/wallet/overview/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/v1/poly/wallet/overview?interval=1W")
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({
+      usdc_positions_mtm: null,
+      usdc_total: null,
+      positions_stale: true,
+    });
+    expect(json.warnings).toContainEqual(
+      expect.objectContaining({ code: "current_positions_stale" })
+    );
+  });
+
   it("overview read-model freshness skips live Polymarket valuation and P/L history", async () => {
     mockListTenantPositions.mockResolvedValue([
       {
