@@ -312,24 +312,40 @@ export interface OrderLedger {
   ): Promise<StateSnapshot>;
 
   /**
-   * Sum the `intent` `size_usdc` of all `poly_copy_trade_fills` rows for this
-   * tenant × market that have not failed. Used by the mirror sizing policy
-   * to enforce a per-(tenant, market) position cap.
+   * Sum the cap-relevant USDC component of all `poly_copy_trade_fills` rows
+   * for this tenant × market. Used by the mirror sizing policy to enforce a
+   * per-(tenant, market) position cap.
    *
-   * **Intent, not filled.** Reads `attributes->>'size_usdc'` (the intended
-   * notional written at `insertPending`), not `attributes->>'filled_size_usdc'`
-   * (the on-chain fill written by `markOrderId`). v0 chooses intent because
-   * the FOK-heavy mirror regime fills only ~14% of placements; a filled-based
-   * cap would let no-match attempts keep firing through the cap. Revisit
-   * once task.0427's design pass lands and the miss rate drops.
+   * **Intent for active rows, realized for terminated rows.** Per-status weight:
+   *   - `pending | open | filled | partial` → `size_usdc` (full intent — we
+   *     are still committed). v0 chooses intent because the FOK-heavy mirror
+   *     regime fills only ~14% of placements; a purely-filled-based cap would
+   *     let no-match attempts keep firing through the cap. Revisit once
+   *     task.0427's design pass lands and the miss rate drops.
+   *   - `error AND placement = market_fok` → `size_usdc` (bug.0430 broadcast
+   *     race: CLOB returns error but the on-chain CTF can still mint).
+   *   - `canceled` → `filled_size_usdc` if present, else `size_usdc`
+   *     (bug.5050 CAP_COUNTS_REALIZED_ON_CANCEL: a STALE_RESTING_CANCEL_REPLACE
+   *     on a partially-filled order leaves the realized shares in our wallet
+   *     even after `markCanceled` flips status to terminal — those shares
+   *     must still count or the next placement leaks past the cap. The
+   *     `size_usdc` fallback is pessimistic for legacy rows where the
+   *     order-reconciler has not yet populated `filled_size_usdc`).
+   *   - `error AND placement = limit` → 0 (CLOB-rejected at API boundary,
+   *     no chain effect).
    *
-   * Counts rows with `status` ∈ `pending | open | filled | partial` while
-   * `attributes.closed_at IS NULL`; closed positions no longer represent
-   * active market exposure. Excludes `canceled | error` except FOK error rows
-   * that can race with on-chain minting. Cross-target by design (the cap is on
-   * the tenant's exposure to a market, not per-target). Fail-closed: returns
-   * `Infinity` on DB error so the caller skips the placement rather than
-   * mis-allowing it.
+   * Rows with terminal `position_lifecycle` (closed/redeemed/loser/dust/
+   * abandoned) or `attributes.closed_at IS NOT NULL` are excluded outright —
+   * the position is no longer in our wallet.
+   *
+   * Cross-target by design (the cap is on the tenant's exposure to a market,
+   * not per-target). Fail-closed: returns `Infinity` on DB error so the
+   * caller skips the placement rather than mis-allowing it.
+   *
+   * Mirrored by `ledger-lifecycle::ledgerCountedIntentUsdc` for the in-memory
+   * FakeOrderLedger.
+   *
+   * Links: bug.5050, bug.0430.
    */
   cumulativeIntentForMarket(
     billing_account_id: string,

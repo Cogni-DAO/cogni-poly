@@ -269,10 +269,40 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       market_id: string
     ): Promise<number> {
       try {
+        // CAP_COUNTS_REALIZED_ON_CANCEL (bug.5050) — canceled rows that filled
+        // any portion before cancel leave realized shares in our wallet; the
+        // exposure persists past the order's terminal state. So:
+        //
+        //   pending/open/filled/partial   → full `size_usdc` (intent commits us)
+        //   error AND placement=market_fok → full `size_usdc` (bug.0430 broadcast race)
+        //   canceled                       → `filled_size_usdc` if present,
+        //                                    else `size_usdc` (pessimistic
+        //                                    fallback for legacy rows the
+        //                                    order-reconciler has not yet
+        //                                    polled — better to over-count
+        //                                    than to under-count and leak)
+        //   error AND placement=limit      → 0 (CLOB-rejected at API boundary)
+        //
+        // The WHERE filter narrows row-scan to the same statuses that the CASE
+        // accepts; the CASE handles per-row weighting. Mirrors
+        // `ledger-lifecycle::ledgerCountedIntentUsdc` (used by FakeOrderLedger).
         const rows = await deps.db
           .select({
             sum: sum(
-              sql<string>`COALESCE((${polyCopyTradeFills.attributes}->>'size_usdc')::numeric, 0)`
+              sql<string>`CASE
+                WHEN ${polyCopyTradeFills.status} = 'canceled'
+                  THEN COALESCE(
+                    (${polyCopyTradeFills.attributes}->>'filled_size_usdc')::numeric,
+                    (${polyCopyTradeFills.attributes}->>'size_usdc')::numeric,
+                    0
+                  )
+                WHEN ${polyCopyTradeFills.status} IN ('pending','open','filled','partial')
+                  THEN COALESCE((${polyCopyTradeFills.attributes}->>'size_usdc')::numeric, 0)
+                WHEN ${polyCopyTradeFills.status} = 'error'
+                     AND ${polyCopyTradeFills.attributes}->>'placement' = 'market_fok'
+                  THEN COALESCE((${polyCopyTradeFills.attributes}->>'size_usdc')::numeric, 0)
+                ELSE 0
+              END`
             ),
           })
           .from(polyCopyTradeFills)
@@ -281,20 +311,13 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
               eq(polyCopyTradeFills.billingAccountId, billing_account_id),
               eq(polyCopyTradeFills.marketId, market_id),
               activeRestingPosition,
-              // bug.0430: `error` rows count toward the cap ONLY when the
-              // intent was a FOK market order. FOK has a real broadcast race
-              // (CLOB returns error but on-chain CTF can still mint), so
-              // pessimistic inclusion is correctness, not paranoia. Limit
-              // orders that error are CLOB-rejected at the API boundary
-              // before any on-chain effect — including them was bug.0430's
-              // overreach against task.5001's new code path. Status terminal
-              // for `canceled` is already excluded.
               or(
                 inArray(polyCopyTradeFills.status, [
                   "pending",
                   "open",
                   "filled",
                   "partial",
+                  "canceled",
                 ]),
                 and(
                   eq(polyCopyTradeFills.status, "error"),
