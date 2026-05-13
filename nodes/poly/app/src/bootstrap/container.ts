@@ -814,49 +814,37 @@ function createContainer(): Container {
     // client, Drizzle queries) don't run on pods without Polymarket creds.
     void (async () => {
       try {
-        const {
-          createPolymarketWsActivitySource,
-          createPolymarketChainActivitySource,
-        } = await import("@/features/wallet-watch");
-        const { PolymarketDataApiClient, createPolymarketWsClient } =
-          await import("@cogni/poly-market-provider/adapters/polymarket");
-        // task.5043 — selectable mirror fill source. Default keeps the legacy
-        // WS-wake + Data-API drain; `POLY_MIRROR_FILL_SOURCE=chain` swaps in
-        // the Polygon eth_subscribe(logs)-driven source (~2s lag).
-        const fillSourceMode = env.POLY_MIRROR_FILL_SOURCE;
-        const chainPublicClient = await (async () => {
-          if (fillSourceMode !== "chain") return null;
-          if (!env.POLYGON_RPC_URL) {
-            log.warn(
-              {
-                event: "poly.mirror.chain_source.disabled",
-                reason: "POLYGON_RPC_URL missing",
-              },
-              "POLY_MIRROR_FILL_SOURCE=chain requested but POLYGON_RPC_URL is unset — falling back to data-api source"
-            );
-            return null;
-          }
-          const { createPublicClient, http } = await import("viem");
-          const { polygon } = await import("viem/chains");
-          return createPublicClient({
-            chain: polygon,
-            // task.5043 — viem's filter-poll for `watchContractEvent` uses
-            // this interval. 2 s gives roughly one Polygon-block worth of
-            // wake-up granularity without spamming the RPC.
-            pollingInterval: 2000,
-            transport: http(env.POLYGON_RPC_URL),
-          });
-        })();
-        const effectiveFillSourceMode: "data-api" | "chain" =
-          chainPublicClient !== null ? "chain" : "data-api";
-        log.info(
-          {
-            event: "poly.mirror.fill_source.selected",
-            mode: effectiveFillSourceMode,
-            requested: fillSourceMode,
-          },
-          "mirror fill source selected"
+        const { createPolymarketChainActivitySource } = await import(
+          "@/features/wallet-watch"
         );
+        const { PolymarketDataApiClient } = await import(
+          "@cogni/poly-market-provider/adapters/polymarket"
+        );
+        // task.5043 — Polygon `OrderFilled` chain logs are the wallet-watch
+        // source. The Polymarket-WS-wake + Data-API drain pair has been
+        // removed entirely; chain logs carry maker/taker identity inline so
+        // there is no need for the ~5 min `/trades` enrichment. Hard
+        // requirement: `POLYGON_RPC_URL`.
+        if (!env.POLYGON_RPC_URL) {
+          log.warn(
+            {
+              event: "poly.mirror.chain_source.disabled",
+              reason: "POLYGON_RPC_URL missing",
+            },
+            "copy-trade mirror not started — POLYGON_RPC_URL is required for the chain fill source"
+          );
+          return;
+        }
+        const { createPublicClient, http } = await import("viem");
+        const { polygon } = await import("viem/chains");
+        const chainPublicClient = createPublicClient({
+          chain: polygon,
+          // viem's filter-poll for `watchContractEvent` uses this interval.
+          // 2 s gives roughly one Polygon-block worth of wake-up granularity
+          // without spamming the RPC.
+          pollingInterval: 2000,
+          transport: http(env.POLYGON_RPC_URL),
+        });
         // noopMetrics for v0 — real prom-client wiring folds into a follow-up
         // once the `poly_mirror_*` series has a Grafana dashboard to back it.
         const { noopMetrics } = await import("@cogni/poly-market-provider");
@@ -872,13 +860,6 @@ function createContainer(): Container {
         // (debug/info/warn/error/child with object + optional msg).
         const mirrorLogger =
           log as unknown as import("@cogni/poly-market-provider").LoggerPort;
-
-        // task.0322 — single shared Polymarket Market-channel WebSocket per
-        // pod, multiplexed across all watched wallets. See WS_NO_WALLET_IDENTITY
-        // in features/wallet-watch/polymarket-ws-source.
-        const sharedWsClient = createPolymarketWsClient({
-          logger: mirrorLogger,
-        });
 
         // Ledger reconciler — syncs open/pending rows from CLOB getOrder,
         // dispatched per tenant. Each ledger row carries its
@@ -920,22 +901,13 @@ function createContainer(): Container {
               mirrorFilterPercentile: enumeratedTarget.mirrorFilterPercentile,
               mirrorMaxUsdcPerTrade: enumeratedTarget.mirrorMaxUsdcPerTrade,
             });
-            const source =
-              effectiveFillSourceMode === "chain" && chainPublicClient !== null
-                ? createPolymarketChainActivitySource({
-                    publicClient: chainPublicClient,
-                    client: dataApiClient,
-                    wallet: targetWallet,
-                    logger: mirrorLogger,
-                    metrics: noopMetrics,
-                  })
-                : createPolymarketWsActivitySource({
-                    client: dataApiClient,
-                    ws: sharedWsClient,
-                    wallet: targetWallet,
-                    logger: mirrorLogger,
-                    metrics: noopMetrics,
-                  });
+            const source = createPolymarketChainActivitySource({
+              publicClient: chainPublicClient,
+              client: dataApiClient,
+              wallet: targetWallet,
+              logger: mirrorLogger,
+              metrics: noopMetrics,
+            });
 
             // Build once per (tenant × target). Executor is cached across
             // ticks inside the factory keyed on billingAccountId.

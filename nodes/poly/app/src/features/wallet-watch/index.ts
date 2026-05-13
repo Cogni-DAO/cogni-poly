@@ -20,12 +20,6 @@ export {
   WALLET_WATCH_CHAIN_METRICS,
 } from "./polymarket-chain-source";
 export {
-  createPolymarketWsActivitySource,
-  type PolymarketWsActivitySource,
-  type PolymarketWsActivitySourceDeps,
-  WALLET_WATCH_WS_METRICS,
-} from "./polymarket-ws-source";
-export {
   type NextFillsResult,
   WALLET_WATCH_METRICS,
   type WalletActivitySource,
