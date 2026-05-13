@@ -100,6 +100,10 @@ import {
   OpenAiCompatibleModelProvider,
   PlatformModelProvider,
 } from "@/adapters/server/ai/providers";
+import {
+  DoltgresNotConfiguredError,
+  getDoltgresWorkItemsAdapter,
+} from "@/adapters/server/db/doltgres/client";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { ServiceDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
 import { OpenRouterFundingAdapter } from "@/adapters/server/treasury/openrouter-funding.adapter";
@@ -177,6 +181,7 @@ import type {
   ExecutionRequestPort,
   GraphRunRepository,
   ScheduleUserPort,
+  WorkItemsDoltgresPort,
 } from "@/ports/server";
 import {
   getDaoTreasuryAddress,
@@ -244,6 +249,8 @@ export interface Container {
   attributionStore: AttributionStore;
   /** Work item queries — reads from markdown files via WorkItemQueryPort */
   workItemQuery: WorkItemQueryPort;
+  /** Work items Doltgres port — full CRUD against poly's work_items table when DOLTGRES_URL_POLY is set. */
+  doltgresWorkItems: WorkItemsDoltgresPort;
   /** Run event streaming — publish/subscribe via Redis Streams */
   runStream: RunStreamPort;
   /** Node-level event streaming — undefined when REDIS_URL not set */
@@ -1278,6 +1285,28 @@ function createContainer(): Container {
     log.warn("Knowledge store not configured (DOLTGRES_URL_POLY not set)");
   }
 
+  // Doltgres work-items port (task.5044): full CRUD when DOLTGRES_URL_POLY is set,
+  // NotConfigured stub otherwise so routes return a structured 503 instead of a generic 500.
+  let doltgresWorkItems: WorkItemsDoltgresPort;
+  try {
+    doltgresWorkItems = getDoltgresWorkItemsAdapter();
+  } catch (e) {
+    if (!(e instanceof DoltgresNotConfiguredError)) throw e;
+    const notConfigured = () => {
+      throw new DoltgresNotConfiguredError();
+    };
+    doltgresWorkItems = {
+      get: notConfigured,
+      list: notConfigured,
+      create: notConfigured,
+      patch: notConfigured,
+      delete: notConfigured,
+    };
+    log.warn(
+      "Doltgres work-items adapter not configured (DOLTGRES_URL_POLY not set)"
+    );
+  }
+
   // ToolSource with real implementations (per CAPABILITY_INJECTION).
   // The agent-facing trade tools (core__poly_{place_trade,list_orders,
   // cancel_order}) are intentionally NOT in POLY_TOOL_BUNDLE — their contracts
@@ -1468,6 +1497,7 @@ function createContainer(): Container {
     ),
     attributionStore: new DrizzleAttributionAdapter(serviceDb, getScopeId()),
     workItemQuery: workItemAdapter,
+    doltgresWorkItems,
     runStream,
     nodeStream,
     get webhookRegistrations() {
