@@ -34,9 +34,11 @@ export type PolymarketNormalizeResult =
   | { ok: false; reason: PolymarketNormalizeSkipReason };
 
 /**
- * Build the canonical `fill_id` for a Data-API trade.
- * Pinned — `poly_copy_trade_fills_fill_id_shape` CHECK and the composite-PK
- * invariant depend on this shape. If you need to change it, write a migration.
+ * Build the canonical `fill_id` for a Data-API trade. Format owned by this
+ * helper (not by a DB constraint — the regex CHECK was removed in migration
+ * 0048): `(target_id, fill_id)` uniqueness comes from the partial unique
+ * index, and the source prefix string exists for log readability + cross-
+ * source collision avoidance, not for runtime validation.
  */
 export function polymarketDataApiFillId(
   trade: Pick<

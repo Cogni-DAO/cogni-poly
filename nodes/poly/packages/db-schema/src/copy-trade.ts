@@ -187,10 +187,15 @@ export const polyCopyTradeFills = pgTable(
       table.billingAccountId,
       table.positionLifecycle
     ),
-    check(
-      "poly_copy_trade_fills_fill_id_shape",
-      sql`${table.fillId} ~ '^(data-api|clob-ws):.+'`
-    ),
+    // `fill_id` format ownership lives in the application layer: the
+    // helpers in `@cogni/poly-market-provider` (`dataApiFillId`,
+    // `chainFillId`, etc.) generate it deterministically per-source. The
+    // table only needs `(target_id, fill_id)` uniqueness — which is
+    // enforced separately by the partial unique index — to dedupe replays.
+    // A DB-level regex check coupled every new fill source to a schema
+    // migration without adding real safety (the unique index already
+    // catches dedupe; a malformed id from an app bug surfaces in metrics
+    // long before the regex would). Removed in task.5043 follow-up.
     check(
       "poly_copy_trade_fills_status_check",
       sql`${table.status} IN ('pending','open','filled','partial','canceled','error')`
