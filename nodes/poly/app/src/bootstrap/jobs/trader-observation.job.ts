@@ -28,6 +28,11 @@ type Db =
   | PostgresJsDatabase<Record<string, unknown>>;
 
 const OBSERVATION_POLL_MS = 30_000;
+// Abandon (not cancel) the in-flight tick after this many ms so the `running`
+// lock releases and the next tick can proceed. Required because the underlying
+// HTTP/DB clients don't accept an AbortSignal yet, so the orphan continues in
+// the background.
+const TICK_TIMEOUT_MS = 120_000;
 
 export type TraderObservationJobStopFn = () => void;
 
@@ -65,18 +70,31 @@ export function startTraderObservationJob(
       return;
     }
     running = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await runTraderObservationTick(deps);
+      await Promise.race([
+        runTraderObservationTick(deps),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            reject(
+              new Error(`trader observation tick exceeded ${TICK_TIMEOUT_MS}ms`)
+            );
+          }, TICK_TIMEOUT_MS);
+          timer.unref?.();
+        }),
+      ]);
     } catch (err: unknown) {
       log.error(
         {
           event: "poly.trader.observe",
           phase: "tick_error",
           err: err instanceof Error ? err.message : String(err),
+          timeout_ms: TICK_TIMEOUT_MS,
         },
         "trader observation tick escaped"
       );
     } finally {
+      clearTimeout(timer);
       running = false;
     }
   }
