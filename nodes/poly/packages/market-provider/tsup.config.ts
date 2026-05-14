@@ -18,6 +18,7 @@ export const tsupConfig = defineConfig({
     "src/index.ts",
     "src/adapters/polymarket/index.ts",
     "src/adapters/kalshi/index.ts",
+    "src/adapters/paper/index.ts",
     "src/analysis/index.ts",
     "src/policy/index.ts",
   ],

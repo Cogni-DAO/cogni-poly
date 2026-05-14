@@ -20,6 +20,11 @@
       "import": "./dist/adapters/kalshi/index.js",
       "default": "./dist/adapters/kalshi/index.js"
     },
+    "./adapters/paper": {
+      "types": "./dist/adapters/paper/index.d.ts",
+      "import": "./dist/adapters/paper/index.js",
+      "default": "./dist/adapters/paper/index.js"
+    },
     "./analysis": {
       "types": "./dist/analysis/index.d.ts",
       "import": "./dist/analysis/index.js",

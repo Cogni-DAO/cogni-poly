@@ -175,16 +175,24 @@ export interface PolyTradeExecutor {
   exitPosition: (params: ExitPositionParams) => Promise<OrderReceipt>;
   /** Per-tenant position query for the operator address. */
   listPositions: () => Promise<PolymarketUserPosition[]>;
-  /** Per-tenant getOrder for the reconciler path (optional, deferred). */
-  getOrder: (orderId: string) => Promise<GetOrderResult>;
   /**
-   * Per-tenant cancel seam (task.5001). Wraps
-   * `PolymarketClobAdapter.cancelOrder` with an audit log so the cancel
-   * boundary is tenant-attributed in Loki the same way placement is. The
-   * adapter swallows CLOB 404 (`CANCEL_404_SWALLOWED_IN_ADAPTER`); callers
-   * see only success / non-404 error.
+   * Per-tenant getOrder for the reconciler path. Optional `mode` arg routes
+   * paper orders to the sidecar; defaults to `"live"` for backwards-compat
+   * with existing callers that don't yet know about paper mode.
    */
-  cancelOrder: (orderId: string) => Promise<void>;
+  getOrder: (
+    orderId: string,
+    mode?: "live" | "paper"
+  ) => Promise<GetOrderResult>;
+  /**
+   * Per-tenant cancel seam (task.5001). Wraps the underlying adapter's
+   * `cancelOrder` with an audit log so the cancel boundary is tenant-
+   * attributed in Loki the same way placement is. The adapter swallows
+   * 404s (`CANCEL_404_SWALLOWED_IN_ADAPTER`); callers see only success /
+   * non-404 error. Optional `mode` routes paper-mode orders to the sidecar;
+   * defaults to `"live"` for backwards-compat.
+   */
+  cancelOrder: (orderId: string, mode?: "live" | "paper") => Promise<void>;
   /**
    * Market-constraints fetch — returns market floors + tick for a token id. Used
    * by the mirror pipeline to pre-flight sizing against the market's share
@@ -210,6 +218,25 @@ export interface PolyTradeExecutorFactoryDeps {
   metrics: MetricsPort;
   host?: string | undefined;
   polygonRpcUrl?: string | undefined;
+  /**
+   * Base URL of the `agent-next/polymarket-paper-trader` sidecar. The sidecar
+   * runs as a sibling container in the same k8s pod; defaults to loopback.
+   * Bootstrap supplies this from the `PAPER_SIDECAR_URL` env var.
+   */
+  paperSidecarUrl?: string | undefined;
+  /**
+   * When `"paper"`, every placement is forced through the paper adapter
+   * regardless of per-target `mode`. The candidate-a and preview overlays set
+   * this so flighted PRs and the continuous always-paper twin physically
+   * cannot place live orders. Bootstrap supplies this from
+   * `PAPER_ENFORCE_MODE` env var.
+   *
+   * TODO(follow-up): when forced, also short-circuit `PolyTraderWalletPort.resolve()`
+   * so a deployment without live CLOB credentials boots cleanly. v0 still
+   * requires CLOB creds because the live `PolymarketClobAdapter` provides
+   * `getMarketConstraints` (real tick + min-size) that paper trades respect.
+   */
+  paperEnforceMode?: "paper" | undefined;
 }
 
 type MarketExitAdapter = {
@@ -296,6 +323,9 @@ async function buildExecutor(
     PolymarketClobAdapter,
     PolymarketDataApiClient,
   } = await import("@cogni/poly-market-provider/adapters/polymarket");
+  const { PaperAdapter } = await import(
+    "@cogni/poly-market-provider/adapters/paper"
+  );
   const {
     createPublicClient,
     createWalletClient,
@@ -344,11 +374,32 @@ async function buildExecutor(
 
   const dataApiClient = new PolymarketDataApiClient();
 
-  // Wrap placeOrder in the generic clob executor (structured logs + metrics)
-  // then wrap again with authorize-first semantics.
-  const basePlace: ClobExecutor = createClobExecutor({
+  // Paper-mode sibling adapter. Routes Run-phase calls to the
+  // `agent-next/polymarket-paper-trader` sidecar (MIT) running on loopback.
+  // Read-phase calls (`getMarketConstraints`, `listMarkets`) delegate to the
+  // live CLOB adapter via `readSource` so paper trades respect real tick +
+  // min-size and exercise `PRICE_TICK_NORMALIZED`. See PaperAdapter for the
+  // PAPER_DELEGATES_READS_TO_LIVE / PAPER_POPULATES_FILLED_USDC invariants.
+  const paperAdapter = new PaperAdapter({
+    ...(deps.paperSidecarUrl !== undefined
+      ? { sidecarBaseUrl: deps.paperSidecarUrl }
+      : {}),
+    readSource: adapter,
+  });
+
+  // Wrap each adapter's `placeOrder` in its own `ClobExecutor` (structured
+  // logs + metrics). `EXECUTOR_SEAM_IS_PLACE_ORDER_FN` is honored — the seam
+  // takes a function, not an adapter — and metrics bucket cleanly per path
+  // (live placements show one `result` distribution, paper placements
+  // another). `authorizedPlace` dispatches on `intent.attributes.mode`.
+  const livePlace: ClobExecutor = createClobExecutor({
     placeOrder: adapter.placeOrder.bind(adapter),
     logger: loggerPort,
+    metrics: deps.metrics,
+  });
+  const paperPlace: ClobExecutor = createClobExecutor({
+    placeOrder: paperAdapter.placeOrder.bind(paperAdapter),
+    logger: loggerPort.child({ adapter: "paper" }),
     metrics: deps.metrics,
   });
 
@@ -387,6 +438,20 @@ async function buildExecutor(
         authz.reason
       );
     }
+    // Effective mode = env override beats intent.attributes.mode beats default
+    // "live". `PAPER_ENFORCE_MODE=paper` is the always-paper-overlay safety net
+    // for candidate-a + preview; per-target `mode='paper'` is the production
+    // primitive for vetting new wallets without burning real USDC.
+    const intentMode =
+      typeof intent.attributes?.mode === "string"
+        ? intent.attributes.mode
+        : "live";
+    const effectiveMode: "live" | "paper" =
+      deps.paperEnforceMode === "paper"
+        ? "paper"
+        : intentMode === "paper"
+          ? "paper"
+          : "live";
     deps.logger.info(
       {
         event: "poly.mirror.place.tenant",
@@ -396,14 +461,16 @@ async function buildExecutor(
         intent_usdc: intent.size_usdc,
         market_id: intent.market_id,
         client_order_id: intent.client_order_id,
+        execution_mode: effectiveMode,
+        paper_enforced: deps.paperEnforceMode === "paper",
       },
       "poly-trade-executor: authorized → placeOrder"
     );
     // With auth green, route through the generic clob executor (logs +
-    // metrics). placeOrder takes OrderIntent; the branded context is
-    // validated upstream — the adapter's signer + creds already reflect the
-    // authorized tenant because `resolved` was used to construct it.
-    return basePlace(intent);
+    // metrics). Live path uses the tenant's CLOB-signing adapter; paper path
+    // routes through the sidecar. Either way, `authorizeIntent` already
+    // enforced caps + scope — paper just doesn't reach the CTF Exchange.
+    return effectiveMode === "paper" ? paperPlace(intent) : livePlace(intent);
   };
 
   // At this point `resolved` has been null-checked at top of `buildExecutor`;
@@ -560,16 +627,37 @@ async function buildExecutor(
     });
   }
 
-  async function cancelOrder(orderId: string): Promise<void> {
+  async function cancelOrder(
+    orderId: string,
+    mode: "live" | "paper" = "live"
+  ): Promise<void> {
+    const effectiveMode: "live" | "paper" =
+      deps.paperEnforceMode === "paper" ? "paper" : mode;
     deps.logger.info(
       {
         event: "poly.mirror.cancel.tenant",
         billing_account_id: billingAccountId,
         order_id: orderId,
+        execution_mode: effectiveMode,
       },
       "poly-trade-executor: cancelOrder (tenant-scoped)"
     );
-    await adapter.cancelOrder(orderId);
+    if (effectiveMode === "paper") {
+      await paperAdapter.cancelOrder(orderId);
+    } else {
+      await adapter.cancelOrder(orderId);
+    }
+  }
+
+  async function getOrder(
+    orderId: string,
+    mode: "live" | "paper" = "live"
+  ): Promise<GetOrderResult> {
+    const effectiveMode: "live" | "paper" =
+      deps.paperEnforceMode === "paper" ? "paper" : mode;
+    return effectiveMode === "paper"
+      ? paperAdapter.getOrder(orderId)
+      : adapter.getOrder(orderId);
   }
 
   async function getPositionShareBalance(tokenId: string): Promise<number> {
@@ -592,7 +680,7 @@ async function buildExecutor(
     // SELLs into the same silent-loss bucket as the chain-source metadata
     // cache miss.
     listPositions: () => dataApiClient.listAllUserPositions(funderAddress),
-    getOrder: adapter.getOrder.bind(adapter),
+    getOrder,
     cancelOrder,
     getMarketConstraints: adapter.getMarketConstraints.bind(adapter),
     listOpenOrders: async () =>
