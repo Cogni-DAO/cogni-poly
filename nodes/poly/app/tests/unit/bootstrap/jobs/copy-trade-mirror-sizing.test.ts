@@ -39,7 +39,7 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
     );
     expect(config.sizing).toMatchObject({
       kind: "target_percentile_scaled",
-      max_usdc_per_trade: 5,
+      max_usdc_per_condition: 5,
       statistic: {
         wallet: RN1,
         label: "RN1",
@@ -66,7 +66,7 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
     const config = build(SWISSTONY);
     expect(config.sizing).toMatchObject({
       kind: "target_percentile_scaled",
-      max_usdc_per_trade: 5,
+      max_usdc_per_condition: 5,
       statistic: {
         wallet: SWISSTONY,
         label: "swisstony",
@@ -87,7 +87,7 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
     });
     expect(config.sizing).toMatchObject({
       kind: "target_percentile_scaled",
-      max_usdc_per_trade: 12,
+      max_usdc_per_condition: 12,
       statistic: {
         percentile: 90,
         min_target_usdc: 665,
@@ -124,7 +124,7 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
     expect(sizingPolicyKindForTargetWallet(UNKNOWN)).toBe("min_bet");
     expect(config.sizing).toEqual({
       kind: "min_bet",
-      max_usdc_per_trade: 5,
+      max_usdc_per_condition: 5,
     });
     expect(config.position_followup).toBeUndefined();
   });

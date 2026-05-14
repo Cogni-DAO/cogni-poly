@@ -23,10 +23,18 @@ import { z } from "zod";
  * Sizing policy — how the pipeline derives `OrderIntent.size_usdc` from a
  * target's fill. Always-min-bet semantics: bet size is the market's
  * `minUsdcNotional` (clamped to `minShares × price` per SHARE_SPACE_MATH).
- * When the floor exceeds `max_usdc_per_trade`, the pipeline skips with
+ * When the floor exceeds `max_usdc_per_condition`, the pipeline skips with
  * `below_market_min` BEFORE the `INSERT_BEFORE_PLACE` row lands — so
  * cap-exceed cases are not duplicated at the `authorizeIntent` boundary as
  * `placement_failed` decisions.
+ *
+ * `max_usdc_per_condition` is a per-conditionId cumulative-intent budget, NOT
+ * a per-trade max (bug.5054). The `position_cap_reached` check in
+ * `applySizingPolicy` sums `cumulativeIntentForMarket` (grouped by
+ * `market_id` = `prediction-market:polymarket:<conditionId>`) against this
+ * value, so YES + NO outcome tokens on the same conditionId share the
+ * budget; different conditionIds get their own. See spec invariant
+ * CAP_IS_PER_CONDITION_ID.
  *
  * FCFS budget gating across multi-target copy-trading is handled downstream by
  * `authorizeIntent` against the tenant's `poly_wallet_grants` row
@@ -40,8 +48,8 @@ import { z } from "zod";
  */
 export const MinBetSizingPolicySchema = z.object({
   kind: z.literal("min_bet"),
-  /** Hard per-intent ceiling. Skip at plan-mirror when floor exceeds this. */
-  max_usdc_per_trade: z.number().positive(),
+  /** Per-conditionId cumulative-intent ceiling (bug.5054). Skip at plan-mirror when floor exceeds this. */
+  max_usdc_per_condition: z.number().positive(),
 });
 export type MinBetSizingPolicy = z.infer<typeof MinBetSizingPolicySchema>;
 
@@ -73,7 +81,7 @@ export type WalletSizeStatistic = z.infer<typeof WalletSizeStatisticSchema>;
  */
 export const TargetPercentileSizingPolicySchema = z.object({
   kind: z.literal("target_percentile"),
-  max_usdc_per_trade: z.number().positive(),
+  max_usdc_per_condition: z.number().positive(),
   statistic: WalletSizeStatisticSchema,
 });
 export type TargetPercentileSizingPolicy = z.infer<
@@ -83,14 +91,14 @@ export type TargetPercentileSizingPolicy = z.infer<
 /**
  * Percentile-filtered relative sizing. Positions below
  * `statistic.min_target_usdc` skip. Accepted positions map linearly from
- * market min bet at pXX to `max_usdc_per_trade` at the configured snapshot
+ * market min bet at pXX to `max_usdc_per_condition` at the configured snapshot
  * high-water percentile. This is intentionally a distinct policy from
  * `target_percentile`; there is no silent fallback between min-bet and scaled
  * sizing.
  */
 export const TargetPercentileScaledSizingPolicySchema = z.object({
   kind: z.literal("target_percentile_scaled"),
-  max_usdc_per_trade: z.number().positive(),
+  max_usdc_per_condition: z.number().positive(),
   statistic: WalletSizeStatisticSchema,
 });
 export type TargetPercentileScaledSizingPolicy = z.infer<
@@ -375,15 +383,16 @@ export const MirrorReasonSchema = z.enum([
   "already_resting",
   /**
    * Target fill × current limit_price × market share-min exceeds the user's
-   * `max_usdc_per_trade` ceiling — skip rather than scale past the ceiling.
+   * `max_usdc_per_condition` ceiling — skip rather than scale past the ceiling.
    * bug.0342.
    */
   "below_market_min",
   /**
-   * Tenant's existing committed exposure to this market plus the proposed
-   * intent's `size_usdc` would exceed `max_usdc_per_trade`. v0 reuses the
-   * per-trade cap field as a per-position bound (one knob, both checks).
-   * task.0424.
+   * Tenant's existing committed intent on this `market_id` (=
+   * `prediction-market:polymarket:<conditionId>`) plus the proposed intent's
+   * `size_usdc` would exceed `max_usdc_per_condition`. YES + NO outcome tokens
+   * on the same conditionId share this budget; different conditionIds get
+   * their own. task.0424 / bug.5054 (CAP_IS_PER_CONDITION_ID).
    */
   "position_cap_reached",
   /**

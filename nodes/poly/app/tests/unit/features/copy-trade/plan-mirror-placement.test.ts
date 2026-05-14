@@ -46,7 +46,7 @@ function makeConfig(
     billing_account_id: "b1",
     created_by_user_id: "u1",
     mode: "live",
-    sizing: { kind: "min_bet", max_usdc_per_trade: 5 },
+    sizing: { kind: "min_bet", max_usdc_per_condition: 5 },
     placement: { kind: "mirror_limit" },
     ...overrides,
   };

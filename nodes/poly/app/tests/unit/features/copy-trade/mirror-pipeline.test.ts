@@ -44,7 +44,7 @@ const BASE_TARGET: MirrorTargetConfig = {
   mode: "live",
   sizing: {
     kind: "min_bet",
-    max_usdc_per_trade: 5,
+    max_usdc_per_condition: 5,
   },
   placement: { kind: "mirror_limit" },
 };
@@ -530,7 +530,9 @@ describe("mirror-pipeline.runMirrorTick — SELL fill: has position → closePos
     expect(closePosition).toHaveBeenCalledTimes(1);
     const callArgs = closePosition.mock.calls[0]?.[0];
     expect(callArgs?.tokenId).toBe(TOKEN);
-    expect(callArgs?.max_size_usdc).toBe(BASE_TARGET.sizing.max_usdc_per_trade);
+    expect(callArgs?.max_size_usdc).toBe(
+      BASE_TARGET.sizing.max_usdc_per_condition
+    );
     expect(callArgs?.limit_price).toBe(fill.price);
     expect(callArgs?.client_order_id).toBe(cid);
 
@@ -651,7 +653,7 @@ describe("mirror-pipeline.runMirrorTick — BUY fill smoke", () => {
       ...BASE_TARGET,
       sizing: {
         kind: "target_percentile_scaled" as const,
-        max_usdc_per_trade: 10,
+        max_usdc_per_condition: 10,
         statistic: {
           wallet: TARGET_WALLET,
           label: "test",
@@ -722,7 +724,7 @@ describe("mirror-pipeline.runMirrorTick — BUY fill smoke", () => {
       ...BASE_TARGET,
       sizing: {
         kind: "target_percentile_scaled" as const,
-        max_usdc_per_trade: 10,
+        max_usdc_per_condition: 10,
         statistic: {
           wallet: TARGET_WALLET,
           label: "test",
@@ -861,7 +863,7 @@ describe("mirror-pipeline.runMirrorTick — bug.5048 target dominance + wrong-si
     ...BASE_TARGET,
     sizing: {
       kind: "target_percentile_scaled",
-      max_usdc_per_trade: 10,
+      max_usdc_per_condition: 10,
       statistic: {
         wallet: TARGET_WALLET,
         label: "test",

@@ -48,7 +48,7 @@ const CONFIG: MirrorTargetConfig = {
   mode: "live",
   sizing: {
     kind: "min_bet",
-    max_usdc_per_trade: 1.0,
+    max_usdc_per_condition: 1.0,
   },
   placement: { kind: "mirror_limit" },
 };

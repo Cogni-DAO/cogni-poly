@@ -40,7 +40,7 @@ const BASE_CONFIG: MirrorTargetConfig = {
   mode: "live",
   sizing: {
     kind: "target_percentile_scaled",
-    max_usdc_per_trade: 10,
+    max_usdc_per_condition: 10,
     statistic: {
       wallet: TARGET_WALLET,
       label: "swisstony",

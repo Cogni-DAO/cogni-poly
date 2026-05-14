@@ -26,7 +26,7 @@ const CLEAN_STATE: RuntimeState = {
   already_placed_ids: [],
 };
 
-function makeConfig(max_usdc_per_trade: number): MirrorTargetConfig {
+function makeConfig(max_usdc_per_condition: number): MirrorTargetConfig {
   return {
     target_id: TARGET_ID,
     target_wallet: TARGET_WALLET,
@@ -35,7 +35,7 @@ function makeConfig(max_usdc_per_trade: number): MirrorTargetConfig {
     mode: "live",
     sizing: {
       kind: "min_bet",
-      max_usdc_per_trade,
+      max_usdc_per_condition,
     },
     placement: { kind: "mirror_limit" },
   };
@@ -101,7 +101,7 @@ describe("planMirrorFromFill() — sizing policy: kind=min_bet (task.0404)", () 
     expect(d.reason).toBe("below_market_min");
   });
 
-  it("skips below_market_min when computed size exceeds max_usdc_per_trade (ceiling wins)", () => {
+  it("skips below_market_min when computed size exceeds max_usdc_per_condition (ceiling wins)", () => {
     const fill = makeFill(1.0);
     const d = planMirrorFromFill({
       fill,
