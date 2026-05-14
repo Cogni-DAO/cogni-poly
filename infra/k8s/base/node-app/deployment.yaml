@@ -94,3 +94,9 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "1000m"
+        # The poly-paper-sidecar container is NOT added to the base manifest.
+        # It lands as an overlay patch on candidate-a + preview (PR 2) so the
+        # production overlay stays unchanged — production runs only the live
+        # CLOB path until a target row sets mode='paper'. Patch shape lives at
+        # infra/k8s/overlays/{candidate-a,preview}/poly/kustomization.yaml.
+        # See infra/images/poly-paper-sidecar/AGENTS.md.

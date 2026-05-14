@@ -278,9 +278,9 @@ export const serverSchema = z.object({
   // `PolyTradeExecutor` factory + CLOB L2 cred derivation at provision time.
   POLY_CLOB_HOST: optionalUrl,
   // Base URL of the agent-next/polymarket-paper-trader sidecar (MIT). The
-  // sidecar runs as a sibling container in the same k8s pod; loopback is the
-  // default. Used by the PolyTradeExecutor factory when constructing the
-  // PaperAdapter. Leave unset in environments that don't run paper trading.
+  // sidecar runs as a sibling container in the same k8s pod and is reachable
+  // on pod-loopback at port 9100 (see infra/k8s/base/node-app/deployment.yaml).
+  // Defaults via the PaperAdapter constructor when unset.
   PAPER_SIDECAR_URL: optionalUrl,
   // When `"paper"`, the trade-executor forces every placement through the
   // paper adapter regardless of per-target mode. Set on the candidate-a and

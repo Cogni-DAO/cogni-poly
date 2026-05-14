@@ -45,14 +45,14 @@ The strict constraint is that **we write no fill logic**. The fill model lives i
 
 #### PR 1 — Paper engine end-to-end (production-deployable, dormant until enabled)
 
-Ships everything: code + infra base + sidecar image. The sidecar starts in all three overlays' base manifest but stays idle until a target is flipped to `mode='paper'` or `PAPER_ENFORCE_MODE` is set. **Smoke test post-merge:** flip one production target to `mode='paper'`, watch a BUY fire, fill via sidecar, and redeem on resolution.
+Ships the full TS architecture + the sidecar Dockerfile. The sidecar **container** is NOT added to the base k8s manifest (would crash production where the image doesn't exist yet); it lands on the candidate-a + preview overlays in PR 2 along with `PAPER_ENFORCE_MODE`. Production stays unchanged — paper-mode in production becomes available once PR 2 + the image-build pipeline land. **Smoke test post-merge:** all 3 environments deploy cleanly with no behaviour change; PR 1 is dormant infrastructure.
 
 **Hard ordering inside PR 1**: the executor dispatcher (item 5) must merge before the bootstrap DB-mode read (item 8). Both are in the same PR so they cannot ship out of order, but if PR 1 gets split, the dispatcher half must land first.
 
 | #   | Deliverable                                                                                                                                                             | Status | Files                                                                                                  |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------ |
-| 1   | Sidecar Dockerfile — pinned `agent-next/polymarket-paper-trader` SHA, MCP stdio entry                                                                                   | [ ]    | `infra/images/poly-paper-sidecar/Dockerfile`                                                           |
-| 2   | Sidecar sibling container in pod template — loopback transport, ships to all 3 overlays                                                                                 | [ ]    | `infra/k8s/base/node-app/deployment.yaml`                                                              |
+| 1   | Sidecar Dockerfile + FastAPI placeholder — pinned `agent-next/polymarket-paper-trader` SHA, health endpoint, 501 on Run-phase until follow-up wires upstream engine     | [x]    | `infra/images/poly-paper-sidecar/{Dockerfile,server.py,AGENTS.md}`                                     |
+| 2   | Sidecar sibling container — added to candidate-a + preview overlay patches in PR 2 (NOT the base manifest, to keep production unaffected until paper-mode is wanted)    | [ ]    | `infra/k8s/overlays/{candidate-a,preview}/poly/kustomization.yaml` (PR 2)                              |
 | 3   | `PaperAdapter` body — Zod IPC client; delegates `getMarketConstraints` + `listMarkets` to `readSource`; populates `OrderReceipt.filled_size_usdc`                       | [ ]    | `nodes/poly/packages/market-provider/src/adapters/paper/paper.adapter.ts`                              |
 | 4   | `FakePaperAdapter` for `APP_ENV=test` — canned responses, no IPC                                                                                                        | [ ]    | `nodes/poly/app/tests/_fakes/paper-adapter.fake.ts`                                                    |
 | 5   | Executor dispatcher — dual `ClobExecutor`, branches on `intent.attributes.mode`, reads `PAPER_ENFORCE_MODE`, refuses `PolyTraderWalletPort.resolve()` when paper-forced | [ ]    | `nodes/poly/app/src/bootstrap/capabilities/poly-trade-executor.ts`                                     |
@@ -70,12 +70,14 @@ Ships everything: code + infra base + sidecar image. The sidecar starts in all t
 
 Bootstrap CLOB-creds refusal lands in PR 1 (item 5). PR 2 is purely two ConfigMap patches.
 
-| #   | Deliverable                                          | Status | Files                                                    |
-| --- | ---------------------------------------------------- | ------ | -------------------------------------------------------- |
-| 1   | Provision `candidate-a` VM                           | [ ]    | external — Derek runs `/deploy-node`                     |
-| 2   | Provision `preview` VM                               | [ ]    | external — Derek runs `/deploy-node`                     |
-| 3   | `PAPER_ENFORCE_MODE: "paper"` on candidate-a overlay | [ ]    | `infra/k8s/overlays/candidate-a/poly/kustomization.yaml` |
-| 4   | `PAPER_ENFORCE_MODE: "paper"` on preview overlay     | [ ]    | `infra/k8s/overlays/preview/poly/kustomization.yaml`     |
+| #   | Deliverable                                                           | Status | Files                                                              |
+| --- | --------------------------------------------------------------------- | ------ | ------------------------------------------------------------------ |
+| 1   | Provision `candidate-a` VM                                            | [ ]    | external — Derek runs `/deploy-node`                               |
+| 2   | Provision `preview` VM                                                | [ ]    | external — Derek runs `/deploy-node`                               |
+| 3   | Sidecar image build + push to `ghcr.io/cogni-dao/poly-paper-sidecar`  | [ ]    | `.github/workflows/`                                               |
+| 4   | Sidecar sibling container patched onto candidate-a + preview overlays | [ ]    | `infra/k8s/overlays/{candidate-a,preview}/poly/kustomization.yaml` |
+| 5   | `PAPER_ENFORCE_MODE: "paper"` on candidate-a overlay ConfigMap        | [ ]    | `infra/k8s/overlays/candidate-a/poly/kustomization.yaml`           |
+| 6   | `PAPER_ENFORCE_MODE: "paper"` on preview overlay ConfigMap            | [ ]    | `infra/k8s/overlays/preview/poly/kustomization.yaml`               |
 
 #### Polish (post-PR-2, opt-in per friction signal)
 
