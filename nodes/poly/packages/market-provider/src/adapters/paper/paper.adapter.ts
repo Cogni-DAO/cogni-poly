@@ -3,94 +3,246 @@
 
 /**
  * Module: `@cogni/poly-market-provider/adapters/paper/paper.adapter`
- * Purpose: Paper-trading adapter — simulates order placement against market book snapshots.
- * Scope: Shape frozen in Phase 1 (all methods throw NotImplemented); body lands in Phase 3 (task.0315). Does not hold credentials, does not hit a platform, does not write to DB, does not load env.
+ * Purpose: Paper-trading adapter — typed IPC client over the `agent-next/polymarket-paper-trader`
+ *   sidecar. Same `MarketProviderPort` shape as `PolymarketClobAdapter`, but Run-phase methods
+ *   route to a loopback HTTP endpoint instead of the CLOB. Read-phase methods
+ *   (`listMarkets`, `getMarketConstraints`) delegate to an injected live `readSource` so paper
+ *   trades respect real tick + min-size constraints from Polymarket production.
+ * Scope: HTTP IPC + Zod parsing. **No fill logic.** The fill model lives upstream in the
+ *   `agent-next/polymarket-paper-trader` sidecar (MIT). If the sidecar misreports fees or fills,
+ *   the bug is upstream — we do not patch it locally.
  * Invariants:
- *   - ADAPTERS_NOT_IN_CORE, PACKAGES_NO_ENV.
- *   - MARKET_PROVIDER_SHAPE_FROZEN: the constructor signature and method list are stable from P1 on; only bodies change.
- * Side-effects: none (P1 shape; methods throw). Phase 3 will add IO (HTTP fetch for book snapshot) + DB write to `paper_orders`.
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 3 — Paper-adapter body)
+ *   - ADAPTERS_NOT_IN_CORE, PACKAGES_NO_ENV — sidecar URL is constructor-injected.
+ *   - MARKET_PROVIDER_SHAPE_FROZEN — constructor + method list is stable from P1 on.
+ *   - PAPER_DELEGATES_READS_TO_LIVE — `listMarkets` + `getMarketConstraints` must return live
+ *     data so the copy-trade algorithm exercises real tick + min-size code paths under paper
+ *     mode. Without delegation, `PRICE_TICK_NORMALIZED` cannot fire correctly.
+ *   - PAPER_POPULATES_FILLED_USDC — the receipt's `filled_size_usdc` must reflect the sidecar's
+ *     actual fill amount (0 for resting, partial for partial fills, full notional for fills).
+ *     Required for `CAP_COUNTS_REALIZED_ON_CANCEL`; without it, cap accounting drifts on paper.
+ *   - PAPER_GETORDER_NEVER_NULL — the discriminated `GetOrderResult` is enforced exactly as in
+ *     the CLOB adapter (task.0328 CP1).
+ * Side-effects: HTTP IO to the loopback sidecar.
+ * Links: docs/research/poly-paper-trading-mode.md, work/projects/proj.poly-paper-trading.md
  * @public
  */
 
-import type {
-  GetOrderResult,
-  OrderIntent,
-  OrderReceipt,
+import { z } from "zod";
+
+import {
+  type GetOrderResult,
+  type OrderIntent,
+  OrderReceiptSchema,
 } from "../../domain/order.js";
 import type {
   ListMarketsParams,
   MarketProvider,
   NormalizedMarket,
 } from "../../domain/schemas.js";
-import type {
-  MarketConstraints,
-  MarketProviderConfig,
-  MarketProviderPort,
+import {
+  type MarketConstraints,
+  type MarketProviderConfig,
+  type MarketProviderPort,
+  OrderNotSupportedError,
 } from "../../port/market-provider.port.js";
+
+const DEFAULT_SIDECAR_BASE_URL = "http://localhost:9100";
 
 export interface PaperAdapterConfig extends MarketProviderConfig {
   /**
-   * The underlying platform this paper adapter simulates. Labels telemetry +
-   * `decisions_total{source=...}` so a paper Kalshi run isn't mis-reported as
-   * `polymarket`. Defaults to `polymarket` — P1 only mirrors Polymarket.
+   * The underlying platform this paper adapter simulates. Labels telemetry and
+   * downstream `attributes.mode`-grouped queries.
    */
   providerIdentity?: MarketProvider;
   /**
-   * Delay (seconds) between observed_at and book-snapshot time used to derive
-   * the synthetic fill price. Default in P3: 5.
+   * Base URL of the `agent-next/polymarket-paper-trader` sidecar. The sidecar
+   * is expected to run in the same k8s pod and be reachable on loopback. The
+   * adapter itself reads no env vars (`PACKAGES_NO_ENV`); the bootstrap supplies
+   * this from `PAPER_SIDECAR_URL`.
    */
-  snapshotDelaySeconds?: number;
+  sidecarBaseUrl?: string;
   /**
-   * Upstream read-only adapter for book snapshots (injected in P3).
-   * Typed as the port itself — paper relies on `listMarkets` / book methods added
-   * in the Walk phase, NOT on any placement methods.
+   * Live `MarketProviderPort` adapter the paper adapter delegates read calls
+   * to. `listMarkets` and `getMarketConstraints` must return real Polymarket
+   * data — paper trades respect real ticks + min-size + market discovery.
    */
   readSource?: MarketProviderPort;
+  /**
+   * Injectable for tests. Defaults to globalThis.fetch.
+   */
+  fetchImpl?: typeof fetch;
 }
 
+/** Network timeout for a single sidecar call (ms). */
+const SIDECAR_TIMEOUT_MS = 10_000;
+
+/** Request body shape posted to the sidecar's place-order endpoint. */
+const PlaceOrderRequestSchema = z.object({
+  client_order_id: z.string().min(1),
+  market_id: z.string().min(1),
+  token_id: z.string().min(1).optional(),
+  outcome: z.string().min(1),
+  side: z.enum(["BUY", "SELL"]),
+  size_usdc: z.number().positive(),
+  limit_price: z.number().positive(),
+  attributes: z.record(z.string(), z.unknown()).optional(),
+});
+
 /**
- * PaperAdapter — Phase 1 stub. All methods throw `NotImplementedError`
- * (a plain `Error` with `name: "NotImplementedError"`). The constructor and
- * method surface are frozen here so container wiring can reference the adapter
- * ahead of Phase 3 landing its body.
+ * PaperAdapter — Phase 3 body.
+ *
+ * Methods that touch order state route HTTP to the sidecar. Methods that read
+ * market structure delegate to the injected `readSource`. The adapter holds no
+ * credentials and no per-pod state — the sidecar owns the open-order book.
+ *
+ * @public
  */
 export class PaperAdapter implements MarketProviderPort {
   readonly provider: MarketProvider;
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- stored when body lands in P3
-  private readonly config: PaperAdapterConfig;
+  private readonly sidecarBaseUrl: string;
+  private readonly readSource: MarketProviderPort | undefined;
+  private readonly fetchImpl: typeof fetch;
 
   constructor(config: PaperAdapterConfig = {}) {
-    this.config = config;
     this.provider = config.providerIdentity ?? "polymarket";
+    this.sidecarBaseUrl = (
+      config.sidecarBaseUrl ?? DEFAULT_SIDECAR_BASE_URL
+    ).replace(/\/$/, "");
+    this.readSource = config.readSource;
+    this.fetchImpl =
+      config.fetchImpl ?? (globalThis.fetch.bind(globalThis) as typeof fetch);
   }
 
-  listMarkets(_params?: ListMarketsParams): Promise<NormalizedMarket[]> {
-    return Promise.reject(notImplemented("listMarkets"));
+  async listMarkets(
+    params?: ListMarketsParams
+  ): Promise<NormalizedMarket[]> {
+    if (!this.readSource) {
+      throw new OrderNotSupportedError(
+        this.provider,
+        "placeOrder",
+        "paper adapter requires `readSource` for market discovery — inject a live adapter at bootstrap"
+      );
+    }
+    return this.readSource.listMarkets(params);
   }
 
-  placeOrder(_intent: OrderIntent): Promise<OrderReceipt> {
-    return Promise.reject(notImplemented("placeOrder"));
+  async placeOrder(intent: OrderIntent): Promise<OrderReceiptSchemaInferred> {
+    // Sidecar speaks the same shape as our OrderIntent (minus provider — implied
+    // by sidecar identity). Strip provider; the rest passes through.
+    const body = PlaceOrderRequestSchema.parse({
+      client_order_id: intent.client_order_id,
+      market_id: intent.market_id,
+      token_id:
+        typeof intent.attributes?.asset === "string"
+          ? intent.attributes.asset
+          : typeof intent.attributes?.token_id === "string"
+            ? intent.attributes.token_id
+            : undefined,
+      outcome: intent.outcome,
+      side: intent.side,
+      size_usdc: intent.size_usdc,
+      limit_price: intent.limit_price,
+      attributes: intent.attributes,
+    });
+
+    const response = await this.fetchWithTimeout(
+      `${this.sidecarBaseUrl}/place-order`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `paper sidecar place-order failed: ${response.status} ${await this.safeReadText(
+          response
+        )}`
+      );
+    }
+
+    const json = await response.json();
+    return OrderReceiptSchema.parse(json);
   }
 
-  cancelOrder(_orderId: string): Promise<void> {
-    return Promise.reject(notImplemented("cancelOrder"));
+  async cancelOrder(orderId: string): Promise<void> {
+    const response = await this.fetchWithTimeout(
+      `${this.sidecarBaseUrl}/orders/${encodeURIComponent(orderId)}/cancel`,
+      { method: "POST" }
+    );
+
+    // 404 on cancel is idempotent — already-cancelled or never-existed orders
+    // should not raise per the port contract.
+    if (response.status === 404) return;
+    if (!response.ok) {
+      throw new Error(
+        `paper sidecar cancel-order failed: ${response.status} ${await this.safeReadText(
+          response
+        )}`
+      );
+    }
   }
 
-  getOrder(_orderId: string): Promise<GetOrderResult> {
-    return Promise.reject(notImplemented("getOrder"));
+  async getMarketConstraints(tokenId: string): Promise<MarketConstraints> {
+    // PAPER_DELEGATES_READS_TO_LIVE — paper trades must respect real ticks +
+    // min-size from Polymarket production. The bootstrap factory injects the
+    // live read source.
+    if (!this.readSource) {
+      throw new OrderNotSupportedError(
+        this.provider,
+        "getMarketConstraints",
+        "paper adapter requires `readSource` for tick + min-size — inject a live adapter at bootstrap"
+      );
+    }
+    return this.readSource.getMarketConstraints(tokenId);
   }
 
-  getMarketConstraints(_tokenId: string): Promise<MarketConstraints> {
-    return Promise.reject(notImplemented("getMarketConstraints"));
+  async getOrder(orderId: string): Promise<GetOrderResult> {
+    const response = await this.fetchWithTimeout(
+      `${this.sidecarBaseUrl}/orders/${encodeURIComponent(orderId)}`,
+      { method: "GET" }
+    );
+
+    // PAPER_GETORDER_NEVER_NULL — return the discriminated `not_found` sentinel.
+    if (response.status === 404) return { status: "not_found" };
+
+    if (!response.ok) {
+      throw new Error(
+        `paper sidecar get-order failed: ${response.status} ${await this.safeReadText(
+          response
+        )}`
+      );
+    }
+
+    const json = await response.json();
+    const receipt = OrderReceiptSchema.parse(json);
+    return { found: receipt };
+  }
+
+  private async fetchWithTimeout(
+    url: string,
+    init: RequestInit
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SIDECAR_TIMEOUT_MS);
+    try {
+      return await this.fetchImpl(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async safeReadText(response: Response): Promise<string> {
+    try {
+      return await response.text();
+    } catch {
+      return "<no body>";
+    }
   }
 }
 
-function notImplemented(method: string): Error {
-  const err = new Error(
-    `PaperAdapter.${method}() is a Phase 1 stub. Body lands in Phase 3 (see task.0315).`
-  );
-  err.name = "NotImplementedError";
-  return err;
-}
+// Inline type alias to avoid re-importing the inferred type from the domain
+// module — keeps the public shape stable.
+type OrderReceiptSchemaInferred = z.infer<typeof OrderReceiptSchema>;
