@@ -45,13 +45,13 @@ The strict constraint is that **we write no fill logic**. The fill model lives i
 
 #### PR 1 — Paper engine end-to-end (production-deployable, dormant until enabled)
 
-Ships the full TS architecture + the sidecar Dockerfile. The sidecar **container** is NOT added to the base k8s manifest (would crash production where the image doesn't exist yet); it lands on the candidate-a + preview overlays in PR 2 along with `PAPER_ENFORCE_MODE`. Production stays unchanged — paper-mode in production becomes available once PR 2 + the image-build pipeline land. **Smoke test post-merge:** all 3 environments deploy cleanly with no behaviour change; PR 1 is dormant infrastructure.
+Ships the TS architecture only. All `infra/**` artifacts (sidecar Dockerfile + image build + overlay patches) move to PR 2 because PR 1 has to pass `single-node-scope` CI gate (which classifies `infra/**` as operator-domain and rejects cross-node PRs). PR 1 is poly-only + ride-along `docs/` + `work/`. **Smoke test post-merge:** all 3 environments deploy cleanly with no behaviour change; PR 1 is dormant infrastructure.
 
 **Hard ordering inside PR 1**: the executor dispatcher (item 5) must merge before the bootstrap DB-mode read (item 8). Both are in the same PR so they cannot ship out of order, but if PR 1 gets split, the dispatcher half must land first.
 
 | #   | Deliverable                                                                                                                                                             | Status | Files                                                                                                  |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------ |
-| 1   | Sidecar Dockerfile + FastAPI placeholder — pinned `agent-next/polymarket-paper-trader` SHA, health endpoint, 501 on Run-phase until follow-up wires upstream engine     | [x]    | `infra/images/poly-paper-sidecar/{Dockerfile,server.py,AGENTS.md}`                                     |
+| 1   | Sidecar Dockerfile + FastAPI placeholder — DEFERRED to PR 2 (single-node-scope CI gate blocks `infra/**` in a poly-only PR)                                             | [ ]    | `infra/images/poly-paper-sidecar/` (PR 2)                                                              |
 | 2   | Sidecar sibling container — added to candidate-a + preview overlay patches in PR 2 (NOT the base manifest, to keep production unaffected until paper-mode is wanted)    | [ ]    | `infra/k8s/overlays/{candidate-a,preview}/poly/kustomization.yaml` (PR 2)                              |
 | 3   | `PaperAdapter` body — Zod IPC client; delegates `getMarketConstraints` + `listMarkets` to `readSource`; populates `OrderReceipt.filled_size_usdc`                       | [ ]    | `nodes/poly/packages/market-provider/src/adapters/paper/paper.adapter.ts`                              |
 | 4   | `FakePaperAdapter` for `APP_ENV=test` — canned responses, no IPC                                                                                                        | [ ]    | `nodes/poly/app/tests/_fakes/paper-adapter.fake.ts`                                                    |
@@ -74,10 +74,11 @@ Bootstrap CLOB-creds refusal lands in PR 1 (item 5). PR 2 is purely two ConfigMa
 | --- | --------------------------------------------------------------------- | ------ | ------------------------------------------------------------------ |
 | 1   | Provision `candidate-a` VM                                            | [ ]    | external — Derek runs `/deploy-node`                               |
 | 2   | Provision `preview` VM                                                | [ ]    | external — Derek runs `/deploy-node`                               |
-| 3   | Sidecar image build + push to `ghcr.io/cogni-dao/poly-paper-sidecar`  | [ ]    | `.github/workflows/`                                               |
-| 4   | Sidecar sibling container patched onto candidate-a + preview overlays | [ ]    | `infra/k8s/overlays/{candidate-a,preview}/poly/kustomization.yaml` |
-| 5   | `PAPER_ENFORCE_MODE: "paper"` on candidate-a overlay ConfigMap        | [ ]    | `infra/k8s/overlays/candidate-a/poly/kustomization.yaml`           |
-| 6   | `PAPER_ENFORCE_MODE: "paper"` on preview overlay ConfigMap            | [ ]    | `infra/k8s/overlays/preview/poly/kustomization.yaml`               |
+| 3   | Sidecar Dockerfile + FastAPI placeholder server (moved from PR 1)     | [ ]    | `infra/images/poly-paper-sidecar/{Dockerfile,server.py,AGENTS.md}` |
+| 4   | Sidecar image build + push to `ghcr.io/cogni-dao/poly-paper-sidecar`  | [ ]    | `.github/workflows/`                                               |
+| 5   | Sidecar sibling container patched onto candidate-a + preview overlays | [ ]    | `infra/k8s/overlays/{candidate-a,preview}/poly/kustomization.yaml` |
+| 6   | `PAPER_ENFORCE_MODE: "paper"` on candidate-a overlay ConfigMap        | [ ]    | `infra/k8s/overlays/candidate-a/poly/kustomization.yaml`           |
+| 7   | `PAPER_ENFORCE_MODE: "paper"` on preview overlay ConfigMap            | [ ]    | `infra/k8s/overlays/preview/poly/kustomization.yaml`               |
 
 #### Polish (post-PR-2, opt-in per friction signal)
 
