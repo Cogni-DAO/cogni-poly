@@ -19,6 +19,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { polyRedeemJobs } from "@cogni/poly-db-schema/poly-redeem-jobs";
 import {
   type PolyTraderWallet,
   polyMarketOutcomes,
@@ -689,6 +690,40 @@ async function persistObservedCurrentPositions(
                   polyTraderCurrentPositions.tokenId
                 ),
                 eq(polyMarketOutcomes.outcome, "loser")
+              )
+            )
+        )
+      )
+    );
+  // Deactivate winners whose on-chain redeem confirmed for THIS wallet's
+  // funder. Polymarket Data API often keeps reporting redeemed positions as
+  // `redeemable=true, size>0` for hours after the chain PayoutRedemption —
+  // without this, the upsert above flips them back to active=true every tick
+  // and they pin to the dashboard's Live tab. Chain truth (rj.status=confirmed)
+  // beats Polymarket's stale indexer.
+  await db
+    .update(polyTraderCurrentPositions)
+    .set({ active: false, lastObservedAt: capturedAt })
+    .where(
+      and(
+        eq(polyTraderCurrentPositions.traderWalletId, wallet.id),
+        eq(polyTraderCurrentPositions.active, true),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(polyRedeemJobs)
+            .where(
+              and(
+                eq(
+                  polyRedeemJobs.conditionId,
+                  polyTraderCurrentPositions.conditionId
+                ),
+                eq(
+                  polyRedeemJobs.positionId,
+                  polyTraderCurrentPositions.tokenId
+                ),
+                eq(polyRedeemJobs.status, "confirmed"),
+                sql`lower(${polyRedeemJobs.funderAddress}) = lower(${wallet.walletAddress})`
               )
             )
         )

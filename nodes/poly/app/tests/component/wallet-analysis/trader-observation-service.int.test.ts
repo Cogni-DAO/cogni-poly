@@ -14,6 +14,7 @@
 import { randomUUID } from "node:crypto";
 import {
   polyMarketOutcomes,
+  polyRedeemJobs,
   polyTraderCurrentPositions,
   polyTraderIngestionCursors,
   polyTraderWallets,
@@ -94,6 +95,9 @@ describe("runTraderObservationTick (component)", () => {
     await db
       .delete(polyMarketOutcomes)
       .where(eq(polyMarketOutcomes.conditionId, MARKET));
+    await db
+      .delete(polyRedeemJobs)
+      .where(eq(polyRedeemJobs.conditionId, MARKET));
   });
 
   it("deactivates stale current positions after a complete position poll", async () => {
@@ -237,6 +241,51 @@ describe("runTraderObservationTick (component)", () => {
       payout: null,
       resolvedAt: null,
       raw: {},
+    });
+
+    const result = await runTraderObservationTick({
+      db,
+      client: clientWithPositions([position()]),
+      logger,
+      metrics,
+      positionPollMs: 0,
+    });
+
+    expect(result.errors).toBe(0);
+    const [row] = await db
+      .select()
+      .from(polyTraderCurrentPositions)
+      .where(eq(polyTraderCurrentPositions.traderWalletId, walletId));
+    expect(row?.active).toBe(false);
+  });
+
+  it("deactivates confirmed-redeem winners even when Data API still reports them with size>0", async () => {
+    const walletId = randomUUID();
+    await db.insert(polyTraderWallets).values({
+      id: walletId,
+      walletAddress: TARGET_WALLET,
+      kind: "cogni_wallet",
+      label: "winner-cleanup-test",
+      activeForResearch: true,
+    });
+    await db.insert(polyMarketOutcomes).values({
+      conditionId: MARKET,
+      tokenId: TOKEN,
+      outcome: "winner",
+      payout: "1",
+      resolvedAt: new Date(),
+      raw: {},
+    });
+    await db.insert(polyRedeemJobs).values({
+      funderAddress: TARGET_WALLET,
+      conditionId: MARKET,
+      positionId: TOKEN,
+      outcomeIndex: 0,
+      status: "confirmed",
+      flavor: "ctf",
+      indexSet: {},
+      lifecycleState: "redeemed",
+      confirmedAt: new Date(),
     });
 
     const result = await runTraderObservationTick({
