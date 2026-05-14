@@ -65,6 +65,13 @@ export const polyCopyTradeTargets = pgTable(
     })
       .notNull()
       .default("5.00"),
+    /**
+     * Execution mode for this target. `live` routes orders to the CLOB.
+     * `paper` routes orders to the `agent-next/polymarket-paper-trader`
+     * sidecar — same algorithm, same ledger, same redemption listener,
+     * but no real USDC spent. See `proj.poly-paper-trading`.
+     */
+    mode: text("mode").notNull().default("live"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -83,6 +90,10 @@ export const polyCopyTradeTargets = pgTable(
     check(
       "poly_copy_trade_targets_max_bet_positive",
       sql`${table.mirrorMaxUsdcPerTrade} > 0`
+    ),
+    check(
+      "poly_copy_trade_targets_mode_check",
+      sql`${table.mode} IN ('live','paper')`
     ),
     // One active row per (tenant, wallet). Soft-deleted rows allowed to coexist
     // so a previously-disabled wallet can be re-added without violating uniqueness.
@@ -143,6 +154,14 @@ export const polyCopyTradeFills = pgTable(
      * this order. Written by `markSynced` — never by the placement path.
      */
     syncedAt: timestamp("synced_at", { withTimezone: true }),
+    /**
+     * Execution mode of the order that produced this fill. Inherited from
+     * `poly_copy_trade_targets.mode` at decision time and stamped on the
+     * `OrderIntent.attributes.mode` discriminator. Paper rows participate in
+     * cap accounting (CAP_COUNTS_REALIZED_ON_CANCEL) identically to live
+     * rows; the paper sidecar populates `filled_size_usdc` correctly.
+     */
+    mode: text("mode").notNull().default("live"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -200,6 +219,10 @@ export const polyCopyTradeFills = pgTable(
         'winner', 'redeem_pending', 'redeemed', 'loser', 'dust', 'abandoned'
       )`
     ),
+    check(
+      "poly_copy_trade_fills_mode_check",
+      sql`${table.mode} IN ('live','paper')`
+    ),
   ]
 );
 
@@ -226,6 +249,12 @@ export const polyCopyTradeDecisions = pgTable(
     /** Non-null iff an order was placed; carries OrderReceipt shape. */
     receipt: jsonb("receipt").$type<Record<string, unknown>>(),
     decidedAt: timestamp("decided_at", { withTimezone: true }).notNull(),
+    /**
+     * Execution mode of the decision. `live` rows hit the CLOB; `paper` rows
+     * route to the OSS sidecar (see `proj.poly-paper-trading`). Defaulted to
+     * `'live'` so existing rows remain semantically correct without backfill.
+     */
+    mode: text("mode").notNull().default("live"),
   },
   (table) => [
     index("poly_copy_trade_decisions_decided_at_idx").on(table.decidedAt),
@@ -239,6 +268,10 @@ export const polyCopyTradeDecisions = pgTable(
     check(
       "poly_copy_trade_decisions_outcome_check",
       sql`${table.outcome} IN ('placed','skipped','error')`
+    ),
+    check(
+      "poly_copy_trade_decisions_mode_check",
+      sql`${table.mode} IN ('live','paper')`
     ),
   ]
 );
