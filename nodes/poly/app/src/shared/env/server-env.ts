@@ -277,6 +277,17 @@ export const serverSchema = z.object({
   // (https://clob.polymarket.com). Used by the per-tenant
   // `PolyTradeExecutor` factory + CLOB L2 cred derivation at provision time.
   POLY_CLOB_HOST: optionalUrl,
+  // Base URL of the agent-next/polymarket-paper-trader sidecar (MIT). The
+  // sidecar runs as a sibling container in the same k8s pod; loopback is the
+  // default. Used by the PolyTradeExecutor factory when constructing the
+  // PaperAdapter. Leave unset in environments that don't run paper trading.
+  PAPER_SIDECAR_URL: optionalUrl,
+  // When `"paper"`, the trade-executor forces every placement through the
+  // paper adapter regardless of per-target mode. Set on the candidate-a and
+  // preview overlays so flighted PRs + the continuous always-paper twin
+  // physically cannot place live orders. Unset in production; per-target
+  // `mode='paper'` in the DB controls the path there.
+  PAPER_ENFORCE_MODE: z.enum(["paper"]).optional(),
   // Optional Polymarket geo-block token. The v1 CLOB SDK appends this as
   // `geo_block_token` on auth requests; needed when upstream Cloudflare blocks
   // the candidate runtime before CLOB API-key derivation can complete.

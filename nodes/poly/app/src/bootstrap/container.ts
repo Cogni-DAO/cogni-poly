@@ -799,6 +799,8 @@ function createContainer(): Container {
         metrics: noopMetricsForExecutor,
         host: env.POLY_CLOB_HOST,
         polygonRpcUrl: env.POLYGON_RPC_URL,
+        paperSidecarUrl: env.PAPER_SIDECAR_URL,
+        paperEnforceMode: env.PAPER_ENFORCE_MODE,
       });
     } catch (err) {
       if (err instanceof WalletAdapterUnconfiguredError) {
@@ -926,6 +928,7 @@ function createContainer(): Container {
               createdByUserId: enumeratedTarget.createdByUserId,
               mirrorFilterPercentile: enumeratedTarget.mirrorFilterPercentile,
               mirrorMaxUsdcPerTrade: enumeratedTarget.mirrorMaxUsdcPerTrade,
+              mode: enumeratedTarget.mode,
             });
             const source = createPolymarketChainActivitySource({
               publicClient: chainPublicClient,
