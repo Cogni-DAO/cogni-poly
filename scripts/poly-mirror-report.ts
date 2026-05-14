@@ -2,11 +2,11 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@scripts/delta-minimizer`
- * Purpose: One-shot Δ-investigator CLI. Takes a market identifier (event slug,
- *   conditionId, comma-list, or fuzzy title), pulls dashboard-equivalent data
- *   sources, and writes an HTML report + JSON bundle for an LLM to author the
- *   takeaway against.
+ * Module: `@scripts/poly-mirror-report`
+ * Purpose: Per-market mirror-comparison data + report builder. Pulls dashboard-
+ *   equivalent data sources for one market and writes an HTML report + JSON
+ *   bundle for the LLM (`/delta-minimizer` skill) to author findings against.
+ *   This is a DATA TOOL — analytical reasoning lives in the skill, not here.
  * Scope: Read-only — does not write any DB row, place orders, or modify the
  *   charter; auto-detects the single copy-target from the decision ledger.
  * Invariants: READ_ONLY_DB — uses scripts/grafana-postgres-query.sh which refuses
@@ -18,7 +18,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -513,8 +513,8 @@ type PerWalletMetric = {
   net_value: number;
   net_cost: number;
   net_pnl: number;
-  return_pct: number | null; // Modified-Dietz: (realized + currentMark - buyNotional) / buyNotional
-  total_buy_notional: number; // max(rollup_buy, snapshot_cost)
+  return_pct: number | null; // (current_value − snapshot_cost) / snapshot_cost — single basis across UI
+  total_buy_notional: number; // snapshot_cost (same basis as net_cost — for internal consistency)
 };
 
 function buildPerWalletMetric(
@@ -527,12 +527,13 @@ function buildPerWalletMetric(
   const hedge = legs.find((l) => l.token_id === hedge_token_id);
   const snapshotCost = legs.reduce((s, l) => s + l.cost_basis_usdc, 0);
   const currentMark = legs.reduce((s, l) => s + l.current_value_usdc, 0);
-  const buyNotional = Math.max(rollup?.buy_notional ?? 0, snapshotCost);
-  const realizedCash = rollup?.realized_cash ?? 0;
+  // SINGLE BASIS: snapshot cost. Used everywhere — Entry KPI, Net %, Net P/L, Δ.
+  // Trades dashboard parity (which uses max(rollup, snapshot)) for internal
+  // consistency. Without this, KPI `%` and `$` were computed on different bases
+  // and disagreed (e.g. −35.3% vs +$1610 on the same row).
   const returnPct =
-    buyNotional > 0
-      ? (realizedCash + currentMark - buyNotional) / buyNotional
-      : null;
+    snapshotCost > 0 ? (currentMark - snapshotCost) / snapshotCost : null;
+  void rollup;
   return {
     primary_value: primary?.current_value_usdc ?? 0,
     primary_cost: primary?.cost_basis_usdc ?? 0,
@@ -547,7 +548,7 @@ function buildPerWalletMetric(
     net_cost: snapshotCost,
     net_pnl: currentMark - snapshotCost,
     return_pct: returnPct,
-    total_buy_notional: buyNotional,
+    total_buy_notional: snapshotCost,
   };
 }
 
@@ -614,114 +615,8 @@ function blendReturns(
   );
 }
 
-// ---------- Δ-class scoring (target-mirror framing) ----------
-
-type CauseScore = {
-  id: string;
-  title: string;
-  charter_class: string;
-  score: number;
-  evidence: string[];
-};
-
-function classifyCauses(
-  decisions: DecisionRow[],
-  placedOrders: PlacedHisto[],
-  metrics: ConditionMetric[],
-  targetLabel: string
-): CauseScore[] {
-  const primaryByCond = new Map<string, string | null>();
-  for (const m of metrics)
-    primaryByCond.set(m.condition_id, m.primary_token_id);
-
-  const causes = new Map<string, CauseScore>();
-  const push = (
-    id: string,
-    title: string,
-    cls: string,
-    weight: number,
-    ev: string
-  ) => {
-    let c = causes.get(id);
-    if (!c) {
-      c = { id, title, charter_class: cls, score: 0, evidence: [] };
-      causes.set(id, c);
-    }
-    c.score += weight;
-    if (c.evidence.length < 5) c.evidence.push(ev);
-  };
-
-  let d4Total = 0,
-    d4Primary = 0;
-  for (const d of decisions)
-    if (d.reason === "vwap_floor_breach") {
-      d4Total++;
-      if (primaryByCond.get(d.condition_id) === d.position_token_id)
-        d4Primary++;
-    }
-  if (d4Total > 0)
-    push(
-      "D4",
-      "VWAP gate bouncing",
-      "D4",
-      d4Primary * 3 + d4Total,
-      `${d4Total} \`vwap_floor_breach\` skips total; ${d4Primary} were on ${targetLabel}'s primary side.`
-    );
-
-  let d3Total = 0,
-    d3Primary = 0;
-  for (const d of decisions)
-    if (d.reason === "target_dominant_other_side") {
-      d3Total++;
-      if (primaryByCond.get(d.condition_id) === d.position_token_id)
-        d3Primary++;
-    }
-  if (d3Total > 0)
-    push(
-      "D3",
-      "Hedge blindness",
-      "D3",
-      d3Primary * 3 + d3Total,
-      `${d3Total} \`target_dominant_other_side\` skips; ${d3Primary} on ${targetLabel}'s final primary side.`
-    );
-
-  const placedAgg = { filled: 0, canceled: 0, error: 0, other: 0 };
-  for (const p of placedOrders) {
-    if (p.status === "filled") placedAgg.filled += Number(p.n);
-    else if (p.status === "canceled") placedAgg.canceled += Number(p.n);
-    else if (p.status === "error") placedAgg.error += Number(p.n);
-    else placedAgg.other += Number(p.n);
-  }
-  const totalPlaces =
-    placedAgg.filled + placedAgg.canceled + placedAgg.error + placedAgg.other;
-  if (totalPlaces > 0 && placedAgg.canceled / totalPlaces > 0.4)
-    push(
-      "D5",
-      "Order staleness / churn",
-      "D5",
-      placedAgg.canceled * 2,
-      `${placedAgg.canceled} of ${totalPlaces} placements canceled (${((placedAgg.canceled / totalPlaces) * 100).toFixed(0)}%).`
-    );
-
-  // D2: our cost on the OPPOSITE side from target's primary
-  let ourPrimaryCost = 0,
-    ourHedgeCost = 0;
-  for (const m of metrics) {
-    ourPrimaryCost += m.ours.primary_cost;
-    ourHedgeCost += m.ours.hedge_cost;
-  }
-  const ourTotal = ourPrimaryCost + ourHedgeCost;
-  if (ourTotal > 0 && ourHedgeCost / ourTotal > 0.3)
-    push(
-      "D2",
-      "Wrong-side allocation vs target",
-      "D2",
-      Math.round(ourHedgeCost * 10),
-      `Our wallet sank $${ourHedgeCost.toFixed(2)} into the side OPPOSITE ${targetLabel}'s primary (${((ourHedgeCost / ourTotal) * 100).toFixed(0)}% of our cost).`
-    );
-
-  return [...causes.values()].sort((a, b) => b.score - a.score);
-}
+// (Auto-classifier removed. With n<10 investigations, threshold-based scoring
+// suggests precision we don't have. Findings are LLM-authored only.)
 
 // (paretoFix removed — Pareto fix is now part of the LLM-authored TAKEAWAY block
 // in the report HTML, not auto-generated by the script.)
@@ -776,6 +671,16 @@ function reasonCategory(
 
 // ---------- SVG timeline: log $ value Y-axis ----------
 
+// NET-POSITION CHART. Y axis is signed (symlog):
+//   y > 0 → cumulative $ on target's primary side
+//   y < 0 → cumulative $ on hedge side
+// Both wallets render even when they only touched the hedge side (which was the
+// blue-line-missing bug on WTA Parry-Paquet). A vertical marker shows the moment
+// target's per-token cumulative cost crossed `min_target_usdc` ($319 prod config),
+// which is the moment our `below_target_percentile` gate stops blocking — the
+// "gate opens here" line.
+const MIN_TARGET_USDC = 319; // matches prod swisstony copy-trade config.
+
 function svgTimeline(args: {
   market: Market;
   primary: {
@@ -783,6 +688,7 @@ function svgTimeline(args: {
     label: string | null;
     outcome: "winner" | "loser" | null;
   } | null;
+  hedge: { token_id: string; label: string | null } | null;
   rawFills: RawFill[];
   decisions: DecisionRow[];
   globalT: { min: number; max: number };
@@ -792,6 +698,7 @@ function svgTimeline(args: {
   const {
     market,
     primary,
+    hedge,
     rawFills,
     decisions,
     globalT,
@@ -803,92 +710,118 @@ function svgTimeline(args: {
   const tMax = globalT.max;
   const span = Math.max(1, tMax - tMin);
   const W = 1200,
-    H = 280,
-    padL = 70,
-    padR = 60,
+    H = 320,
+    padL = 80,
+    padR = 30,
     padT = 28,
-    padB = 70;
+    padB = 80;
   const plotW = W - padL - padR,
     plotH = H - padT - padB;
+  const yMid = padT + plotH / 2;
 
-  const here = rawFills.filter(
-    (f) =>
-      f.condition_id === market.condition_id && f.token_id === primary.token_id
-  );
+  const here = rawFills.filter((f) => f.condition_id === market.condition_id);
   const decsHere = decisions.filter(
     (d) => d.condition_id === market.condition_id
   );
 
-  type Pt = { t: number; cumCost: number; cumShares: number; vwap: number };
+  type Pt = {
+    t: number;
+    net: number;
+    primaryCost: number;
+    hedgeCost: number;
+    primaryShares: number;
+    hedgeShares: number;
+  };
   const series = (wallet: string): Pt[] => {
     const pts: Pt[] = [];
-    let cumShares = 0;
-    let cumCost = 0;
+    let primaryCost = 0;
+    let hedgeCost = 0;
+    let primaryShares = 0;
+    let hedgeShares = 0;
     for (const f of here) {
       if (f.wallet_label !== wallet) continue;
       const sign = f.side === "BUY" ? 1 : -1;
-      cumShares += sign * Number(f.shares);
-      cumCost += sign * Number(f.size_usdc);
+      if (f.token_id === primary.token_id) {
+        primaryCost += sign * Number(f.size_usdc);
+        primaryShares += sign * Number(f.shares);
+      } else if (hedge && f.token_id === hedge.token_id) {
+        hedgeCost += sign * Number(f.size_usdc);
+        hedgeShares += sign * Number(f.shares);
+      }
       pts.push({
         t: Number(f.observed_at),
-        cumCost,
-        cumShares,
-        vwap: cumShares > 0 ? cumCost / cumShares : 0,
+        net: primaryCost - hedgeCost,
+        primaryCost,
+        hedgeCost,
+        primaryShares,
+        hedgeShares,
       });
     }
     return pts;
   };
   const target = series(targetLabel);
   const ours = series(ourLabel);
+  const vwap = (pt: Pt | undefined): { p: number | null; h: number | null } => {
+    if (!pt) return { p: null, h: null };
+    return {
+      p: pt.primaryShares > 0 ? pt.primaryCost / pt.primaryShares : null,
+      h: pt.hedgeShares > 0 ? pt.hedgeCost / pt.hedgeShares : null,
+    };
+  };
 
   if (target.length === 0 && ours.length === 0)
-    return `<div class="empty">No fills on ${market.market_title} → ${primary.label} (token ${primary.token_id.slice(0, 8)}…)</div>`;
+    return `<div class="empty">No fills on ${market.market_title}</div>`;
 
-  const maxCost = Math.max(
-    1,
-    ...target.map((p) => p.cumCost),
-    ...ours.map((p) => p.cumCost)
-  );
-  const yCost = (cost: number) => {
-    if (cost <= 0) return padT + plotH;
-    const v = Math.log10(cost + 1) / Math.log10(maxCost + 1);
-    return padT + (1 - v) * plotH;
+  // Y-scale: symmetric log on signed net value.
+  const allAbs = [
+    ...target.map((p) => Math.abs(p.net)),
+    ...ours.map((p) => Math.abs(p.net)),
+  ];
+  const maxAbs = Math.max(1, ...allAbs);
+  const symLogDen = Math.log10(maxAbs + 1);
+  const yNet = (net: number): number => {
+    if (net === 0) return yMid;
+    const s = Math.sign(net);
+    const m = Math.log10(Math.abs(net) + 1) / symLogDen; // 0..1
+    return yMid - s * (m * (plotH / 2));
   };
   const xT = (t: number) => padL + ((t - tMin) / span) * plotW;
-  const yPrice = (p: number) => padT + (1 - p) * plotH;
 
   const COLOR = { target: "#10b981", us: "#3b82f6" };
 
-  function costPath(pts: Pt[]): string {
+  function netPath(pts: Pt[]): string {
     if (pts.length === 0) return "";
-    let d = `M ${xT(tMin).toFixed(1)} ${yCost(0).toFixed(1)}`;
+    let d = `M ${xT(tMin).toFixed(1)} ${yMid.toFixed(1)}`;
     let prev = 0;
     for (const p of pts) {
-      d += ` L ${xT(p.t).toFixed(1)} ${yCost(prev).toFixed(1)}`;
-      d += ` L ${xT(p.t).toFixed(1)} ${yCost(p.cumCost).toFixed(1)}`;
-      prev = p.cumCost;
+      d += ` L ${xT(p.t).toFixed(1)} ${yNet(prev).toFixed(1)}`;
+      d += ` L ${xT(p.t).toFixed(1)} ${yNet(p.net).toFixed(1)}`;
+      prev = p.net;
     }
-    d += ` L ${xT(tMax).toFixed(1)} ${yCost(prev).toFixed(1)}`;
-    return d;
-  }
-  function vwapPath(pts: Pt[]): string {
-    if (pts.length === 0) return "";
-    let d = "";
-    let started = false;
-    let prev = pts[0].vwap;
-    for (const p of pts) {
-      if (!started) {
-        d += `M ${xT(p.t).toFixed(1)} ${yPrice(prev).toFixed(1)}`;
-        started = true;
-      }
-      d += ` L ${xT(p.t).toFixed(1)} ${yPrice(prev).toFixed(1)}`;
-      d += ` L ${xT(p.t).toFixed(1)} ${yPrice(p.vwap).toFixed(1)}`;
-      prev = p.vwap;
-    }
-    d += ` L ${xT(tMax).toFixed(1)} ${yPrice(prev).toFixed(1)}`;
+    d += ` L ${xT(tMax).toFixed(1)} ${yNet(prev).toFixed(1)}`;
     return d;
   }
 
+  // Gate-opens marker: first moment target's cumulative cost on EITHER token
+  // crossed MIN_TARGET_USDC. Before this point, every decision skips with
+  // `below_target_percentile`.
+  let gateOpenAt: number | null = null;
+  {
+    let primaryCum = 0;
+    let hedgeCum = 0;
+    for (const f of here) {
+      if (f.wallet_label !== targetLabel || f.side !== "BUY") continue;
+      if (f.token_id === primary.token_id) primaryCum += Number(f.size_usdc);
+      else if (hedge && f.token_id === hedge.token_id)
+        hedgeCum += Number(f.size_usdc);
+      if (primaryCum >= MIN_TARGET_USDC || hedgeCum >= MIN_TARGET_USDC) {
+        gateOpenAt = Number(f.observed_at);
+        break;
+      }
+    }
+  }
+
+  // X axis ticks
   const ticks: { t: number; label: string }[] = [];
   for (let i = 0; i <= 6; i++) {
     const t = tMin + (span * i) / 6;
@@ -904,34 +837,51 @@ function svgTimeline(args: {
   );
   lines.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="#0b1220"/>`);
 
-  // Y axis: log $ value
+  // Y-axis grid: symlog tick marks at $1, $10, $100, $1k, $10k on both halves.
   const niceTicks = [1, 10, 100, 1000, 10000, 100000].filter(
-    (v) => v <= maxCost * 1.2
+    (v) => v <= maxAbs * 1.2
   );
   for (const tk of niceTicks) {
-    const y = yCost(tk);
-    lines.push(
-      `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${padL + plotW}" y2="${y.toFixed(1)}" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>`
-    );
-    lines.push(
-      `<text x="${padL - 8}" y="${y.toFixed(1)}" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$${tk >= 1000 ? `${tk / 1000}k` : tk}</text>`
-    );
+    for (const sign of [1, -1]) {
+      const y = yNet(sign * tk);
+      lines.push(
+        `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${padL + plotW}" y2="${y.toFixed(1)}" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>`
+      );
+      const label = `${sign > 0 ? "+" : "-"}$${tk >= 1000 ? `${tk / 1000}k` : tk}`;
+      lines.push(
+        `<text x="${padL - 8}" y="${y.toFixed(1)}" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">${label}</text>`
+      );
+    }
   }
+  // The net-zero line — emphasized.
   lines.push(
-    `<text x="20" y="${padT + plotH / 2}" fill="#94a3b8" font-size="11" text-anchor="middle" transform="rotate(-90 20 ${padT + plotH / 2})">cumulative $ cost (log)</text>`
+    `<line x1="${padL}" y1="${yMid.toFixed(1)}" x2="${padL + plotW}" y2="${yMid.toFixed(1)}" stroke="#475569" stroke-width="1"/>`
+  );
+  lines.push(
+    `<text x="${padL - 8}" y="${yMid.toFixed(1)}" fill="#94a3b8" font-size="10" text-anchor="end" dominant-baseline="middle">$0 net</text>`
   );
 
-  // Right axis: VWAP $ scale
-  for (const p of [0, 0.25, 0.5, 0.75, 1]) {
-    const y = yPrice(p);
+  // Side labels (primary up, hedge down).
+  lines.push(
+    `<text x="20" y="${padT + plotH / 4}" fill="${COLOR.target}" font-size="11" text-anchor="middle" transform="rotate(-90 20 ${padT + plotH / 4})">PRIMARY · ${escapeXml(primary.label ?? "?")} ↑</text>`
+  );
+  if (hedge)
     lines.push(
-      `<text x="${padL + plotW + 8}" y="${y.toFixed(1)}" fill="#475569" font-size="10" dominant-baseline="middle">$${p.toFixed(2)}</text>`
+      `<text x="20" y="${padT + (plotH * 3) / 4}" fill="#94a3b8" font-size="11" text-anchor="middle" transform="rotate(-90 20 ${padT + (plotH * 3) / 4})">HEDGE · ${escapeXml(hedge.label ?? "?")} ↓</text>`
+    );
+
+  // Gate-opens vertical marker.
+  if (gateOpenAt !== null) {
+    const gx = xT(gateOpenAt);
+    lines.push(
+      `<line x1="${gx.toFixed(1)}" y1="${padT}" x2="${gx.toFixed(1)}" y2="${(padT + plotH).toFixed(1)}" stroke="#fbbf24" stroke-width="1" stroke-dasharray="2,3" opacity="0.65"/>`
+    );
+    lines.push(
+      `<text x="${(gx + 4).toFixed(1)}" y="${(padT + 12).toFixed(1)}" fill="#fbbf24" font-size="10">gate opens · target crosses $${MIN_TARGET_USDC}</text>`
     );
   }
-  lines.push(
-    `<text x="${W - 14}" y="${padT + plotH / 2}" fill="#475569" font-size="11" text-anchor="middle" transform="rotate(90 ${W - 14} ${padT + plotH / 2})">VWAP $</text>`
-  );
 
+  // X axis ticks
   for (const tk of ticks) {
     lines.push(
       `<line x1="${xT(tk.t).toFixed(1)}" y1="${(padT + plotH).toFixed(1)}" x2="${xT(tk.t).toFixed(1)}" y2="${(padT + plotH + 4).toFixed(1)}" stroke="#4b5563"/>`
@@ -941,39 +891,28 @@ function svgTimeline(args: {
     );
   }
 
+  // Series: target (green) + us (blue), both as step-curves of net position.
   if (target.length > 0) {
     const last = target[target.length - 1];
-    const area =
-      costPath(target) +
-      ` L ${xT(tMax).toFixed(1)} ${yCost(0).toFixed(1)} L ${xT(tMin).toFixed(1)} ${yCost(0).toFixed(1)} Z`;
-    lines.push(`<path d="${area}" fill="${COLOR.target}" opacity="0.18"/>`);
     lines.push(
-      `<path d="${costPath(target)}" fill="none" stroke="${COLOR.target}" stroke-width="2"/>`
+      `<path d="${netPath(target)}" fill="none" stroke="${COLOR.target}" stroke-width="2"/>`
     );
     lines.push(
-      `<circle cx="${xT(last.t).toFixed(1)}" cy="${yCost(last.cumCost).toFixed(1)}" r="3.5" fill="${COLOR.target}"/>`
+      `<circle cx="${xT(last.t).toFixed(1)}" cy="${yNet(last.net).toFixed(1)}" r="3.5" fill="${COLOR.target}"><title>${escapeXml(targetLabel)}: primary $${last.primaryCost.toFixed(0)} / hedge $${last.hedgeCost.toFixed(0)} / net $${last.net.toFixed(0)}</title></circle>`
     );
   }
   if (ours.length > 0) {
     const last = ours[ours.length - 1];
     lines.push(
-      `<path d="${costPath(ours)}" fill="none" stroke="${COLOR.us}" stroke-width="2"/>`
+      `<path d="${netPath(ours)}" fill="none" stroke="${COLOR.us}" stroke-width="2"/>`
     );
     lines.push(
-      `<circle cx="${xT(last.t).toFixed(1)}" cy="${yCost(last.cumCost).toFixed(1)}" r="3.5" fill="${COLOR.us}"/>`
+      `<circle cx="${xT(last.t).toFixed(1)}" cy="${yNet(last.net).toFixed(1)}" r="3.5" fill="${COLOR.us}"><title>Our: primary $${last.primaryCost.toFixed(2)} / hedge $${last.hedgeCost.toFixed(2)} / net $${last.net.toFixed(2)}</title></circle>`
     );
   }
-  if (target.length > 0)
-    lines.push(
-      `<path d="${vwapPath(target)}" fill="none" stroke="${COLOR.target}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>`
-    );
-  if (ours.length > 0)
-    lines.push(
-      `<path d="${vwapPath(ours)}" fill="none" stroke="${COLOR.us}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>`
-    );
 
-  // Decision strip
-  const stripY = padT + plotH + 28;
+  // Decision strip.
+  const stripY = padT + plotH + 32;
   lines.push(
     `<text x="${padL}" y="${stripY - 4}" fill="#9ca3af" font-size="11">our decisions →</text>`
   );
@@ -991,18 +930,21 @@ function svgTimeline(args: {
     );
   }
 
+  // Title + final-state annotation.
   const winnerNote = primary.outcome ? ` (${primary.outcome})` : "";
   lines.push(
-    `<text x="${padL}" y="${padT - 10}" fill="#f3f4f6" font-size="14" font-weight="600">${escapeXml(market.market_title)} <tspan fill="#94a3b8" font-weight="400">→ ${escapeXml(primary.label ?? "?")}${winnerNote}</tspan></text>`
+    `<text x="${padL}" y="${padT - 10}" fill="#f3f4f6" font-size="14" font-weight="600">${escapeXml(market.market_title)} <tspan fill="#94a3b8" font-weight="400">→ primary ${escapeXml(primary.label ?? "?")}${winnerNote}</tspan></text>`
   );
+  // Per-wallet end-state annotation: just $ totals. VWAP lives in the positions
+  // table directly above the chart — don't duplicate.
   const targetEnd = target[target.length - 1];
   const ourEnd = ours[ours.length - 1];
   const annot = [
     targetEnd
-      ? `${targetLabel}: ${fmtUsd(targetEnd.cumCost)} @ VWAP $${targetEnd.vwap.toFixed(3)}`
+      ? `${targetLabel}: P $${targetEnd.primaryCost.toFixed(0)} / H $${targetEnd.hedgeCost.toFixed(0)}`
       : null,
     ourEnd
-      ? `us: ${fmtUsd(ourEnd.cumCost)} @ VWAP $${ourEnd.vwap.toFixed(3)}`
+      ? `us: P $${ourEnd.primaryCost.toFixed(2)} / H $${ourEnd.hedgeCost.toFixed(2)}`
       : null,
   ]
     .filter(Boolean)
@@ -1010,6 +952,7 @@ function svgTimeline(args: {
   lines.push(
     `<text x="${padL + plotW}" y="${padT - 10}" fill="#94a3b8" font-size="11" text-anchor="end">${escapeXml(annot)}</text>`
   );
+  void vwap;
 
   lines.push(`</svg>`);
   return lines.join("\n");
@@ -1253,14 +1196,18 @@ function renderGroupSection(
           o.condition_id === m.condition_id &&
           o.token_id === metric.primary_token_id
       );
+      const hedge = group.outcomes.find(
+        (o) =>
+          o.condition_id === m.condition_id &&
+          o.token_id === metric.hedge_token_id
+      );
       return `<div class="market-card">
-        <div class="market-head"><span class="market-title">${escapeHtml(m.market_title)} → ${escapeHtml(primary?.label ?? "?")}</span></div>
-        ${svgTimeline({ market: m, primary: primary ?? null, rawFills, decisions, globalT, targetLabel, ourLabel })}
+        <div class="market-head"><span class="market-title">${escapeHtml(m.market_title)} → primary ${escapeHtml(primary?.label ?? "?")} / hedge ${escapeHtml(hedge?.label ?? "—")}</span></div>
+        ${svgTimeline({ market: m, primary: primary ?? null, hedge: hedge ?? null, rawFills, decisions, globalT, targetLabel, ourLabel })}
         <div class="legend">
-          <span><span class="line" style="background:#10b981"></span>${escapeHtml(targetLabel)} $cost</span>
-          <span><span class="line" style="background:#3b82f6"></span>Our $cost</span>
-          <span><span class="line dash" style="color:#10b981"></span>${escapeHtml(targetLabel)} VWAP</span>
-          <span><span class="line dash" style="color:#3b82f6"></span>Our VWAP</span>
+          <span><span class="line" style="background:#10b981"></span>${escapeHtml(targetLabel)} net</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our net</span>
+          <span><span class="line" style="background:#fbbf24;opacity:0.65;background-image:repeating-linear-gradient(90deg,#fbbf24 0 3px,transparent 3px 6px)"></span>gate-opens marker</span>
           <span><span class="dot" style="background:#22c55e"></span>placed</span>
           <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
           <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
@@ -1306,7 +1253,6 @@ function renderHtml(args: {
   rawFills: RawFill[];
   decisions: DecisionRow[];
   placedOrders: PlacedHisto[];
-  causes: CauseScore[];
   target: Target;
   ourWallet: string;
   ourLabel: string;
@@ -1318,7 +1264,6 @@ function renderHtml(args: {
     rawFills,
     decisions,
     placedOrders,
-    causes,
     target,
     ourWallet,
     ourLabel,
@@ -1340,7 +1285,6 @@ function renderHtml(args: {
   // Add 5% pad on each side so end-points aren't flush against the axis.
   const pad = (tMax - tMin) * 0.05;
   const globalT = { min: tMin - pad, max: tMax + pad };
-  void causes;
 
   const css = `
 :root { color-scheme: dark; }
@@ -1476,12 +1420,10 @@ function renderAiWalkthrough(args: {
   groups: EventGroup[];
   decisions: DecisionRow[];
   placedOrders: PlacedHisto[];
-  causes: CauseScore[];
   target: Target;
   ourLabel: string;
 }): string {
-  const { input, groups, decisions, placedOrders, causes, target, ourLabel } =
-    args;
+  const { input, groups, decisions, placedOrders, target, ourLabel } = args;
   const lines: string[] = [];
   const eventTitle =
     groups[0]?.event_title ?? groups[0]?.event_slug ?? "(unknown event)";
@@ -1563,36 +1505,32 @@ function renderAiWalkthrough(args: {
   }
   lines.push("");
 
-  lines.push(`## 5 · Δ-class scoring (target-mirror framing)`);
+  lines.push(`## 5 · Reason → code mapping (cheat-sheet)`);
   lines.push("");
-  lines.push(`| Class | Trigger | Code path |`);
-  lines.push(`|---|---|---|`);
+  lines.push(`| MirrorReason | Code |`);
+  lines.push(`|---|---|`);
   lines.push(
-    `| D2 wrong-side allocation | Our cost on OPPOSITE side from target's primary > 30% of our cost | \`planMirrorFromFill\` |`
+    `| \`below_target_percentile\` | \`plan-mirror.ts:92–115\`; \`targetSizingUsdcForFill:657–666\` |`
   );
   lines.push(
-    `| D3 hedge blindness | ≥1 \`target_dominant_other_side\` skip on what became target's primary side | \`analyzeTargetDominance\` |`
+    `| \`target_dominant_other_side\` | \`analyzeTargetDominance\` + \`decideMirrorBranch\` |`
   );
   lines.push(
-    `| D4 VWAP gate bouncing | ≥1 \`vwap_floor_breach\` skip on target's primary side | \`targetVwapForToken\` |`
+    `| \`vwap_floor_breach\` | \`targetVwapForToken\` + \`NEVER_PAY_ABOVE_TARGET_VWAP\` invariant |`
   );
-  lines.push(`| D5 staleness | Cancel rate > 40% | resting-sweep TTL |`);
+  lines.push(
+    `| \`followup_position_too_small\` | \`plan-mirror.ts:563, 572, 609, 618\` |`
+  );
+  lines.push(
+    `| \`position_cap_reached\` | \`applyMarketFloors\` (cumulative intent + size > \`max_usdc_per_trade\`) |`
+  );
+  lines.push("");
+  lines.push(
+    `Findings (charter assignment + confidence) are LLM-authored — see TAKEAWAY in \`report.html\` and \`findings.json\` for the structured form.`
+  );
   lines.push("");
 
-  lines.push(`## 6 · Ranked findings`);
-  lines.push("");
-  for (const c of causes) {
-    lines.push(
-      `### ${c.id} · ${c.title} (charter ${c.charter_class}, score ${c.score})`
-    );
-    lines.push("");
-    for (const e of c.evidence) lines.push(`- ${e}`);
-    lines.push("");
-  }
-  if (causes.length === 0) lines.push(`_No class crossed threshold._`);
-  lines.push("");
-
-  lines.push(`## 7 · Placement summary`);
+  lines.push(`## 6 · Placement summary`);
   lines.push("");
   const ps = placedOrders.reduce(
     (a, p) => {
@@ -1612,7 +1550,7 @@ function renderAiWalkthrough(args: {
   lines.push(`- Canceled ${ps.canceled} · Errored ${ps.error}`);
   lines.push("");
 
-  lines.push(`## 8 · Not checked`);
+  lines.push(`## 7 · Not checked`);
   lines.push("");
   lines.push(
     `- **Loki**: only needed for \`outcome='error'\` rows where \`errorCode\` lives in the pino line. Skip-reason rows carry all data in the \`intent\` JSON.`
@@ -1729,7 +1667,108 @@ function markdownToHtml(md: string): string {
   return out.join("\n");
 }
 
-function renderCharterHtml(md: string): string {
+// Scan every report's findings.json and tally per D-class.
+type CharterTally = {
+  class_id: string;
+  count: number;
+  reports: {
+    slug: string;
+    primary: boolean;
+    confidence: number | null;
+    one_liner: string | null;
+  }[];
+};
+
+function collectCharterTallies(
+  researchRoot: string
+): Map<string, CharterTally> {
+  const out = new Map<string, CharterTally>();
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(researchRoot, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return out;
+  }
+  for (const slug of entries) {
+    const findingsPath = join(researchRoot, slug, "findings.json");
+    let f: {
+      primary_class?: string | null;
+      primary_confidence?: number | null;
+      primary_one_liner?: string | null;
+      secondary_class?: string | null;
+      secondary_confidence?: number | null;
+      secondary_one_liner?: string | null;
+    };
+    try {
+      f = JSON.parse(readFileSync(findingsPath, "utf8"));
+    } catch {
+      continue;
+    }
+    const push = (
+      cls: string | null | undefined,
+      isPrimary: boolean,
+      conf: number | null | undefined,
+      ol: string | null | undefined
+    ) => {
+      if (!cls) return;
+      let t = out.get(cls);
+      if (!t) {
+        t = { class_id: cls, count: 0, reports: [] };
+        out.set(cls, t);
+      }
+      t.count++;
+      t.reports.push({
+        slug,
+        primary: isPrimary,
+        confidence: conf ?? null,
+        one_liner: ol ?? null,
+      });
+    };
+    push(f.primary_class, true, f.primary_confidence, f.primary_one_liner);
+    push(
+      f.secondary_class,
+      false,
+      f.secondary_confidence,
+      f.secondary_one_liner
+    );
+  }
+  return out;
+}
+
+function renderCharterHtml(
+  md: string,
+  tallies: Map<string, CharterTally>
+): string {
+  const tallySection: string[] = [];
+  tallySection.push(
+    `<h2>Investigation tallies <span style="font-size:11px;color:#6b7280;font-weight:400">(from <code>findings.json</code> in each report subdir)</span></h2>`
+  );
+  if (tallies.size === 0) {
+    tallySection.push(
+      `<p style="color:#6b7280;font-style:italic">No <code>findings.json</code> entries with a populated <code>primary_class</code> yet. Each report's findings.json starts as a stub — the LLM fills it after authoring the takeaway.</p>`
+    );
+  } else {
+    tallySection.push(
+      `<table class="tallies"><thead><tr><th>Charter class</th><th>Investigations</th><th>Most recent reports</th></tr></thead><tbody>`
+    );
+    const sorted = [...tallies.values()].sort((a, b) => b.count - a.count);
+    for (const t of sorted) {
+      const recent = t.reports.slice(-3).reverse();
+      const reportsHtml = recent
+        .map(
+          (r) =>
+            `<a href="${escapeHtml(r.slug)}/report.html" title="${escapeHtml(r.one_liner ?? "")}">${escapeHtml(r.slug)}</a><span style="color:#6b7280">${r.primary ? "" : " (2°)"}${r.confidence != null ? ` ${Math.round(r.confidence * 100)}%` : ""}</span>`
+        )
+        .join("<br/>");
+      tallySection.push(
+        `<tr><td><strong>${escapeHtml(t.class_id)}</strong></td><td><strong>${t.count}</strong></td><td>${reportsHtml || "—"}</td></tr>`
+      );
+    }
+    tallySection.push(`</tbody></table>`);
+  }
+
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"/><title>Poly Copy-Trade Δ Charter</title>
 <style>
@@ -1743,17 +1782,21 @@ code { background: #131826; padding: 1px 6px; border-radius: 3px; font-size: 12.
 table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 12px 0 24px; }
 th, td { padding: 8px 10px; border-bottom: 1px solid #1f2937; vertical-align: top; text-align: left; }
 th { background: #0e1422; color: #94a3b8; font-weight: 500; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+table.tallies td { font-size: 12px; }
 blockquote { border-left: 3px solid #475569; margin: 12px 0; padding: 4px 12px; color: #94a3b8; }
 ul { padding-left: 20px; }
 strong { color: #f3f4f6; }
-</style></head><body>${markdownToHtml(md)}</body></html>`;
+</style></head><body>
+${tallySection.join("\n")}
+${markdownToHtml(md)}
+</body></html>`;
 }
 
 // ---------- main ----------
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  console.error(`[delta] resolving "${args.market}" …`);
+  console.error(`[mirror-report] resolving "${args.market}" …`);
 
   const markets = resolveMarkets(args.market, args.env);
   if (markets.length === 0) {
@@ -1761,7 +1804,7 @@ async function main() {
     process.exit(1);
   }
   console.error(
-    `[delta] ${markets.length} market(s) matched across ${new Set(markets.map((m) => m.event_slug)).size} event group(s).`
+    `[mirror-report] ${markets.length} market(s) matched across ${new Set(markets.map((m) => m.event_slug)).size} event group(s).`
   );
 
   // Backfill event_title from Gamma if sparse.
@@ -1805,18 +1848,18 @@ async function main() {
   );
   if (filteredMarkets.length === 0) {
     console.error(
-      "[delta] no markets in this input have any position in our wallet; nothing to report."
+      "[mirror-report] no markets in this input have any position in our wallet; nothing to report."
     );
     process.exit(1);
   }
   console.error(
-    `[delta] anchored to ${filteredMarkets.length}/${markets.length} markets where our wallet holds a position.`
+    `[mirror-report] anchored to ${filteredMarkets.length}/${markets.length} markets where our wallet holds a position.`
   );
   const conditionIds = filteredMarkets.map((m) => m.condition_id);
 
   const target = detectTarget(conditionIds, args.env, args.target);
   console.error(
-    `[delta] target: ${target.label} (${target.wallet}) · ${target.n_decisions} decisions`
+    `[mirror-report] target: ${target.label} (${target.wallet}) · ${target.n_decisions} decisions`
   );
 
   const outcomes = await fetchOutcomesAndLabels(conditionIds);
@@ -1869,14 +1912,6 @@ async function main() {
   // Sort groups: largest by our entry first.
   groups.sort((a, b) => b.ourBuyNotional - a.ourBuyNotional);
 
-  const allMetrics = groups.flatMap((g) => g.metrics);
-  const causes = classifyCauses(
-    decisions,
-    placedOrders,
-    allMetrics,
-    target.label
-  );
-
   const slug =
     filteredMarkets[0]?.event_slug ??
     filteredMarkets[0]?.condition_id.slice(0, 10) ??
@@ -1895,7 +1930,10 @@ async function main() {
   let charterRelPath = "../charter.html";
   try {
     const charterMd = readFileSync(charterMdPath, "utf8");
-    writeFileSync(sharedCharterPath, renderCharterHtml(charterMd));
+    const tallies = collectCharterTallies(
+      join(REPO_ROOT, "research/delta-minimizing")
+    );
+    writeFileSync(sharedCharterPath, renderCharterHtml(charterMd, tallies));
   } catch {
     charterRelPath = "../../work/charters/POLY_COPY_DELTA.md";
   }
@@ -1906,7 +1944,6 @@ async function main() {
     rawFills,
     decisions,
     placedOrders,
-    causes,
     target,
     ourWallet,
     ourLabel,
@@ -1919,7 +1956,6 @@ async function main() {
     groups,
     decisions,
     placedOrders,
-    causes,
     target,
     ourLabel,
   });
@@ -1937,17 +1973,40 @@ async function main() {
         groups,
         decisions,
         placedOrders,
-        causes,
       },
       null,
       2
     )
   );
-  console.error(`[delta] bundle JSON → ${join(outDir, "bundle.json")}`);
+  console.error(`[mirror-report] bundle JSON → ${join(outDir, "bundle.json")}`);
 
-  console.error(`[delta] HTML       → ${join(outDir, "report.html")}`);
-  console.error(`[delta] AI walk    → ${join(outDir, "ai-walkthrough.md")}`);
-  console.error(`[delta] charter    → ${sharedCharterPath} (shared)`);
+  // findings.json stub — LLM fills this after authoring the takeaway. Charter
+  // renderer reads every report's findings.json to compute per-D-class tallies.
+  const findingsPath = join(outDir, "findings.json");
+  writeFileSync(
+    findingsPath,
+    JSON.stringify(
+      {
+        report_path: join(outDir, "report.html"),
+        primary_class: null,
+        primary_confidence: null,
+        primary_one_liner: null,
+        secondary_class: null,
+        secondary_confidence: null,
+        secondary_one_liner: null,
+        authored_at: null,
+      },
+      null,
+      2
+    )
+  );
+  console.error(`[mirror-report] findings stub → ${findingsPath}`);
+
+  console.error(`[mirror-report] HTML       → ${join(outDir, "report.html")}`);
+  console.error(
+    `[mirror-report] AI walk    → ${join(outDir, "ai-walkthrough.md")}`
+  );
+  console.error(`[mirror-report] charter    → ${sharedCharterPath} (shared)`);
 }
 
 main().catch((e) => {
