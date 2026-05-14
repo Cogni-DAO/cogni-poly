@@ -13,6 +13,7 @@
 
 import { randomUUID } from "node:crypto";
 import {
+  polyMarketOutcomes,
   polyTraderCurrentPositions,
   polyTraderIngestionCursors,
   polyTraderWallets,
@@ -90,6 +91,9 @@ describe("runTraderObservationTick (component)", () => {
     await db
       .delete(polyTraderWallets)
       .where(eq(polyTraderWallets.walletAddress, TARGET_WALLET));
+    await db
+      .delete(polyMarketOutcomes)
+      .where(eq(polyMarketOutcomes.conditionId, MARKET));
   });
 
   it("deactivates stale current positions after a complete position poll", async () => {
@@ -215,6 +219,40 @@ describe("runTraderObservationTick (component)", () => {
         )
       );
     expect(cursor?.status).toBe("stale");
+  });
+
+  it("deactivates resolved-loser positions even when Data API still reports them with size>0", async () => {
+    const walletId = randomUUID();
+    await db.insert(polyTraderWallets).values({
+      id: walletId,
+      walletAddress: TARGET_WALLET,
+      kind: "copy_target",
+      label: "loser-cleanup-test",
+      activeForResearch: true,
+    });
+    await db.insert(polyMarketOutcomes).values({
+      conditionId: MARKET,
+      tokenId: TOKEN,
+      outcome: "loser",
+      payout: null,
+      resolvedAt: null,
+      raw: {},
+    });
+
+    const result = await runTraderObservationTick({
+      db,
+      client: clientWithPositions([position()]),
+      logger,
+      metrics,
+      positionPollMs: 0,
+    });
+
+    expect(result.errors).toBe(0);
+    const [row] = await db
+      .select()
+      .from(polyTraderCurrentPositions)
+      .where(eq(polyTraderCurrentPositions.traderWalletId, walletId));
+    expect(row?.active).toBe(false);
   });
 
   it("deactivates Data API-omitted Cogni wallet positions when chain authority says terminal", async () => {

@@ -21,6 +21,7 @@
 import { createHash } from "node:crypto";
 import {
   type PolyTraderWallet,
+  polyMarketOutcomes,
   polyTraderCurrentPositions,
   polyTraderFills,
   polyTraderIngestionCursors,
@@ -653,6 +654,20 @@ async function persistObservedCurrentPositions(
         },
       });
   }
+  // Deactivate resolved-loser positions on every tick. CTF loser tokens stay
+  // ERC1155-held at $0 forever, and Polymarket Data API keeps reporting them
+  // with size>0 — without this, every active-position aggregation is polluted
+  // by hundreds of terminal-zero rows. Idempotent; safe to re-run.
+  await db.execute(sql`
+    UPDATE ${polyTraderCurrentPositions} cp
+    SET active = false, last_observed_at = ${capturedAt}
+    FROM ${polyMarketOutcomes} mo
+    WHERE cp.trader_wallet_id = ${wallet.id}
+      AND cp.condition_id = mo.condition_id
+      AND cp.token_id = mo.token_id
+      AND mo.outcome = 'loser'
+      AND cp.active = true
+  `);
   const staleDisposition = pageResult.complete
     ? await classifyStaleCurrentPositionRows(db, wallet, capturedAt, options)
     : { deactivateTokenIds: [], preservedRows: 0 };

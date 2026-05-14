@@ -281,6 +281,12 @@ export class PolymarketDataApiClient {
    * when a page returns fewer rows than requested. Hard-bounded to
    * `LIST_ALL_POSITIONS_MAX_PAGES` to defend against a misbehaving server
    * that always returns full pages.
+   *
+   * Defaults `sizeThreshold: 0` so sub-dollar positions are included. The
+   * Polymarket API silently omits them otherwise, which left winner positions
+   * with `currentValue < ~$1` invisible to the redeem-diff input set — the
+   * redeem pipeline never saw them and never enqueued. Callers that want the
+   * stricter default (research/screening) override via `baseParams`.
    */
   async listAllUserPositions(
     wallet: string,
@@ -289,6 +295,7 @@ export class PolymarketDataApiClient {
     const all: PolymarketUserPosition[] = [];
     for (let page = 0; page < LIST_ALL_POSITIONS_MAX_PAGES; page += 1) {
       const rows = await this.listUserPositions(wallet, {
+        sizeThreshold: 0,
         ...baseParams,
         limit: LIST_ALL_POSITIONS_PAGE_SIZE,
         offset: page * LIST_ALL_POSITIONS_PAGE_SIZE,
