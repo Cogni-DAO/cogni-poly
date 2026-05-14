@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Poly Copy-Trade Δ Charter</title>
+<style>
+:root { color-scheme: dark; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0; padding: 32px; max-width: 1100px; margin: 0 auto; line-height: 1.55; }
+h1 { font-size: 26px; border-bottom: 1px solid #1f2937; padding-bottom: 8px; margin-top: 0; }
+h2 { font-size: 18px; color: #f3f4f6; margin-top: 28px; }
+h3 { font-size: 14px; color: #cbd5e1; }
+a { color: #60a5fa; }
+code { background: #131826; padding: 1px 6px; border-radius: 3px; font-size: 12.5px; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 12px 0 24px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid #1f2937; vertical-align: top; text-align: left; }
+th { background: #0e1422; color: #94a3b8; font-weight: 500; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+blockquote { border-left: 3px solid #475569; margin: 12px 0; padding: 4px 12px; color: #94a3b8; }
+ul { padding-left: 20px; }
+strong { color: #f3f4f6; }
+</style>
+</head>
+<body>
+
+<h1>Poly Copy-Trade Delta Charter</h1>
+
+<h2>Goal</h2>
+
+<p>Systematically drive <code>|delta| = |our_position − scaled(target_position)|</code> to zero across all watched (target, market) pairs. <code>/delta-minimizer</code> investigates ONE incident at a time and produces ONE proven cause. This charter is the rollup: every proven cause lands here, scored, and linked to a design item. Without that aggregation we keep re-investigating the same class of bug under different surface symptoms.</p>
+
+<h2>How to use this charter</h2>
+
+<ul>
+<li><strong>When <code>/delta-minimizer</code> produces a finding:</strong> add or update a row in the projects/taxonomy below. Cite the incident (market + tape).</li>
+<li><strong>When triaging a new bug:</strong> read the taxonomy first. If the symptom matches a known class, link to the existing class instead of creating a new ticket.</li>
+<li><strong>When designing a fix:</strong> the design item must reference a class (or argue for a new one).</li>
+</ul>
+
+<p>A new class is added only when the failure mode is <strong>structurally distinct</strong> — same gate, different price → same class. Different gate or different data structure assumption → new class.</p>
+
+<h2>Projects</h2>
+
+<p>Delta classes ranked by observed impact across the tapes we've investigated. Status reflects whether a design item is in-flight or shipped.</p>
+
+<table>
+<thead><tr><th>#</th><th>Class</th><th>Symptom</th><th>Proof tape</th><th>Root cause</th><th>Design item</th><th>Status</th></tr></thead>
+<tbody><tr><td><strong>D1</strong></td><td><strong>Information lag</strong></td><td>Mirror reacts to target fills ~5 min after they happen; price has moved away.</td><td>swisstony Hon · 12:22:59Z fill → 12:28:32Z decision (5 min 33 sec).</td><td><code>WS_NO_WALLET_IDENTITY</code> forces a Data-API <code>/trades</code> drain to attach maker/taker addresses; <code>/trades</code> is server-cached and stale.</td><td>task.5043 — Polygon <code>OrderFilled</code> chain-log source via viem <code>watchContractEvent</code> filtered by indexed wallet topics. ~2 sec lag.</td><td><strong>🟡 IN-FLIGHT</strong> (PR #23)</td></tr><tr><td><strong>D2</strong></td><td><strong>Fill-chase / adverse selection</strong></td><td>We react to target's _latest_ fill, which clusters at price spikes. Target's true position has good VWAP because they built quietly; our reactive VWAP is bad by construction.</td><td>swisstony Hon · target VWAP $0.632 built across 12:04–13:12Z; our 51.68 sh filled at $0.31 _after_ the price spike crashed.</td><td><code>planMirrorFromFill(fill, …)</code> API is fill-shaped. The mirror is a fill replay machine, not a position tracker. Every fill is a fresh decision; no concept of "target's current state vs my current state".</td><td>New spec — <code>docs/spec/poly-copy-trade-position-mirror.md</code>. Replace <code>planMirrorFromFill</code> with <code>planMirrorFromPositionGap(target_state, our_state)</code>; add <code>GapExecutor</code>.</td><td><strong>🔴 NOT STARTED</strong></td></tr><tr><td><strong>D3</strong></td><td><strong>Hedge blindness</strong></td><td>We mirror only the dominant side of a target's condition position; cheap insurance / long-shot hedges get silently dropped.</td><td>swisstony Bandecchi · 13,813 sh @ $0.015 = $211 cost = +$13,595 realized P/L. We held zero. All 7 entries blocked by <code>target_dominant_other_side</code>.</td><td><code>target_dominant_other_side</code> gate computes "dominance" by USDC cost-basis fraction and skips any entry below <code>min_target_side_fraction</code> (default 0.2). Bandecchi was 0.02–0.27 of target USDC throughout.</td><td>Dissolve the gate in the position-mirror refactor (D2). Position-mirror tracks every token-id position independently — no concept of "the other side".</td><td><strong>🔴 NOT STARTED</strong> (subsumed by D2)</td></tr><tr><td><strong>D4</strong></td><td><strong>VWAP gate bouncing</strong></td><td><code>vwap_floor_breach</code> rejects fills above target's running VWAP, but fires per-fill — so we skip the whole run-up phase of a target position, then react on the crash, then chase again on the next run-up.</td><td>swisstony Hon · 17 of 32 target fills rejected with <code>vwap_floor_breach</code> while target was actively accumulating.</td><td><code>NEVER_PAY_ABOVE_TARGET_VWAP</code> invariant is correct _in principle_ but wrong _layer_ — should be a property of a gap-eval (do I want more of this position at this price?), not a per-event filter.</td><td>Dissolve in D2. Position-mirror sets <code>vwap_ceiling = target_vwap + ε</code> as a _limit-price bound on the gap executor_, not a fill gate.</td><td><strong>🔴 NOT STARTED</strong> (subsumed by D2)</td></tr><tr><td><strong>D5</strong></td><td><strong>Order staleness churn</strong></td><td>Mirror orders rest at stale prices for 2 min, then sweep cancels them; cycle repeats. Under fast latency (D1 fixed) this churns into cancel-replace storms during price surges.</td><td>bug.5035 documented under the old 5-min regime; expected to _worsen_ under task.5043's ~2 sec latency.</td><td>Resting-sweep TTL is a band-aid for fill-driven placements that go out-of-band-of-market before they fill. The orders shouldn't exist as long-lived stale objects — they should be re-derived each tick from the gap.</td><td>Dissolve in D2. <code>GapExecutor.reconcile(gap, book, our_resting)</code> decides cancel/place each tick; no order outlives the gap that motivated it. Pre-D2: widen the staleness threshold dynamically (3pp → adaptive on volatility).</td><td><strong>🟡 PARTIAL</strong> (cancel-replace exists; debounce missing)</td></tr><tr><td><strong>D6</strong></td><td><strong>Per-fill sizing instead of per-gap sizing</strong></td><td>Each target fill is scaled by <code>capital_fraction</code> and placed. We never settle to a steady-state proportion — we just accumulate event-by-event.</td><td>Implicit in every tape; not a single-incident proof. swisstony: target accumulated to 3960 sh; if all our reactions had hit at perfect timing we'd have a position scaled per-event, not per-target-state.</td><td><code>sizing_policy</code> in <code>plan-mirror.ts</code> operates on <code>fill.size_usdc</code>. There's no <code>desired_position_shares</code> anywhere in the planner.</td><td>Dissolve in D2. <code>desired_shares = scale(target_shares, capital_alloc, per-target cap)</code>; <code>gap_shares = desired − ours</code>. Sizer reads the gap, not a fill.</td><td><strong>🔴 NOT STARTED</strong> (subsumed by D2)</td></tr><tr><td><strong>D7</strong></td><td><strong>Reorg blindness (post-chain-source)</strong></td><td>Chain logs arrive at <code>confirmations: 1</code> (no buffer). A reorg of an emitted fill leaves orphan mirror orders on CLOB until the <code>clob_not_found</code> 15-min grace expires.</td><td>Theoretical for now; the task.5043 source ships with <code>CHAIN_REORG_POLICY_V0</code> documenting this.</td><td><code>watchContractEvent</code> delivers raw logs; we drop <code>log.removed === true</code> retractions but already-emitted Fills aren't recalled.</td><td>task.5043 follow-up — add 1-block delay buffer OR switch to <code>getLogs(toBlock: latest - N)</code>.</td><td><strong>🔴 NOT STARTED</strong></td></tr><tr><td><strong>D8</strong></td><td><strong>Metadata cache miss on new-market entry</strong></td><td>Target's very first fill into a market they don't yet hold elsewhere has no <code>(condition_id, outcome, end_date)</code> in the position-cache; chain source drops it with <code>metadata_unresolved</code>.</td><td>Theoretical for now; the task.5043 source ships with <code>METADATA_FROM_POSITIONS</code>.</td><td><code>listUserPositions(target)</code> lags the chain by seconds; first-fill-in-new-market is a race.</td><td>task.5043 follow-up — fall back to Polymarket Gamma <code>/markets?clob_token_ids=&lt;id&gt;</code> for metadata when positions cache misses.</td><td><strong>🔴 NOT STARTED</strong></td></tr></tbody>
+</table>
+
+<h2>Constraints</h2>
+
+<p>What blocks driving the table to green:</p>
+
+<ul>
+<li><strong>Single execution surface.</strong> Today's pipeline is fill-driven end-to-end (<code>planMirrorFromFill</code>). Any class that isn't dissolvable by adding a per-fill gate (D2/D3/D4/D6) requires the position-mirror refactor. No incremental in-place fix for those.</li>
+<li><strong>Chain RPC dependency.</strong> D1's solution (chain source, task.5043) makes the mirror hard-dependent on <code>POLYGON_RPC_URL</code>. If that RPC degrades, the mirror is silent — a single point of failure we accept v0 in exchange for sub-second target detection.</li>
+<li><strong>No live regression test.</strong> Replaying a recorded tape (e.g. swisstony WTA Parma) against a candidate planner change is not wired. Each design iteration is validated against synthetic logs + production observation only. Adding a tape-replay harness is itself a project on this charter, not yet listed.</li>
+<li><strong>Capital cap of $30/trade (v0).</strong> Even when delta-classes are dissolved, absolute P/L impact is bounded by <code>mirror_max_usdc_per_trade</code>. This charter measures _delta minimization_, not _P/L maximization_ — those will diverge until v1.</li>
+</ul>
+
+<h2>Categories at a glance</h2>
+
+<ul>
+<li><strong>🟡 IN-FLIGHT (1 of 8 named classes):</strong> D1 information lag (PR #23 lands the source rewrite + lag instrumentation). D5 partial.</li>
+<li><strong>🔴 NOT STARTED (5 of 8):</strong> D2, D3, D4, D6 are all subsumed by the same architectural refactor (position-mirror). D7, D8 are smaller task.5043 follow-ups.</li>
+<li><strong>Inference:</strong> the single highest-leverage piece of work _after_ PR #23 ships is the position-mirror spec — it dissolves D2, D3, D4, D6 in one design. Treat as one project, not four.</li>
+</ul>
+
+<h2>Working agreements</h2>
+
+<p>1. <strong>No new gate is added to <code>plan-mirror.ts</code></strong> without a charter entry naming the delta class it addresses. We are over-indexed on per-fill gates already; adding more without classifying the bug they target is how we ended up here.</p>
+<p>2. <strong>Every <code>/delta-minimizer</code> proof updates this charter</strong> before the user-facing reply ends. Either a row gets added or an existing row's "proof tape" list grows. Otherwise we re-litigate.</p>
+<p>3. <strong>When a class moves to 🟢 SHIPPED</strong>, the row stays in the table with a <code>Shipped: &lt;PR / SHA&gt;</code> note in the Status column. The shipped class is still a category — it's how we measure regression.</p>
+
+<h2>Pointers</h2>
+
+<ul>
+<li><code>/delta-minimizer</code> skill: <code>.claude/skills/delta-minimizer/SKILL.md</code> — per-incident investigator</li>
+<li>Execution contract: <code>docs/spec/poly-copy-trade-execution.md</code> — what <code>planMirrorFromFill</code> is supposed to do today</li>
+<li>Position-mirror design (new): <code>docs/spec/poly-copy-trade-position-mirror.md</code> — the D2/D3/D4/D6 dissolution proposal</li>
+<li>Lag instrumentation + chain source: PR #23 / task.5043 / task.5042</li>
+</ul>
+
+</body>
+</html>
