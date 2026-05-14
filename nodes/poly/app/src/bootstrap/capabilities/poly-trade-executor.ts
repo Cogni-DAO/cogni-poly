@@ -413,7 +413,10 @@ async function buildExecutor(
   async function closePosition(
     params: ClosePositionParams
   ): Promise<OrderReceipt> {
-    const positions = await dataApiClient.listUserPositions(funderAddress);
+    // bug.5055 — single-page listUserPositions caps at ~100 rows (bug.5027).
+    // Funders routinely hold long-tail positions; truncation would throw
+    // `no_position_to_close` spuriously on any tokenId outside the top page.
+    const positions = await dataApiClient.listAllUserPositions(funderAddress);
     const position = positions.find((p) => p.asset === params.tokenId);
     if (!position || position.size <= 0) {
       throw new PolyTradeExecutorError(
@@ -511,7 +514,10 @@ async function buildExecutor(
     });
 
     const marketExitAdapter = adapter as typeof adapter & MarketExitAdapter;
-    const positions = await dataApiClient.listUserPositions(funderAddress);
+    // bug.5055 — paginate. Truncation here would silently bypass the
+    // minShares-vs-onchain-balance branch and force every long-tail exit
+    // through the on-chain fallback, masking the underlying coverage gap.
+    const positions = await dataApiClient.listAllUserPositions(funderAddress);
     const position = positions.find((p) => p.asset === params.tokenId);
     const dataApiShares = position?.size ?? 0;
     let shares = dataApiShares;
@@ -581,7 +587,11 @@ async function buildExecutor(
     placeIntent: authorizedPlace,
     closePosition,
     exitPosition,
-    listPositions: () => dataApiClient.listUserPositions(funderAddress),
+    // bug.5055 — paginate. Consumer is mirror-pipeline SELL path
+    // (sell_without_position skip); single-page truncation drops long-tail
+    // SELLs into the same silent-loss bucket as the chain-source metadata
+    // cache miss.
+    listPositions: () => dataApiClient.listAllUserPositions(funderAddress),
     getOrder: adapter.getOrder.bind(adapter),
     cancelOrder,
     getMarketConstraints: adapter.getMarketConstraints.bind(adapter),

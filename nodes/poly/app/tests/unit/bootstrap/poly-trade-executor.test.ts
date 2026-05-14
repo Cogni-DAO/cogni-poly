@@ -5,7 +5,7 @@ import type { OrderReceipt } from "@cogni/poly-market-provider";
 import type { PolyTraderWalletPort } from "@cogni/poly-wallet";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const listUserPositions = vi.fn();
+const listAllUserPositions = vi.fn();
 const placeOrder = vi.fn();
 const sellPositionAtMarket = vi.fn();
 const getOrder = vi.fn();
@@ -28,7 +28,7 @@ vi.mock("@cogni/poly-market-provider/adapters/polymarket", () => {
   }
 
   class FakePolymarketDataApiClient {
-    listUserPositions = listUserPositions;
+    listAllUserPositions = listAllUserPositions;
   }
 
   return {
@@ -156,7 +156,7 @@ function makeWalletPort(): PolyTraderWalletPort {
 describe("createPolyTradeExecutorFactory", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    listUserPositions.mockReset();
+    listAllUserPositions.mockReset();
     placeOrder.mockReset();
     sellPositionAtMarket.mockReset();
     getOrder.mockReset();
@@ -174,7 +174,7 @@ describe("createPolyTradeExecutorFactory", () => {
   });
 
   it("exitPosition sells the wallet's full share balance via market order without grant-cap authorization", async () => {
-    listUserPositions.mockResolvedValue([
+    listAllUserPositions.mockResolvedValue([
       {
         asset: "token-1",
         size: 5,
@@ -216,12 +216,12 @@ describe("createPolyTradeExecutorFactory", () => {
       orderType: "FAK",
     });
     expect(sellPositionAtMarket).toHaveBeenCalledTimes(1);
-    expect(listUserPositions).toHaveBeenCalledTimes(1);
+    expect(listAllUserPositions).toHaveBeenCalledTimes(1);
     expect(walletPort.authorizeIntent).not.toHaveBeenCalled();
   });
 
   it("exitPosition returns an accepted pending market sell without retrying the same shares", async () => {
-    listUserPositions.mockResolvedValue([
+    listAllUserPositions.mockResolvedValue([
       {
         asset: "token-1",
         size: 5,
@@ -257,11 +257,11 @@ describe("createPolyTradeExecutorFactory", () => {
 
     expect(result).toEqual(receipt);
     expect(sellPositionAtMarket).toHaveBeenCalledTimes(1);
-    expect(listUserPositions).toHaveBeenCalledTimes(1);
+    expect(listAllUserPositions).toHaveBeenCalledTimes(1);
   });
 
   it("exitPosition reads on-chain CTF balance when Data API omits a legacy holding", async () => {
-    listUserPositions.mockResolvedValue([]);
+    listAllUserPositions.mockResolvedValue([]);
     readContract.mockResolvedValue(4_898_000n);
     const receipt: OrderReceipt = {
       order_id: "0xexit",
@@ -303,7 +303,7 @@ describe("createPolyTradeExecutorFactory", () => {
   });
 
   it("exitPosition reads on-chain CTF balance when Data API reports sub-floor shares", async () => {
-    listUserPositions.mockResolvedValue([
+    listAllUserPositions.mockResolvedValue([
       {
         asset: "123",
         size: 0.67,
@@ -355,7 +355,7 @@ describe("createPolyTradeExecutorFactory", () => {
   });
 
   it("exitPosition self-heals trading approvals when the readiness stamp is missing", async () => {
-    listUserPositions
+    listAllUserPositions
       .mockResolvedValueOnce([
         {
           asset: "token-1",
@@ -416,7 +416,7 @@ describe("createPolyTradeExecutorFactory", () => {
   });
 
   it("closePosition caps SELL notional at the requested limit price so it never oversells shares", async () => {
-    listUserPositions.mockResolvedValue([
+    listAllUserPositions.mockResolvedValue([
       {
         asset: "token-1",
         size: 5,
