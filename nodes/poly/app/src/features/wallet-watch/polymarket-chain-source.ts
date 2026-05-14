@@ -4,14 +4,14 @@
 /**
  * Module: `@features/wallet-watch/polymarket-chain-source`
  * Purpose: `WalletActivitySource` implementation that listens to Polygon `OrderFilled` events on Polymarket's CTF Exchange V2 + NegRisk Exchange V2 contracts, filtered at the RPC layer by indexed target-wallet topics. Replaces the `polymarket-ws-source` Data-API drain — the wake-up path was sub-second already, but `WS_NO_WALLET_IDENTITY` forced a ~5min `/trades` poll to attach wallet identity. Chain logs carry maker/taker as indexed event fields, so identity arrives with the data and the drain is gone.
- * Scope: One source instance per (target wallet). Holds 2 viem `watchContractEvent` subscriptions — one per exchange contract (V2 + NegRisk V2), filtered at the RPC layer by `maker = target_wallet`. Polymarket emits one `OrderFilled` per party per match, so the maker-only filter catches every target trade and the event's `side` field is target's side directly. Decodes price/size/side from log fields alone; enriches `(condition_id, outcome, end_date)` from a `listUserPositions(wallet)` snapshot refreshed every `refreshAssetsIntervalMs`. Pushes via `subscribeWake` callbacks; `fetchSince` drains the in-memory ring buffer.
+ * Scope: One source instance per (target wallet). Holds 2 viem `watchContractEvent` subscriptions — one per exchange contract (V2 + NegRisk V2), filtered at the RPC layer by `maker = target_wallet`. Polymarket emits one `OrderFilled` per party per match, so the maker-only filter catches every target trade and the event's `side` field is target's side directly. Decodes price/size/side from log fields alone; enriches `(condition_id, outcome, end_date)` from a fully-paginated `listAllUserPositions(wallet)` snapshot refreshed every `refreshAssetsIntervalMs`. Pushes via `subscribeWake` callbacks; `fetchSince` drains the in-memory ring buffer.
  * Invariants:
  *   - FILL_ID_SHAPE_CHAIN — `fill_id = "chain:" + txHash + ":" + logIndex + ":" + side`. `(txHash, logIndex)` is a globally unique log coordinate, so the id is deterministic from chain state alone: two readers of the same log produce the same `fill_id` and `(target_id, fill_id)` unique-index dedupes correctly across replays + multi-pod. Cross-source collision with `data-api:` is structurally impossible (different prefix).
  *   - OBSERVED_AT_IS_BLOCK_TIMESTAMP — `observed_at` is the Polygon `block.timestamp` (ISO-8601) — same semantic as the prior data-api source's `trade.timestamp`, so the task.5042 lag histogram measures actual target → mirror latency and remains comparable across sources. `block.timestamp` is fetched via memoized `getBlock` (one RPC per unique block; logs in the same block share the cached value). On `getBlock` failure we fall back to wall-clock with a warn log + `getBlockTimestampFallback` counter — fills are NEVER dropped for a transient RPC issue; lag histogram degrades to a ≤ ~2 s under-report rather than silently losing trades.
  *   - CHAIN_REORG_POLICY_V0 — `watchContractEvent` delivers logs with no confirmations buffer; reorg retractions arrive as `log.removed === true` on the next poll, are dropped + counted (`poly_mirror_chain_skip_total{reason="reorg"}`), but already-emitted Fills are NOT recalled. Mirror orders placed on a reorged log sit on CLOB until the order-reconciler (`bootstrap/jobs/order-reconciler.job`) hits its `clob_not_found` grace window (default 900 s). v1 hardening: 1-block delay-buffer or `getLogs(toBlock: latest - N)`. task.5043 follow-up.
  *   - CURSOR_IS_MAX_TIMESTAMP — `newSince` = max `block.timestamp` (unix seconds) emitted this drain.
  *   - CHAIN_TRANSPORT_IS_PUSH — the caller-supplied `publicClient` MUST use viem's `webSocket()` transport so `watchContractEvent` issues `eth_subscribe` (push, server-side filter). HTTP transport falls back to `eth_newFilter` + `eth_getFilterChanges` polling, which Alchemy garbage-collects and viem 2.39 does not recreate (bug.5051 — observed ~98% event miss rate). Same WSS client multiplexes all per-target subscriptions + `getBlock` lookups onto one connection.
- *   - METADATA_FROM_POSITIONS — `(condition_id, outcome, end_date)` enriched from `listUserPositions(wallet)`, refreshed every `refreshAssetsIntervalMs`. Cache miss triggers an immediate refresh + retry; still-missing OR empty-outcome → skip with `metadata_unresolved` + warn. Empty-outcome skip prevents wrong-leg mirroring on NegRisk multi-outcome markets.
+ *   - METADATA_FROM_POSITIONS — `(condition_id, outcome, end_date)` enriched from `listAllUserPositions(wallet)` (paginated to exhaustion — bug.5055; the single-page `listUserPositions` silently caps at ~100 rows per bug.5027, which would drop everything past the top page), refreshed every `refreshAssetsIntervalMs`. Cache miss triggers an immediate refresh + retry; still-missing OR empty-outcome → skip with `metadata_unresolved` + warn. Empty-outcome skip prevents wrong-leg mirroring on NegRisk multi-outcome markets.
  * Side-effects: opens 2 viem RPC subscriptions; HTTPS GETs to data-api.polymarket.com on each metadata refresh; logger + metrics; periodic heartbeat info log.
  * Links: docs/spec/poly-copy-trade-execution.md, work/items/task.5043, work/items/task.5042
  * @public
@@ -262,8 +262,12 @@ export function createPolymarketChainActivitySource(
         deps.metrics.incr(WALLET_WATCH_CHAIN_METRICS.metadataRefreshTotal, {
           trigger,
         });
+        // bug.5055: must paginate. Single-call `listUserPositions` caps at
+        // ~100 rows (Polymarket default page). Active targets hold thousands
+        // of positions; any tokenId outside the top page → permanent
+        // metadata_unresolved skip. Use the page-walking helper.
         const positions: PolymarketUserPosition[] =
-          await deps.client.listUserPositions(deps.wallet);
+          await deps.client.listAllUserPositions(deps.wallet);
         for (const p of positions) {
           if (!p.asset || !p.conditionId) continue;
           tokenMeta.set(p.asset, {
