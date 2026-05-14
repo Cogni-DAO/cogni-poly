@@ -330,6 +330,18 @@ describe("PolymarketDataApiClient.listAllUserPositions", () => {
     expect(url).toContain("limit=500");
     expect(url).toContain("offset=0");
   });
+
+  it("defaults sizeThreshold=0 so sub-dollar positions are not silently omitted", async () => {
+    // Polymarket's /positions endpoint applies a non-zero default threshold
+    // server-side. Without an explicit `sizeThreshold=0`, winning positions
+    // with `currentValue < ~$1` are dropped from the response — leaving the
+    // redeem-diff blind to them and stranding them indefinitely.
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse([]));
+    const client = new PolymarketDataApiClient({ fetch: fetchImpl });
+    await client.listAllUserPositions(wallet);
+    const url = fetchImpl.mock.calls[0]?.[0] as string;
+    expect(url).toContain("sizeThreshold=0");
+  });
 });
 
 describe("PolymarketDataApiClient.listActivity", () => {

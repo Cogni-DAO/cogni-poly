@@ -21,6 +21,7 @@
 import { createHash } from "node:crypto";
 import {
   type PolyTraderWallet,
+  polyMarketOutcomes,
   polyTraderCurrentPositions,
   polyTraderFills,
   polyTraderIngestionCursors,
@@ -39,7 +40,16 @@ import {
   type PolymarketUserPnlClient,
   type PolymarketUserPosition,
 } from "@cogni/poly-market-provider/adapters/polymarket";
-import { and, eq, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  exists,
+  inArray,
+  isNull,
+  lt,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { refreshMarketMetadata } from "./poly-market-metadata-service";
@@ -653,6 +663,37 @@ async function persistObservedCurrentPositions(
         },
       });
   }
+  // Deactivate resolved-loser positions on every tick. CTF loser tokens stay
+  // ERC1155-held at $0 forever, and Polymarket Data API keeps reporting them
+  // with size>0 — without this, every active-position aggregation is polluted
+  // by hundreds of terminal-zero rows. Idempotent; safe to re-run.
+  await db
+    .update(polyTraderCurrentPositions)
+    .set({ active: false, lastObservedAt: capturedAt })
+    .where(
+      and(
+        eq(polyTraderCurrentPositions.traderWalletId, wallet.id),
+        eq(polyTraderCurrentPositions.active, true),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(polyMarketOutcomes)
+            .where(
+              and(
+                eq(
+                  polyMarketOutcomes.conditionId,
+                  polyTraderCurrentPositions.conditionId
+                ),
+                eq(
+                  polyMarketOutcomes.tokenId,
+                  polyTraderCurrentPositions.tokenId
+                ),
+                eq(polyMarketOutcomes.outcome, "loser")
+              )
+            )
+        )
+      )
+    );
   const staleDisposition = pageResult.complete
     ? await classifyStaleCurrentPositionRows(db, wallet, capturedAt, options)
     : { deactivateTokenIds: [], preservedRows: 0 };
