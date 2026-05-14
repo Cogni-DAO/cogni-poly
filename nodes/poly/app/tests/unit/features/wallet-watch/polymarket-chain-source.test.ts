@@ -327,12 +327,13 @@ function makeHarness(opts?: {
   } as unknown as PublicClient;
 
   const dataApiClient = {
-    async listUserPositions(
+    async listAllUserPositions(
       _wallet: string
     ): Promise<PolymarketUserPosition[]> {
       // Return a snapshot of the current `positions` array. Tests mutate the
       // array between events to simulate Polymarket's position endpoint
-      // catching up to a fresh trade.
+      // catching up to a fresh trade. Production uses listAllUserPositions
+      // (paginated walk) per bug.5055; tests stub the same method.
       return [...positions];
     },
   } as unknown as PolymarketDataApiClient;
