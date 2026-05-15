@@ -58,7 +58,7 @@ jobs:
       COGNI_NODE_DBS: ${{ inputs.cogni_node_dbs != '' && inputs.cogni_node_dbs || secrets.COGNI_NODE_DBS }}
       VM_HOST: ${{ secrets.VM_HOST }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup SSH
         if: inputs.bootstrap_pdc_agent == 'true'
