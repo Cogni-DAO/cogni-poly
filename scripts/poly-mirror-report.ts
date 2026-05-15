@@ -18,7 +18,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -1220,7 +1220,6 @@ function renderHtml(args: {
   target: Target;
   ourWallet: string;
   ourLabel: string;
-  charterRelPath: string;
 }): string {
   const {
     input,
@@ -1231,7 +1230,6 @@ function renderHtml(args: {
     target,
     ourWallet,
     ourLabel,
-    charterRelPath,
   } = args;
   // Time scale: first activity → last activity (NOT market resolution). This keeps the
   // actual trading window visible; otherwise the action gets jammed against the left edge
@@ -1356,7 +1354,7 @@ h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
 <h1>Δ-Report · ${escapeHtml(headerTitle)}</h1>
 <div class="sub">
   Input: <code>${escapeHtml(input)}</code> · Copy-target: <strong style="color:#34d399">${escapeHtml(target.label)}</strong> <code>${escapeHtml(target.wallet)}</code> · Our wallet: <code>${escapeHtml(ourWallet)}</code><br/>
-  Charter: <a href="${escapeHtml(charterRelPath)}">POLY_COPY_DELTA</a> · ${groups.length} event group${groups.length === 1 ? "" : "s"} · ${totalDecisions} mirror decisions · Global time scale: ${fmtTime(tMin)} → ${fmtTime(tMax)}
+  Charter: <a href="../../work/charters/POLY_COPY_DELTA.md">POLY_COPY_DELTA.md</a> (source of truth — edit in place, surgically) · ${groups.length} event group${groups.length === 1 ? "" : "s"} · ${totalDecisions} mirror decisions · Global time scale: ${fmtTime(tMin)} → ${fmtTime(tMax)}
 </div>
 
 <!-- TAKEAWAY:START -->
@@ -1377,237 +1375,12 @@ ${groupsHtml}
 </html>`;
 }
 
-// (renderAiWalkthrough deleted. Was 80% static boilerplate + 20% data already
-// in bundle.json — net zero analytical value. AI read surface is bundle.json;
-// guidelines are in .claude/skills/delta-minimizer/SKILL.md.)
-
-// ---------- Charter md → html ----------
-
-function markdownToHtml(md: string): string {
-  const lines = md.split("\n");
-  const out: string[] = [];
-  let i = 0;
-  let inUl = false;
-  const closeList = () => {
-    if (inUl) {
-      out.push("</ul>");
-      inUl = false;
-    }
-  };
-  const inline = (s: string): string => {
-    let r = escapeHtml(s);
-    r = r.replace(/`([^`]+)`/g, "<code>$1</code>");
-    r = r.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    r = r.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-    r = r.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-    return r;
-  };
-  while (i < lines.length) {
-    const line = lines[i];
-    if (i === 0 && line.trim() === "---") {
-      i++;
-      while (i < lines.length && lines[i].trim() !== "---") i++;
-      i++;
-      continue;
-    }
-    if (/^#{1,6}\s+/.test(line)) {
-      closeList();
-      const m = /^(#{1,6})\s+(.*)$/.exec(line);
-      if (!m) {
-        i++;
-        continue;
-      }
-      out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`);
-      i++;
-      continue;
-    }
-    if (
-      /^\|.*\|/.test(line) &&
-      i + 1 < lines.length &&
-      /^\|[\s-:|]+\|/.test(lines[i + 1])
-    ) {
-      closeList();
-      const headers = line
-        .split("|")
-        .slice(1, -1)
-        .map((c) => c.trim());
-      i += 2;
-      const rows: string[][] = [];
-      while (i < lines.length && /^\|.*\|/.test(lines[i])) {
-        rows.push(
-          lines[i]
-            .split("|")
-            .slice(1, -1)
-            .map((c) => c.trim())
-        );
-        i++;
-      }
-      out.push("<table>");
-      out.push(
-        `<thead><tr>${headers.map((h) => `<th>${inline(h)}</th>`).join("")}</tr></thead>`
-      );
-      const bodyCells = rows
-        .map(
-          (r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`
-        )
-        .join("");
-      out.push(`<tbody>${bodyCells}</tbody>`);
-      out.push("</table>");
-      continue;
-    }
-    if (/^- /.test(line)) {
-      if (!inUl) {
-        out.push("<ul>");
-        inUl = true;
-      }
-      out.push(`<li>${inline(line.replace(/^- /, ""))}</li>`);
-      i++;
-      continue;
-    }
-    if (/^> /.test(line)) {
-      closeList();
-      out.push(`<blockquote>${inline(line.replace(/^> /, ""))}</blockquote>`);
-      i++;
-      continue;
-    }
-    if (line.trim() === "") {
-      closeList();
-      out.push("");
-      i++;
-      continue;
-    }
-    closeList();
-    out.push(`<p>${inline(line)}</p>`);
-    i++;
-  }
-  closeList();
-  return out.join("\n");
-}
-
-// Scan every report's findings.json and tally per D-class.
-type CharterTally = {
-  class_id: string;
-  count: number;
-  reports: {
-    slug: string;
-    primary: boolean;
-    confidence: number | null;
-    one_liner: string | null;
-  }[];
-};
-
-function collectCharterTallies(
-  researchRoot: string
-): Map<string, CharterTally> {
-  const out = new Map<string, CharterTally>();
-  let entries: string[] = [];
-  try {
-    entries = readdirSync(researchRoot, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name);
-  } catch {
-    return out;
-  }
-  for (const slug of entries) {
-    const findingsPath = join(researchRoot, slug, "findings.json");
-    let f: {
-      primary_class?: string | null;
-      primary_confidence?: number | null;
-      primary_one_liner?: string | null;
-      secondary_class?: string | null;
-      secondary_confidence?: number | null;
-      secondary_one_liner?: string | null;
-    };
-    try {
-      f = JSON.parse(readFileSync(findingsPath, "utf8"));
-    } catch {
-      continue;
-    }
-    const push = (
-      cls: string | null | undefined,
-      isPrimary: boolean,
-      conf: number | null | undefined,
-      ol: string | null | undefined
-    ) => {
-      if (!cls) return;
-      let t = out.get(cls);
-      if (!t) {
-        t = { class_id: cls, count: 0, reports: [] };
-        out.set(cls, t);
-      }
-      t.count++;
-      t.reports.push({
-        slug,
-        primary: isPrimary,
-        confidence: conf ?? null,
-        one_liner: ol ?? null,
-      });
-    };
-    push(f.primary_class, true, f.primary_confidence, f.primary_one_liner);
-    push(
-      f.secondary_class,
-      false,
-      f.secondary_confidence,
-      f.secondary_one_liner
-    );
-  }
-  return out;
-}
-
-function renderCharterHtml(
-  md: string,
-  tallies: Map<string, CharterTally>
-): string {
-  const tallySection: string[] = [];
-  tallySection.push(
-    `<h2>Investigation tallies <span style="font-size:11px;color:#6b7280;font-weight:400">(from <code>findings.json</code> in each report subdir)</span></h2>`
-  );
-  if (tallies.size === 0) {
-    tallySection.push(
-      `<p style="color:#6b7280;font-style:italic">No <code>findings.json</code> entries with a populated <code>primary_class</code> yet. Each report's findings.json starts as a stub — the LLM fills it after authoring the takeaway.</p>`
-    );
-  } else {
-    tallySection.push(
-      `<table class="tallies"><thead><tr><th>Charter class</th><th>Investigations</th><th>Most recent reports</th></tr></thead><tbody>`
-    );
-    const sorted = [...tallies.values()].sort((a, b) => b.count - a.count);
-    for (const t of sorted) {
-      const recent = t.reports.slice(-3).reverse();
-      const reportsHtml = recent
-        .map(
-          (r) =>
-            `<a href="${escapeHtml(r.slug)}/report.html" title="${escapeHtml(r.one_liner ?? "")}">${escapeHtml(r.slug)}</a><span style="color:#6b7280">${r.primary ? "" : " (2°)"}${r.confidence != null ? ` ${Math.round(r.confidence * 100)}%` : ""}</span>`
-        )
-        .join("<br/>");
-      tallySection.push(
-        `<tr><td><strong>${escapeHtml(t.class_id)}</strong></td><td><strong>${t.count}</strong></td><td>${reportsHtml || "—"}</td></tr>`
-      );
-    }
-    tallySection.push(`</tbody></table>`);
-  }
-
-  return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"/><title>Poly Copy-Trade Δ Charter</title>
-<style>
-:root { color-scheme: dark; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0; padding: 32px; max-width: 1100px; margin: 0 auto; line-height: 1.55; }
-h1 { font-size: 26px; border-bottom: 1px solid #1f2937; padding-bottom: 8px; margin-top: 0; }
-h2 { font-size: 18px; color: #f3f4f6; margin-top: 28px; }
-h3 { font-size: 14px; color: #cbd5e1; }
-a { color: #60a5fa; }
-code { background: #131826; padding: 1px 6px; border-radius: 3px; font-size: 12.5px; }
-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 12px 0 24px; }
-th, td { padding: 8px 10px; border-bottom: 1px solid #1f2937; vertical-align: top; text-align: left; }
-th { background: #0e1422; color: #94a3b8; font-weight: 500; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
-table.tallies td { font-size: 12px; }
-blockquote { border-left: 3px solid #475569; margin: 12px 0; padding: 4px 12px; color: #94a3b8; }
-ul { padding-left: 20px; }
-strong { color: #f3f4f6; }
-</style></head><body>
-${tallySection.join("\n")}
-${markdownToHtml(md)}
-</body></html>`;
-}
+// (Charter render removed. The charter is LLM-owned at
+// work/charters/POLY_COPY_DELTA.md and edits go through the skill workflow,
+// not this script. Auto-derived investigation tallies were an anti-pattern:
+// they implied the tool had opinions about the charter, and they forced a
+// re-run of the script just to refresh the rendered html after the LLM
+// authored a findings.json. Report headers link directly to the .md.)
 
 // ---------- main ----------
 
@@ -1734,24 +1507,6 @@ async function main() {
   const outDir = join(REPO_ROOT, "research/delta-minimizing", `${slug}-${ts}`);
   mkdirSync(outDir, { recursive: true });
 
-  // Shared charter HTML — single copy at research/delta-minimizing/charter.html.
-  // Re-rendered every run so it tracks the latest .md content.
-  const charterMdPath = join(REPO_ROOT, "work/charters/POLY_COPY_DELTA.md");
-  const sharedCharterPath = join(
-    REPO_ROOT,
-    "research/delta-minimizing/charter.html"
-  );
-  let charterRelPath = "../charter.html";
-  try {
-    const charterMd = readFileSync(charterMdPath, "utf8");
-    const tallies = collectCharterTallies(
-      join(REPO_ROOT, "research/delta-minimizing")
-    );
-    writeFileSync(sharedCharterPath, renderCharterHtml(charterMd, tallies));
-  } catch {
-    charterRelPath = "../../work/charters/POLY_COPY_DELTA.md";
-  }
-
   const html = renderHtml({
     input: args.market,
     groups,
@@ -1761,7 +1516,6 @@ async function main() {
     target,
     ourWallet,
     ourLabel,
-    charterRelPath,
   });
   writeFileSync(join(outDir, "report.html"), html);
 
@@ -1783,8 +1537,8 @@ async function main() {
   );
   console.error(`[mirror-report] bundle JSON → ${join(outDir, "bundle.json")}`);
 
-  // findings.json stub — LLM fills this after authoring the takeaway. Charter
-  // renderer reads every report's findings.json to compute per-D-class tallies.
+  // findings.json stub — LLM fills this after authoring the takeaway. The
+  // file lives next to the report for archival, not for re-aggregation.
   const findingsPath = join(outDir, "findings.json");
   writeFileSync(
     findingsPath,
@@ -1806,7 +1560,6 @@ async function main() {
   console.error(`[mirror-report] findings stub → ${findingsPath}`);
 
   console.error(`[mirror-report] HTML       → ${join(outDir, "report.html")}`);
-  console.error(`[mirror-report] charter    → ${sharedCharterPath} (shared)`);
 }
 
 main().catch((e) => {

@@ -34,7 +34,7 @@ Accepts: event slug (`lal-bet-elc-2026-05-12`), conditionId (`0xb974…`), comma
 - `bundle.json` — the structured AI read surface: groups, per-market metrics, decisions with full intent JSON, placedOrders.
 - `findings.json` — empty stub. YOU fill it after authoring the takeaway. Schema below in step 3.
 
-A shared `research/delta-minimizing/charter.html` is re-rendered every run from `work/charters/POLY_COPY_DELTA.md` (the .md is the source of truth — edit there, NOT the .html). Reports are tracked in git (history is essential).
+The charter at `work/charters/POLY_COPY_DELTA.md` is the **source of truth** and is **LLM-owned**. The script does NOT touch it; you do, surgically, in step 3 below. Reports are tracked in git (history is essential).
 
 ### 2 · Cross-reference code BEFORE claiming anything
 
@@ -70,7 +70,7 @@ The previous version of this skill asked for "5 visible drafts" — that rule di
 1. **One primary finding.** Maximum two (secondary only if you can prove it's a different root cause, not a symptom of the primary). If you have three, you haven't reduced enough — keep going.
 2. **The primary finding must cite a file:line.** The right file depends on the finding (see §2 above — `plan-mirror.ts` for gates, `market-exposure-service.ts` for number disagreements, `current-position-read-model.ts` for cache/value, `wallet-watch/*` for latency, etc.). Not "downstream of \<gate\>".
 3. **% confidence is mandatory.** 95% means code path read + decision-count verified + chart confirms. 70% means data points in this direction but the causal chain is plausible-not-proven. Don't write findings under 60%.
-4. **Charter class is mandatory.** Either an existing D1–D8 row OR "no clean row (new symptom)" — and if you claim new, edit `work/charters/POLY_COPY_DELTA.md` IN THE SAME TURN to add the row. No charter handwaves.
+4. **Charter class is mandatory** — but use the existing row. The default move is: name the D-class (e.g. `D6`) and STOP. Do not edit the charter unless one of the surgical triggers below fires. If your finding doesn't fit any existing D-row, say so explicitly (`primary_class: null` with a one-line reason in `findings.json`) — this is the honest answer, not a license to invent.
 5. **Root cause, not symptom.** "VWAP delta", "value zero", "won by accident" are observations. Trace them back to a single code path. If the same line of code explains two findings, they're the same finding.
 6. **Variance check on favorable headlines.** If "+20.7% return" depends on a single fill's timing, say so. The Fix block must include the falsification.
 
@@ -93,7 +93,15 @@ The previous version of this skill asked for "5 visible drafts" — that rule di
 }
 ```
 
-The charter renderer reads every report's `findings.json` to compute per-D-class investigation tallies. Don't skip this step — it's how the charter learns prioritization.
+`findings.json` is archival — it lives next to its report for searchability. Nothing reads it back to re-aggregate.
+
+#### Charter edits: surgical only
+
+If — and only if — this investigation produces concrete new evidence for an existing D-row, append it to that row's **proof tape** column in `POLY_COPY_DELTA.md`. Format: one sentence, one cite (market + decision count + line of evidence). Example: `**Also:** swisstony Parry/Paquet (2026-05-13) — 21 Paquet entry attempts blocked, side-fraction parked at 0.18–0.22.`
+
+Other charter edits — status flips (🔴→🟡→🟢 when a PR ships), rewording a Root cause cell — are allowed but require the same surgical discipline: one cell, one diff, no opportunistic cleanup. Always include the inline link to the proof report.
+
+**Do NOT** add a new D-row, change the D1–D8 numbering, reword the Goal/Constraints/Working-agreements sections, or rerank the priority order without explicit user approval in this turn. The charter is high-leverage shared context; volume = entropy.
 
 ### 4 · Pareto fix block (one line)
 
@@ -114,17 +122,17 @@ The charter renderer reads every report's `findings.json` to compute per-D-class
 - Chart y-axis: symmetric log-$ on net position (primary cost − hedge cost). Net-zero line in the middle; primary side up, hedge side down. Both wallets render regardless of which side they're on.
 - Decision markers strip below the chart, dimmed if the decision was on the hedge token.
 - Group by `event_slug`. Each group gets its own 3-KPI band (Our / Target / Δ-vs-target), per-market table, and chart.
-- Per run, writes `findings.json` stub — LLM fills it with `primary_class` / `primary_confidence` / `primary_one_liner`. The shared `charter.html` aggregates all `findings.json` files into a per-D-class tally table.
+- Per run, writes `findings.json` stub — LLM fills it with `primary_class` / `primary_confidence` / `primary_one_liner`. The script does NOT re-aggregate the stub; the file is archival.
 
 ## What the tool does NOT do
 
 - It does NOT author findings, charter assignments, or confidence levels. Those are YOUR job.
 - It does NOT touch Loki. If a decision row has `outcome='error'`, the errorCode lives on the pino log line. Add a Loki step to your investigation if needed: `scripts/loki-query.sh '{env="production",service="app"} | json | component="mirror-pipeline" |~ "<fill_id_prefix>"' 1440 200`.
-- It does NOT update `POLY_COPY_DELTA.md`. If you discover a class that isn't covered, edit the charter in the same turn — don't just claim it.
+- It does NOT update `POLY_COPY_DELTA.md`, render a charter HTML, or aggregate prior findings. The charter is LLM-owned; see "Charter edits: surgical only" above.
 
 ## Common failures (read once)
 
-- **Claiming a new charter class without verifying the symptom isn't already covered.** D6 ("Per-fill sizing instead of per-gap sizing") already covers `followup_position_too_small`. Read the existing rows first.
+- **Adding charter rows the user didn't ask for.** Default move is "match an existing D-row or say `null`." A new row needs explicit user approval IN THIS TURN. D6 ("Per-fill sizing instead of per-gap sizing") already covers `followup_position_too_small`.
 - **Saying "likely" or "probably" instead of citing code.** If you haven't read the file, don't write the finding.
 - **Shipping a list of findings instead of one.** If you have 3-4 findings, you haven't reduced. Most cases collapse to a single code-path-rooted finding. Keep going.
 - **Skipping `findings.json`.** The charter learns prioritization from this file. If you leave the stub unpopulated, your investigation didn't count.
@@ -134,8 +142,7 @@ The charter renderer reads every report's `findings.json` to compute per-D-class
 
 - Tool: `scripts/poly-mirror-report.ts` (invoke via `pnpm tsx`)
 - Output dir: `research/delta-minimizing/<slug>-<iso>/`
-- Shared charter HTML: `research/delta-minimizing/charter.html`
-- Charter source: `work/charters/POLY_COPY_DELTA.md`
+- Charter (LLM-owned, source of truth): `work/charters/POLY_COPY_DELTA.md`
 - Algorithm: `nodes/poly/app/src/features/copy-trade/plan-mirror.ts`
 - Dashboard math: `nodes/poly/app/src/features/wallet-analysis/server/market-exposure-service.ts`
 - Postgres helper: `scripts/grafana-postgres-query.sh` (only when the bundle isn't enough)

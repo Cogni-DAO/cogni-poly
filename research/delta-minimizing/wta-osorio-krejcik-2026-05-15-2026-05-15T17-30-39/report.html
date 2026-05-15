@@ -66,7 +66,7 @@ h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
 <h1>Δ-Report · Parma: Camila Osorio vs Barbora Krejcikova</h1>
 <div class="sub">
   Input: <code>wta-osorio-krejcik-2026-05-15</code> · Copy-target: <strong style="color:#34d399">swisstony</strong> <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code> · Our wallet: <code>0x95e407fe03996602ed1bf4289ecb3b5af88b5134</code><br/>
-  Charter: <a href="../charter.html">POLY_COPY_DELTA</a> · 1 event group · 186 mirror decisions · Global time scale: 2026-05-15 11:30:12 → 2026-05-15 15:11:38
+  Charter: <a href="../../work/charters/POLY_COPY_DELTA.md">POLY_COPY_DELTA.md</a> (source of truth — edit in place, surgically) · 1 event group · 186 mirror decisions · Global time scale: 2026-05-15 11:30:12 → 2026-05-15 15:11:38
 </div>
 
 <!-- TAKEAWAY:START -->
@@ -77,24 +77,18 @@ h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
     <tbody>
       <tr>
         <td>1</td>
-        <td><strong>Dashboard "Target entry $36,215.52" and the per-trader "+$1,631.69 P/L" inside the same row are computed on different cost-basis denominators</strong>. The row's Entry column at <code>market-exposure-service.ts:430-431</code> uses <code>aggregateWalletReturn.totalBuyNotional = Math.max(rollupNotional, snapshotCostBasis)</code> (L581) &mdash; here the fill-rollup BUY notional is $36,215.52 because swisstony churned the same ~4,834 shares through ~12 round-trips; the snapshot cost basis after those round-trips nets to $3,200.75. The per-trader expansion table uses snapshot-only cost basis ($3,200.75 = $2,888 primary + $312 hedge), so it reports P/L = $4,832.44 - $3,200.75 = +$1,631.69. Both numbers are individually correct answers to different questions; rendering them adjacent in one row without a basis label is the bug. The headline Δ -166.5% inherits the inflated $36k denominator (target_return ≈ -86.6%); using snapshot-only gives target +51.0% and Δ -28.9pp (we beat target on rate, not by 166%).</td>
-        <td class="charter">N/A (dashboard reporting, not a mirror-algorithm Δ cause)</td>
+        <td><strong>Dashboard row mixes two cost-basis denominators in adjacent cells</strong>. The outer "Target entry" column at <code>market-exposure-service.ts:430-431</code> uses <code>aggregateWalletReturn.totalBuyNotional = Math.max(rollupNotional, snapshotCostBasis)</code> (L581) — here rollup = $36,215.52 (~12× round-trips of 4,834 sh). The per-trader expansion table writes snapshot net cost basis directly ($3,200.75) and reports P/L = $4,832.44 − $3,200.75 = +$1,631.69. Same row, two bases — that's why the numbers look contradictory. The headline Δ −166.5% inherits the inflated $36k denominator; on a single (snapshot) basis the actual Δ is target +51.0% vs us +79.9% = −28.9pp.</td>
+        <td class="charter">N/A — dashboard reporting bug, not a mirror-Δ cause; <code>primary_class: null</code> in findings.json</td>
         <td class="conf">95%</td>
-      </tr>
-      <tr>
-        <td>2</td>
-        <td><strong>Underlying mirror Δ: we matched 0.31% of target's notional on a market they cleared $1.6k on.</strong> Target net cost $3,200.75 / value $4,832.44 / +51.0% return. Us: $9.83 entry / $17.68 value / +79.9%. 186 decisions, 2 placed (1.1% acceptance). Block histogram: 64 <code>vwap_floor_breach</code> (D4), 61 <code>target_dominant_other_side</code> (D3), 55 <code>position_cap_reached</code> (D6). With three gates simultaneously firing on a high-volume target, the per-fill planner has no path to a non-trivial position &mdash; every avenue is blocked by a different invariant.</td>
-        <td class="charter">D3 + D4 + D6 (all subsumed by D2)</td>
-        <td class="conf">90%</td>
       </tr>
     </tbody>
   </table>
   <div class="fix">
-    <strong>Pareto fix (dashboard):</strong> <code>nodes/poly/app/src/features/wallet-analysis/server/market-exposure-service.ts:581</code> &mdash; either (a) pick ONE basis per row and label the column accordingly ("Cumulative entry" vs "Net cost"), or (b) drop the per-trader expansion's snapshot-only basis and pivot everything onto <code>aggregateWalletReturn</code> output. Option (b) preserves the rollup advantage (correct return anchor through partial closes) but the "row P/L $X" reader needs to understand it's currentMark + realizedCash - rollupBuyNotional, not the more intuitive value - snapshotCost. The header comment at L41-L45 acknowledges the basis choice was deliberate; the per-trader expansion appears to have been written against snapshot directly without picking up the same call.
+    <strong>Pareto fix:</strong> pivot the per-trader expansion table onto the same <code>aggregateWalletReturn</code> the outer row uses, so one row = one denominator. Code path: <code>nodes/poly/app/src/features/wallet-analysis/server/market-exposure-service.ts:591+</code> (<code>pivotParticipants</code>) currently bypasses <code>aggregateWalletReturn</code> and reads snapshot fields off legs directly. The header comment at L41–45 picked the rollup-max basis deliberately for partial-close correctness; the expansion just didn't get the memo.
     <br/><br/>
-    <strong>Pareto fix (mirror algorithm, D-class side):</strong> Long-term &mdash; D2 position-mirror refactor (<code>docs/spec/poly-copy-trade-position-mirror.md</code>) dissolves D3 / D4 / D6 simultaneously by tracking each token-id position independently with gap-based sizing and a VWAP ceiling as a limit-price bound (not a per-event fail-gate).
+    <strong>Sidebar — underlying mirror behavior on this market</strong> (not a new finding; logging because it's quantified and the user will ask): 2 placed / 186 decisions. Block histogram 64 D4 / 61 D3 / 55 D6 — three different per-fill gates each blocking a different path. We matched ~0.31% of target's notional. This is the existing D6 / D3 / D4 pattern; no charter edit needed.
     <br/><br/>
-    <strong>Variance check on +79.9% / +$7.85:</strong> our headline is a single-fill coin flip. 17.69 sh at $0.556 VWAP went in on a Krejcikova entry that swisstony was actively building; the win landed because Krejcikova won. If she'd lost, we'd be at $0 holdings while target took the $312 hedge loss anyway. The +$7.85 is variance, not algorithm edge.
+    <strong>Variance check on +79.9% / +$7.85:</strong> single 17.69-sh entry at $0.556 VWAP on Krejcikova, who won. If Osorio had won we'd be at $0. The headline is a coin flip, not algorithm edge.
   </div>
 </div>
 <!-- TAKEAWAY:END -->
