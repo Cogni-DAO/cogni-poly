@@ -106,6 +106,11 @@ export async function resolveRedeemCandidatesForCondition(deps: {
     deps.positions ??
     (await deps.dataApiClient.listUserPositions(deps.funderAddress, {
       market: conditionId,
+      // Polymarket's /positions endpoint defaults sizeThreshold=1, which
+      // silently omits winning shares worth <$1 (the very class we need to
+      // redeem). Same trap that `listAllUserPositions` already documents
+      // and works around. bug.5056.
+      sizeThreshold: 0,
     }));
   const matches = allPositions.filter((p) => {
     try {

@@ -73,4 +73,25 @@ describe("resolveRedeemCandidatesForCondition", () => {
     expect(listUserPositions).not.toHaveBeenCalled();
     expect(multicall).not.toHaveBeenCalled();
   });
+
+  it("fetches positions with sizeThreshold: 0 so sub-dollar winners are visible (bug.5056)", async () => {
+    const listUserPositions = vi.fn(async () => [] as PolymarketUserPosition[]);
+    const multicall = vi.fn();
+
+    await resolveRedeemCandidatesForCondition({
+      funderAddress: FUNDER,
+      conditionId: CONDITION_A,
+      publicClient: { multicall } as unknown as PublicClient,
+      dataApiClient: { listUserPositions } as never,
+    });
+
+    expect(listUserPositions).toHaveBeenCalledTimes(1);
+    const args = listUserPositions.mock.calls[0];
+    expect(args?.[1]).toEqual(
+      expect.objectContaining({
+        market: CONDITION_A,
+        sizeThreshold: 0,
+      })
+    );
+  });
 });
