@@ -255,8 +255,6 @@ REQUIRED_SECRETS=(
     "OPENCLAW_GATEWAY_TOKEN"
     "OPENCLAW_GITHUB_RW_TOKEN"
     "INTERNAL_OPS_TOKEN"
-    "POSTHOG_API_KEY"
-    "POSTHOG_HOST"
 )
 
 REQUIRED_ENV_VARS=(
@@ -299,6 +297,8 @@ log_info "All required secrets provided"
 
 # Check optional secrets (warn if missing)
 OPTIONAL_SECRETS=(
+    "POSTHOG_API_KEY"
+    "POSTHOG_HOST"
     "GRAFANA_CLOUD_LOKI_URL"
     "GRAFANA_CLOUD_LOKI_USER"
     "GRAFANA_CLOUD_LOKI_API_KEY"
@@ -642,8 +642,8 @@ GIT_READ_USERNAME=${GIT_READ_USERNAME}
 GIT_READ_TOKEN=${GIT_READ_TOKEN}
 OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
 OPENCLAW_GITHUB_RW_TOKEN=${OPENCLAW_GITHUB_RW_TOKEN}
-POSTHOG_API_KEY=${POSTHOG_API_KEY}
-POSTHOG_HOST=${POSTHOG_HOST}
+POSTHOG_API_KEY=${POSTHOG_API_KEY:-}
+POSTHOG_HOST=${POSTHOG_HOST:-}
 # App/worker images — not started by infra deploy, but compose validates all vars.
 # Use placeholder values; k8s/Argo manages the real images.
 APP_IMAGE=${APP_IMAGE:-cogni-poly-local}
