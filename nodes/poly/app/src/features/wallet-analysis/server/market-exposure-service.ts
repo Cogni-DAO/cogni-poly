@@ -59,13 +59,19 @@
  *     makers vs directional traders. `grossBuyNotionalUsdc` (rollup BUY
  *     total) is exposed as a SEPARATE field for callers who want lifetime-
  *     volume visibility; it must never be conflated with cost basis.
- *   - KNOWN_GAP_FULLY_EXITED_TARGETS: a target wallet that fully exited a
- *     condition via SELL fills before our backfill horizon has no snapshot
- *     row → totalBuyNotional = 0 → returnPct = null → no Δ. Hits directional
- *     target wallets only (market-makers like swisstony have 0 SELLs).
- *     Future remedy: index NegRiskAdapter + ConditionalTokens redemption
- *     events as realized cash flows; then Modified-Dietz on rollup BUY +
- *     all cash recoveries gives a clean answer regardless of held shares.
+ *   - KNOWN_GAP_FULLY_EXITED_TARGETS: a wallet that BOTH (a) fully exited
+ *     a condition via SELL fills before we ever started observing it (so
+ *     no snapshot row ever existed) AND (b) had its BUY fills predate our
+ *     `poly_trader_fills` backfill horizon (so the rollup is also empty)
+ *     will render with `totalBuyNotional = 0 → returnPct = null → no Δ`.
+ *     This does NOT hit currently-tracked targets (RN1, swisstony) because
+ *     our observer captured at-least-one snapshot per condition they
+ *     touched while alive, and that latest row preserves cost+value.
+ *     The gap fires only for prospective targets added to comparisons
+ *     AFTER they've already cleared markets. Future remedy: index
+ *     NegRiskAdapter MERGE + ConditionalTokens PayoutRedemption events
+ *     as realized cash flows; Modified-Dietz on rollup BUY + all cash
+ *     recoveries gives a clean answer even without a held position.
  *   - EDGE_GAP_NULL_WITHOUT_TARGETS: `edgeGapUsdc` and `edgeGapPct` are null
  *     on lines/groups with zero target legs that have positive buy notional.
  *     "Edge gap vs. nobody" is undefined, not `-ourPnl`.
