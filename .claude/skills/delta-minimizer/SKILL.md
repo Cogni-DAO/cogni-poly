@@ -7,6 +7,17 @@ description: "Investigate ONE specific divergence between our wallet and the cop
 
 We copy-trade ONE target wallet at a time (today: `swisstony`). Every divergence is a bug worth understanding. The algorithm has known fundamental issues catalogued in `work/charters/POLY_COPY_DELTA.md`. Your job: investigate one market, produce one high-confidence finding, map it to a charter class (or argue for a new one and update the charter), drop the fluff.
 
+## Required reading BEFORE you investigate
+
+The skill assumes you already know how the mirror algorithm works. If you don't, read these first — they are short and load-bearing:
+
+- [`docs/spec/poly-copy-trade-execution.md`](../../../docs/spec/poly-copy-trade-execution.md) — mirror-side rules, decision-ledger contract, `MirrorPositionView` (per-condition cache; `our_token_id` = OUR dominant side), error codes, lifecycle, sizing surfaces, the **`TARGET_DOMINANCE_DRIVES_BRANCH`** / **`NEVER_PAY_ABOVE_TARGET_VWAP`** / **`NO_SELL_IN_MIRROR`** / **`OPTION_C_TOLERATES_MULTI_TARGET`** invariants, and the dashboard read-model (`current-position-read-model.ts`). When investigating wrong-side / wrong-size Δ, always check `state.target_position` side fractions, not just our position.
+- [`docs/spec/poly-tenant-and-collateral.md`](../../../docs/spec/poly-tenant-and-collateral.md) — per-tenant wallets, USDC.e (deposit) vs pUSD (the ONLY currency the CLOB spends), `authorizeIntent` pre-place gate (grants/caps, NOT balance), v0 default caps. `errorCode=insufficient_balance` ≠ "we ran out of money"; it specifically means the wallet has USDC.e but not pUSD.
+- [`docs/spec/poly-copy-trade-position-mirror.md`](../../../docs/spec/poly-copy-trade-position-mirror.md) — the future-state position-mirror design (the D2 charter dissolution proposal). If your finding is "the gap-based architecture would fix this", point to this spec.
+- [`work/charters/POLY_COPY_DELTA.md`](../../../work/charters/POLY_COPY_DELTA.md) — the existing D1–D8 classes + proof tapes. Read first; don't invent a new class without checking what's already covered.
+
+Canonical CLOB `errorCode` enum (EXEC:693): `insufficient_balance | insufficient_allowance | stale_api_key | invalid_signature | invalid_price_or_tick | below_min_order_size | empty_response | http_error | unknown`.
+
 ## The workflow (4 steps, in order)
 
 ### 1 · Run the tool
@@ -19,20 +30,25 @@ Naming convention: the **skill** is `/delta-minimizer` (the workflow / analysis 
 
 Accepts: event slug (`lal-bet-elc-2026-05-12`), conditionId (`0xb974…`), comma-separated conditionIds, or fuzzy event-title text. Produces a timestamped subdir at `research/delta-minimizing/<slug>-<iso>/` containing:
 
-- `report.html` — human-facing report. KPIs, per-market positions table (with VWAP-delta highlights), per-market timeline charts (log-$ Y-axis, VWAP overlay, decision-marker strip). Has a placeholder `<!-- TAKEAWAY -->` block at the top — that's where YOU author.
-- `bundle.json` — structured data: groups, metrics, decisions, placedOrders, auto-scored causes. This is your read surface.
-- `ai-walkthrough.md` — verbose data-source notes, computation math, code-path map. Useful for the next agent who picks up this incident.
+- `report.html` — human-facing report. KPI cards, per-market positions table (Primary/Hedge/Net with VWAP-delta highlights), per-market net-position chart with `gate opens` marker, decision-marker strip. Has a placeholder `<!-- TAKEAWAY -->` block at the top — that's where YOU author.
+- `bundle.json` — the structured AI read surface: groups, per-market metrics, decisions with full intent JSON, placedOrders.
+- `findings.json` — empty stub. YOU fill it after authoring the takeaway. Schema below in step 3.
 
-A shared `research/delta-minimizing/charter.html` is re-rendered every run. Reports are tracked in git (history is essential).
+A shared `research/delta-minimizing/charter.html` is re-rendered every run from `work/charters/POLY_COPY_DELTA.md` (the .md is the source of truth — edit there, NOT the .html). Reports are tracked in git (history is essential).
 
 ### 2 · Cross-reference code BEFORE claiming anything
 
-**Mandatory reads to ground a finding**:
+Findings claim something about behavior. That claim must be grounded in code. **Cite the file:line that implements the relevant path** — not always `plan-mirror.ts`. Depending on the finding:
 
-- `nodes/poly/app/src/features/copy-trade/plan-mirror.ts` — every skip reason in `bundle.json/decisions` corresponds to a specific code path here. Quote the line number when you cite it. Example: `followup_position_too_small` at `plan-mirror.ts:563` — gate fires when our mirror exposure < `min_mirror_position_usdc`. Don't say "likely" — say what the code does.
-- `nodes/poly/app/src/features/copy-trade/types.ts` — `MirrorReason` enum + intent schema.
-- `nodes/poly/app/src/features/wallet-analysis/server/market-exposure-service.ts` — the dashboard math the tool mirrors. Read this if numbers ever disagree with the UI.
-- `work/charters/POLY_COPY_DELTA.md` — the existing D1–D8 classes. If your finding doesn't fit one of them, either argue for an extension OR explicitly note "no clean charter row".
+- **Skip-reason / sizing / gate behavior** → `nodes/poly/app/src/features/copy-trade/plan-mirror.ts` (cheat-sheet table below).
+- **MirrorReason enum / intent schema** → `nodes/poly/app/src/features/copy-trade/types.ts`.
+- **Number disagrees with dashboard** → `nodes/poly/app/src/features/wallet-analysis/server/market-exposure-service.ts` (dashboard math).
+- **Position cache / value computation** → `nodes/poly/app/src/features/wallet-analysis/server/current-position-read-model.ts`.
+- **Latency / chain-source / metadata** → `nodes/poly/app/src/features/wallet-watch/*` and `nodes/poly/app/src/features/poly-chain-source/*`.
+- **Order staleness / reconcile** → `nodes/poly/app/src/features/copy-trade/order-reconciler.ts` (or equivalent).
+- **Charter classes (existing D1–D8)** → `work/charters/POLY_COPY_DELTA.md` — read first; do not invent a new class without adding the row in the same turn.
+
+If you say "downstream of \<gate\>" without naming a file:line, you haven't done the work.
 
 **Bundle data → code mapping cheat-sheet** (verified, not guesses):
 
@@ -52,7 +68,7 @@ The previous version of this skill asked for "5 visible drafts" — that rule di
 **Rules**:
 
 1. **One primary finding.** Maximum two (secondary only if you can prove it's a different root cause, not a symptom of the primary). If you have three, you haven't reduced enough — keep going.
-2. **The primary finding must cite a `plan-mirror.ts` (or similar) line number.** Not "downstream of \<gate\>". Name the file:line that fires the gate.
+2. **The primary finding must cite a file:line.** The right file depends on the finding (see §2 above — `plan-mirror.ts` for gates, `market-exposure-service.ts` for number disagreements, `current-position-read-model.ts` for cache/value, `wallet-watch/*` for latency, etc.). Not "downstream of \<gate\>".
 3. **% confidence is mandatory.** 95% means code path read + decision-count verified + chart confirms. 70% means data points in this direction but the causal chain is plausible-not-proven. Don't write findings under 60%.
 4. **Charter class is mandatory.** Either an existing D1–D8 row OR "no clean row (new symptom)" — and if you claim new, edit `work/charters/POLY_COPY_DELTA.md` IN THE SAME TURN to add the row. No charter handwaves.
 5. **Root cause, not symptom.** "VWAP delta", "value zero", "won by accident" are observations. Trace them back to a single code path. If the same line of code explains two findings, they're the same finding.

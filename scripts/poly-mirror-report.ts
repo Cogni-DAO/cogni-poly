@@ -1406,163 +1406,16 @@ ${groupsHtml}
 
 <div class="footer-note">
   <strong>${placedSummary.filled} orders filled</strong> · ${placedSummary.canceled} canceled · ${placedSummary.err} errored · ${fmtUsd(placedSummary.filledNotional)} filled / ${fmtUsd(placedSummary.attemptedNotional)} attempted
-  · <a href="ai-walkthrough.md">AI walkthrough</a> · <a href="bundle.json">bundle.json</a>
+  · <a href="bundle.json">bundle.json</a> (AI read surface)
 </div>
 
 </body>
 </html>`;
 }
 
-// ---------- AI walkthrough ----------
-
-function renderAiWalkthrough(args: {
-  input: string;
-  groups: EventGroup[];
-  decisions: DecisionRow[];
-  placedOrders: PlacedHisto[];
-  target: Target;
-  ourLabel: string;
-}): string {
-  const { input, groups, decisions, placedOrders, target, ourLabel } = args;
-  const lines: string[] = [];
-  const eventTitle =
-    groups[0]?.event_title ?? groups[0]?.event_slug ?? "(unknown event)";
-  lines.push(`# AI walkthrough · Δ-Report · ${eventTitle}`);
-  lines.push("");
-  lines.push(
-    `> Audience: another agent picking up this incident. Reproduce the analysis without re-discovering the data layout.`
-  );
-  lines.push("");
-
-  lines.push(`## 1 · Input → resolution`);
-  lines.push("");
-  lines.push(`- Input: \`${input}\``);
-  lines.push(
-    `- Resolver: prefix-match on \`event_slug\` (so \`<slug>\` catches \`<slug>-more-markets\` siblings).`
-  );
-  lines.push(`- Event groups returned: ${groups.length}`);
-  for (const g of groups) {
-    lines.push(
-      `  - **${g.event_title ?? "(no title)"}** · \`${g.event_slug}\` · ${g.markets.length} markets`
-    );
-    for (const m of g.markets)
-      lines.push(`    - \`${m.condition_id}\` · ${m.market_title}`);
-  }
-  lines.push(
-    `- **Copy-target**: \`${target.label}\` (\`${target.wallet}\`, ${target.n_decisions} decisions on these markets).`
-  );
-  lines.push(`- Our wallet: \`${ourLabel}\`.`);
-  lines.push("");
-
-  lines.push(`## 2 · Data sources (dashboard-equivalent)`);
-  lines.push("");
-  lines.push(`| Source | Notes |`);
-  lines.push(`|---|---|`);
-  lines.push(
-    `| \`poly_trader_current_positions\` (OUR wallet) | Cost basis + current value. Redemption-status override: winner+redeemed → value 0, loser → value 0. Mirrors \`deriveCurrentPositionStatus\`. |`
-  );
-  lines.push(
-    `| \`poly_trader_position_snapshots\` (TARGET wallet, latest per (cond, token)) | Append-only history; survives target exit. Used because targets only REDEEM, no SELL. |`
-  );
-  lines.push(
-    `| \`poly_trader_fills\` rollup | Per (wallet, condition): \`max(BUY rollup, snapshot cost)\` = canonical cost basis denominator. Matches \`aggregateWalletReturn\`. |`
-  );
-  lines.push(
-    `| \`poly_copy_trade_decisions\` (${decisions.length}) | Decision history with \`intent\` JSON. |`
-  );
-  lines.push(`| \`poly_copy_trade_fills\` | Status of OUR placed orders. |`);
-  lines.push(
-    `| CLOB \`/markets/{cond}\` | Authoritative \`{token_id, outcome label, winner}\` triples. |`
-  );
-  lines.push("");
-
-  lines.push(`## 3 · Computation, in dashboard math`);
-  lines.push("");
-  lines.push(
-    `- **Per (wallet, condition)** \`totalBuyNotional = max(rollup_buy, snapshot_cost)\`. The rollup wins when we have full fill history (our wallet); the snapshot wins when fills predate our backfill horizon (target wallet).`
-  );
-  lines.push(
-    `- **Per (wallet, condition)** \`return_pct = (realized_cash + current_mark - buy_notional) / buy_notional\` (Modified-Dietz).`
-  );
-  lines.push(
-    `- **Group return** = cost-basis-weighted blend of per-condition returns.`
-  );
-  lines.push(
-    `- **Δ KPI** \`edgeGapPct = targetReturnPct - ourReturnPct\`; \`edgeGapUsdc = edgeGapPct × ourBuyNotional\`. Positive Δ = target ahead = alpha leak.`
-  );
-  lines.push("");
-
-  lines.push(`## 4 · Group totals`);
-  lines.push("");
-  lines.push(
-    `| Group | Our entry | Our value | Our Δ% | Target entry | Target value | Target Δ% | edgeGap % | edgeGap $ |`
-  );
-  lines.push(`|---|---|---|---|---|---|---|---|---|`);
-  for (const g of groups) {
-    lines.push(
-      `| ${g.event_title ?? g.event_slug} | ${fmtUsd(g.ourBuyNotional)} | ${fmtUsd(g.ourValue)} | ${fmtPct(g.ourReturnPct)} | ${fmtUsd(g.targetBuyNotional)} | ${fmtUsd(g.targetValue)} | ${fmtPct(g.targetReturnPct)} | ${fmtPct(g.edgeGapPct)} | ${fmtUsd(g.edgeGapUsdc, { sign: true })} |`
-    );
-  }
-  lines.push("");
-
-  lines.push(`## 5 · Reason → code mapping (cheat-sheet)`);
-  lines.push("");
-  lines.push(`| MirrorReason | Code |`);
-  lines.push(`|---|---|`);
-  lines.push(
-    `| \`below_target_percentile\` | \`plan-mirror.ts:92–115\`; \`targetSizingUsdcForFill:657–666\` |`
-  );
-  lines.push(
-    `| \`target_dominant_other_side\` | \`analyzeTargetDominance\` + \`decideMirrorBranch\` |`
-  );
-  lines.push(
-    `| \`vwap_floor_breach\` | \`targetVwapForToken\` + \`NEVER_PAY_ABOVE_TARGET_VWAP\` invariant |`
-  );
-  lines.push(
-    `| \`followup_position_too_small\` | \`plan-mirror.ts:563, 572, 609, 618\` |`
-  );
-  lines.push(
-    `| \`position_cap_reached\` | \`applyMarketFloors\` (cumulative intent + size > \`max_usdc_per_trade\`) |`
-  );
-  lines.push("");
-  lines.push(
-    `Findings (charter assignment + confidence) are LLM-authored — see TAKEAWAY in \`report.html\` and \`findings.json\` for the structured form.`
-  );
-  lines.push("");
-
-  lines.push(`## 6 · Placement summary`);
-  lines.push("");
-  const ps = placedOrders.reduce(
-    (a, p) => {
-      if (p.status === "filled") {
-        a.filled += Number(p.n);
-        a.filledNotional += Number(p.total_size_attempted);
-      } else if (p.status === "canceled") a.canceled += Number(p.n);
-      else if (p.status === "error") a.error += Number(p.n);
-      a.attempted += Number(p.total_size_attempted);
-      return a;
-    },
-    { filled: 0, canceled: 0, error: 0, filledNotional: 0, attempted: 0 }
-  );
-  lines.push(
-    `- Filled ${ps.filled} orders (${fmtUsd(ps.filledNotional)}) of ${ps.filled + ps.canceled + ps.error} placed (${fmtUsd(ps.attempted)} attempted)`
-  );
-  lines.push(`- Canceled ${ps.canceled} · Errored ${ps.error}`);
-  lines.push("");
-
-  lines.push(`## 7 · Not checked`);
-  lines.push("");
-  lines.push(
-    `- **Loki**: only needed for \`outcome='error'\` rows where \`errorCode\` lives in the pino line. Skip-reason rows carry all data in the \`intent\` JSON.`
-  );
-  lines.push(
-    `- **Target SELL fills**: targets only redeem (no SELL). The snapshot is the truth.`
-  );
-  lines.push(
-    `- **Latency (D1)**: needs \`mirror-pipeline\` Loki lines. Not material once structural classes dominate.`
-  );
-  return lines.join("\n");
-}
+// (renderAiWalkthrough deleted. Was 80% static boilerplate + 20% data already
+// in bundle.json — net zero analytical value. AI read surface is bundle.json;
+// guidelines are in .claude/skills/delta-minimizer/SKILL.md.)
 
 // ---------- Charter md → html ----------
 
@@ -1951,17 +1804,6 @@ async function main() {
   });
   writeFileSync(join(outDir, "report.html"), html);
 
-  const ai = renderAiWalkthrough({
-    input: args.market,
-    groups,
-    decisions,
-    placedOrders,
-    target,
-    ourLabel,
-  });
-  writeFileSync(join(outDir, "ai-walkthrough.md"), ai);
-  console.log(ai);
-
   // Always write bundle.json — it's the agent's read surface for authoring the takeaway.
   writeFileSync(
     join(outDir, "bundle.json"),
@@ -2003,9 +1845,6 @@ async function main() {
   console.error(`[mirror-report] findings stub → ${findingsPath}`);
 
   console.error(`[mirror-report] HTML       → ${join(outDir, "report.html")}`);
-  console.error(
-    `[mirror-report] AI walk    → ${join(outDir, "ai-walkthrough.md")}`
-  );
   console.error(`[mirror-report] charter    → ${sharedCharterPath} (shared)`);
 }
 
