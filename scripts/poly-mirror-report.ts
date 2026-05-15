@@ -306,8 +306,10 @@ function fetchTargetLegs(
 ): Leg[] {
   if (conditionIds.length === 0) return [];
   const inCond = conditionIds.map((c) => `'${c}'`).join(",");
-  // Dashboard uses poly_trader_position_snapshots (append-only), DISTINCT ON
-  // (wallet, condition, token) latest by captured_at. Survives target redemption.
+  // poly_trader_position_snapshots is append-only — latest per (cond, token)
+  // survives target redemption. Apply outcome override: loser → value 0
+  // (matches what we do for our wallet; the snapshot might be pre-resolution
+  // and still showing a non-zero price for a now-worthless loser token).
   const sql = `
     select distinct on (s.trader_wallet_id, s.condition_id, s.token_id)
       w.label,
@@ -315,9 +317,12 @@ function fetchTargetLegs(
       s.shares::float8 as shares,
       s.cost_basis_usdc::float8 as cost_basis,
       s.current_value_usdc::float8 as current_value,
-      s.avg_price::float8 as avg_price
+      s.avg_price::float8 as avg_price,
+      pmo.outcome as market_outcome
     from poly_trader_position_snapshots s
     join poly_trader_wallets w on w.id = s.trader_wallet_id
+    left join poly_market_outcomes pmo
+      on lower(pmo.condition_id) = lower(s.condition_id) and pmo.token_id = s.token_id
     where lower(w.wallet_address) = '${targetWallet.toLowerCase()}'
       and s.condition_id in (${inCond})
     order by s.trader_wallet_id, s.condition_id, s.token_id, s.captured_at desc
@@ -326,7 +331,9 @@ function fetchTargetLegs(
   return rows.map((r) => {
     const shares = Number(r.shares ?? 0);
     const costBasis = Number(r.cost_basis ?? 0);
-    const currentValue = Number(r.current_value ?? 0);
+    const currentValueRaw = Number(r.current_value ?? 0);
+    const outcome = r.market_outcome as "winner" | "loser" | null;
+    const displayValue = outcome === "loser" ? 0 : currentValueRaw;
     return {
       side: "target" as const,
       wallet_label: String(r.label),
@@ -334,12 +341,12 @@ function fetchTargetLegs(
       token_id: String(r.token_id),
       shares,
       cost_basis_usdc: costBasis,
-      current_value_usdc: currentValue,
+      current_value_usdc: displayValue,
       vwap:
         r.avg_price != null && Number(r.avg_price) > 0
           ? Number(r.avg_price)
           : null,
-      lifecycle: currentValue > 0 ? "active" : "inactive",
+      lifecycle: displayValue > 0 || outcome === null ? "active" : "inactive",
     };
   });
 }
@@ -674,12 +681,11 @@ function reasonCategory(
 // NET-POSITION CHART. Y axis is signed (symlog):
 //   y > 0 → cumulative $ on target's primary side
 //   y < 0 → cumulative $ on hedge side
-// Both wallets render even when they only touched the hedge side (which was the
-// blue-line-missing bug on WTA Parry-Paquet). A vertical marker shows the moment
-// target's per-token cumulative cost crossed `min_target_usdc` ($319 prod config),
-// which is the moment our `below_target_percentile` gate stops blocking — the
-// "gate opens here" line.
-const MIN_TARGET_USDC = 319; // matches prod swisstony copy-trade config.
+// FOUR lines per market (so both wallets' both sides are visible, not collapsed
+// into a single net curve): target-primary, target-hedge, our-primary, our-hedge.
+// Primary side goes UP, hedge goes DOWN — net-zero in the middle. VWAP appears
+// in the top-right annotation. Wide left padding so the per-side labels don't
+// overlap the axis numbers.
 
 function svgTimeline(args: {
   market: Market;
@@ -710,11 +716,11 @@ function svgTimeline(args: {
   const tMax = globalT.max;
   const span = Math.max(1, tMax - tMin);
   const W = 1200,
-    H = 320,
-    padL = 80,
+    H = 340,
+    padL = 130, // wide enough for "PRIMARY · …" label outside the numbers column
     padR = 30,
-    padT = 28,
-    padB = 80;
+    padT = 30,
+    padB = 90;
   const plotW = W - padL - padR,
     plotH = H - padT - padB;
   const yMid = padT + plotH / 2;
@@ -726,7 +732,6 @@ function svgTimeline(args: {
 
   type Pt = {
     t: number;
-    net: number;
     primaryCost: number;
     hedgeCost: number;
     primaryShares: number;
@@ -750,7 +755,6 @@ function svgTimeline(args: {
       }
       pts.push({
         t: Number(f.observed_at),
-        net: primaryCost - hedgeCost,
         primaryCost,
         hedgeCost,
         primaryShares,
@@ -772,53 +776,35 @@ function svgTimeline(args: {
   if (target.length === 0 && ours.length === 0)
     return `<div class="empty">No fills on ${market.market_title}</div>`;
 
-  // Y-scale: symmetric log on signed net value.
+  // Y-scale: symmetric log on max(primary, hedge) across all series.
   const allAbs = [
-    ...target.map((p) => Math.abs(p.net)),
-    ...ours.map((p) => Math.abs(p.net)),
+    ...target.flatMap((p) => [Math.abs(p.primaryCost), Math.abs(p.hedgeCost)]),
+    ...ours.flatMap((p) => [Math.abs(p.primaryCost), Math.abs(p.hedgeCost)]),
   ];
   const maxAbs = Math.max(1, ...allAbs);
   const symLogDen = Math.log10(maxAbs + 1);
-  const yNet = (net: number): number => {
-    if (net === 0) return yMid;
-    const s = Math.sign(net);
-    const m = Math.log10(Math.abs(net) + 1) / symLogDen; // 0..1
-    return yMid - s * (m * (plotH / 2));
+  // Sign argument: +1 plots in upper half (primary), -1 plots in lower half (hedge).
+  const ySide = (cost: number, sign: 1 | -1): number => {
+    if (cost <= 0) return yMid;
+    const m = Math.log10(cost + 1) / symLogDen; // 0..1
+    return yMid - sign * (m * (plotH / 2));
   };
   const xT = (t: number) => padL + ((t - tMin) / span) * plotW;
 
   const COLOR = { target: "#10b981", us: "#3b82f6" };
 
-  function netPath(pts: Pt[]): string {
+  // Step-curve path. extractCost picks primary or hedge from each Pt; sign +1/-1 places it.
+  function sidePath(pts: Pt[], pick: (p: Pt) => number, sign: 1 | -1): string {
     if (pts.length === 0) return "";
     let d = `M ${xT(tMin).toFixed(1)} ${yMid.toFixed(1)}`;
     let prev = 0;
     for (const p of pts) {
-      d += ` L ${xT(p.t).toFixed(1)} ${yNet(prev).toFixed(1)}`;
-      d += ` L ${xT(p.t).toFixed(1)} ${yNet(p.net).toFixed(1)}`;
-      prev = p.net;
+      d += ` L ${xT(p.t).toFixed(1)} ${ySide(prev, sign).toFixed(1)}`;
+      d += ` L ${xT(p.t).toFixed(1)} ${ySide(pick(p), sign).toFixed(1)}`;
+      prev = pick(p);
     }
-    d += ` L ${xT(tMax).toFixed(1)} ${yNet(prev).toFixed(1)}`;
+    d += ` L ${xT(tMax).toFixed(1)} ${ySide(prev, sign).toFixed(1)}`;
     return d;
-  }
-
-  // Gate-opens marker: first moment target's cumulative cost on EITHER token
-  // crossed MIN_TARGET_USDC. Before this point, every decision skips with
-  // `below_target_percentile`.
-  let gateOpenAt: number | null = null;
-  {
-    let primaryCum = 0;
-    let hedgeCum = 0;
-    for (const f of here) {
-      if (f.wallet_label !== targetLabel || f.side !== "BUY") continue;
-      if (f.token_id === primary.token_id) primaryCum += Number(f.size_usdc);
-      else if (hedge && f.token_id === hedge.token_id)
-        hedgeCum += Number(f.size_usdc);
-      if (primaryCum >= MIN_TARGET_USDC || hedgeCum >= MIN_TARGET_USDC) {
-        gateOpenAt = Number(f.observed_at);
-        break;
-      }
-    }
   }
 
   // X axis ticks
@@ -842,12 +828,12 @@ function svgTimeline(args: {
     (v) => v <= maxAbs * 1.2
   );
   for (const tk of niceTicks) {
-    for (const sign of [1, -1]) {
-      const y = yNet(sign * tk);
+    for (const sign of [1, -1] as const) {
+      const y = ySide(tk, sign);
       lines.push(
         `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${padL + plotW}" y2="${y.toFixed(1)}" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>`
       );
-      const label = `${sign > 0 ? "+" : "-"}$${tk >= 1000 ? `${tk / 1000}k` : tk}`;
+      const label = `$${tk >= 1000 ? `${tk / 1000}k` : tk}`;
       lines.push(
         `<text x="${padL - 8}" y="${y.toFixed(1)}" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">${label}</text>`
       );
@@ -858,26 +844,22 @@ function svgTimeline(args: {
     `<line x1="${padL}" y1="${yMid.toFixed(1)}" x2="${padL + plotW}" y2="${yMid.toFixed(1)}" stroke="#475569" stroke-width="1"/>`
   );
   lines.push(
-    `<text x="${padL - 8}" y="${yMid.toFixed(1)}" fill="#94a3b8" font-size="10" text-anchor="end" dominant-baseline="middle">$0 net</text>`
+    `<text x="${padL - 8}" y="${yMid.toFixed(1)}" fill="#94a3b8" font-size="10" text-anchor="end" dominant-baseline="middle">$0</text>`
   );
 
-  // Side labels (primary up, hedge down).
+  // Side labels — left of axis numbers (not overlapping). Rotated, centered in each half.
   lines.push(
-    `<text x="20" y="${padT + plotH / 4}" fill="${COLOR.target}" font-size="11" text-anchor="middle" transform="rotate(-90 20 ${padT + plotH / 4})">PRIMARY · ${escapeXml(primary.label ?? "?")} ↑</text>`
+    `<text x="22" y="${padT + plotH / 4}" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 22 ${padT + plotH / 4})">PRIMARY ↑</text>`
   );
-  if (hedge)
+  lines.push(
+    `<text x="22" y="${padT + plotH / 4 + 14}" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 ${padT + plotH / 4 + 14})">${escapeXml(primary.label ?? "?")}</text>`
+  );
+  if (hedge) {
     lines.push(
-      `<text x="20" y="${padT + (plotH * 3) / 4}" fill="#94a3b8" font-size="11" text-anchor="middle" transform="rotate(-90 20 ${padT + (plotH * 3) / 4})">HEDGE · ${escapeXml(hedge.label ?? "?")} ↓</text>`
-    );
-
-  // Gate-opens vertical marker.
-  if (gateOpenAt !== null) {
-    const gx = xT(gateOpenAt);
-    lines.push(
-      `<line x1="${gx.toFixed(1)}" y1="${padT}" x2="${gx.toFixed(1)}" y2="${(padT + plotH).toFixed(1)}" stroke="#fbbf24" stroke-width="1" stroke-dasharray="2,3" opacity="0.65"/>`
+      `<text x="22" y="${padT + (plotH * 3) / 4}" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 22 ${padT + (plotH * 3) / 4})">HEDGE ↓</text>`
     );
     lines.push(
-      `<text x="${(gx + 4).toFixed(1)}" y="${(padT + 12).toFixed(1)}" fill="#fbbf24" font-size="10">gate opens · target crosses $${MIN_TARGET_USDC}</text>`
+      `<text x="22" y="${padT + (plotH * 3) / 4 + 14}" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 ${padT + (plotH * 3) / 4 + 14})">${escapeXml(hedge.label ?? "?")}</text>`
     );
   }
 
@@ -891,25 +873,33 @@ function svgTimeline(args: {
     );
   }
 
-  // Series: target (green) + us (blue), both as step-curves of net position.
-  if (target.length > 0) {
-    const last = target[target.length - 1];
+  // Series: 4 lines. Solid = primary, dashed = hedge.
+  function drawSeries(pts: Pt[], color: string, walletNameForTooltip: string) {
+    if (pts.length === 0) return;
+    const last = pts[pts.length - 1];
+    // Primary side (solid, upper half).
     lines.push(
-      `<path d="${netPath(target)}" fill="none" stroke="${COLOR.target}" stroke-width="2"/>`
+      `<path d="${sidePath(pts, (p) => p.primaryCost, 1)}" fill="none" stroke="${color}" stroke-width="2"/>`
     );
-    lines.push(
-      `<circle cx="${xT(last.t).toFixed(1)}" cy="${yNet(last.net).toFixed(1)}" r="3.5" fill="${COLOR.target}"><title>${escapeXml(targetLabel)}: primary $${last.primaryCost.toFixed(0)} / hedge $${last.hedgeCost.toFixed(0)} / net $${last.net.toFixed(0)}</title></circle>`
-    );
+    if (last.primaryCost > 0) {
+      lines.push(
+        `<circle cx="${xT(last.t).toFixed(1)}" cy="${ySide(last.primaryCost, 1).toFixed(1)}" r="3.5" fill="${color}"><title>${escapeXml(walletNameForTooltip)} primary $${last.primaryCost.toFixed(2)}</title></circle>`
+      );
+    }
+    // Hedge side (dashed, lower half).
+    if (hedge) {
+      lines.push(
+        `<path d="${sidePath(pts, (p) => p.hedgeCost, -1)}" fill="none" stroke="${color}" stroke-width="1.6" stroke-dasharray="5,3" opacity="0.95"/>`
+      );
+      if (last.hedgeCost > 0) {
+        lines.push(
+          `<circle cx="${xT(last.t).toFixed(1)}" cy="${ySide(last.hedgeCost, -1).toFixed(1)}" r="3.5" fill="${color}"><title>${escapeXml(walletNameForTooltip)} hedge $${last.hedgeCost.toFixed(2)}</title></circle>`
+        );
+      }
+    }
   }
-  if (ours.length > 0) {
-    const last = ours[ours.length - 1];
-    lines.push(
-      `<path d="${netPath(ours)}" fill="none" stroke="${COLOR.us}" stroke-width="2"/>`
-    );
-    lines.push(
-      `<circle cx="${xT(last.t).toFixed(1)}" cy="${yNet(last.net).toFixed(1)}" r="3.5" fill="${COLOR.us}"><title>Our: primary $${last.primaryCost.toFixed(2)} / hedge $${last.hedgeCost.toFixed(2)} / net $${last.net.toFixed(2)}</title></circle>`
-    );
-  }
+  drawSeries(target, COLOR.target, targetLabel);
+  drawSeries(ours, COLOR.us, ourLabel);
 
   // Decision strip.
   const stripY = padT + plotH + 32;
@@ -930,29 +920,29 @@ function svgTimeline(args: {
     );
   }
 
-  // Title + final-state annotation.
+  // Title + final-state annotation (with VWAP).
   const winnerNote = primary.outcome ? ` (${primary.outcome})` : "";
   lines.push(
-    `<text x="${padL}" y="${padT - 10}" fill="#f3f4f6" font-size="14" font-weight="600">${escapeXml(market.market_title)} <tspan fill="#94a3b8" font-weight="400">→ primary ${escapeXml(primary.label ?? "?")}${winnerNote}</tspan></text>`
+    `<text x="${padL}" y="${padT - 12}" fill="#f3f4f6" font-size="14" font-weight="600">${escapeXml(market.market_title)} <tspan fill="#94a3b8" font-weight="400">→ primary ${escapeXml(primary.label ?? "?")}${winnerNote}</tspan></text>`
   );
-  // Per-wallet end-state annotation: just $ totals. VWAP lives in the positions
-  // table directly above the chart — don't duplicate.
   const targetEnd = target[target.length - 1];
   const ourEnd = ours[ours.length - 1];
+  const tVw = vwap(targetEnd);
+  const oVw = vwap(ourEnd);
+  const fmtV = (v: number | null) => (v != null ? `@$${v.toFixed(3)}` : "—");
   const annot = [
     targetEnd
-      ? `${targetLabel}: P $${targetEnd.primaryCost.toFixed(0)} / H $${targetEnd.hedgeCost.toFixed(0)}`
+      ? `${targetLabel}: P $${targetEnd.primaryCost.toFixed(0)} ${fmtV(tVw.p)} · H $${targetEnd.hedgeCost.toFixed(0)} ${fmtV(tVw.h)}`
       : null,
     ourEnd
-      ? `us: P $${ourEnd.primaryCost.toFixed(2)} / H $${ourEnd.hedgeCost.toFixed(2)}`
+      ? `us: P $${ourEnd.primaryCost.toFixed(2)} ${fmtV(oVw.p)} · H $${ourEnd.hedgeCost.toFixed(2)} ${fmtV(oVw.h)}`
       : null,
   ]
     .filter(Boolean)
-    .join("  ·  ");
+    .join("   ·   ");
   lines.push(
-    `<text x="${padL + plotW}" y="${padT - 10}" fill="#94a3b8" font-size="11" text-anchor="end">${escapeXml(annot)}</text>`
+    `<text x="${padL + plotW}" y="${padT - 12}" fill="#94a3b8" font-size="11" text-anchor="end">${escapeXml(annot)}</text>`
   );
-  void vwap;
 
   lines.push(`</svg>`);
   return lines.join("\n");
@@ -1205,9 +1195,8 @@ function renderGroupSection(
         <div class="market-head"><span class="market-title">${escapeHtml(m.market_title)} → primary ${escapeHtml(primary?.label ?? "?")} / hedge ${escapeHtml(hedge?.label ?? "—")}</span></div>
         ${svgTimeline({ market: m, primary: primary ?? null, hedge: hedge ?? null, rawFills, decisions, globalT, targetLabel, ourLabel })}
         <div class="legend">
-          <span><span class="line" style="background:#10b981"></span>${escapeHtml(targetLabel)} net</span>
-          <span><span class="line" style="background:#3b82f6"></span>Our net</span>
-          <span><span class="line" style="background:#fbbf24;opacity:0.65;background-image:repeating-linear-gradient(90deg,#fbbf24 0 3px,transparent 3px 6px)"></span>gate-opens marker</span>
+          <span><span class="line" style="background:#10b981"></span>${escapeHtml(targetLabel)} primary (solid) / hedge (dashed)</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our primary (solid) / hedge (dashed)</span>
           <span><span class="dot" style="background:#22c55e"></span>placed</span>
           <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
           <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
@@ -1219,7 +1208,15 @@ function renderGroupSection(
 
   const ourPctCls = group.ourPnl >= 0 ? "pos" : "neg";
   const targetPctCls = group.targetPnl >= 0 ? "pos" : "neg";
-  const deltaCls = (group.edgeGapUsdc ?? 0) >= 0 ? "neg" : "pos"; // positive Δ = target ahead = bad
+  // Variance = |target_return − our_return|. Always positive. The goal is to
+  // MINIMIZE this — copy-trade rationale is to match the target's edge, so any
+  // divergence (positive or negative) is a miss. Drop "alpha leak" framing.
+  const varianceAbs =
+    group.ourReturnPct != null && group.targetReturnPct != null
+      ? Math.abs(group.targetReturnPct - group.ourReturnPct)
+      : null;
+  const varianceCls =
+    varianceAbs == null ? "" : varianceAbs > 0.05 ? "neg" : "pos";
 
   return `<section class="event-group">
     <h2>${escapeHtml(group.event_title ?? group.event_slug ?? "(no title)")} <span class="evslug">event_slug: <code>${escapeHtml(group.event_slug ?? "?")}</code> · ${group.markets.length} markets</span></h2>
@@ -1235,9 +1232,9 @@ function renderGroupSection(
         <div class="sub">Entry ${fmtUsd(group.targetBuyNotional)} · Value ${fmtUsd(group.targetValue)}</div>
       </div>
       <div class="kpi delta">
-        <h3>Δ vs target</h3>
-        <div class="big ${deltaCls}">${fmtPct(group.edgeGapPct)} <span style="color:#94a3b8;font-size:14px">(${fmtUsd(group.edgeGapUsdc, { sign: true })})</span></div>
-        <div class="sub">positive = target ahead = alpha leak</div>
+        <h3>Variance from target</h3>
+        <div class="big ${varianceCls}">${varianceAbs != null ? `${(varianceAbs * 100).toFixed(1)}%` : "—"}</div>
+        <div class="sub">|target − us| · goal: minimize (any divergence = miss)</div>
       </div>
     </div>
     <h3 class="subhead">Final positions (per market)</h3>
