@@ -3,18 +3,19 @@
 
 /**
  * Module: `@tests/unit/features/wallet-analysis/market-return-math`
- * Purpose: Locks the worked examples (A–F) from
- *   docs/design/poly-markets-aggregation-redesign.md §3.3 against the
- *   pure math module that powers the Markets aggregation columns.
+ * Purpose: Lock the held-P/L semantics defined in
+ *   market-exposure-service.ts → SINGLE_BASIS_SNAPSHOT_COST. Inputs to
+ *   `positionReturnPct` are Σ snapshot.cost_basis_usdc (currently held)
+ *   and Σ snapshot.current_value_usdc; return is (value − cost) / cost.
  * Scope: Pure unit. No DB, no DOM, no SQL.
  * Invariants:
- *   - MODIFIED_DIETZ_V_BEGIN_ZERO — positionReturnPct walks total-in vs
- *     total-out; partial-close (Example B) returns +24.0%, not the
- *     naive snapshot-based +30%.
+ *   - HELD_PNL_BASIS — pure value/cost ratio on shares still in the
+ *     position; realized SELL / merge / redeem cash flows are
+ *     intentionally outside scope (see market-exposure-service.ts).
  *   - NULL_WHEN_UNDEFINED — divide-by-zero on totalBuyNotional returns
  *     null; rateGapPct degrades to null whenever either side is null.
- *   - SIGN_CONVENTION_TARGET_MINUS_US — Example D reproduces the
- *     +15.5pp / +$8.22 pair exactly.
+ *   - SIGN_CONVENTION_TARGET_MINUS_US — `edgeGap` example reproduces
+ *     +15.5pp / +$8.22 exactly.
  * Side-effects: none
  * Links: nodes/poly/app/src/features/wallet-analysis/server/market-return-math.ts
  * @internal
@@ -29,90 +30,67 @@ import {
   positionReturnPct,
 } from "@/features/wallet-analysis/server/market-return-math";
 
-describe("positionReturnPct — worked examples §3.3", () => {
-  it("A. simple long, still open → +30.0%", () => {
+describe("positionReturnPct — held P/L on snapshot basis", () => {
+  it("simple long, still open → +30.0%", () => {
+    // 100 shares bought avg $0.50, current mark $0.65 → cost $50, value $65.
     expect(
-      positionReturnPct({
-        totalBuyNotional: 50,
-        realizedCash: 0,
-        currentMarkValue: 65,
-      })
+      positionReturnPct({ totalBuyNotional: 50, currentMarkValue: 65 })
     ).toBe(0.3);
   });
 
-  it("B. partial close → +24.0% (NOT the naive +30% from snapshot)", () => {
+  it("post-merge market-maker target → reflects held shares only", () => {
+    // swisstony-shaped: target BOUGHT $36k of fills but merged ~$33k back.
+    // Polymarket snapshot.cost_basis on remaining held shares = $3,200.
+    // current_value = $4,832. Return on the held position = +51.0%.
+    // (Realized merge cash is outside this function — see module header.)
     expect(
       positionReturnPct({
-        totalBuyNotional: 50,
-        realizedCash: 36,
-        currentMarkValue: 26,
+        totalBuyNotional: 3200.75,
+        currentMarkValue: 4832.44,
       })
-    ).toBe(0.24);
+    ).toBeCloseTo(0.5098, 4);
   });
 
-  it("C. hedged YES + NO legs aggregated → +3.6%", () => {
+  it("hedged YES + NO legs aggregated → +3.6%", () => {
+    // cost basis sum 41.50 (Σ snapshot.cost across both legs),
+    // current value sum 43.00.
     expect(
-      positionReturnPct({
-        totalBuyNotional: 41.5, // 50 * 0.50 + 30 * 0.55
-        realizedCash: 0,
-        currentMarkValue: 43.0, // 50 * 0.65 + 30 * 0.35
-      })
-    ).toBe(0.0361); // (1.5 / 41.5) rounded to 4 decimals
+      positionReturnPct({ totalBuyNotional: 41.5, currentMarkValue: 43.0 })
+    ).toBe(0.0361);
   });
 
-  it("E. multi-fill averaging up then partial close → +13.2%", () => {
+  it("fully exited / redeemed → null (representation gap)", () => {
+    // After full redemption, Polymarket zeroes both cost and value on
+    // the snapshot. Held basis is undefined here; realized P/L is not
+    // recoverable without redemption-event tracking (future PR).
     expect(
-      positionReturnPct({
-        totalBuyNotional: 53,
-        realizedCash: 31,
-        currentMarkValue: 29,
-      })
-    ).toBeCloseTo(0.1321, 4);
-  });
-
-  it("F1. all-sold-out closed position with positive PnL", () => {
-    expect(
-      positionReturnPct({
-        totalBuyNotional: 50,
-        realizedCash: 60,
-        currentMarkValue: 0,
-      })
-    ).toBe(0.2);
-  });
-
-  it("F2. zero buy notional → null", () => {
-    expect(
-      positionReturnPct({
-        totalBuyNotional: 0,
-        realizedCash: 0,
-        currentMarkValue: 0,
-      })
+      positionReturnPct({ totalBuyNotional: 0, currentMarkValue: 0 })
     ).toBeNull();
   });
 
-  it("F3. negative buy notional (data bug) → null", () => {
+  it("zero buy notional → null", () => {
     expect(
-      positionReturnPct({
-        totalBuyNotional: -10,
-        realizedCash: 0,
-        currentMarkValue: 5,
-      })
+      positionReturnPct({ totalBuyNotional: 0, currentMarkValue: 0 })
     ).toBeNull();
   });
 
-  it("F4. NaN inputs → null", () => {
+  it("negative buy notional (data bug) → null", () => {
+    expect(
+      positionReturnPct({ totalBuyNotional: -10, currentMarkValue: 5 })
+    ).toBeNull();
+  });
+
+  it("NaN inputs → null", () => {
     expect(
       positionReturnPct({
         totalBuyNotional: Number.NaN,
-        realizedCash: 0,
         currentMarkValue: 50,
       })
     ).toBeNull();
     expect(
       positionReturnPct({
         totalBuyNotional: 50,
-        realizedCash: Number.NaN,
-        currentMarkValue: 50,
+        currentMarkValue: Number.NaN,
       })
     ).toBeNull();
   });

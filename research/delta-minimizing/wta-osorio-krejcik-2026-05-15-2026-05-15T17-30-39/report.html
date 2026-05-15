@@ -66,7 +66,7 @@ h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
 <h1>Δ-Report · Parma: Camila Osorio vs Barbora Krejcikova</h1>
 <div class="sub">
   Input: <code>wta-osorio-krejcik-2026-05-15</code> · Copy-target: <strong style="color:#34d399">swisstony</strong> <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code> · Our wallet: <code>0x95e407fe03996602ed1bf4289ecb3b5af88b5134</code><br/>
-  Charter: <a href="../../work/charters/POLY_COPY_DELTA.md">POLY_COPY_DELTA.md</a> (source of truth — edit in place, surgically) · 1 event group · 186 mirror decisions · Global time scale: 2026-05-15 11:30:12 → 2026-05-15 15:11:38
+  Charter: <a href="../charter.html">POLY_COPY_DELTA</a> (rendered) / <a href="../../work/charters/POLY_COPY_DELTA.md">.md source</a> · 1 event group · 186 mirror decisions · Global time scale: 2026-05-15 11:30:12 → 2026-05-15 15:11:38
 </div>
 
 <!-- TAKEAWAY:START -->
@@ -77,18 +77,18 @@ h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
     <tbody>
       <tr>
         <td>1</td>
-        <td><strong>Dashboard row mixes two cost-basis denominators in adjacent cells</strong>. The outer "Target entry" column at <code>market-exposure-service.ts:430-431</code> uses <code>aggregateWalletReturn.totalBuyNotional = Math.max(rollupNotional, snapshotCostBasis)</code> (L581) — here rollup = $36,215.52 (~12× round-trips of 4,834 sh). The per-trader expansion table writes snapshot net cost basis directly ($3,200.75) and reports P/L = $4,832.44 − $3,200.75 = +$1,631.69. Same row, two bases — that's why the numbers look contradictory. The headline Δ −166.5% inherits the inflated $36k denominator; on a single (snapshot) basis the actual Δ is target +51.0% vs us +79.9% = −28.9pp.</td>
-        <td class="charter">N/A — dashboard reporting bug, not a mirror-Δ cause; <code>primary_class: null</code> in findings.json</td>
+        <td><strong>Dashboard row mixed two cost-basis denominators in adjacent cells</strong>. The outer "Target entry $36,215.52" column was <code>aggregateWalletReturn.totalBuyNotional = Math.max(rollupNotional, snapshotCostBasis)</code> at <code>market-exposure-service.ts:581</code> (now refactored). For swisstony, gross BUY rollup on this market was $36,215.52 across 181 fills (all BUYs; <strong>zero SELLs across all 195,723 lifetime fills</strong>). The reason rollup ≫ snapshot cost is <strong>negRisk pair-merges</strong>, not round-trips: swisstony bought BOTH outcomes (Krejcikova primary + Osorio hedge), repeatedly submitted matched pairs to the NegRiskAdapter for $1 USDC each (~34k pairs recovered ~$34k of cash), and held the residual ~4,834 K + ~1,167 O at a snapshot cost basis of $3,200.75. The per-trader expansion table read snapshot fields directly → P/L = $4,832.44 − $3,200.75 = +$1,631.69. Same row, two bases. The headline Δ −166.5% inherited the inflated $36k denominator.</td>
+        <td class="charter">N/A — dashboard reporting bug, not a mirror-algorithm Δ cause; <code>primary_class: null</code></td>
         <td class="conf">95%</td>
       </tr>
     </tbody>
   </table>
   <div class="fix">
-    <strong>Pareto fix:</strong> pivot the per-trader expansion table onto the same <code>aggregateWalletReturn</code> the outer row uses, so one row = one denominator. Code path: <code>nodes/poly/app/src/features/wallet-analysis/server/market-exposure-service.ts:591+</code> (<code>pivotParticipants</code>) currently bypasses <code>aggregateWalletReturn</code> and reads snapshot fields off legs directly. The header comment at L41–45 picked the rollup-max basis deliberately for partial-close correctness; the expansion just didn't get the memo.
+    <strong>Fix landed in this PR:</strong> <code>aggregateWalletReturn</code> now returns snapshot-only <code>totalBuyNotional</code> (<code>market-exposure-service.ts:585+</code>) and exposes <code>grossBuyNotional</code> as a separate field for any future "Lifetime BUY activity" column. <code>positionReturnPct</code> is now pure held-P/L: <code>(value − cost) / cost</code>, no <code>realizedCash</code> input (see module header SINGLE_BASIS_SNAPSHOT_COST + market-return-math.ts HELD_PNL_BASIS). The "Target entry" cell on this row will now display <strong>$3,200.75</strong>, internally consistent with the +$1,631.69 P/L below it. Δ is now target +51.0% vs us +79.9% = −28.9pp (we beat target on rate; matched 0.31% of their notional).
     <br/><br/>
-    <strong>Sidebar — underlying mirror behavior on this market</strong> (not a new finding; logging because it's quantified and the user will ask): 2 placed / 186 decisions. Block histogram 64 D4 / 61 D3 / 55 D6 — three different per-fill gates each blocking a different path. We matched ~0.31% of target's notional. This is the existing D6 / D3 / D4 pattern; no charter edit needed.
+    <strong>Known gap, deferred:</strong> full-trade P/L for market-maker targets needs merge + redemption event tracking (NegRiskAdapter logs + redemption events). Without them, "held P/L" under-reports total profit on swisstony-shaped activity by the merge spread (~$500–$1k on this market). Snapshot-only is still the most honest single number available today; the alternative (max-rollup) was over-reporting by $33k.
     <br/><br/>
-    <strong>Variance check on +79.9% / +$7.85:</strong> single 17.69-sh entry at $0.556 VWAP on Krejcikova, who won. If Osorio had won we'd be at $0. The headline is a coin flip, not algorithm edge.
+    <strong>Sidebar — underlying mirror behavior:</strong> 2 placed / 186 decisions. Block histogram 64 D4 / 61 D3 / 55 D6 — three different per-fill gates each blocking a different path. Variance check on our +79.9% / +$7.85: single 17.69-sh entry on Krejcikova, who won; if Osorio had won we'd be at $0. Coin flip, not edge.
   </div>
 </div>
 <!-- TAKEAWAY:END -->

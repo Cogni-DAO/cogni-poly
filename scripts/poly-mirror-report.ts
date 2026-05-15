@@ -1354,7 +1354,7 @@ h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
 <h1>Δ-Report · ${escapeHtml(headerTitle)}</h1>
 <div class="sub">
   Input: <code>${escapeHtml(input)}</code> · Copy-target: <strong style="color:#34d399">${escapeHtml(target.label)}</strong> <code>${escapeHtml(target.wallet)}</code> · Our wallet: <code>${escapeHtml(ourWallet)}</code><br/>
-  Charter: <a href="../../work/charters/POLY_COPY_DELTA.md">POLY_COPY_DELTA.md</a> (source of truth — edit in place, surgically) · ${groups.length} event group${groups.length === 1 ? "" : "s"} · ${totalDecisions} mirror decisions · Global time scale: ${fmtTime(tMin)} → ${fmtTime(tMax)}
+  Charter: <a href="../charter.html">POLY_COPY_DELTA</a> (rendered) / <a href="../../work/charters/POLY_COPY_DELTA.md">.md source</a> — re-render with <code>pnpm tsx scripts/render-charter.ts</code> · ${groups.length} event group${groups.length === 1 ? "" : "s"} · ${totalDecisions} mirror decisions · Global time scale: ${fmtTime(tMin)} → ${fmtTime(tMax)}
 </div>
 
 <!-- TAKEAWAY:START -->
