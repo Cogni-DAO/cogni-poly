@@ -225,6 +225,70 @@ describe("buildMarketExposureGroups", () => {
     expect(line?.targetEntryValueUsdc).toBe(929.43);
   });
 
+  it("uses snapshot cost basis when the fill rollup is inflated by negRisk merges (market-maker target)", async () => {
+    // swisstony-shaped: target bought BOTH outcomes ($36k of BUY fills, 0
+    // SELLs lifetime) and merged matched YES+NO pairs back to USDC via the
+    // NegRiskAdapter (~$33k recovered). Polymarket's vendor cost_basis on
+    // the held shares is $3,200 — the rollup BUY notional of $36k is the
+    // wrong P/L denominator (would compute return ≈ −86%, false negative).
+    //
+    // After SINGLE_BASIS_SNAPSHOT_COST, the row's "Entry" column uses the
+    // snapshot ($3,200), the new `targetGrossBuyNotionalUsdc` field carries
+    // the rollup ($36,215) for any future "Lifetime BUY" UI column, and
+    // Δ% / target return are computed on the snapshot basis.
+    const db = fakeDb([
+      [
+        {
+          wallet_address: TARGET_WALLET,
+          label: "swisstony",
+          condition_id: "0xCOND1",
+          token_id: "tok-no-1",
+          market_title: "Parma: Camila Osorio vs Barbora Krejcikova",
+          event_title: null,
+          market_slug: "wta-osorio-krejcik-2026-05-15",
+          event_slug: null,
+          outcome: "Barbora Krejcikova",
+          shares: "4834.27",
+          cost_basis_usdc: "3200.75",
+          current_value_usdc: "4832.44",
+          avg_price: "0.6622",
+          last_observed_at: new Date("2026-05-15T15:30:00.000Z"),
+          lifecycle: "active",
+        },
+      ],
+      [
+        {
+          wallet_address: TARGET_WALLET.toLowerCase(),
+          condition_id: "0xCOND1",
+          total_buy_notional: "36215.52",
+          realized_cash: "0",
+        },
+      ],
+    ]);
+
+    const groups = await buildMarketExposureGroups({
+      db,
+      billingAccountId: "ba-1",
+      walletAddress: OUR_WALLET,
+      livePositions: [ourPosition()],
+    });
+
+    expect(groups).toHaveLength(1);
+    const line = groups[0]?.lines[0];
+    // Cost basis (the P/L denominator) is snapshot, not rollup.
+    expect(line?.targetEntryValueUsdc).toBe(3200.75);
+    // Lifetime BUY activity is exposed separately, never mixed.
+    expect(line?.targetGrossBuyNotionalUsdc).toBe(36215.52);
+    // Target's participant-level cost basis flows through `pivotParticipants`
+    // from the same snapshot, so per-trader expansion and outer row agree.
+    const targetRow = line?.participants.find((p) => p.side === "copy_target");
+    expect(targetRow?.net.costBasisUsdc).toBe(3200.75);
+    // The legacy max(rollup, snapshot) policy would have produced
+    // targetEntryValueUsdc = 36215.52 here — exactly the inconsistency
+    // the Osorio Krejcik investigation surfaced. SINGLE_BASIS_SNAPSHOT_COST
+    // forbids that outcome.
+  });
+
   it("preserves entry notional for closed lines so 'Our value' is non-zero after exit", async () => {
     // Regression for bug.5037: closed-line `ourValueUsdc` collapses to 0
     // because currentValue is 0 after we exit. The dashboard displays
@@ -271,12 +335,12 @@ describe("buildMarketExposureGroups", () => {
     expect(line?.status).toBe("closed");
     // Current mark-to-market is correctly $0 (we exited).
     expect(line?.ourValueUsdc).toBe(0);
-    // Entry value: max(fill rollup $42, pnl-derived snapshot cost $47.94).
-    // Snapshot wins here — same backfill-horizon resilience as bug.5044
-    // on target wallets, applied to closed-position fixtures whose fills
-    // and pnl-derived cost can drift due to fee rounding or partial-fill
-    // observation gaps.
+    // Entry value = snapshot cost (pnl-derived $47.94 for closedPosition
+    // legs, per the same SINGLE_BASIS_SNAPSHOT_COST policy applied to
+    // target wallets). Rollup BUY notional $42 is now exposed separately
+    // as `ourGrossBuyNotionalUsdc` for any future "Lifetime BUY" column.
     expect(line?.ourEntryValueUsdc).toBe(47.94);
+    expect(line?.ourGrossBuyNotionalUsdc).toBe(42);
     expect(line?.targetEntryValueUsdc).toBe(0);
     expect(group?.ourValueUsdc).toBe(0);
     expect(group?.ourEntryValueUsdc).toBe(47.94);

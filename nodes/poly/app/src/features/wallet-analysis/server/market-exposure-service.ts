@@ -38,21 +38,34 @@
  *     → `winner`/`loser`/`resolved`.
  *   - SINGLE_BASIS_SNAPSHOT_COST: per-position cost basis, P/L, and return %
  *     all derive from `Σ snapshot.cost_basis_usdc` (Polymarket vendor's
- *     FIFO-allocated cost of *currently held* shares). Snapshot is the
- *     canonical truth: it correctly deducts shares disposed via SELL, merge
- *     (negRisk pair → 1 USDC), or redemption, so the displayed "entry value"
- *     never includes capital that has already left the position. The earlier
- *     `max(rollup, snapshot)` policy was abandoned because for market-maker
- *     targets (swisstony being canonical) it inflated entry by 10× — every
- *     BUY fill counted, even on shares that were merged back to USDC seconds
- *     later. P/L on this basis is "held P/L" (`value − cost`); realized cash
- *     from SELL fills is intentionally NOT folded in because (a) it leaks
- *     into the denominator inconsistently, (b) the analogous merge/redeem
- *     cash flows aren't tracked yet, so partial inclusion would mis-rank
- *     market-makers vs directional traders. `grossBuyNotionalUsdc` (rollup
- *     BUY total) is exposed as a SEPARATE field on each line for callers
- *     who want lifetime-volume visibility — it must never be conflated with
- *     cost basis in display.
+ *     FIFO-allocated cost of *currently held* shares). The snapshot is
+ *     canonically durable in two ways: (a) Polymarket's vendor accounting
+ *     deducts cost as shares leave the position via SELL, negRisk merge
+ *     (YES + NO pair → 1 USDC), or redemption, so the held-cost number on
+ *     a still-active position is correct; (b) the snapshot table itself is
+ *     append-only and the writer at trader-observation-service.ts inserts
+ *     only positive-share rows from Polymarket's `/positions` page — once
+ *     Polymarket drops the position post-redemption, the writer stops
+ *     inserting and the last pre-redemption row persists, preserving the
+ *     final cost + last-marked value for historical attribution (held P/L
+ *     remains the resolved-but-not-redeemed mark, which equals the
+ *     redemption value). The earlier `max(rollup, snapshot)` policy was
+ *     abandoned because for market-maker targets (swisstony being canonical)
+ *     it inflated entry by 10× — every BUY fill counted, even on shares
+ *     merged back to USDC seconds later. P/L on this basis is "held P/L"
+ *     (`value − cost`); realized cash from SELL fills is intentionally NOT
+ *     folded into the numerator because we don't track the analogous merge
+ *     / redeem cash flows yet — partial inclusion would mis-rank market-
+ *     makers vs directional traders. `grossBuyNotionalUsdc` (rollup BUY
+ *     total) is exposed as a SEPARATE field for callers who want lifetime-
+ *     volume visibility; it must never be conflated with cost basis.
+ *   - KNOWN_GAP_FULLY_EXITED_TARGETS: a target wallet that fully exited a
+ *     condition via SELL fills before our backfill horizon has no snapshot
+ *     row → totalBuyNotional = 0 → returnPct = null → no Δ. Hits directional
+ *     target wallets only (market-makers like swisstony have 0 SELLs).
+ *     Future remedy: index NegRiskAdapter + ConditionalTokens redemption
+ *     events as realized cash flows; then Modified-Dietz on rollup BUY +
+ *     all cash recoveries gives a clean answer regardless of held shares.
  *   - EDGE_GAP_NULL_WITHOUT_TARGETS: `edgeGapUsdc` and `edgeGapPct` are null
  *     on lines/groups with zero target legs that have positive buy notional.
  *     "Edge gap vs. nobody" is undefined, not `-ourPnl`.
