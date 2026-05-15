@@ -89,9 +89,38 @@ patches:
       - op: add
         path: /spec/template/metadata/labels/app.kubernetes.io~1instance
         value: "poly"
-  # Migration: skip until node-template builds its own -migrate image (task.0260).
-  # The current migrate digest points to the app image, which starts Next.js
-  # instead of running migrations — blocking Argo PreSync indefinitely.
+  # task.0370 step 1: Doltgres knowledge-plane migrator runs as a second initContainer
+  # on the poly Deployment. DATABASE_URL maps to DOLTGRES_URL_POLY (separate from
+  # the Postgres DATABASE_URL the main container + first initContainer use).
+  - target:
+      kind: Deployment
+      name: node-app
+    patch: |
+      - op: add
+        path: /spec/template/spec/initContainers/-
+        value:
+          name: migrate-doltgres
+          image: ghcr.io/cogni-dao/cogni-poly:placeholder
+          command:
+            - /bin/sh
+            - -c
+            - exec node /app/nodes/$(NODE_NAME)/app/migrate-doltgres.mjs /app/nodes/$(NODE_NAME)/app/doltgres-migrations
+          envFrom:
+            - configMapRef:
+                name: poly-node-app-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: poly-node-app-secrets
+                  key: DOLTGRES_URL_POLY
+          resources:
+            requests:
+              memory: "384Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
 
   # bug.0295: VM discovery via DNS (poly.vm.cognidao.org).
   # Convert base headless Services → ExternalName; delete EndpointSlices.
