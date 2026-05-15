@@ -1,10 +1,10 @@
 {
   "report_path": "/Users/derek/conductor/workspaces/cogni-poly/montevideo/research/delta-minimizing/wta-parry-paquet-2026-05-13-2026-05-15T16-48-47/report.html",
-  "primary_class": null,
-  "primary_confidence": null,
-  "primary_one_liner": null,
-  "secondary_class": null,
-  "secondary_confidence": null,
-  "secondary_one_liner": null,
-  "authored_at": null
+  "primary_class": "D3",
+  "primary_confidence": 0.9,
+  "primary_one_liner": "21/27 Paquet entries blocked by target_dominant_other_side while target's Paquet cost-basis fraction sat at 0.18-0.22; target later accumulated to $1238 on Paquet (61% of cost), which we never touched.",
+  "secondary_class": "D6",
+  "secondary_confidence": 0.75,
+  "secondary_one_liner": "4 layer follow-ups on Parry hit position_cap_reached after a $7.70 micro-entry burned the $30/market cap.",
+  "authored_at": "2026-05-15T17:30:00Z"
 }

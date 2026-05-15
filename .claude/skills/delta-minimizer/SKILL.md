@@ -30,7 +30,7 @@ Naming convention: the **skill** is `/delta-minimizer` (the workflow / analysis 
 
 Accepts: event slug (`lal-bet-elc-2026-05-12`), conditionId (`0xb974…`), comma-separated conditionIds, or fuzzy event-title text. Produces a timestamped subdir at `research/delta-minimizing/<slug>-<iso>/` containing:
 
-- `report.html` — human-facing report. KPI cards, per-market positions table (Primary/Hedge/Net with VWAP-delta highlights), per-market net-position chart with `gate opens` marker, decision-marker strip. Has a placeholder `<!-- TAKEAWAY -->` block at the top — that's where YOU author.
+- `report.html` — human-facing report. KPI cards (Our / Target / Variance-from-target), per-market positions table (Primary/Hedge/Net with VWAP-delta highlights), per-market 4-line position+VWAP chart (target & us, primary up / hedge down, plus thin VWAP lines on a secondary right axis), decision-marker strip. Has a placeholder `<!-- TAKEAWAY -->` block at the top — that's where YOU author.
 - `bundle.json` — the structured AI read surface: groups, per-market metrics, decisions with full intent JSON, placedOrders.
 - `findings.json` — empty stub. YOU fill it after authoring the takeaway. Schema below in step 3.
 
@@ -108,11 +108,10 @@ The charter renderer reads every report's `findings.json` to compute per-D-class
 - Anchors on our wallet's positions (`OUR_POSITIONS_ANCHOR_GROUPS` invariant from `market-exposure-service.ts`). If we never held the market, the tool exits with a message.
 - Pulls OUR legs from `poly_trader_position_snapshots` (NOT `current_positions` — that filters `active=true` which drops losers; for Δ-analysis we need every leg).
 - Pulls target legs from `poly_trader_position_snapshots` (latest per (cond, token), survives target redeem).
-- Cost basis denominator = `max(rollup_buy_notional, snapshot_cost)` per (wallet, condition), matching dashboard's `aggregateWalletReturn`.
+- Cost basis denominator = snapshot `cost_basis_usdc` per (wallet, condition). Single basis everywhere (Entry, Net %, Net P/L, Δ). Trades dashboard parity (which uses `max(rollup, snapshot)`) for internal consistency — earlier mixed-basis math produced rows where `%` and `$` disagreed (e.g. `-35.3%` vs `+$1610`).
 - Δ-investigation value override: `outcome=loser → value 0`; winners keep snapshot value (we do NOT zero redeemed winners — dashboard does that to avoid USDC double-counting, but we need realized P/L visible on the position).
 - Chart x-axis: first activity → last activity (NOT market resolution — keeps action visible).
 - Chart y-axis: symmetric log-$ on net position (primary cost − hedge cost). Net-zero line in the middle; primary side up, hedge side down. Both wallets render regardless of which side they're on.
-- Vertical "gate opens" marker at the moment target's cumulative per-token cost crosses `min_target_usdc` ($319 prod config) — this is when `below_target_percentile` stops firing.
 - Decision markers strip below the chart, dimmed if the decision was on the hedge token.
 - Group by `event_slug`. Each group gets its own 3-KPI band (Our / Target / Δ-vs-target), per-market table, and chart.
 - Per run, writes `findings.json` stub — LLM fills it with `primary_class` / `primary_confidence` / `primary_one_liner`. The shared `charter.html` aggregates all `findings.json` files into a per-D-class tally table.

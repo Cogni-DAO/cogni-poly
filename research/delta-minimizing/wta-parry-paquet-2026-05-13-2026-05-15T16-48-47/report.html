@@ -72,7 +72,22 @@ h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
 <!-- TAKEAWAY:START -->
 <div class="takeaway">
   <h2>↗ Top finding</h2>
-  <div class="placeholder">Awaiting LLM-authored takeaway. Script produces data + visualization; agent reads <code>bundle.json</code>, cross-references <code>plan-mirror.ts</code>, drafts/refines/critiques, then fills this block with a single highest-priority finding, charter class, % confidence, and Pareto fix. Replace between TAKEAWAY:START and TAKEAWAY:END.</div>
+  <table class="findings">
+    <thead><tr><th>#</th><th>Finding</th><th class="charter">Charter</th><th class="conf">Confidence</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><strong>`target_dominant_other_side` blocked all 21 Paquet entry attempts</strong> at 15:54&ndash;16:17Z, when target's cost-basis was still 78% on Parry (target_side_fraction on Paquet 0.18&ndash;0.22, below `min_target_side_fraction` 0.2). Target subsequently accumulated to $1238 on Paquet (final 61% of cost) &mdash; the position we never touched. The dominance gate reads instantaneous cost-basis split, not target's accumulation trajectory; an active rebalance from 81/19 toward 61/39 is invisible to it.</td>
+        <td class="charter">D3 &mdash; hedge blindness</td>
+        <td class="conf">90%</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="fix">
+    <strong>Pareto fix:</strong> `analyzeTargetDominance` + `decideMirrorBranch` in `nodes/poly/app/src/features/copy-trade/plan-mirror.ts:92&ndash;115` &mdash; the per-fill dominance check fires against the current cost-basis snapshot, which is a lagging indicator when target is mid-rebalance. Long-term: D2 position-mirror refactor (`docs/spec/poly-copy-trade-position-mirror.md`) dissolves D3 by tracking each token-id position independently &mdash; no "the other side" concept. Short-term band-aid: lowering `min_target_side_fraction` 0.20 &rarr; 0.15 would have caught 17 of the 21 blocks here, but it's a coin-flip whether that helps next time (this market just happened to live near the wall).
+    <br/><br/>
+    <strong>Variance check on the +53.8% / +$4.14 headline:</strong> our P/L is variance, not signal. We held $7.70 of Parry (winner) from a single new_entry that slipped through at 16:18Z (target_side_fraction 0.777). The 4 subsequent `position_cap_reached` layer attempts confirm we couldn't size up &mdash; the $7.70 burned the $30/market cap. If Paquet had won, we'd be at $0 holdings while target took the $1238 loss. The favorable headline is a 50/50 coin flip, not algorithm edge.
+  </div>
 </div>
 <!-- TAKEAWAY:END -->
 

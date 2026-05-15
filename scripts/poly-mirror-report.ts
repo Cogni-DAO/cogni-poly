@@ -44,7 +44,7 @@ function parseArgs(argv: string[]): Args {
   }
   if (!out.market) {
     console.error(
-      "usage: tsx scripts/delta-minimizer.ts <event_slug | condition_id | fuzzy_title> [--target <wallet>] [--json] [--env production]"
+      "usage: tsx scripts/poly-mirror-report.ts <event_slug | condition_id | fuzzy_title> [--target <wallet>] [--json] [--env production]"
     );
     process.exit(2);
   }
@@ -57,6 +57,13 @@ type GrafanaFrame = {
   schema: { fields: { name: string }[] };
   data: { values: unknown[][] };
 };
+// Quote a single SQL string literal, escaping embedded `'`. Only needed for
+// agent-controllable input (CLI slug, --target flag). DB-sourced values
+// (condition_ids, wallet addresses already in our tables) are trusted.
+function quoteLit(s: string): string {
+  return `'${s.replace(/'/g, "''")}'`;
+}
+
 function runSql(sql: string, env: string): Record<string, unknown>[] {
   const out = execFileSync(
     "bash",
@@ -114,11 +121,13 @@ function resolveMarkets(input: string, env: string): Market[] {
   } else if (trimmed.includes("-") && /\d/.test(trimmed)) {
     // Prefix match — `lal-bet-elc-2026-05-12` should catch the
     // `-more-markets` and `-halftime-result` siblings too.
-    where = `event_slug = '${trimmed}' or event_slug like '${trimmed}-%' or market_slug = '${trimmed}'`;
+    const lit = quoteLit(trimmed);
+    const prefix = quoteLit(`${trimmed}-%`);
+    where = `event_slug = ${lit} or event_slug like ${prefix} or market_slug = ${lit}`;
   } else {
     const parts = trimmed.split(/\s+/).filter(Boolean);
     const ilikes = parts
-      .map((p) => `event_title ilike '%${p.replace(/'/g, "''")}%'`)
+      .map((p) => `event_title ilike ${quoteLit(`%${p}%`)}`)
       .join(" and ");
     where = ilikes || "false";
   }
@@ -159,7 +168,7 @@ function detectTarget(
     .map((c) => `'prediction-market:polymarket:${c}'`)
     .join(",");
   const whereWallet = explicit
-    ? `and intent->>'target_wallet' = '${explicit.toLowerCase()}'`
+    ? `and intent->>'target_wallet' = ${quoteLit(explicit.toLowerCase())}`
     : "";
   const rows = runSql(
     `select intent->>'target_wallet' as wallet, target_id, count(*) as n
@@ -243,20 +252,25 @@ type Leg = {
   lifecycle: "active" | "inactive";
 };
 
-function fetchOurLegs(
+// One source for both ours and target's per-leg snapshot history.
+//   poly_trader_position_snapshots is append-only — latest per (cond, token)
+//   survives target redemption AND own-side closes (we deactivate loser legs in
+//   poly_trader_current_positions but the snapshot row is preserved here).
+// Outcome override: loser → value 0 (snapshot can be pre-resolution and still
+//   carry a non-zero price for a now-worthless loser token). We do NOT zero
+//   redeemed winners — that hides realized P/L on hedges.
+// `requireCogniKind` exists only for our-wallet lookups (one row in
+//   poly_trader_wallets has `kind = 'cogni_wallet'`).
+function fetchSnapshotLegs(
   walletAddress: string,
   conditionIds: string[],
-  env: string
+  env: string,
+  side: "ours" | "target",
+  requireCogniKind: boolean
 ): Leg[] {
   if (conditionIds.length === 0) return [];
   const inCond = conditionIds.map((c) => `'${c}'`).join(",");
-  // OWN-WALLET LEGS COME FROM SNAPSHOTS, NOT current_positions.
-  //   poly_trader_current_positions filters active=true, which DROPS loser-side
-  //   legs (the observer deactivates them once shares go to $0). For Δ-analysis
-  //   we need every leg that ever existed, including the losers — same source we
-  //   use for the target wallet. poly_market_outcomes is the chain truth on
-  //   winner/loser; we apply only the "loser → value 0" override (NOT the
-  //   dashboard's "winner+redeemed → 0" — that hides realized P/L on our hedges).
+  const kindClause = requireCogniKind ? "and w.kind = 'cogni_wallet'" : "";
   const sql = `
     select distinct on (s.trader_wallet_id, s.condition_id, s.token_id)
       w.label,
@@ -271,7 +285,7 @@ function fetchOurLegs(
     left join poly_market_outcomes pmo
       on lower(pmo.condition_id) = lower(s.condition_id) and pmo.token_id = s.token_id
     where lower(w.wallet_address) = '${walletAddress.toLowerCase()}'
-      and w.kind = 'cogni_wallet'
+      ${kindClause}
       and s.condition_id in (${inCond})
     order by s.trader_wallet_id, s.condition_id, s.token_id, s.captured_at desc
   `;
@@ -283,7 +297,7 @@ function fetchOurLegs(
     const outcome = r.market_outcome as "winner" | "loser" | null;
     const displayValue = outcome === "loser" ? 0 : currentValueRaw;
     return {
-      side: "ours" as const,
+      side,
       wallet_label: String(r.label),
       condition_id: String(r.condition_id),
       token_id: String(r.token_id),
@@ -297,98 +311,6 @@ function fetchOurLegs(
       lifecycle: displayValue > 0 || outcome === null ? "active" : "inactive",
     };
   });
-}
-
-function fetchTargetLegs(
-  targetWallet: string,
-  conditionIds: string[],
-  env: string
-): Leg[] {
-  if (conditionIds.length === 0) return [];
-  const inCond = conditionIds.map((c) => `'${c}'`).join(",");
-  // poly_trader_position_snapshots is append-only — latest per (cond, token)
-  // survives target redemption. Apply outcome override: loser → value 0
-  // (matches what we do for our wallet; the snapshot might be pre-resolution
-  // and still showing a non-zero price for a now-worthless loser token).
-  const sql = `
-    select distinct on (s.trader_wallet_id, s.condition_id, s.token_id)
-      w.label,
-      s.condition_id, s.token_id,
-      s.shares::float8 as shares,
-      s.cost_basis_usdc::float8 as cost_basis,
-      s.current_value_usdc::float8 as current_value,
-      s.avg_price::float8 as avg_price,
-      pmo.outcome as market_outcome
-    from poly_trader_position_snapshots s
-    join poly_trader_wallets w on w.id = s.trader_wallet_id
-    left join poly_market_outcomes pmo
-      on lower(pmo.condition_id) = lower(s.condition_id) and pmo.token_id = s.token_id
-    where lower(w.wallet_address) = '${targetWallet.toLowerCase()}'
-      and s.condition_id in (${inCond})
-    order by s.trader_wallet_id, s.condition_id, s.token_id, s.captured_at desc
-  `;
-  const rows = runSql(sql, env);
-  return rows.map((r) => {
-    const shares = Number(r.shares ?? 0);
-    const costBasis = Number(r.cost_basis ?? 0);
-    const currentValueRaw = Number(r.current_value ?? 0);
-    const outcome = r.market_outcome as "winner" | "loser" | null;
-    const displayValue = outcome === "loser" ? 0 : currentValueRaw;
-    return {
-      side: "target" as const,
-      wallet_label: String(r.label),
-      condition_id: String(r.condition_id),
-      token_id: String(r.token_id),
-      shares,
-      cost_basis_usdc: costBasis,
-      current_value_usdc: displayValue,
-      vwap:
-        r.avg_price != null && Number(r.avg_price) > 0
-          ? Number(r.avg_price)
-          : null,
-      lifecycle: displayValue > 0 || outcome === null ? "active" : "inactive",
-    };
-  });
-}
-
-// ---------- Fill rollups (for max(rollup, snapshot) cost-basis denominator) ----------
-
-type Rollup = {
-  wallet_address: string;
-  condition_id: string;
-  buy_notional: number;
-  realized_cash: number;
-};
-
-function fetchFillRollups(
-  conditionIds: string[],
-  wallets: string[],
-  env: string
-): Map<string, Rollup> {
-  const out = new Map<string, Rollup>();
-  if (conditionIds.length === 0 || wallets.length === 0) return out;
-  const inCond = conditionIds.map((c) => `'${c}'`).join(",");
-  const inWallet = wallets.map((w) => `'${w.toLowerCase()}'`).join(",");
-  const sql = `
-    select lower(w.wallet_address) as wallet_address, f.condition_id,
-           coalesce(sum(f.size_usdc) filter (where f.side = 'BUY'), 0)::float8 as buy_notional,
-           coalesce(sum(f.size_usdc) filter (where f.side = 'SELL'), 0)::float8 as realized_cash
-    from poly_trader_fills f
-    join poly_trader_wallets w on w.id = f.trader_wallet_id
-    where f.condition_id in (${inCond})
-      and lower(w.wallet_address) in (${inWallet})
-    group by lower(w.wallet_address), f.condition_id
-  `;
-  for (const r of runSql(sql, env)) {
-    const k = `${String(r.wallet_address)}|${String(r.condition_id)}`;
-    out.set(k, {
-      wallet_address: String(r.wallet_address),
-      condition_id: String(r.condition_id),
-      buy_notional: Number(r.buy_notional ?? 0),
-      realized_cash: Number(r.realized_cash ?? 0),
-    });
-  }
-  return out;
 }
 
 // ---------- Raw fills (for timeline) ----------
@@ -498,7 +420,7 @@ function fetchPlacedOrders(
   return runSql(sql, env) as unknown as PlacedHisto[];
 }
 
-// ---------- Per-condition metric (dashboard math: max(rollup, snapshot)) ----------
+// ---------- Per-condition metric (snapshot-cost basis everywhere) ----------
 
 type ConditionMetric = {
   condition_id: string;
@@ -527,8 +449,7 @@ type PerWalletMetric = {
 function buildPerWalletMetric(
   legs: Leg[],
   primary_token_id: string | null,
-  hedge_token_id: string | null,
-  rollup: Rollup | undefined
+  hedge_token_id: string | null
 ): PerWalletMetric {
   const primary = legs.find((l) => l.token_id === primary_token_id);
   const hedge = legs.find((l) => l.token_id === hedge_token_id);
@@ -540,7 +461,6 @@ function buildPerWalletMetric(
   // and disagreed (e.g. −35.3% vs +$1610 on the same row).
   const returnPct =
     snapshotCost > 0 ? (currentMark - snapshotCost) / snapshotCost : null;
-  void rollup;
   return {
     primary_value: primary?.current_value_usdc ?? 0,
     primary_cost: primary?.cost_basis_usdc ?? 0,
@@ -562,10 +482,7 @@ function buildPerWalletMetric(
 function buildConditionMetric(
   conditionId: string,
   ourLegs: Leg[],
-  targetLegs: Leg[],
-  rollups: Map<string, Rollup>,
-  ourWallet: string,
-  targetWallet: string
+  targetLegs: Leg[]
 ): ConditionMetric {
   // Primary = larger snapshot cost basis from TARGET's legs (their bet);
   // hedge = the other side. If target has only one leg, use that.
@@ -579,18 +496,8 @@ function buildConditionMetric(
     condition_id: conditionId,
     primary_token_id,
     hedge_token_id,
-    ours: buildPerWalletMetric(
-      ourLegs,
-      primary_token_id,
-      hedge_token_id,
-      rollups.get(`${ourWallet.toLowerCase()}|${conditionId}`)
-    ),
-    target: buildPerWalletMetric(
-      targetLegs,
-      primary_token_id,
-      hedge_token_id,
-      rollups.get(`${targetWallet.toLowerCase()}|${conditionId}`)
-    ),
+    ours: buildPerWalletMetric(ourLegs, primary_token_id, hedge_token_id),
+    target: buildPerWalletMetric(targetLegs, primary_token_id, hedge_token_id),
   };
 }
 
@@ -649,9 +556,6 @@ function fmtTime(ms: number | null | undefined): string {
 }
 function escapeHtml(s: string | null | undefined): string {
   if (s == null) return "";
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-function escapeXml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -852,14 +756,14 @@ function svgTimeline(args: {
     `<text x="22" y="${padT + plotH / 4}" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 22 ${padT + plotH / 4})">PRIMARY ↑</text>`
   );
   lines.push(
-    `<text x="22" y="${padT + plotH / 4 + 14}" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 ${padT + plotH / 4 + 14})">${escapeXml(primary.label ?? "?")}</text>`
+    `<text x="22" y="${padT + plotH / 4 + 14}" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 ${padT + plotH / 4 + 14})">${escapeHtml(primary.label ?? "?")}</text>`
   );
   if (hedge) {
     lines.push(
       `<text x="22" y="${padT + (plotH * 3) / 4}" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 22 ${padT + (plotH * 3) / 4})">HEDGE ↓</text>`
     );
     lines.push(
-      `<text x="22" y="${padT + (plotH * 3) / 4 + 14}" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 ${padT + (plotH * 3) / 4 + 14})">${escapeXml(hedge.label ?? "?")}</text>`
+      `<text x="22" y="${padT + (plotH * 3) / 4 + 14}" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 ${padT + (plotH * 3) / 4 + 14})">${escapeHtml(hedge.label ?? "?")}</text>`
     );
   }
 
@@ -930,7 +834,7 @@ function svgTimeline(args: {
     );
     if (last.primaryCost > 0) {
       lines.push(
-        `<circle cx="${xT(last.t).toFixed(1)}" cy="${ySide(last.primaryCost, 1).toFixed(1)}" r="3.5" fill="${color}"><title>${escapeXml(walletNameForTooltip)} primary $${last.primaryCost.toFixed(2)}</title></circle>`
+        `<circle cx="${xT(last.t).toFixed(1)}" cy="${ySide(last.primaryCost, 1).toFixed(1)}" r="3.5" fill="${color}"><title>${escapeHtml(walletNameForTooltip)} primary $${last.primaryCost.toFixed(2)}</title></circle>`
       );
     }
     // Hedge position (dashed, lower half).
@@ -940,7 +844,7 @@ function svgTimeline(args: {
       );
       if (last.hedgeCost > 0) {
         lines.push(
-          `<circle cx="${xT(last.t).toFixed(1)}" cy="${ySide(last.hedgeCost, -1).toFixed(1)}" r="3.5" fill="${color}"><title>${escapeXml(walletNameForTooltip)} hedge $${last.hedgeCost.toFixed(2)}</title></circle>`
+          `<circle cx="${xT(last.t).toFixed(1)}" cy="${ySide(last.hedgeCost, -1).toFixed(1)}" r="3.5" fill="${color}"><title>${escapeHtml(walletNameForTooltip)} hedge $${last.hedgeCost.toFixed(2)}</title></circle>`
         );
       }
     }
@@ -994,7 +898,7 @@ function svgTimeline(args: {
   // Title + final-state annotation (with VWAP).
   const winnerNote = primary.outcome ? ` (${primary.outcome})` : "";
   lines.push(
-    `<text x="${padL}" y="${padT - 12}" fill="#f3f4f6" font-size="14" font-weight="600">${escapeXml(market.market_title)} <tspan fill="#94a3b8" font-weight="400">→ primary ${escapeXml(primary.label ?? "?")}${winnerNote}</tspan></text>`
+    `<text x="${padL}" y="${padT - 12}" fill="#f3f4f6" font-size="14" font-weight="600">${escapeHtml(market.market_title)} <tspan fill="#94a3b8" font-weight="400">→ primary ${escapeHtml(primary.label ?? "?")}${winnerNote}</tspan></text>`
   );
   const targetEnd = target[target.length - 1];
   const ourEnd = ours[ours.length - 1];
@@ -1012,7 +916,7 @@ function svgTimeline(args: {
     .filter(Boolean)
     .join("   ·   ");
   lines.push(
-    `<text x="${padL + plotW}" y="${padT - 12}" fill="#94a3b8" font-size="11" text-anchor="end">${escapeXml(annot)}</text>`
+    `<text x="${padL + plotW}" y="${padT - 12}" fill="#94a3b8" font-size="11" text-anchor="end">${escapeHtml(annot)}</text>`
   );
 
   lines.push(`</svg>`);
@@ -1045,22 +949,12 @@ function buildEventGroup(
   markets: Market[],
   outcomes: OutcomeRow[],
   ourLegs: Leg[],
-  targetLegs: Leg[],
-  rollups: Map<string, Rollup>,
-  ourWallet: string,
-  targetWallet: string
+  targetLegs: Leg[]
 ): EventGroup {
   const metrics: ConditionMetric[] = markets.map((m) => {
     const oLegs = ourLegs.filter((l) => l.condition_id === m.condition_id);
     const tLegs = targetLegs.filter((l) => l.condition_id === m.condition_id);
-    return buildConditionMetric(
-      m.condition_id,
-      oLegs,
-      tLegs,
-      rollups,
-      ourWallet,
-      targetWallet
-    );
+    return buildConditionMetric(m.condition_id, oLegs, tLegs);
   });
   const ourCost = metrics.reduce((s, m) => s + m.ours.net_cost, 0);
   const ourValue = metrics.reduce((s, m) => s + m.ours.net_value, 0);
@@ -1764,7 +1658,13 @@ async function main() {
   // prevents the report from showing markets in the same event_slug that we
   // never traded.
   const candidateConditionIds = markets.map((m) => m.condition_id);
-  const ourLegsAll = fetchOurLegs(ourWallet, candidateConditionIds, args.env);
+  const ourLegsAll = fetchSnapshotLegs(
+    ourWallet,
+    candidateConditionIds,
+    args.env,
+    "ours",
+    true
+  );
   const heldConditions = new Set(ourLegsAll.map((l) => l.condition_id));
   const filteredMarkets = markets.filter((m) =>
     heldConditions.has(m.condition_id)
@@ -1787,11 +1687,12 @@ async function main() {
 
   const outcomes = await fetchOutcomesAndLabels(conditionIds);
   const ourLegs = ourLegsAll.filter((l) => heldConditions.has(l.condition_id));
-  const targetLegs = fetchTargetLegs(target.wallet, conditionIds, args.env);
-  const rollups = fetchFillRollups(
+  const targetLegs = fetchSnapshotLegs(
+    target.wallet,
     conditionIds,
-    [target.wallet, ourWallet],
-    args.env
+    args.env,
+    "target",
+    false
   );
   const rawFills = fetchRawFills(
     conditionIds,
@@ -1820,17 +1721,7 @@ async function main() {
     const groupTarget = targetLegs.filter((l) =>
       conds.includes(l.condition_id)
     );
-    groups.push(
-      buildEventGroup(
-        mkts,
-        groupOuts,
-        groupOur,
-        groupTarget,
-        rollups,
-        ourWallet,
-        target.wallet
-      )
-    );
+    groups.push(buildEventGroup(mkts, groupOuts, groupOur, groupTarget));
   }
   // Sort groups: largest by our entry first.
   groups.sort((a, b) => b.ourBuyNotional - a.ourBuyNotional);

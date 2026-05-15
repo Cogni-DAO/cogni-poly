@@ -92,7 +92,7 @@ X-axis: first activity → last activity + 5% padding. Charts share a global tim
 
 - **Chart cost vs table cost**: chart shows running cumulative `BUY − SELL` from `poly_trader_fills` (so swisstony's Parry hedge displays cost $4391 in the chart annotation). The positions table shows snapshot `cost_basis_usdc` ($792). These differ when there are SELL events or when fills predate the backfill horizon. The script currently makes no attempt to reconcile. Either decision is defensible; I went with "fills = activity, snapshot = current state" but they should ideally agree.
 - **VWAP lines only appear when we have positive shares on that side**. For our wallet's primary on WTA Parry-Paquet (cost $0), no primary VWAP line is drawn. That's correct but mildly confusing — a user looking for "us primary VWAP" sees nothing.
-- **Findings backfill not done**: the iteration-history reports (ATP Lajovic-Altmaier, LAL BET ELC, WTA Parry-Paquet older runs) have empty `findings.json` stubs because they predated the schema. Charter tally section says "No findings yet". Author them OR delete old reports.
+- **Findings backfill partial**: only the latest WTA Parry-Paquet run (`2026-05-13-2026-05-15T16-48-47`) has a populated `findings.json` (D3 primary 90% / D6 secondary 75%). The other ~16 iteration runs predate this schema and remain stubs. Charter tally renders D3 and D6 from that one run. Backfill the rest OR delete the older runs — current state is the worst of both.
 
 ### Explicitly deferred (next PRs)
 
@@ -113,10 +113,16 @@ X-axis: first activity → last activity + 5% padding. Charts share a global tim
 
 - `buildPerWalletMetric` — the math choices (snapshot-only basis, loser override). This is where the prior agents kept making mistakes.
 - `svgTimeline` — large function, lots of magic numbers. Consider extracting axis-rendering into helpers.
-- The `fetchOurLegs` / `fetchTargetLegs` near-duplication. Could be a single `fetchSnapshotLegs(walletAddress, conditionIds, env)` since both apply the same outcome override now.
-- The `findings.json` schema is loose — no Zod or type validation when reading it for the charter tally. A bad JSON file from a careless agent would crash the tally. Add a permissive parser.
-- Many `void` statements (`void rollup;`, `void vwap;`) where I held a param/var unused after a refactor. Audit and remove if truly unused.
-- ESCape-XML / escape-HTML helpers are near-duplicate. Could be one helper.
+- The `findings.json` schema is loose — no Zod or type validation when reading it for the charter tally. `collectCharterTallies` swallows JSON parse errors via `try/catch` so a malformed file is skipped, but a present-but-wrong-shape file (e.g. `primary_class` as a number) would slip through and produce a junk row. Tighten with a permissive Zod parse before adding to the tally.
+
+Already addressed in the self-review pass (PR #37):
+
+- `fetchOurLegs` / `fetchTargetLegs` collapsed into one `fetchSnapshotLegs(walletAddress, conditionIds, env, side, requireCogniKind)`.
+- Dead `fetchFillRollups` + `Rollup` type + the `void rollup;` sentinel removed. No more wasted Postgres round trip.
+- `escapeXml` merged into `escapeHtml` (one function, escapes all five HTML/XML entities).
+- SQL string interpolation in `resolveMarkets` (slug branch) and `detectTarget` (--target flag) routed through a new `quoteLit` helper; matches the existing fuzzy-title escape.
+- SKILL.md no longer claims `max(rollup, snapshot)` denominator or a "gate opens" chart marker — both lies (former: code uses snapshot-only; latter: marker never existed).
+- CLI usage string now says `scripts/poly-mirror-report.ts` (was stale `delta-minimizer.ts` after the rename).
 
 ## What's likely to break next
 
