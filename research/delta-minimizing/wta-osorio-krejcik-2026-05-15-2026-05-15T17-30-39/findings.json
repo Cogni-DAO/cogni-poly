@@ -1,0 +1,10 @@
+{
+  "report_path": "/Users/derek/conductor/workspaces/cogni-poly/montevideo/research/delta-minimizing/wta-osorio-krejcik-2026-05-15-2026-05-15T17-30-39/report.html",
+  "primary_class": null,
+  "primary_confidence": 0.95,
+  "primary_one_liner": "Dashboard row mixes two cost-basis denominators: Entry column uses max(rollup, snapshot)=$36,215 while per-trader expansion uses snapshot-only=$3,200. Same row, two bases. market-exposure-service.ts:581 vs the per-trader pivot. Not a charter D-class (this is a reporting bug, not a position-Δ cause).",
+  "secondary_class": "D6",
+  "secondary_confidence": 0.9,
+  "secondary_one_liner": "Mirror placed 2/186 decisions (1.1%) on a market where target cleared $3.2k cost basis. Three gates (D3:61, D4:64, D6:55) blocked every alternate path. Δ in notional: ~325x undersized vs target.",
+  "authored_at": "2026-05-15T17:35:00Z"
+}
