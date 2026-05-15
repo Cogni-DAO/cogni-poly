@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Δ-Report · Paris: Diane Parry vs Chloe Paquet</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0; padding: 24px; max-width: 1320px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+.sub { color: #94a3b8; font-size: 13px; margin-bottom: 24px; }
+.sub a { color: #60a5fa; text-decoration: none; } .sub a:hover { text-decoration: underline; }
+.kpis { display: grid; gap: 12px; margin: 12px 0 18px; }
+.kpis-3 { grid-template-columns: 1fr 1fr 1fr; }
+.kpi { background: #131826; border: 1px solid #1f2937; border-radius: 8px; padding: 14px 16px; }
+.kpi h3 { margin: 0 0 6px; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.kpi .big { font-size: 26px; font-weight: 600; line-height: 1.1; }
+.kpi .sub { margin: 6px 0 0; color: #94a3b8; font-size: 12px; }
+.kpi.us { border-left: 3px solid #3b82f6; }
+.kpi.target { border-left: 3px solid #10b981; }
+.kpi.delta { border-left: 3px solid #f59e0b; }
+.pos { color: #22c55e; } .neg { color: #ef4444; }
+.event-group { margin: 36px 0; padding-top: 16px; border-top: 1px solid #1f2937; }
+.event-group > h2 { font-size: 18px; color: #f3f4f6; margin: 0 0 12px; font-weight: 600; }
+.event-group .evslug { font-size: 11px; color: #6b7280; margin-left: 8px; font-weight: 400; }
+.event-group .subhead { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin: 20px 0 10px; }
+.market-card { background: #131826; border: 1px solid #1f2937; border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+.market-head { padding: 10px 14px; background: #0f1525; border-bottom: 1px solid #1f2937; display: flex; align-items: center; gap: 10px; }
+.market-title { font-weight: 600; font-size: 13px; }
+.badge { font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 500; }
+.badge.win { background: #052e1a; color: #34d399; border: 1px solid #10b98166; }
+.badge.lose { background: #2a0a0a; color: #f87171; border: 1px solid #ef444466; }
+.positions { width: 100%; border-collapse: collapse; font-size: 12px; }
+.positions th, .positions td { padding: 7px 9px; text-align: left; border-bottom: 1px solid #1f2937; }
+.positions th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; background: #0e1422; }
+.positions td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.wallet { font-weight: 600; }
+.wallet.us { color: #60a5fa; } .wallet.target { color: #34d399; }
+.chart { width: 100%; height: auto; display: block; margin: 4px 0 12px; border-radius: 8px; }
+.empty { background: #131826; border: 1px dashed #334155; border-radius: 8px; padding: 18px; text-align: center; color: #64748b; }
+.legend { font-size: 11px; color: #94a3b8; padding: 4px 14px 14px; display: flex; gap: 14px; flex-wrap: wrap; }
+.legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.legend .line { display: inline-block; width: 16px; height: 2px; margin-right: 5px; vertical-align: middle; }
+.legend .line.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px); height: 2px; }
+.positions td.vwap-bad { color: #f87171; font-weight: 600; }
+.positions td.vwap-good { color: #34d399; font-weight: 600; }
+.positions tr.annotation td { font-size: 10.5px; color: #94a3b8; font-style: italic; padding: 3px 9px 8px; border-bottom: none; }
+.positions tr.annotation td.vwap-bad { color: #f87171; font-style: normal; }
+.positions tr.annotation td.vwap-good { color: #34d399; font-style: normal; }
+.footer-note { font-size: 11px; color: #6b7280; margin-top: 28px; padding-top: 12px; border-top: 1px solid #1f2937; }
+.footer-note a { color: #60a5fa; }
+
+.takeaway { background: linear-gradient(180deg, #1f1410 0%, #131826 100%); border: 1px solid #f59e0b; border-radius: 8px; padding: 18px 22px; margin: 12px 0 26px; }
+.takeaway h2 { margin: 0 0 12px; font-size: 13px; color: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.takeaway table.findings { width: 100%; border-collapse: collapse; font-size: 13px; }
+.takeaway table.findings th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: 0 10px 6px 0; border-bottom: 1px solid #f59e0b33; }
+.takeaway table.findings td { padding: 8px 10px 8px 0; vertical-align: top; border-bottom: 1px solid #f59e0b18; color: #e5e7eb; }
+.takeaway table.findings td.conf { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; white-space: nowrap; }
+.takeaway table.findings td.charter { font-size: 11px; color: #6b7280; white-space: nowrap; }
+.takeaway .placeholder { color: #64748b; font-style: italic; font-size: 13px; }
+.takeaway .fix { margin-top: 14px; padding-top: 12px; border-top: 1px solid #f59e0b33; font-size: 13px; color: #e5e7eb; line-height: 1.5; }
+.takeaway .fix strong { color: #34d399; }
+</style>
+</head>
+<body>
+<h1>Δ-Report · Paris: Diane Parry vs Chloe Paquet</h1>
+<div class="sub">
+  Input: <code>wta-parry-paquet-2026-05-13</code> · Copy-target: <strong style="color:#34d399">swisstony</strong> <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code> · Our wallet: <code>0x95e407fe03996602ed1bf4289ecb3b5af88b5134</code><br/>
+  Charter: <a href="../charter.html">POLY_COPY_DELTA</a> · 1 event group · 27 mirror decisions · Global time scale: 2026-05-13 12:55:38 → 2026-05-13 16:36:32
+</div>
+
+<!-- TAKEAWAY:START -->
+<div class="takeaway">
+  <h2>↗ Top finding</h2>
+  <div class="placeholder">Awaiting LLM-authored takeaway. Script produces data + visualization; agent reads <code>bundle.json</code>, cross-references <code>plan-mirror.ts</code>, drafts/refines/critiques, then fills this block with a single highest-priority finding, charter class, % confidence, and Pareto fix. Replace between TAKEAWAY:START and TAKEAWAY:END.</div>
+</div>
+<!-- TAKEAWAY:END -->
+
+<section class="event-group">
+    <h2>Paris: Diane Parry vs Chloe Paquet <span class="evslug">event_slug: <code>wta-parry-paquet-2026-05-13</code> · 1 markets</span></h2>
+    <div class="kpis kpis-3">
+      <div class="kpi us">
+        <h3>Our wallet</h3>
+        <div class="big pos">+53.8% <span style="color:#94a3b8;font-size:14px">(+$4.14)</span></div>
+        <div class="sub">Entry $7.70 · Value $11.84</div>
+      </div>
+      <div class="kpi target">
+        <h3>swisstony (target)</h3>
+        <div class="big neg">-39.8% <span style="color:#94a3b8;font-size:14px">(-$808.12)</span></div>
+        <div class="sub">Entry $2030 · Value $1222</div>
+      </div>
+      <div class="kpi delta">
+        <h3>Variance from target</h3>
+        <div class="big neg">93.7%</div>
+        <div class="sub">|target − us| · goal: minimize (any divergence = miss)</div>
+      </div>
+    </div>
+    <h3 class="subhead">Final positions (per market)</h3>
+    <div class="market-card">
+    <div class="market-head">
+      <span class="market-title">Paris: Diane Parry vs Chloe Paquet</span>
+      
+      <span class="badge lose">Chloe Paquet lost</span>
+    </div>
+    <table class="positions">
+      <thead>
+        <tr>
+          <th rowspan="2">Trader</th>
+          <th colspan="3">Primary · Chloe Paquet</th>
+          <th colspan="3">Hedge · Diane Parry</th>
+          <th rowspan="2">Net value</th>
+          <th rowspan="2">Net %</th>
+          <th rowspan="2">Net P/L</th>
+        </tr>
+        <tr><th>Value</th><th>VWAP</th><th>P/L</th><th>Value</th><th>VWAP</th><th>P/L</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+      <td><span class="wallet us">Our wallet</span></td>
+      <td class="num">$0.00</td><td class="num">—</td><td class="num">—</td>
+      <td class="num">$11.84</td><td class="num ">0.650</td><td class="num pos">+$4.14</td>
+      <td class="num">$11.84</td>
+      <td class="num pos">+53.8%</td>
+      <td class="num pos">+$4.14</td>
+    </tr>
+        <tr>
+      <td><span class="wallet target">swisstony</span></td>
+      <td class="num">$0.00</td><td class="num ">0.223</td><td class="num neg">-$1238</td>
+      <td class="num">$1222</td><td class="num ">0.647</td><td class="num pos">+$430.28</td>
+      <td class="num">$1222</td>
+      <td class="num neg">-39.8%</td>
+      <td class="num neg">-$808.12</td>
+    </tr>
+        
+      </tbody>
+    </table>
+  </div>
+    <h3 class="subhead">Position divergence over time</h3>
+    <div class="market-card">
+        <div class="market-head"><span class="market-title">Paris: Diane Parry vs Chloe Paquet → primary Chloe Paquet / hedge Diane Parry</span></div>
+        <svg viewBox="0 0 1200 340" xmlns="http://www.w3.org/2000/svg" class="chart">
+<rect x="0" y="0" width="1200" height="340" fill="#0b1220"/>
+<line x1="130" y1="130.9" x2="1170" y2="130.9" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="130.9" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1</text>
+<line x1="130" y1="149.1" x2="1170" y2="149.1" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="149.1" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1</text>
+<line x1="130" y1="108.6" x2="1170" y2="108.6" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="108.6" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10</text>
+<line x1="130" y1="171.4" x2="1170" y2="171.4" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="171.4" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10</text>
+<line x1="130" y1="79.5" x2="1170" y2="79.5" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="79.5" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$100</text>
+<line x1="130" y1="200.5" x2="1170" y2="200.5" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="200.5" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$100</text>
+<line x1="130" y1="49.4" x2="1170" y2="49.4" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="49.4" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1k</text>
+<line x1="130" y1="230.6" x2="1170" y2="230.6" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="230.6" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1k</text>
+<line x1="130" y1="140.0" x2="1170" y2="140.0" stroke="#475569" stroke-width="1"/>
+<text x="122" y="140.0" fill="#94a3b8" font-size="10" text-anchor="end" dominant-baseline="middle">$0</text>
+<text x="22" y="85" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 22 85)">PRIMARY ↑</text>
+<text x="22" y="99" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 99)">Chloe Paquet</text>
+<text x="22" y="195" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 22 195)">HEDGE ↓</text>
+<text x="22" y="209" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 209)">Diane Parry</text>
+<line x1="130.0" y1="250.0" x2="130.0" y2="254.0" stroke="#4b5563"/>
+<text x="130.0" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 12:44</text>
+<line x1="303.3" y1="250.0" x2="303.3" y2="254.0" stroke="#4b5563"/>
+<text x="303.3" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 13:25</text>
+<line x1="476.7" y1="250.0" x2="476.7" y2="254.0" stroke="#4b5563"/>
+<text x="476.7" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 14:05</text>
+<line x1="650.0" y1="250.0" x2="650.0" y2="254.0" stroke="#4b5563"/>
+<text x="650.0" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 14:46</text>
+<line x1="823.3" y1="250.0" x2="823.3" y2="254.0" stroke="#4b5563"/>
+<text x="823.3" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 15:26</text>
+<line x1="996.7" y1="250.0" x2="996.7" y2="254.0" stroke="#4b5563"/>
+<text x="996.7" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 16:07</text>
+<line x1="1170.0" y1="250.0" x2="1170.0" y2="254.0" stroke="#4b5563"/>
+<text x="1170.0" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 16:47</text>
+<text x="1176" y="112.5" fill="#475569" font-size="9" dominant-baseline="middle">$0.25</text>
+<text x="1176" y="167.5" fill="#475569" font-size="9" dominant-baseline="middle">$0.25</text>
+<text x="1176" y="85.0" fill="#475569" font-size="9" dominant-baseline="middle">$0.50</text>
+<text x="1176" y="195.0" fill="#475569" font-size="9" dominant-baseline="middle">$0.50</text>
+<text x="1176" y="57.5" fill="#475569" font-size="9" dominant-baseline="middle">$0.75</text>
+<text x="1176" y="222.5" fill="#475569" font-size="9" dominant-baseline="middle">$0.75</text>
+<text x="1176" y="30.0" fill="#475569" font-size="9" dominant-baseline="middle">$1.00</text>
+<text x="1176" y="250.0" fill="#475569" font-size="9" dominant-baseline="middle">$1.00</text>
+<text x="1182" y="140" fill="#475569" font-size="10" text-anchor="middle" transform="rotate(90 1182 140)">VWAP $</text>
+<path d="M 130.0 140.0 L 177.3 140.0 L 177.3 140.0 L 179.8 140.0 L 179.8 140.0 L 182.0 140.0 L 182.0 140.0 L 185.3 140.0 L 185.3 122.8 L 188.1 122.8 L 188.1 114.9 L 210.6 114.9 L 210.6 68.9 L 232.8 68.9 L 232.8 60.6 L 298.0 60.6 L 298.0 60.1 L 322.7 60.1 L 322.7 60.0 L 323.4 60.0 L 323.4 60.0 L 337.9 60.0 L 337.9 59.6 L 345.8 59.6 L 345.8 59.6 L 345.8 59.6 L 345.8 59.6 L 345.8 59.6 L 345.8 59.6 L 345.8 59.6 L 345.8 59.5 L 347.5 59.5 L 347.5 59.3 L 347.5 59.3 L 347.5 59.3 L 347.8 59.3 L 347.8 59.3 L 348.0 59.3 L 348.0 59.3 L 352.8 59.3 L 352.8 59.2 L 357.9 59.2 L 357.9 59.2 L 357.9 59.2 L 357.9 59.2 L 386.9 59.2 L 386.9 59.0 L 395.6 59.0 L 395.6 58.9 L 403.5 58.9 L 403.5 58.6 L 407.2 58.6 L 407.2 58.6 L 409.3 58.6 L 409.3 58.4 L 412.0 58.4 L 412.0 58.3 L 412.6 58.3 L 412.6 58.3 L 490.1 58.3 L 490.1 58.2 L 490.2 58.2 L 490.2 54.8 L 490.2 54.8 L 490.2 53.7 L 490.5 53.7 L 490.5 53.5 L 490.7 53.5 L 490.7 53.5 L 493.5 53.5 L 493.5 53.5 L 493.7 53.5 L 493.7 53.5 L 878.3 53.5 L 878.3 53.4 L 882.5 53.4 L 882.5 53.4 L 890.5 53.4 L 890.5 53.3 L 911.5 53.3 L 911.5 53.3 L 913.9 53.3 L 913.9 53.3 L 943.3 53.3 L 943.3 53.3 L 945.4 53.3 L 945.4 53.3 L 962.4 53.3 L 962.4 53.3 L 971.4 53.3 L 971.4 53.2 L 971.4 53.2 L 971.4 52.9 L 982.4 52.9 L 982.4 52.8 L 989.3 52.8 L 989.3 52.7 L 991.8 52.7 L 991.8 52.5 L 1000.0 52.5 L 1000.0 52.4 L 1034.8 52.4 L 1034.8 52.3 L 1035.3 52.3 L 1035.3 52.2 L 1037.8 52.2 L 1037.8 50.2 L 1045.5 50.2 L 1045.5 50.2 L 1048.3 50.2 L 1048.3 50.2 L 1054.6 50.2 L 1054.6 50.2 L 1056.5 50.2 L 1056.5 50.1 L 1058.2 50.1 L 1058.2 50.1 L 1065.7 50.1 L 1065.7 50.1 L 1070.7 50.1 L 1070.7 50.1 L 1077.1 50.1 L 1077.1 49.8 L 1077.7 49.8 L 1077.7 49.7 L 1077.8 49.7 L 1077.8 49.5 L 1085.6 49.5 L 1085.6 49.3 L 1092.9 49.3 L 1092.9 49.1 L 1119.0 49.1 L 1119.0 49.0 L 1120.7 49.0 L 1120.7 46.6 L 1122.7 46.6 L 1122.7 46.6 L 1170.0 46.6" fill="none" stroke="#10b981" stroke-width="2"/>
+<circle cx="1122.7" cy="46.6" r="3.5" fill="#10b981"><title>swisstony primary $1238.39</title></circle>
+<path d="M 130.0 140.0 L 177.3 140.0 L 177.3 245.7 L 179.8 245.7 L 179.8 245.8 L 182.0 245.8 L 182.0 245.9 L 185.3 245.9 L 185.3 245.9 L 188.1 245.9 L 188.1 245.9 L 210.6 245.9 L 210.6 245.9 L 232.8 245.9 L 232.8 245.9 L 298.0 245.9 L 298.0 245.9 L 322.7 245.9 L 322.7 245.9 L 323.4 245.9 L 323.4 245.9 L 337.9 245.9 L 337.9 245.9 L 345.8 245.9 L 345.8 245.9 L 345.8 245.9 L 345.8 245.9 L 345.8 245.9 L 345.8 245.9 L 345.8 245.9 L 345.8 245.9 L 347.5 245.9 L 347.5 245.9 L 347.5 245.9 L 347.5 245.9 L 347.8 245.9 L 347.8 245.9 L 348.0 245.9 L 348.0 245.9 L 352.8 245.9 L 352.8 245.9 L 357.9 245.9 L 357.9 245.9 L 357.9 245.9 L 357.9 245.9 L 386.9 245.9 L 386.9 245.9 L 395.6 245.9 L 395.6 245.9 L 403.5 245.9 L 403.5 245.9 L 407.2 245.9 L 407.2 245.9 L 409.3 245.9 L 409.3 245.9 L 412.0 245.9 L 412.0 245.9 L 412.6 245.9 L 412.6 245.9 L 490.1 245.9 L 490.1 245.9 L 490.2 245.9 L 490.2 245.9 L 490.2 245.9 L 490.2 245.9 L 490.5 245.9 L 490.5 245.9 L 490.7 245.9 L 490.7 245.9 L 493.5 245.9 L 493.5 245.9 L 493.7 245.9 L 493.7 245.9 L 878.3 245.9 L 878.3 245.9 L 882.5 245.9 L 882.5 246.0 L 890.5 246.0 L 890.5 246.0 L 911.5 246.0 L 911.5 246.1 L 913.9 246.1 L 913.9 246.2 L 943.3 246.2 L 943.3 246.2 L 945.4 246.2 L 945.4 246.2 L 962.4 246.2 L 962.4 246.2 L 971.4 246.2 L 971.4 246.2 L 971.4 246.2 L 971.4 246.2 L 982.4 246.2 L 982.4 246.2 L 989.3 246.2 L 989.3 246.2 L 991.8 246.2 L 991.8 246.2 L 1000.0 246.2 L 1000.0 246.2 L 1034.8 246.2 L 1034.8 246.2 L 1035.3 246.2 L 1035.3 246.2 L 1037.8 246.2 L 1037.8 246.2 L 1045.5 246.2 L 1045.5 246.3 L 1048.3 246.3 L 1048.3 247.7 L 1054.6 247.7 L 1054.6 248.4 L 1056.5 248.4 L 1056.5 248.4 L 1058.2 248.4 L 1058.2 248.4 L 1065.7 248.4 L 1065.7 249.9 L 1070.7 249.9 L 1070.7 250.0 L 1077.1 250.0 L 1077.1 250.0 L 1077.7 250.0 L 1077.7 250.0 L 1077.8 250.0 L 1077.8 250.0 L 1085.6 250.0 L 1085.6 250.0 L 1092.9 250.0 L 1092.9 250.0 L 1119.0 250.0 L 1119.0 250.0 L 1120.7 250.0 L 1120.7 250.0 L 1122.7 250.0 L 1122.7 250.0 L 1170.0 250.0" fill="none" stroke="#10b981" stroke-width="1.6" stroke-dasharray="5,3" opacity="0.95"/>
+<circle cx="1122.7" cy="250.0" r="3.5" fill="#10b981"><title>swisstony hedge $4391.02</title></circle>
+<path d="M 185.3 110.3 L 188.1 110.3 L 188.1 108.1 L 210.6 108.1 L 210.6 108.1 L 232.8 108.1 L 232.8 111.6 L 298.0 111.6 L 298.0 112.1 L 322.7 112.1 L 322.7 112.1 L 323.4 112.1 L 323.4 112.2 L 337.9 112.2 L 337.9 113.0 L 345.8 113.0 L 345.8 113.0 L 345.8 113.0 L 345.8 113.0 L 345.8 113.0 L 345.8 113.1 L 345.8 113.1 L 345.8 113.1 L 347.5 113.1 L 347.5 113.4 L 347.5 113.4 L 347.5 113.5 L 347.8 113.5 L 347.8 113.5 L 348.0 113.5 L 348.0 113.5 L 352.8 113.5 L 352.8 113.5 L 357.9 113.5 L 357.9 113.5 L 357.9 113.5 L 357.9 113.5 L 386.9 113.5 L 386.9 114.0 L 395.6 114.0 L 395.6 114.2 L 403.5 114.2 L 403.5 114.6 L 407.2 114.6 L 407.2 114.6 L 409.3 114.6 L 409.3 114.8 L 412.0 114.8 L 412.0 115.0 L 412.6 115.0 L 412.6 115.0 L 490.1 115.0 L 490.1 115.1 L 490.2 115.1 L 490.2 116.9 L 490.2 116.9 L 490.2 117.2 L 490.5 117.2 L 490.5 117.2 L 490.7 117.2 L 490.7 117.2 L 493.5 117.2 L 493.5 117.2 L 493.7 117.2 L 493.7 117.2 L 878.3 117.2 L 878.3 117.3 L 882.5 117.3 L 882.5 117.3 L 890.5 117.3 L 890.5 117.4 L 911.5 117.4 L 911.5 117.4 L 913.9 117.4 L 913.9 117.4 L 943.3 117.4 L 943.3 117.4 L 945.4 117.4 L 945.4 117.4 L 962.4 117.4 L 962.4 117.4 L 971.4 117.4 L 971.4 117.7 L 971.4 117.7 L 971.4 118.9 L 982.4 118.9 L 982.4 119.0 L 989.3 119.0 L 989.3 119.2 L 991.8 119.2 L 991.8 119.8 L 1000.0 119.8 L 1000.0 119.9 L 1034.8 119.9 L 1034.8 119.9 L 1035.3 119.9 L 1035.3 119.8 L 1037.8 119.8 L 1037.8 118.7 L 1045.5 118.7 L 1045.5 118.7 L 1048.3 118.7 L 1048.3 118.7 L 1054.6 118.7 L 1054.6 118.7 L 1056.5 118.7 L 1056.5 118.6 L 1058.2 118.6 L 1058.2 118.5 L 1065.7 118.5 L 1065.7 118.5 L 1070.7 118.5 L 1070.7 118.5 L 1077.1 118.5 L 1077.1 118.3 L 1077.7 118.3 L 1077.7 118.2 L 1077.8 118.2 L 1077.8 118.1 L 1085.6 118.1 L 1085.6 117.8 L 1092.9 117.8 L 1092.9 117.7 L 1119.0 117.7 L 1119.0 117.6 L 1120.7 117.6 L 1120.7 115.5 L 1122.7 115.5 L 1122.7 115.5 L 1170.0 115.5" fill="none" stroke="#10b981" stroke-width="1" opacity="0.55"/>
+<path d="M 177.3 213.7 L 179.8 213.7 L 179.8 213.7 L 182.0 213.7 L 182.0 213.7 L 185.3 213.7 L 185.3 213.7 L 188.1 213.7 L 188.1 213.7 L 210.6 213.7 L 210.6 213.7 L 232.8 213.7 L 232.8 213.7 L 298.0 213.7 L 298.0 213.7 L 322.7 213.7 L 322.7 213.7 L 323.4 213.7 L 323.4 213.7 L 337.9 213.7 L 337.9 213.7 L 345.8 213.7 L 345.8 213.7 L 345.8 213.7 L 345.8 213.7 L 345.8 213.7 L 345.8 213.7 L 345.8 213.7 L 345.8 213.7 L 347.5 213.7 L 347.5 213.7 L 347.5 213.7 L 347.5 213.7 L 347.8 213.7 L 347.8 213.7 L 348.0 213.7 L 348.0 213.7 L 352.8 213.7 L 352.8 213.7 L 357.9 213.7 L 357.9 213.7 L 357.9 213.7 L 357.9 213.7 L 386.9 213.7 L 386.9 213.7 L 395.6 213.7 L 395.6 213.7 L 403.5 213.7 L 403.5 213.7 L 407.2 213.7 L 407.2 213.7 L 409.3 213.7 L 409.3 213.7 L 412.0 213.7 L 412.0 213.7 L 412.6 213.7 L 412.6 213.7 L 490.1 213.7 L 490.1 213.7 L 490.2 213.7 L 490.2 213.7 L 490.2 213.7 L 490.2 213.7 L 490.5 213.7 L 490.5 213.7 L 490.7 213.7 L 490.7 213.7 L 493.5 213.7 L 493.5 213.7 L 493.7 213.7 L 493.7 213.8 L 878.3 213.8 L 878.3 213.8 L 882.5 213.8 L 882.5 213.9 L 890.5 213.9 L 890.5 213.9 L 911.5 213.9 L 911.5 213.9 L 913.9 213.9 L 913.9 214.0 L 943.3 214.0 L 943.3 214.0 L 945.4 214.0 L 945.4 214.0 L 962.4 214.0 L 962.4 214.0 L 971.4 214.0 L 971.4 214.0 L 971.4 214.0 L 971.4 214.0 L 982.4 214.0 L 982.4 214.0 L 989.3 214.0 L 989.3 214.0 L 991.8 214.0 L 991.8 214.0 L 1000.0 214.0 L 1000.0 214.0 L 1034.8 214.0 L 1034.8 214.0 L 1035.3 214.0 L 1035.3 214.0 L 1037.8 214.0 L 1037.8 214.0 L 1045.5 214.0 L 1045.5 214.0 L 1048.3 214.0 L 1048.3 213.2 L 1054.6 213.2 L 1054.6 212.9 L 1056.5 212.9 L 1056.5 212.9 L 1058.2 212.9 L 1058.2 212.9 L 1065.7 212.9 L 1065.7 211.3 L 1070.7 211.3 L 1070.7 211.2 L 1077.1 211.2 L 1077.1 211.2 L 1077.7 211.2 L 1077.7 211.2 L 1077.8 211.2 L 1077.8 211.2 L 1085.6 211.2 L 1085.6 211.2 L 1092.9 211.2 L 1092.9 211.2 L 1119.0 211.2 L 1119.0 211.2 L 1120.7 211.2 L 1120.7 211.2 L 1122.7 211.2 L 1122.7 211.2 L 1170.0 211.2" fill="none" stroke="#10b981" stroke-width="1" opacity="0.55"/>
+<path d="M 130.0 140.0 L 1046.0 140.0 L 1046.0 140.0 L 1170.0 140.0" fill="none" stroke="#3b82f6" stroke-width="2"/>
+<path d="M 130.0 140.0 L 1046.0 140.0 L 1046.0 168.4 L 1170.0 168.4" fill="none" stroke="#3b82f6" stroke-width="1.6" stroke-dasharray="5,3" opacity="0.95"/>
+<circle cx="1046.0" cy="168.4" r="3.5" fill="#3b82f6"><title>Tenant trading wallet hedge $7.70</title></circle>
+<path d="M 1046.0 211.5 L 1170.0 211.5" fill="none" stroke="#3b82f6" stroke-width="1" opacity="0.55"/>
+<text x="130" y="278" fill="#9ca3af" font-size="11">our decisions →</text>
+<line x1="130" y1="290" x2="1170" y2="290" stroke="#1f2937"/>
+<circle cx="943.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 15:54:35 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="945.4" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 15:55:06 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="962.4" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 15:59:04 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="971.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:01:12 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="971.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:01:12 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="982.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:03:47 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="989.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:05:21 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="991.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:05:56 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1000.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:07:51 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1034.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:15:58 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1035.4" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:16:08 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1038.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:16:43 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1045.5" cy="290.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-13 16:18:28 · Diane Parry · ok (hedge side)</title></circle>
+<circle cx="1048.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:19:08 · Diane Parry · position_cap_reached (hedge side)</title></circle>
+<circle cx="1054.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:20:36 · Diane Parry · position_cap_reached (hedge side)</title></circle>
+<circle cx="1056.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:21:03 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1060.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:21:54 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1065.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:23:13 · Diane Parry · position_cap_reached (hedge side)</title></circle>
+<circle cx="1070.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:24:22 · Diane Parry · position_cap_reached (hedge side)</title></circle>
+<circle cx="1077.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:25:51 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1077.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:26:01 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1077.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:26:02 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1085.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:27:50 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1092.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:29:33 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1118.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:35:39 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1120.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:36:01 · Chloe Paquet · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="1122.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-13 16:36:31 · Chloe Paquet · vwap_floor_breach (hedge side)</title></circle>
+<text x="130" y="18" fill="#f3f4f6" font-size="14" font-weight="600">Paris: Diane Parry vs Chloe Paquet <tspan fill="#94a3b8" font-weight="400">→ primary Chloe Paquet (loser)</tspan></text>
+<text x="1170" y="18" fill="#94a3b8" font-size="11" text-anchor="end">swisstony: P $1238 @$0.223 · H $4391 @$0.648   ·   us: P $0.00 — · H $7.70 @$0.650</text>
+</svg>
+        <div class="legend">
+          <span><span class="line" style="background:#10b981"></span>swisstony position: primary solid (up) / hedge dashed (down)</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our position: primary solid (up) / hedge dashed (down)</span>
+          <span><span class="line" style="background:#10b981;opacity:0.55;height:1px"></span>swisstony VWAP (thin, right-axis $)</span>
+          <span><span class="line" style="background:#3b82f6;opacity:0.55;height:1px"></span>Our VWAP (thin, right-axis $)</span>
+          <span><span class="dot" style="background:#22c55e"></span>placed</span>
+          <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
+          <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
+          <span><span class="dot" style="background:#ef4444"></span>error</span>
+        </div>
+      </div>
+  </section>
+
+<div class="footer-note">
+  <strong>1 orders filled</strong> · 0 canceled · 0 errored · $7.70 filled / $7.70 attempted
+  · <a href="bundle.json">bundle.json</a> (AI read surface)
+</div>
+
+</body>
+</html>

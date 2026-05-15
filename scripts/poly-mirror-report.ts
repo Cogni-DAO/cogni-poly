@@ -873,11 +873,58 @@ function svgTimeline(args: {
     );
   }
 
-  // Series: 4 lines. Solid = primary, dashed = hedge.
+  // Right (secondary) axis for VWAP price [0,1]. Mirrored across the net-zero
+  // line — primary VWAP in upper half, hedge VWAP in lower half. Price=1 lives
+  // far from midline, price=0 at the midline (so a $0.5 VWAP sits halfway up
+  // its respective half).
+  const yPrimaryVwap = (price: number) => yMid - price * (plotH / 2);
+  const yHedgeVwap = (price: number) => yMid + price * (plotH / 2);
+  for (const p of [0.25, 0.5, 0.75, 1]) {
+    for (const yFn of [yPrimaryVwap, yHedgeVwap]) {
+      const y = yFn(p);
+      lines.push(
+        `<text x="${padL + plotW + 6}" y="${y.toFixed(1)}" fill="#475569" font-size="9" dominant-baseline="middle">$${p.toFixed(2)}</text>`
+      );
+    }
+  }
+  lines.push(
+    `<text x="${W - 18}" y="${padT + plotH / 2}" fill="#475569" font-size="10" text-anchor="middle" transform="rotate(90 ${W - 18} ${padT + plotH / 2})">VWAP $</text>`
+  );
+
+  // VWAP step path on the secondary right axis. `yFn` maps price→y.
+  function vwapPath(
+    pts: Pt[],
+    pick: (p: Pt) => { cost: number; shares: number },
+    yFn: (price: number) => number
+  ): string {
+    if (pts.length === 0) return "";
+    let d = "";
+    let started = false;
+    let prev = 0;
+    for (const p of pts) {
+      const { cost, shares } = pick(p);
+      if (shares <= 0) continue;
+      const vw = cost / shares;
+      if (!started) {
+        d = `M ${xT(p.t).toFixed(1)} ${yFn(vw).toFixed(1)}`;
+        prev = vw;
+        started = true;
+        continue;
+      }
+      d += ` L ${xT(p.t).toFixed(1)} ${yFn(prev).toFixed(1)}`;
+      d += ` L ${xT(p.t).toFixed(1)} ${yFn(vw).toFixed(1)}`;
+      prev = vw;
+    }
+    if (started) d += ` L ${xT(tMax).toFixed(1)} ${yFn(prev).toFixed(1)}`;
+    return d;
+  }
+
+  // Series: position lines (solid primary up, dashed hedge down) +
+  // VWAP lines (thin solid, lighter opacity — placement upper/lower distinguishes side).
   function drawSeries(pts: Pt[], color: string, walletNameForTooltip: string) {
     if (pts.length === 0) return;
     const last = pts[pts.length - 1];
-    // Primary side (solid, upper half).
+    // Primary position (solid, upper half).
     lines.push(
       `<path d="${sidePath(pts, (p) => p.primaryCost, 1)}" fill="none" stroke="${color}" stroke-width="2"/>`
     );
@@ -886,7 +933,7 @@ function svgTimeline(args: {
         `<circle cx="${xT(last.t).toFixed(1)}" cy="${ySide(last.primaryCost, 1).toFixed(1)}" r="3.5" fill="${color}"><title>${escapeXml(walletNameForTooltip)} primary $${last.primaryCost.toFixed(2)}</title></circle>`
       );
     }
-    // Hedge side (dashed, lower half).
+    // Hedge position (dashed, lower half).
     if (hedge) {
       lines.push(
         `<path d="${sidePath(pts, (p) => p.hedgeCost, -1)}" fill="none" stroke="${color}" stroke-width="1.6" stroke-dasharray="5,3" opacity="0.95"/>`
@@ -894,6 +941,30 @@ function svgTimeline(args: {
       if (last.hedgeCost > 0) {
         lines.push(
           `<circle cx="${xT(last.t).toFixed(1)}" cy="${ySide(last.hedgeCost, -1).toFixed(1)}" r="3.5" fill="${color}"><title>${escapeXml(walletNameForTooltip)} hedge $${last.hedgeCost.toFixed(2)}</title></circle>`
+        );
+      }
+    }
+    // Primary VWAP (thin solid, upper half on right-axis price scale).
+    const primaryVwapD = vwapPath(
+      pts,
+      (p) => ({ cost: p.primaryCost, shares: p.primaryShares }),
+      yPrimaryVwap
+    );
+    if (primaryVwapD) {
+      lines.push(
+        `<path d="${primaryVwapD}" fill="none" stroke="${color}" stroke-width="1" opacity="0.55"/>`
+      );
+    }
+    // Hedge VWAP (thin solid, lower half).
+    if (hedge) {
+      const hedgeVwapD = vwapPath(
+        pts,
+        (p) => ({ cost: p.hedgeCost, shares: p.hedgeShares }),
+        yHedgeVwap
+      );
+      if (hedgeVwapD) {
+        lines.push(
+          `<path d="${hedgeVwapD}" fill="none" stroke="${color}" stroke-width="1" opacity="0.55"/>`
         );
       }
     }
@@ -1195,8 +1266,10 @@ function renderGroupSection(
         <div class="market-head"><span class="market-title">${escapeHtml(m.market_title)} → primary ${escapeHtml(primary?.label ?? "?")} / hedge ${escapeHtml(hedge?.label ?? "—")}</span></div>
         ${svgTimeline({ market: m, primary: primary ?? null, hedge: hedge ?? null, rawFills, decisions, globalT, targetLabel, ourLabel })}
         <div class="legend">
-          <span><span class="line" style="background:#10b981"></span>${escapeHtml(targetLabel)} primary (solid) / hedge (dashed)</span>
-          <span><span class="line" style="background:#3b82f6"></span>Our primary (solid) / hedge (dashed)</span>
+          <span><span class="line" style="background:#10b981"></span>${escapeHtml(targetLabel)} position: primary solid (up) / hedge dashed (down)</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our position: primary solid (up) / hedge dashed (down)</span>
+          <span><span class="line" style="background:#10b981;opacity:0.55;height:1px"></span>${escapeHtml(targetLabel)} VWAP (thin, right-axis $)</span>
+          <span><span class="line" style="background:#3b82f6;opacity:0.55;height:1px"></span>Our VWAP (thin, right-axis $)</span>
           <span><span class="dot" style="background:#22c55e"></span>placed</span>
           <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
           <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
