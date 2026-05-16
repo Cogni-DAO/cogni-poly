@@ -4,356 +4,305 @@ type: guide
 title: Create a New Service
 status: draft
 trust: draft
-summary: Step-by-step checklist for creating a new deployable service in services/, from workspace setup through Docker, health endpoints, and repo integration.
-read_when: Creating a new service in the services/ directory.
+summary: v0 plan + executable playbook for adding a new deployable service (k8s deployment, sibling container, MCP, Compose, cron) and shipping it through candidate-a → preview → production.
+read_when: Adding any new service, sidecar, MCP server, cron job, or Compose process to the deployed stack.
 owner: derekg1729
 created: 2026-02-06
-verified: 2026-04-17
-tags: [deployment, infra]
+verified: 2026-05-16
+tags: [deployment, infra, k8s, argo]
 ---
 
-# Create a New Service
+# Create a New Service (v0)
 
-## When to Use This
+## When to Use
 
-You are adding a new independently deployable service to the `services/` directory. This covers workers (Temporal, queue consumers) and HTTP services (APIs, webhooks).
+You are adding any net-new process that runs in the deployed stack: standalone service, sidecar, MCP server, scheduled job, or (rarely) a Compose process.
 
-**Do NOT use this guide for:** Shared libraries (use `packages/`), feature code in the Next.js app (`src/features/`), or one-off scripts (`scripts/`).
+**Do NOT use this guide for:** shared libraries (`packages/`), feature code inside a node app (`nodes/<node>/app/src/features/`), local-only scripts (`scripts/`).
 
-## Preconditions
+## K8s-Native Default
 
-- [ ] Code meets the "When to Create a Service" criteria in [Services Architecture Spec](../spec/services-architecture.md)
-- [ ] Service name chosen (`<name>` throughout this guide)
-- [ ] Package dependencies identified (which `@cogni/*` packages are needed)
+**Every new service we author runs in k3s under Argo CD.** Compose is **legacy** for upstream third-party processes (postgres, temporal, redis, caddy, alloy, litellm, doltgres). Adding a Compose service for code we own is a review reject.
 
-## Steps
+K8s gets BUILD_ONCE_PROMOTE_DIGEST, Argo reconciliation, the candidate → preview → production flight chain, and full reproducibility from `provision-test-vm.sh` + GitOps. Compose only gets rsync-and-restart via [`scripts/ci/deploy-infra.sh`](../../scripts/ci/deploy-infra.sh), which by design never touches k8s ([`deploy-infra.sh:26-28`](../../scripts/ci/deploy-infra.sh)).
 
-### 1. Workspace Setup
+## Decision Tree
 
-- [ ] Add `services/*` to `pnpm-workspace.yaml` (if first service)
-- [ ] Create `services/<name>/package.json`:
-  ```json
-  {
-    "name": "@cogni/<name>-service",
-    "private": true,
-    "type": "module",
-    "scripts": {
-      "build": "tsup",
-      "start": "node dist/main.js",
-      "dev": "tsx watch src/main.ts",
-      "typecheck": "tsc --noEmit"
-    }
-  }
-  ```
-- [ ] Add workspace dependency to root `package.json` (if needed for scripts)
-
-### 2. TypeScript Configuration
-
-- [ ] Create `tsconfig.json` (standalone, does NOT extend root or use composite mode — services are isolated)
-- [ ] Create `tsup.config.ts` for **transpile-only** (Model B):
-
-  ```typescript
-  import { defineConfig } from "tsup";
-
-  export default defineConfig({
-    entry: ["src/**/*.ts"], // Transpile all source files
-    format: ["esm"],
-    bundle: false, // Model B: transpile-only, node_modules copied to Docker image
-    splitting: false,
-    dts: false,
-    clean: true,
-    sourcemap: true,
-    platform: "node",
-    target: "node22",
-  });
-  ```
-
-- [ ] Add to `biome/base.json` noDefaultExport override (tsup + vitest configs)
-
-> **Note:** Services do NOT get added to root `tsconfig.json` references. Unlike packages (which produce declarations consumed by other packages), services are standalone processes with their own isolated build.
->
-> **Why `bundle: false`:** ESM bundling breaks libs like pino that use dynamic requires (`Dynamic require of "os" is not supported`). Transpile-only preserves imports, resolved at runtime via node_modules.
-
-**ESM relative import rule:** All relative imports in service source files **must include `.js` extensions**:
-
-```typescript
-// Correct — ESM requires .js extension
-import { loadConfig } from "./config.js";
-import { startHealthServer } from "./health.js";
-
-// Wrong — will fail at runtime with ERR_MODULE_NOT_FOUND
-import { loadConfig } from "./config";
+```
+Does the workload have meaningfully independent lifecycle from any existing pod?
+│
+├─ Yes (or unsure)
+│  ├─ Is it an HTTP/SSE MCP server?           → SHAPE 1
+│  └─ Anything else with its own restart      → SHAPE 1  (DEFAULT)
+│
+├─ Must share network namespace, in-pod volume, or restart in lockstep
+│  ├─ stdio MCP spawned by host pod           → SHAPE 2
+│  └─ Sibling container                        → SHAPE 2
+│
+├─ Upstream third-party with no usable k8s path + already pinned image
+│                                              → SHAPE 4  (LEGACY — sign-off)
+│
+└─ Periodic / one-shot
+   ├─ One-shot at deploy time (migration)     → initContainer in node-app base
+   ├─ Triggered / queued                       → SHAPE 1 worker (scheduler-worker)
+   └─ Periodic (cron)                          → SHAPE 5  (gap; workaround inside)
 ```
 
-This is a Node.js ESM requirement when using `bundle: false`. TypeScript resolves `.js` to `.ts` during compilation, but the output keeps `.js` which Node.js needs.
+**Hard rules** (reject in code review):
 
-### 3. Environment Configuration
+- `:latest` in any new manifest — tag by SHA only (existing `sandbox-openclaw` debt is tracked separately, do not replicate)
+- Manual VM SSH as part of any deploy — every change lands in git
+- Compose service for code we author — Shape 1 instead
+- Sibling container when it could be standalone — Shape 1 instead
 
-- [ ] Create `src/config.ts` with Zod schema:
+---
 
-  ```typescript
-  import { z } from "zod";
+## The Pipeline (End-to-End)
 
-  const envSchema = z.object({
-    DATABASE_URL: z.string().url(),
-    NODE_ENV: z
-      .enum(["development", "production", "test"])
-      .default("development"),
-    // PORT for main HTTP server (if applicable)
-    PORT: z.coerce.number().default(3001),
-    // HEALTH_PORT for K8s probes (separate to avoid clashes)
-    HEALTH_PORT: z.coerce.number().default(9000),
-    // Service-specific vars...
-  });
+Same for every shape. Five phases. Each shape's playbook below maps to these.
 
-  export type ServiceConfig = z.infer<typeof envSchema>;
+| Phase                     | What                                                 | How                                                                                                                                                                                                  | Verify                                                                                                               |
+| ------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **1. Author**             | Code + manifests + wiring                            | Per-shape file checklist                                                                                                                                                                             | `pnpm check`; `docker build` locally; `kustomize build infra/k8s/overlays/candidate-a/<name>`                        |
+| **2. PR Build**           | Image to GHCR                                        | Automatic via [`pr-build.yml`](../../.github/workflows/pr-build.yml) on PR open/sync                                                                                                                 | `gh pr checks <N>` green; image at `ghcr.io/cogni-dao/cogni-poly:pr-<N>-<sha><suffix>`                               |
+| **3. Candidate-A Flight** | Push to `deploy/candidate-a-<name>`; Argo reconciles | `gh workflow run candidate-flight.yml -R Cogni-DAO/cogni-poly --ref <branch> -f pr_number=<N>`                                                                                                       | Workflow green; `/validate-candidate` scorecard PASS                                                                 |
+| **4. Preview Promote**    | Auto on merge to `main`                              | [`flight-preview.yml`](../../.github/workflows/flight-preview.yml) re-tags `pr-` → `preview-` and dispatches [`promote-and-deploy.yml`](../../.github/workflows/promote-and-deploy.yml)              | `https://poly-preview.cognidao.org/version.buildSha` matches merge SHA; Loki shows your service requests at that SHA |
+| **5. Production Promote** | Human-dispatched                                     | `gh workflow run promote-and-deploy.yml -R Cogni-DAO/cogni-poly -f environment=production -f source_sha=<sha> -f build_sha=<sha>` — or use [`/promote` skill](../../.claude/skills/promote/SKILL.md) | `https://poly.cognidao.org/version.buildSha` matches; no Loki error spike vs prior 1h                                |
 
-  export function loadConfig(): ServiceConfig {
-    const result = envSchema.safeParse(process.env);
-    if (!result.success) {
-      console.error("Invalid environment:", result.error.flatten().fieldErrors);
-      process.exit(1);
-    }
-    return result.data;
-  }
+**Production promote gate** (verify before dispatching prod):
+
+1. Preview soak ≥ 1 hour with real traffic
+2. `/version.buildSha` on preview matches the source SHA you'll promote
+3. No new error spike in Loki vs. the prior preview SHA (`{service=~"<name>", level=~"error|fatal"} | rate(5m)`)
+4. Rollback plan written into the PR body (see [Rollback](#rollback))
+
+---
+
+## Shape 1: Standalone k8s Deployment (DEFAULT)
+
+A pod with its own Deployment, Service, optional Ingress, and per-env deploy branch. Fully integrated with the pipeline.
+
+**Precedent**: [`services/scheduler-worker/`](../../services/scheduler-worker/) — every reference below is to this implementation.
+
+### Files to create / edit
+
+**One PR. Operator-domain** ([`single-node-scope`](../spec/node-ci-cd-contract.md)).
+
+- [ ] `services/<name>/` (TS) or `infra/images/<name>/` (Python/polyglot) — source + `Dockerfile`
+- [ ] `infra/catalog/<name>.yaml` — validated by [`_schema.json`](../../infra/catalog/_schema.json), model on [`scheduler-worker.yaml`](../../infra/catalog/scheduler-worker.yaml):
+  ```yaml
+  name: <name> # must match filename; ^[a-z][a-z0-9-]*$
+  type: service # "node" only for full top-level node app (then node_id required)
+  port: 9000
+  dockerfile: services/<name>/Dockerfile # or infra/images/<name>/Dockerfile
+  image_tag_suffix: "-<name>"
+  migrator_tag_suffix: "-<name>-migrate" # alias; no-op for services without per-node migrator
+  path_prefix: services/<name>/ # MUST end with /
+  candidate_a_branch: deploy/candidate-a-<name>
+  preview_branch: deploy/preview-<name>
+  production_branch: deploy/production-<name>
+  ```
+- [ ] `infra/k8s/base/<name>/{deployment,service,kustomization}.yaml` — reference [`infra/k8s/base/scheduler-worker/`](../../infra/k8s/base/scheduler-worker/) (worker) or [`infra/k8s/base/node-app/`](../../infra/k8s/base/node-app/) (HTTP)
+- [ ] `infra/k8s/overlays/{candidate-a,preview,production}/<name>/kustomization.yaml` — overlay's `images:` block uses `newTag: "<env>-placeholder-<name>"` or `digest: "sha256:..."`; [`promote-k8s-image.sh`](../../scripts/ci/promote-k8s-image.sh) handles either
+- [ ] **`infra/k8s/argocd/{candidate-a,preview,production}-applicationset.yaml`** — add a generator block in each. **This is the silent killer**: skip it and the catalog entry + overlay exist on disk but no Argo Application materializes. Pattern:
+  ```yaml
+  - git:
+      repoURL: https://github.com/cogni-dao/cogni-poly.git
+      revision: deploy/<env>-<name>
+      files:
+        - path: "infra/catalog/<name>.yaml"
   ```
 
-> **Note:** `HEALTH_PORT` can be the same value (e.g., 9000) across all services; only host port publishing (`ports:` in Compose) must be unique if exposing externally.
+### Deploy branch bootstrap (chicken-and-egg)
 
-### 3b. Repo-Spec Identity (if needed)
+The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile if the branch doesn't exist. Two viable orderings:
 
-If the service needs node identity (`node_id`, `scope_id`, `chain_id`) or governance config: add `@cogni/repo-spec` as a workspace dependency, bake `.cogni/repo-spec.yaml` into the Dockerfile runner stage, and read it at bootstrap. See [`packages/repo-spec/AGENTS.md`](../../packages/repo-spec/AGENTS.md) for the public API and [`services/scheduler-worker/src/bootstrap/container.ts`](../../services/scheduler-worker/src/bootstrap/container.ts) for the reference implementation.
+- **Preferred** — split into two PRs:
+  1. PR1 adds catalog + base + overlay; after merge, run `git push origin main:deploy/candidate-a-<name> main:deploy/preview-<name> main:deploy/production-<name>` to seed the deploy branches
+  2. PR2 wires the AppSet generators (Argo's reconcile now finds the branches)
+- **One-shot** — single PR with explicit post-merge admin step in the PR body: "after merge, push the three deploy branches from `main` HEAD."
 
-### 4. Health Endpoints
+Pick one and stick to it for the PR.
 
-> **Contract:** [docs/spec/health-probes.md](../spec/health-probes.md) — liveness vs. readiness separation, worker drain semantics, probe ownership.
+### Flight phase 3 → 5 mechanics
 
-- [ ] Create `src/health.ts` using minimal `node:http` (no framework):
+- **Flight to candidate-a**: [`candidate-flight.yml`](../../.github/workflows/candidate-flight.yml) resolves digests via [`resolve-pr-build-images.sh`](../../scripts/ci/resolve-pr-build-images.sh), writes them into `deploy/candidate-a-<name>` via [`promote-build-payload.sh`](../../scripts/ci/promote-build-payload.sh), then [`wait-for-argocd.sh`](../../scripts/ci/wait-for-argocd.sh) + [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) block until Argo + rollout + `/version.buildSha` agree. `PROMOTED_APPS` is dynamic — there is **no** manual `APPS=(...)` list to maintain. If a service shouldn't gate flights, don't put it in the catalog.
+- **Auto-preview on merge**: [`flight-preview.yml`](../../.github/workflows/flight-preview.yml) re-tags `pr-{N}-{sha}` → `preview-{sha}` and dispatches `promote-and-deploy.yml`. [`promote-preview-digest-seed.yml`](../../.github/workflows/promote-preview-digest-seed.yml) handles preview overlay digest seeding on `main`.
+- **Manual prod**: see Phase 5 in the pipeline table above.
 
-  ```typescript
-  /**
-   * Health endpoints for orchestrator probes.
-   * Uses raw node:http — do NOT add Fastify/Express for workers.
-   */
-  import { createServer, type Server } from "node:http";
+### Validate
 
-  export interface HealthState {
-    ready: boolean; // Set false during drain/shutdown
-  }
+`/validate-candidate` scorecard rows:
 
-  export function startHealthServer(state: HealthState, port: number): Server {
-    const server = createServer((req, res) => {
-      if (req.url === "/livez") {
-        res.writeHead(200, { "Content-Type": "text/plain" });
-        res.end("ok");
-      } else if (req.url === "/readyz") {
-        const status = state.ready ? 200 : 503;
-        res.writeHead(status, { "Content-Type": "text/plain" });
-        res.end(state.ready ? "ok" : "not ready");
-      } else {
-        res.writeHead(404).end("not found");
-      }
-    });
-    server.listen(port);
-    return server;
-  }
+- `/livez` 200 from outside the cluster
+- `/readyz` 200 from outside the cluster
+- `/version.buildSha` matches PR head SHA
+- One real request observed in Loki at the deployed SHA
+
+---
+
+## Shape 2: Sibling Container in Existing Pod
+
+A second container in an existing pod's Deployment, patched in via the host's overlay. Shares network namespace and lifecycle with the host.
+
+**Precedent**: `poly-paper-sidecar`. The canonical pattern is commit `3ee5913f8` ("pin poly-paper-sidecar to sha-c18eed2"). Earlier commit `377134f42` tried the `images:` block route but that path was abandoned for the inline-pin pattern below.
+
+### When
+
+Sibling is justified when the workload **must** share network namespace (localhost IPC), an in-pod volume, or restart in lockstep with the host. Anything else → Shape 1.
+
+### Files to create / edit
+
+**One PR. Operator-domain** (overlay paths live under `infra/`).
+
+- [ ] `infra/images/<sidecar-name>/Dockerfile` + source
+- [ ] `.github/workflows/build-<sidecar-name>.yml` — model on [`build-poly-paper-sidecar.yml`](../../.github/workflows/build-poly-paper-sidecar.yml):
+  - Path-triggered on `infra/images/<sidecar-name>/**` + `workflow_dispatch`
+  - Tag `sha-<short>` always
+  - **Do not** push `:latest` to a tag any deploy manifest references
+- [ ] `infra/k8s/overlays/{candidate-a,preview,production}/<host-node>/kustomization.yaml` — append the sidecar **as a container patch with the tag pinned INLINE**. Reference: [`infra/k8s/overlays/candidate-a/poly/kustomization.yaml`](../../infra/k8s/overlays/candidate-a/poly/kustomization.yaml) lines 96-132.
+  ```yaml
+  patches:
+    - target: { kind: Deployment, name: <host-deployment> }
+      patch: |
+        - op: add
+          path: /spec/template/spec/containers/-
+          value:
+            name: <sidecar-name>
+            image: ghcr.io/cogni-dao/<sidecar-name>:sha-<short>   # bump inline
+            ports: [{ containerPort: <port>, name: <port-name>, protocol: TCP }]
+            livenessProbe:  { httpGet: { path: /healthz, port: <port-name> }, initialDelaySeconds: 5, periodSeconds: 30 }
+            readinessProbe: { httpGet: { path: /healthz, port: <port-name> }, initialDelaySeconds: 3, periodSeconds: 10 }
+            resources:
+              requests: { memory: 128Mi, cpu: 50m }
+              limits:   { memory: 384Mi, cpu: 500m }
   ```
+- [ ] If host needs to call the sidecar, add `<NAME>_URL: http://localhost:<port>` (or equivalent) via a separate ConfigMap patch in the same overlay.
 
-**Probe contract:**
+### The inline-pin rule
 
-| Endpoint  | Purpose                       | K8s Probe        | Cost    |
-| --------- | ----------------------------- | ---------------- | ------- |
-| `/livez`  | Process alive, not deadlocked | `livenessProbe`  | Minimal |
-| `/readyz` | Ready to accept work (DB OK)  | `readinessProbe` | Low     |
+**The sidecar tag is pinned inline in the container patch, NOT in the kustomize `images:` block.** Reason: [`promote-k8s-image.sh`](../../scripts/ci/promote-k8s-image.sh) is image-name-blind and would clobber the wrong slot via first-newTag-wins. See the design comment in the poly overlay file. Fixing the script is a follow-up; until then, inline-pin is the contract.
 
-**Health check ownership (where to define probes):**
+### Production overlay decision
 
-| Environment    | Where to Define        | Notes                                                |
-| -------------- | ---------------------- | ---------------------------------------------------- |
-| Kubernetes     | K8s manifests          | `livenessProbe`, `readinessProbe` in pod spec        |
-| Docker Compose | `healthcheck:` in YAML | Only if needed for `depends_on: condition:`          |
-| Dockerfile     | **Do NOT define**      | No `HEALTHCHECK` instruction — defer to orchestrator |
+Decide explicitly whether the sidecar runs in production. The paper-trading sidecar deliberately does **not** ship to prod (enforces `mode=paper` — wrong in prod). Omit the patch from `infra/k8s/overlays/production/<host-node>/kustomization.yaml` if so.
 
-> **Dockerfile HEALTHCHECK is forbidden:** It bakes probe logic into the image, preventing orchestrator-specific tuning. Probes belong in deployment manifests (K8s) or compose files, not the image.
+### Flight phase 3 (pre-merge candidate-a)
 
-**Worker readiness invariant:** For queue workers, `ready=false` must **gate the poll/claim loop**, not just HTTP traffic. When `ready=false`:
+Sidecar-only PRs **can** flight pre-merge via standard `candidate-flight.yml`. Mechanism: [`detect-affected.sh:155`](../../scripts/ci/detect-affected.sh) lights up `<host-node>` when its overlay changes; [`candidate-flight.yml`](../../.github/workflows/candidate-flight.yml) rsyncs the PR overlay onto `deploy/candidate-a-<host-node>` before promotion; the snapshot-and-restore step preserves the host digest while the inline sidecar tag advances.
 
-- Worker stops polling for new jobs immediately
-- In-flight jobs drain to completion (with timeout)
-- Only after drain completes does the process exit
+Procedure:
 
-Workers must stop claiming new jobs immediately on SIGTERM regardless of orchestrator — do not rely on external routing semantics.
+1. Push the branch — `build-<sidecar-name>.yml` builds + pushes `sha-<short>` to GHCR
+2. Bump the inline `image: ghcr.io/cogni-dao/<sidecar-name>:sha-<short>` in the candidate-a overlay → commit, push
+3. `gh workflow run candidate-flight.yml -R Cogni-DAO/cogni-poly --ref <branch> -f pr_number=<N>`
+4. `/validate-candidate`
 
-### 5. Entry Point with Signal Handling
+**Wart**: this rebuilds the host image even though only the overlay changed. Wasted compute, correct behavior. Tracked as a CI gap.
 
-- [ ] Create `src/main.ts`:
+### Flight phase 4 → 5 (post-merge promote)
 
-  ```typescript
-  import { loadConfig } from "./config";
-  import { createHealthHandlers, type HealthState } from "./health";
+- **Preview**: bump the inline `image:` field in `infra/k8s/overlays/preview/<host-node>/kustomization.yaml` on `main`. Push triggers `flight-preview.yml`. Since only the sidecar tag changed, no host-image promote step runs — the inline bump IS the digest advance.
+- **Production**: same on `infra/k8s/overlays/production/<host-node>/kustomization.yaml`. Production overlay edits are human-gated by the standard merge gate.
 
-  const config = loadConfig();
+### Validate
 
-  const healthState: HealthState = {
-    ready: false,
-    dbConnected: false,
-  };
+`/validate-candidate` scorecard rows for Shape 2:
 
-  async function main() {
-    // 1. Initialize dependencies
-    const db = await initDatabase(config.DATABASE_URL);
-    healthState.dbConnected = true;
+- Host pod `/livez` + `/readyz` still pass at the deployed SHA
+- Sidecar Ready in `kubectl describe pod`
+- `kubectl exec <host-pod> -c <sidecar-name> -- wget -qO- localhost:<port>/healthz` returns 200
+- One real request to the sidecar observed in Loki at the deployed sidecar SHA
 
-    // 2. Start health server on dedicated port (avoids clashes with main HTTP)
-    startHealthServer(createHealthHandlers(healthState), config.HEALTH_PORT);
+---
 
-    // 3. Mark ready AFTER initialization complete
-    healthState.ready = true;
-    console.log(`Service ready, health on port ${config.HEALTH_PORT}`);
+## Shape 3: MCP Server
 
-    // 4. Start main work loop
-    await startWorker(db);
-  }
+No separate playbook — slot into Shape 1 or Shape 2 by transport.
 
-  // Graceful shutdown
-  async function shutdown(signal: string) {
-    console.log(`Received ${signal}, starting graceful shutdown...`);
+| Transport                   | Shape              | Why                               |
+| --------------------------- | ------------------ | --------------------------------- |
+| HTTP / SSE                  | Shape 1            | Own port, own probes, own scaling |
+| stdio (spawned by consumer) | Shape 2            | Must share pod with the consumer  |
+| Compose-only third-party    | Shape 4 (sign-off) | Closed for code we author         |
 
-    // 1. Stop accepting new work immediately
-    healthState.ready = false;
+HTTP/SSE MCP exposes `/livez` + `/readyz` like any Shape 1 service. stdio MCP rides the host pod's readiness.
 
-    // 2. Drain in-flight work (with timeout)
-    await drainWithTimeout(30_000);
+---
 
-    // 3. Close connections
-    await closeDatabase();
+## Shape 4: Compose-Stack Service (LEGACY — closed for new code we author)
 
-    // 4. Exit cleanly
-    process.exit(0);
-  }
+Process in `infra/compose/runtime/docker-compose.yml`, deployed via [`candidate-flight-infra.yml`](../../.github/workflows/candidate-flight-infra.yml) → [`deploy-infra.sh`](../../scripts/ci/deploy-infra.sh).
 
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("SIGINT", () => shutdown("SIGINT"));
+**Valid only for**: upstream third-party processes already pre-dating the k8s pipeline (postgres, temporal, redis, alloy, caddy, litellm, doltgres, db-backup). Net-new additions require explicit sign-off.
 
-  main().catch((err) => {
-    console.error("Fatal error:", err);
-    process.exit(1);
-  });
-  ```
+**Procedure** (after sign-off):
 
-**Shutdown sequence:**
+- Add definition to [`infra/compose/runtime/docker-compose.yml`](../../infra/compose/runtime/docker-compose.yml) with **explicit image tag** (never bare `image: vendor/foo`)
+- If local extension needed (e.g. `litellm` custom callback), add Dockerfile under [`infra/images/<name>/`](../../infra/images/)
+- Document env vars in [`docs/spec/environments.md`](../spec/environments.md)
+- Flight: `gh workflow run candidate-flight-infra.yml -R Cogni-DAO/cogni-poly --ref <branch>`
+- Verify: `docker compose ps` healthy + external probe (no Argo, no `/version.buildSha`, no rollout-status)
 
-1. Set `ready = false` immediately (canonical drain signal; in K8s also stops routing; in Compose only helps if process gates work intake)
-2. Stop pulling new jobs/requests
-3. Drain in-flight work with timeout
-4. Close DB pool and connections
-5. Exit 0 (clean) or 1 (error)
+---
 
-### 6. Dockerfile
+## Shape 5: Cron / One-Shot Job
 
-> **Image discipline (enforced by the pipeline):**
->
-> - **IMAGE_IMMUTABILITY** — The image you build is tagged by SHA, never `:latest`. PR lane: `pr-{N}-{sha}-{service}`. Promotion: `preview-{sha}-{service}` → `prod-{sha}-{service}`.
-> - **BUILD_ONCE_PROMOTE** — `pr-build.yml` builds once; `flight-preview.yml` and `promote-and-deploy.yml` re-tag the same digest. Your Dockerfile must be digest-stable (no timestamps, no random IDs, no git-state writes at build time).
->
-> If your service can't satisfy both, fix the Dockerfile before going further — every downstream stage assumes these hold.
+| Trigger                 | Shape                          | Today                                                                                                      |
+| ----------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| One-shot at deploy time | initContainer in node-app base | [`infra/k8s/base/node-app/deployment.yaml`](../../infra/k8s/base/node-app/deployment.yaml) (migrator init) |
+| Triggered / queued      | Shape 1 worker                 | [`services/scheduler-worker/`](../../services/scheduler-worker/)                                           |
+| Periodic schedule       | k8s `CronJob`                  | **GAP — no precedent.** Use scheduler-worker handler as workaround.                                        |
 
-**Packaging models:** Choose exactly one per service:
+**Workaround for periodic work**: register the task as a periodic handler in [`services/scheduler-worker/`](../../services/scheduler-worker/). Pure Shape 1 code change. If you ever need a true `CronJob` (heavy resource isolation, distinct image), file a follow-up to add `infra/k8s/base/cronjob/`.
 
-| Model                                 | Description                            | When to Use                           | Runtime Copies            |
-| ------------------------------------- | -------------------------------------- | ------------------------------------- | ------------------------- |
-| **B: Runtime node_modules** (default) | tsup transpile-only + node_modules     | Default for all services              | `dist/` + `node_modules/` |
-| **A: Bundled**                        | tsup bundles all deps into single file | Only if you need single-file artifact | Only `dist/`              |
+---
 
-> **Default to Model B.** ESM bundling with pino and other libs that use dynamic requires causes runtime errors (`Dynamic require of "os" is not supported`). Model B (transpile-only) avoids these issues. Model A is only for advanced cases requiring single-file output (must use CJS format if bundling).
+## Universal Invariants
 
-- [ ] Create multi-stage `Dockerfile`:
+These apply across shapes. Failures here cause silent deploy issues that the pipeline does not catch.
 
-  > **Reference implementation:** `services/scheduler-worker/Dockerfile`
+### Health probes
 
-  ```dockerfile
-  # syntax=docker/dockerfile:1
+| Endpoint   | Purpose                       | k8s probe                                                                                    |
+| ---------- | ----------------------------- | -------------------------------------------------------------------------------------------- |
+| `/livez`   | Process alive, not deadlocked | `livenessProbe` (cheap, no DB)                                                               |
+| `/readyz`  | Ready to accept work          | `readinessProbe` (set false during drain)                                                    |
+| `/version` | `{ buildSha, builtAt }`       | — required for Shape 1; [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) reads it |
 
-  # ============================================================================
-  # Stage 1: Builder — install deps, build packages, prune to prod
-  # ============================================================================
-  FROM node:22-bookworm-slim AS builder
+**Health probes belong in k8s manifests, NOT in the Dockerfile.** No `HEALTHCHECK` instruction — it bakes probe logic into the image and prevents orchestrator-specific tuning.
 
-  # Build tools for native modules (bufferutil, etc. from shared lockfile)
-  RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 make g++ && rm -rf /var/lib/apt/lists/*
+### Worker drain semantics (Shape 1 workers + Shape 5 handlers)
 
-  # Pin pnpm to match root package.json packageManager field
-  RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
-  WORKDIR /app
+`/readyz=false` must **gate the work-claim loop**, not just HTTP routing:
 
-  # Copy workspace config for dependency resolution
-  COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-  COPY packages/<dep1>/package.json packages/<dep1>/
-  COPY packages/<dep2>/package.json packages/<dep2>/
-  COPY services/<name>/package.json services/<name>/
+1. SIGTERM → `ready=false` immediately
+2. Stop polling / claiming new jobs
+3. Drain in-flight work with timeout (typical: 30s)
+4. Close DB pool + external connections
+5. `process.exit(0)`
 
-  # Install all dependencies (dev + prod) for build
-  RUN pnpm install --frozen-lockfile --filter @cogni/<name>-service...
+In k8s, `ready=false` also drops the pod from Service endpoints. **Workers must NOT rely on that** — claim-loop gating is mandatory because there is no Service routing pressure on Temporal workers.
 
-  # Copy source files for packages that need to be built
-  COPY packages/<dep1> packages/<dep1>
-  COPY packages/<dep2> packages/<dep2>
-  COPY services/<name> services/<name>
+### Dockerfile rules
 
-  # Build packages in dependency order (transpile-only for service)
-  RUN pnpm --filter @cogni/<dep1> build && \
-      pnpm --filter @cogni/<dep2> build && \
-      pnpm --filter @cogni/<name>-service build
+- Multi-stage; final stage `node:22-bookworm-slim` (glibc — broad native-dep compatibility; Alpine only if no native deps + CI smoke proves it)
+- Pin pnpm via `corepack prepare pnpm@<root-package.json-packageManager> --activate` — **not** `pnpm@latest`
+- Install `python3 make g++` in builder for native modules (`bufferutil` etc. from shared lockfile)
+- Run as non-root (`addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 worker; USER worker`)
+- **No `HEALTHCHECK`** (see above)
+- Digest-stable build: no timestamps, no random IDs, no `git rev-parse` baked into env at build time — BUILD_ONCE_PROMOTE depends on this
 
-  # Prune to production dependencies only
-  RUN pnpm prune --prod --filter @cogni/<name>-service...
+Reference: `services/scheduler-worker/Dockerfile`.
 
-  # ============================================================================
-  # Stage 2: Runner — minimal production image with node_modules
-  # ============================================================================
-  FROM node:22-bookworm-slim AS runner
+### ESM rules (TS services)
 
-  # Security: non-root user
-  RUN addgroup --system --gid 1001 nodejs && \
-      adduser --system --uid 1001 worker
-  USER worker
-  WORKDIR /app
+- `tsup` transpile-only (`bundle: false`) — ESM bundling breaks libs that use dynamic requires (pino throws `Dynamic require of "os" is not supported`)
+- All relative imports include `.js` extensions: `import { x } from "./y.js"` — TypeScript resolves `.js`→`.ts` at compile; Node needs `.js` at runtime
+- Standalone `tsconfig.json` (not in root references — services are isolated)
+- Config via Zod (`src/config.ts` parses `process.env`, exits non-zero on failure) — **never** use `process.env` in business code
 
-  # Copy transpiled output, node_modules, and package.json files for resolution
-  COPY --from=builder --chown=worker:nodejs /app/services/<name>/dist ./services/<name>/dist
-  COPY --from=builder --chown=worker:nodejs /app/services/<name>/package.json ./services/<name>/
-  COPY --from=builder --chown=worker:nodejs /app/node_modules ./node_modules
-  COPY --from=builder --chown=worker:nodejs /app/packages/<dep1>/dist ./packages/<dep1>/dist
-  COPY --from=builder --chown=worker:nodejs /app/packages/<dep1>/package.json ./packages/<dep1>/
-  COPY --from=builder --chown=worker:nodejs /app/packages/<dep2>/dist ./packages/<dep2>/dist
-  COPY --from=builder --chown=worker:nodejs /app/packages/<dep2>/package.json ./packages/<dep2>/
-
-  # If service needs repo-spec identity (see Step 3b):
-  # COPY --chown=worker:nodejs .cogni/repo-spec.yaml ./.cogni/repo-spec.yaml
-
-  WORKDIR /app/services/<name>
-  ENV NODE_ENV=production
-
-  # NOTE: No HEALTHCHECK instruction — probes defined in K8s manifests or Compose
-  CMD ["node", "dist/main.js"]
-  ```
-
-**Dockerfile rules:**
-
-- **Pin pnpm version** to match root `package.json` `packageManager` field (not `pnpm@latest`)
-- **Include build tools** in builder stage: `python3`, `make`, `g++` (required for native modules from shared lockfile)
-- **Default base image:** `node:22-bookworm-slim` (glibc, broad native dep compatibility)
-- Alpine (`node:22-alpine`) allowed only if: (1) no native deps, and (2) CI smoke test proves image runs correctly
-- **Do NOT use `--ignore-scripts`** (breaks esbuild/tsup postinstall)
-- Use multi-stage to minimize final image size
-- Add OCI labels (`org.opencontainers.image.*`)
-- Run as non-root user
-- **No HEALTHCHECK in Dockerfile** — probes are orchestrator concerns, defined in K8s manifests or Compose files
-
-### 7. Security Defaults (K8s)
-
-When deploying to Kubernetes, apply these security constraints:
+### Security context (k8s)
 
 ```yaml
 securityContext:
@@ -361,146 +310,92 @@ securityContext:
   runAsUser: 1001
   readOnlyRootFilesystem: true
   allowPrivilegeEscalation: false
-  capabilities:
-    drop:
-      - ALL
-
-# If service needs writable temp space:
+  capabilities: { drop: [ALL] }
 volumeMounts:
-  - name: tmp
-    mountPath: /tmp
+  - { name: tmp, mountPath: /tmp }
 volumes:
-  - name: tmp
-    emptyDir: {}
+  - { name: tmp, emptyDir: {} }
 ```
 
-### 8. Dependency Cruiser Rules
+### Secrets (sops + ksops)
 
-- [ ] Add rule blocking `services/<name>/` from importing `src/`:
-  ```javascript
-  {
-    name: "no-<name>-service-to-src",
-    severity: "error",
-    from: { path: "^services/<name>/" },
-    to: { path: "^src/" },
-    comment: "<name> service cannot import from Next.js app"
-  }
-  ```
-- [ ] Add arch probe: `services/<name>/__arch_probes__/illegal-src-import.ts`
+- Per-env encrypted secrets at `infra/k8s/secrets/<env>/<name>.enc.yaml` (template: [`sandbox-openclaw.enc.yaml.example`](../../infra/k8s/secrets/staging/sandbox-openclaw.enc.yaml.example))
+- Reference via `envFrom.secretRef.name: <name>-secrets` in the Deployment
+- Encrypt: `sops --encrypt --age <env-recipient> --in-place <file>.enc.yaml` (age pubkeys in `.sops.yaml`)
+- Argo's config-management plugin decrypts at sync time using the VM's age key
+- **Never** bake secrets into images or `kubectl create secret` on the VM (reprovision wipes it)
+- **Not used**: sealed-secrets, external-secrets-operator, Vault
 
-### 9. Repo Integration
+### HA reality
 
-> **Production runs on k3s via Argo CD.** Docker Compose is local-dev only. A new service reaches production only after it's wired into the CI target list, the k8s base, and the Argo catalog — all three are required. Missing any one silently green-lights CI and never deploys.
+The repo runs `replicas: 1` everywhere. Zero `PodDisruptionBudget`, zero `HorizontalPodAutoscaler`. A pod restart is downtime. **Do not bolt on speculative HA** in a new-service PR — multi-replica + PDB + HPA is a deliberate repo-wide project, not per-service work. Do set tight resource requests/limits + `terminationGracePeriodSeconds` ≥ your drain timeout.
 
-#### 9a. Wire into the PR build matrix
+### Reproducibility (zero SSH)
 
-`pr-build.yml` runs a detect → build (matrix) → manifest pipeline. Each matrix leg builds one target in parallel. To make your service a target:
+**Pass criterion**: destroy the candidate-a VM, run [`scripts/setup/provision-test-vm.sh`](../../scripts/setup/provision-test-vm.sh), wait for Argo to reconcile. Your service must come back without a single manual SSH step. If your PR's bring-up requires SSH, it's a bug in the PR, not an operational quirk.
 
-- [ ] **Register the target** in `scripts/ci/detect-affected.sh`:
-  - Append to `ALL_TARGETS=(...)`
-  - Add a path pattern under the case-statement so edits trigger a rebuild:
-    ```bash
-    services/<name>/*)
-      add_target <name>
-      ;;
-    ```
-- [ ] **Add a build recipe** in `scripts/ci/build-and-push-images.sh`:
-  - `resolve_tag()` case — defines the tag suffix (e.g. `-<name>`)
-  - `build_target()` case — `docker buildx build` against your Dockerfile
-- [ ] **Add a digest resolver** in `scripts/ci/resolve-pr-build-images.sh`:
-  - Same `resolve_tag` case (must mirror the build script)
-- [ ] **Add to the dispatch fallback** `.github/workflows/build-multi-node.yml` (manual fallback for rebuilding all targets — currently dispatched by hand when affected-only detection misses something):
-  - Node-scoped services go in the `build-nodes` matrix; utility services go as a step in the `build-services` job — match the pattern `scheduler-worker` / `migrator` already use.
+---
 
-**Verify locally:** Touch a file under `services/<name>/` and run `scripts/ci/detect-affected.sh` with `TURBO_SCM_BASE=origin/main TURBO_SCM_HEAD=HEAD`. Your service should appear in the `targets` CSV and `targets_json` array.
+## Anti-Patterns (consolidated — reject in code review)
 
-> **Preview-overlay digest seeding is automated (task.0349).** After merge to `main`, Flight Preview and related workflows run `promote-k8s-image.sh` against `deploy/preview`, and [`promote-preview-digest-seed.yml`](../../.github/workflows/promote-preview-digest-seed.yml) can emit a `chore(preview):` commit refreshing `main:infra/k8s/overlays/preview/<name>/kustomization.yaml` digest pins. New services are picked up once they are in the preview AppSet catalog and the build/promote path knows their image — **no hand-edited digest bump for preview**. Candidate-a and production overlays on `main` are not auto-seeded the same way; candidate-flight overwrites `deploy/candidate-a` digests on acquisition, and production stays human-gated via direct `promote-and-deploy.yml` dispatch (bug.0361). App + migrator images still use the split GHCR packages (`cogni-template` and `cogni-template-migrate`); wire both in the overlay `images:` blocks per existing nodes.
+Image / build:
 
-#### 9b. Wire into the Argo catalog
+- `:latest` in any new deploy manifest
+- Catalog entry pointing at a Dockerfile that isn't digest-stable (timestamps, random IDs, git-state at build)
+- `HEALTHCHECK` instruction in the Dockerfile
+- ESM bundled build for a service that imports pino (breaks at runtime)
 
-Argo CD ApplicationSets are catalog-driven (task.0247). The catalog is the single declaration; each environment (candidate-a, preview, production) templates from it.
+Deploy state:
 
-- [ ] **Add `infra/catalog/<name>.yaml`** — minimal shape (see `infra/catalog/scheduler-worker.yaml` as reference):
-  ```yaml
-  name: <name>
-  type: service # or "node" for node-scoped apps
-  port: 9000 # health/main port
-  dockerfile: services/<name>/Dockerfile
-  ```
-- [ ] **Add k8s base** at `infra/k8s/base/<name>/`:
-  - `deployment.yaml`, `service.yaml`, `kustomization.yaml`
-  - Reference `services/scheduler-worker` for a worker-style service
-  - Apply the security context from Step 7
-- [ ] **Verify the AppSet picks it up** — the per-env ApplicationSet (`infra/k8s/argocd/candidate-a-applicationset.yaml`, `preview-applicationset.yaml`, `production-applicationset.yaml`) generates one Application per catalog entry at runtime. No per-service Application file should be added by hand; if the AppSet template needs to branch on your service, extend the template, not the generated output.
-- [ ] **Add to `scripts/ci/wait-for-argocd.sh`** `APPS=(...)` list so flights wait for your service to reach Healthy before declaring success.
+- Sibling container with its tag in the kustomize `images:` block (Shape 2 inline-pin rule)
+- Catalog entry without a matching AppSet generator block (silent: pipeline goes green, service never deploys)
+- Sidecar without its own `livenessProbe`/`readinessProbe` (host pod becomes Ready while sidecar is broken)
+- Hand-editing `deploy/<env>-<name>` directly instead of patching the `main` overlay (bypasses review + single-domain-scope)
+- Adding to the catalog a service that should not gate flights — drop it from the catalog instead
 
-#### 9c. Dev stack (local Docker Compose)
+Compose / legacy:
 
-- [ ] Add the service to `infra/compose/runtime/docker-compose.dev.yml` (dev stack) and `infra/compose/runtime/docker-compose.yml` (docker-compose stack used by candidate-flight-infra / preview VMs)
-- [ ] Add root `package.json` script if solo iteration helps:
-  ```json
-  "<name>:dev": "dotenv -e .env.local -- pnpm --filter @cogni/<name>-service dev"
-  ```
+- Compose service for code we author (Shape 1, no exceptions)
+- Compose service with bare `image: vendor/foo` (no tag → drift on every VM rebuild)
+- Compose service with `restart: always` masking a crash loop — use `restart: unless-stopped` + alerting
 
-> Compose is the dev path. Never add a service to Compose without also completing 9a + 9b — Compose coverage alone means the service won't ship.
+Runtime:
 
-### 10. Deployment Criticality (K8s)
+- Worker that gates only HTTP routing on `/readyz=false` and not the poll-claim loop — jobs claimed during drain → corruption
+- MCP server with secrets baked into the image (use `envFrom.secretRef` instead)
+- Hardcoded MCP / sidecar port collisions — pick from `9100-9199` and document in the overlay
 
-Classify the service as **critical** (a flight fails if it can't reach Healthy) or **optional** (best-effort). Then:
+Process:
 
-- [ ] **Probes** — `readinessProbe` and `livenessProbe` in `infra/k8s/base/<name>/deployment.yaml` pointing at `/readyz` and `/livez`. Tune `initialDelaySeconds` and `periodSeconds` — probe ownership belongs to the manifest, never `HEALTHCHECK` in the Dockerfile.
-- [ ] **If critical** — include the service name in `scripts/ci/wait-for-argocd.sh` `APPS=(...)`. `candidate-flight.yml`, `flight-preview.yml`, and `promote-and-deploy.yml` all block until every listed app reports `sync.revision == deploy-branch SHA && health.status == Healthy`.
-- [ ] **If optional / in-flight** — keep it out of the `APPS` list so a broken optional service doesn't block the whole flight. See bug.0312 context in `proj.cicd-services-gitops.md` (openclaw placeholder image tag was exactly this failure mode).
+- New service PR that crosses domains (e.g. catalog change + node app feature wiring in one PR) — split into two PRs per [`single-node-scope`](../spec/node-ci-cd-contract.md)
+- Speculative HA (`PodDisruptionBudget` + `replicas: 1` → Argo stuck)
+- Manual VM SSH as a step in any deploy or recovery path
 
-> **Not yet repo conventions:** HA patterns (PodDisruptionBudgets, Argo `sync-wave` ordering, multi-replica deployments) are absent from `infra/k8s/base/**` today — every app runs `replicas: 1`. Revisit when a service needs genuine HA; don't bolt on PDBs speculatively.
+---
 
-### 11. Documentation
+## Rollback
 
-- [ ] Create `services/<name>/AGENTS.md` with:
-  - Purpose and scope
-  - Environment variables
-  - Health endpoints
-  - Deployment notes
-- [ ] Update `docs/spec/environments.md` with service env vars
-- [ ] Update the Existing Services table in [Services Architecture Spec](../spec/services-architecture.md)
+**If you can't describe rollback in one sentence, the PR is not ready to merge.** Put the rollback recipe in the PR body.
 
-## Verification
+| Shape                | Forward                                                                                              | Rollback                                                                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Standalone k8s    | `gh workflow run promote-and-deploy.yml -f environment=<env> -f source_sha=<new> -f build_sha=<new>` | Same workflow with the prior `source_sha` — look up via `git log deploy/<env>-<name> --oneline` or `.promote-state/source-sha-by-app.json` |
+| 2. Sibling container | Edit inline `image:` tag on `main`'s overlay → reconcile                                             | `git revert <overlay-commit>` on `main` (preview auto-reconciles; candidate-a re-flight on a revert branch)                                |
+| 4. Compose           | `candidate-flight-infra` / `promote-and-deploy` with new `infra/compose/**`                          | Same workflow with `--ref <older-sha>`                                                                                                     |
+| 5. Cron handler      | Standard Shape 1 rollback                                                                            | Same. For "stop the cron immediately" without a redeploy, document a runtime feature-flag at handler creation.                             |
 
-Run these commands to verify the new service is correctly set up:
+For new services, "rollback = remove" — see Deprecation in [Services Architecture Spec](../spec/services-architecture.md) or run the Shape 1 steps in reverse (empty deploy state → remove AppSet generator → remove catalog → delete deploy branches → remove source).
 
-```bash
-# Build succeeds
-pnpm --filter @cogni/<name>-service build
-
-# Types check
-pnpm --filter @cogni/<name>-service typecheck
-
-# Tests pass
-pnpm --filter @cogni/<name>-service test
-
-# Docker build succeeds
-docker build -f services/<name>/Dockerfile -t <name>-local .
-
-# Import boundaries enforced
-pnpm check
-```
-
-## Troubleshooting
-
-### Problem: `Dynamic require of "os" is not supported`
-
-**Solution:** You're using Model A (bundled) with ESM format. Switch to Model B (transpile-only, `bundle: false`) or use CJS format for bundled builds.
-
-### Problem: `ERR_MODULE_NOT_FOUND` at runtime
-
-**Solution:** Relative imports are missing `.js` extensions. All `import ... from "./foo"` must be `import ... from "./foo.js"` in ESM services.
-
-### Problem: Health endpoint not responding in Docker
-
-**Solution:** Ensure the health server binds to `0.0.0.0` (not `127.0.0.1`), and the `HEALTH_PORT` is exposed in Docker Compose or K8s manifests.
+---
 
 ## Related
 
-- [Services Architecture Spec](../spec/services-architecture.md) — invariants, import boundaries, structure contracts
-- [Packages Architecture Spec](../spec/packages-architecture.md) — packages vs services distinction
-- [CI/CD & Services GitOps Project](../../work/projects/proj.cicd-services-gitops.md) — service build/deploy roadmap
+- [Node CI/CD Contract](../spec/node-ci-cd-contract.md) — BUILD_ONCE_PROMOTE_DIGEST, single-node-scope, SCRIPTS_ARE_THE_API
+- [Node ↔ Operator Contract](../spec/node-operator-contract.md) — DEPLOY_INDEPENDENCE, HEALTH_ENDPOINTS_REQUIRED
+- [Services Architecture Spec](../spec/services-architecture.md) — invariants, import boundaries
+- [Health Probes Spec](../spec/health-probes.md) — full liveness / readiness / drain contract
+- [Candidate Flight V0 Guide](./candidate-flight-v0.md)
+- [Multi-Node Dev Guide](./multi-node-dev.md)
+- [`/validate-candidate` skill](../../.claude/skills/validate-candidate/SKILL.md)
+- [`/promote` skill](../../.claude/skills/promote/SKILL.md)
+- [CI/CD & Services GitOps Project](../../work/projects/proj.cicd-services-gitops.md) — active gaps, follow-up work, roadmap
