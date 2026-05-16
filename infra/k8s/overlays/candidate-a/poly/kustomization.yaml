@@ -14,6 +14,18 @@ images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
     digest: "sha256:c18feaf648c48245fc1af5f921c83e1a90681f8f791fae2f48474dfe4ec18eda"
+  # poly-paper-sidecar is built by the standalone .github/workflows/
+  # build-poly-paper-sidecar.yml on path-triggered pushes to main. The catalog
+  # SSOT (infra/catalog/*.yaml) does not model sibling containers — the sidecar
+  # is a sibling container in the poly pod, not a standalone deployment with
+  # its own Argo Application — so it deliberately stays outside the catalog and
+  # rides its own build workflow. Until argocd-image-updater is wired for this
+  # image (follow-up), bumps happen via a manual `newTag` edit here pointing
+  # at the workflow's `sha-<short>` output. Bare image reference in the
+  # container patch below resolves through this entry.
+  - name: ghcr.io/cogni-dao/poly-paper-sidecar
+    newName: ghcr.io/cogni-dao/poly-paper-sidecar
+    newTag: "sha-pending-first-build"
 
 patches:
   - target:
@@ -96,8 +108,9 @@ patches:
         path: /spec/template/spec/containers/-
         value:
           name: poly-paper-sidecar
-          image: ghcr.io/cogni-dao/poly-paper-sidecar:latest
-          imagePullPolicy: Always
+          # No tag — kustomize rewrites this to the digest pinned in the
+          # `images:` block above (and advanced by argocd-image-updater).
+          image: ghcr.io/cogni-dao/poly-paper-sidecar
           ports:
             - containerPort: 9100
               name: paper
