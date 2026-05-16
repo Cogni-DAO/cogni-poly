@@ -21,6 +21,14 @@
  *     `targetReturnPct − ourReturnPct`. Positive = target ahead = leak.
  *   - SIZE_SCALED_ON_OUR_BOOK: `sizeScaledGapUsdc` is denominated in OUR
  *     buy notional, not target's. Stays bounded to our portfolio scale.
+ *   - OUTCOME_AUTHORITATIVE_REMAINING_VALUE: when `marketOutcome` is
+ *     `winner` or `loser`, `computeRealizedPnl` derives the remaining-
+ *     shares value from outcome (`netShares × $1` for winners, `0` for
+ *     losers) and ignores `currentMarkValue`. This sidesteps Polymarket's
+ *     stale-echo race — Data API rows continue to mid-price after CTF
+ *     burn — and yields the deterministic payout that recovers a
+ *     redeemed winner's P/L. `currentMarkValue` is only consulted for
+ *     unresolved markets (`outcome` null or `"unknown"`).
  * Side-effects: none
  * Links: docs/design/poly-markets-aggregation-redesign.md §3
  * @internal
@@ -31,8 +39,35 @@ export type PositionReturnInput = {
   totalBuyNotional: number;
   /** Σ size_usdc over fills WHERE side='SELL'. */
   realizedCash: number;
-  /** Σ over open legs of (shares × current_price). */
+  /** Σ over open legs of (shares × current_price). MTM, only used when
+   *  no `redemptionProceeds` is supplied (= unresolved market). */
   currentMarkValue: number;
+  /**
+   * Redemption value of any winning shares still attributable to the
+   * wallet (`max(0, netShares) × $1` when the market resolved YES on this
+   * token; `0` for losers). Callers compute this via `computeRealizedPnl`
+   * and pass it in. When provided, it REPLACES `currentMarkValue` in the
+   * return-numerator — the outcome is authoritative, the mark is noisy
+   * post-resolution.
+   */
+  redemptionProceeds?: number;
+};
+
+export type MarketOutcome = "winner" | "loser" | "unknown" | null;
+
+export type RealizedPnlInput = {
+  totalBuyNotional: number;
+  realizedCash: number;
+  currentMarkValue: number;
+  /** Σ BUY shares − Σ SELL shares from poly_trader_fills. */
+  netShares: number;
+  marketOutcome: MarketOutcome;
+};
+
+export type RealizedPnl = {
+  pnlUsd: number;
+  pnlPct: number | null;
+  redemptionProceeds: number;
 };
 
 export type EdgeGapInput = {
@@ -64,7 +99,15 @@ export function positionReturnPct(input: PositionReturnInput): number | null {
   if (!Number.isFinite(realizedCash) || !Number.isFinite(currentMarkValue)) {
     return null;
   }
-  const totalPnl = realizedCash + currentMarkValue - totalBuyNotional;
+  // Outcome-authoritative remaining-value: redemption (when supplied)
+  // replaces the noisy current mark for resolved markets. Callers compute
+  // this via `computeRealizedPnl` so the two formulas can never drift.
+  const remainingValue =
+    input.redemptionProceeds !== undefined &&
+    Number.isFinite(input.redemptionProceeds)
+      ? input.redemptionProceeds
+      : currentMarkValue;
+  const totalPnl = realizedCash + remainingValue - totalBuyNotional;
   return roundPct(totalPnl / totalBuyNotional);
 }
 
@@ -113,6 +156,70 @@ export function blendTargetReturns(
   }
   if (weightSum <= 0) return null;
   return roundPct(weightedSum / weightSum);
+}
+
+/**
+ * Realized P/L for one (wallet, condition, token) leg in USD.
+ *
+ * For resolved markets the outcome — not the current mark — dictates the
+ * remaining-shares value:
+ *
+ *   - `winner`: pnlUsd = realizedCash + (max(0, netShares) × $1) − totalBuyNotional
+ *   - `loser`:  pnlUsd = realizedCash − totalBuyNotional
+ *   - `unknown` / null: pnlUsd = realizedCash + currentMarkValue − totalBuyNotional  (MTM)
+ *
+ * Using the deterministic outcome instead of `currentMarkValue` for
+ * resolved markets sidesteps two real-world races: (a) Polymarket
+ * continues to echo a row with stale `current_value_usdc` for several
+ * minutes after CTF burn, which would otherwise leak the payout into
+ * "still on chain" and zero out the redemption credit; (b) winners that
+ * mark at ~$0.95 mid-resolution would under-count their realized payout.
+ *
+ * `pnlPct` is `pnlUsd / totalBuyNotional`, `null` when no capital was
+ * deployed. Renders as `—` upstream.
+ */
+export function computeRealizedPnl(input: RealizedPnlInput): RealizedPnl {
+  const {
+    totalBuyNotional,
+    realizedCash,
+    currentMarkValue,
+    netShares,
+    marketOutcome,
+  } = input;
+  const remainingValue = remainingSharesValue({
+    netShares,
+    currentMarkValue,
+    marketOutcome,
+  });
+  const pnlUsdRaw = realizedCash + remainingValue - totalBuyNotional;
+  const pnlUsd = Number.isFinite(pnlUsdRaw) ? roundUsd(pnlUsdRaw) : 0;
+  const pnlPct =
+    Number.isFinite(totalBuyNotional) && totalBuyNotional > 0
+      ? roundPct(pnlUsdRaw / totalBuyNotional)
+      : null;
+  const redemptionProceeds =
+    marketOutcome === "winner" && Number.isFinite(netShares) && netShares > 0
+      ? roundUsd(netShares) // $1/share payout
+      : 0;
+  return {
+    pnlUsd,
+    pnlPct,
+    redemptionProceeds,
+  };
+}
+
+function remainingSharesValue(input: {
+  netShares: number;
+  currentMarkValue: number;
+  marketOutcome: MarketOutcome;
+}): number {
+  if (input.marketOutcome === "winner") {
+    return Number.isFinite(input.netShares) && input.netShares > 0
+      ? input.netShares // 1 USDC/share for winning binary token
+      : 0;
+  }
+  if (input.marketOutcome === "loser") return 0;
+  return Number.isFinite(input.currentMarkValue) ? input.currentMarkValue : 0;
 }
 
 function roundPct(value: number): number {

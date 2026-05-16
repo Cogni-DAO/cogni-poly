@@ -24,6 +24,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   blendTargetReturns,
+  computeRealizedPnl,
   edgeGap,
   positionReturnPct,
 } from "@/features/wallet-analysis/server/market-return-math";
@@ -206,5 +207,128 @@ describe("blendTargetReturns — multi-target weighting §3.5", () => {
         { totalBuyNotional: 100, returnPct: null },
       ])
     ).toBeNull();
+  });
+});
+
+describe("computeRealizedPnl", () => {
+  it("open winner (mark still on chain) → no redemption credit", () => {
+    const { pnlUsd, redemptionProceeds } = computeRealizedPnl({
+      totalBuyNotional: 50,
+      realizedCash: 0,
+      currentMarkValue: 65,
+      netShares: 100,
+      marketOutcome: null,
+    });
+    expect(pnlUsd).toBe(15);
+    expect(redemptionProceeds).toBe(0);
+  });
+
+  it("closed loser → −total_buy_notional", () => {
+    const { pnlUsd, redemptionProceeds } = computeRealizedPnl({
+      totalBuyNotional: 100,
+      realizedCash: 0,
+      currentMarkValue: 0,
+      netShares: 500,
+      marketOutcome: "loser",
+    });
+    expect(pnlUsd).toBe(-100);
+    expect(redemptionProceeds).toBe(0);
+  });
+
+  it("redeemed winner → netShares × $1 − total_buy_notional", () => {
+    const { pnlUsd, redemptionProceeds } = computeRealizedPnl({
+      totalBuyNotional: 80,
+      realizedCash: 0,
+      currentMarkValue: 0,
+      netShares: 500,
+      marketOutcome: "winner",
+    });
+    expect(redemptionProceeds).toBe(500);
+    expect(pnlUsd).toBe(420);
+  });
+
+  it("partial-sell-then-redeem winner → cash + redemption − cost", () => {
+    const { pnlUsd, redemptionProceeds } = computeRealizedPnl({
+      totalBuyNotional: 200,
+      realizedCash: 200,
+      currentMarkValue: 0,
+      netShares: 600,
+      marketOutcome: "winner",
+    });
+    expect(redemptionProceeds).toBe(600);
+    expect(pnlUsd).toBe(600);
+  });
+
+  it("winner pre-redemption: redemption replaces mark (never additive)", () => {
+    // The outcome — not the mark — is authoritative for resolved markets.
+    // Redemption proceeds equal netShares × $1; pnl never double-counts
+    // because `positionReturnPct` consumes redemption *instead of* mark.
+    const { pnlUsd, redemptionProceeds } = computeRealizedPnl({
+      totalBuyNotional: 30,
+      realizedCash: 0,
+      currentMarkValue: 100,
+      netShares: 100,
+      marketOutcome: "winner",
+    });
+    expect(redemptionProceeds).toBe(100);
+    expect(pnlUsd).toBe(70);
+  });
+
+  it("fully-sold winner (no shares to redeem) → realized cash only", () => {
+    const { pnlUsd, redemptionProceeds } = computeRealizedPnl({
+      totalBuyNotional: 50,
+      realizedCash: 80,
+      currentMarkValue: 0,
+      netShares: 0,
+      marketOutcome: "winner",
+    });
+    expect(redemptionProceeds).toBe(0);
+    expect(pnlUsd).toBe(30);
+  });
+
+  it("unknown outcome (market never resolved) → no redemption credit", () => {
+    const { pnlUsd, redemptionProceeds } = computeRealizedPnl({
+      totalBuyNotional: 100,
+      realizedCash: 20,
+      currentMarkValue: 0,
+      netShares: 200,
+      marketOutcome: "unknown",
+    });
+    expect(redemptionProceeds).toBe(0);
+    expect(pnlUsd).toBe(-80);
+  });
+
+  it("zero capital deployed → pnlPct is null", () => {
+    const { pnlPct } = computeRealizedPnl({
+      totalBuyNotional: 0,
+      realizedCash: 0,
+      currentMarkValue: 0,
+      netShares: 0,
+      marketOutcome: null,
+    });
+    expect(pnlPct).toBeNull();
+  });
+});
+
+describe("positionReturnPct — redemption proceeds threading", () => {
+  it("redemption credit flows into return%", () => {
+    expect(
+      positionReturnPct({
+        totalBuyNotional: 80,
+        realizedCash: 0,
+        currentMarkValue: 0,
+        redemptionProceeds: 500,
+      })
+    ).toBe(5.25); // ($500 - $80) / $80 = 5.25x = +525%
+  });
+
+  it("default (no redemption field) preserves legacy behavior", () => {
+    expect(
+      positionReturnPct({
+        totalBuyNotional: 50,
+        realizedCash: 0,
+        currentMarkValue: 65,
+      })
+    ).toBe(0.3);
   });
 });

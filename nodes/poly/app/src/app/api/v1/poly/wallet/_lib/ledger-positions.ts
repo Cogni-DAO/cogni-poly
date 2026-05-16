@@ -112,13 +112,12 @@ export function toWalletExecutionPosition(
   const executedValue = ledgerExecutedUsdc(row);
   const currentValue = status === "closed" ? 0 : ledgerCurrentValue(row);
   const costBasis = readLedgerCostBasis(row, executedValue);
-  // Ledger has no redemption-proceeds column; realized PnL only resolvable via current-positions path.
-  const pnlUsd =
-    status === "closed" ? 0 : roundToCents(currentValue - costBasis);
-  const pnlPct =
-    status === "closed" || costBasis <= 0
-      ? 0
-      : roundToCents((pnlUsd / costBasis) * 100);
+  // Per-order pnl is unrealized MTM at this layer. Token-level realized
+  // P/L is applied by `applyRealizedPnl` AFTER coalescing — adding it
+  // here would double-count when two ledger rows share a (condition,
+  // token) and both carry the full token-level realized credit.
+  const pnlUsd = roundToCents(currentValue - costBasis);
+  const pnlPct = costBasis > 0 ? roundToCents((pnlUsd / costBasis) * 100) : 0;
   const size =
     price > 0 ? Number((executedValue / price).toFixed(4)) : executedValue;
   const syncAgeMs =

@@ -45,6 +45,10 @@ import {
 } from "@/bootstrap/poly-trader-wallet";
 import { readCurrentWalletPositionModel } from "@/features/wallet-analysis/server/current-position-read-model";
 import { buildMarketExposureGroups } from "@/features/wallet-analysis/server/market-exposure-service";
+import {
+  applyRealizedPnl,
+  readWalletTokenPnlMap,
+} from "@/features/wallet-analysis/server/realized-pnl-service";
 import { EVENT_NAMES, logEvent } from "@/shared/observability";
 import {
   coalesceWalletExecutionPositions,
@@ -153,6 +157,21 @@ export const GET = wrapRouteHandlerWithLogging(
       string,
       PolyWalletExecutionOutput["live_positions"][number]
     >();
+    // Canonical fills + outcomes realized-P/L for this wallet. Fetched
+    // once and threaded into every consumer so the dashboard's positions
+    // list, markets aggregator, and ledger overlay all derive P/L from
+    // the same source. Soft-fails to an empty map — read-models then fall
+    // back to unrealized MTM, preserving pre-fix display rather than 500.
+    const realizedPnlMap = await readWalletTokenPnlMap({
+      db: container.serviceDb,
+      walletAddress: address,
+    }).catch((err: unknown) => {
+      warnings.push({
+        code: "realized_pnl_unavailable",
+        message: err instanceof Error ? err.message : String(err),
+      });
+      return new Map();
+    });
     try {
       const [rows, dailyCountsFromDb] = await Promise.all([
         container.orderLedger.listTenantPositions({
@@ -170,6 +189,10 @@ export const GET = wrapRouteHandlerWithLogging(
       const positions = rows.map((row) =>
         toWalletExecutionPosition(row, capturedAt)
       );
+      // Realized P/L is overlaid LATER (after all sources are merged) so
+      // the additive `mergeWalletExecutionPosition` can't double-count a
+      // token-level credit that's already applied to both the ledger row
+      // and the current-position row.
       const ledgerLivePositions = coalesceWalletExecutionPositions(
         positions
           .filter((position) => position.status !== "closed")
@@ -239,6 +262,13 @@ export const GET = wrapRouteHandlerWithLogging(
         message: err instanceof Error ? err.message : String(err),
       });
     }
+    // Single overlay point. Both `livePositions` and `closedPositions`
+    // arrived here from a merge that summed per-row unrealized P/L;
+    // applying the canonical fills+outcomes P/L here is the single source
+    // of truth for the dashboard. The markets aggregator below has its
+    // own rollup query and is independent of this overlay.
+    livePositions = applyRealizedPnl(livePositions, realizedPnlMap);
+    closedPositions = applyRealizedPnl(closedPositions, realizedPnlMap);
     const marketGroups = await buildMarketExposureGroups({
       db: container.serviceDb,
       billingAccountId: account.id,

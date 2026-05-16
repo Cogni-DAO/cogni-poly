@@ -212,14 +212,18 @@ function rowToExecutionPosition(
   const endDate =
     isoOrNull(row.metadata_end_date) ??
     isoString(readOptionalString(raw, "endDate"));
-  const pnlUsd = roundToCents(currentValue - costBasis);
-  const pnlPct = costBasis > 0 ? roundToCents((pnlUsd / costBasis) * 100) : 0;
   const syncAgeMs = Math.max(0, capturedAt.getTime() - Date.parse(observedAt));
   const status = deriveCurrentPositionStatus({
     currentValue,
     marketOutcome: row.market_outcome,
     lifecycleState: row.redeem_lifecycle_state,
   });
+  // Unrealized P/L from the snapshot row. Callers needing realized P/L
+  // overlay `applyRealizedPnl` from `./realized-pnl-service` using the
+  // fills+outcomes map produced by `readWalletTokenPnlMap`. Keeping this
+  // module strictly bounded to its own SQL row makes it composable.
+  const pnlUsd = roundToCents(currentValue - costBasis);
+  const pnlPct = costBasis > 0 ? roundToCents((pnlUsd / costBasis) * 100) : 0;
   const terminalTs = status === "closed" ? observedAt : null;
 
   return [
@@ -263,6 +267,10 @@ function rowToExecutionPosition(
       entryPrice,
       currentPrice,
       size: roundToPrecision(shares, 4),
+      // Closed positions have no remaining mark-to-market exposure even
+      // when Polymarket's Data API row still echoes a stale `curPrice`
+      // (the row outlives CTF burn by minutes). Realized P/L survives in
+      // `pnlUsd` — this only zeros the *current* exposure column.
       currentValue: status === "closed" ? 0 : roundToCents(currentValue),
       pnlUsd,
       pnlPct,
