@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir \
   "fastapi>=0.115,<0.116" \
   "uvicorn[standard]>=0.32,<0.33" \
   "pydantic>=2.9,<3" \
-  "git+https://github.com/agent-next/polymarket-paper-trader@${UPSTREAM_PAPER_TRADER_SHA}#egg=pm-trader"
+  "git+https://github.com/agent-next/polymarket-paper-trader@${UPSTREAM_PAPER_TRADER_SHA}"
 
 COPY server.py /app/server.py
 
