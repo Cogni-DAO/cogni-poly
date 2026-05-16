@@ -10,7 +10,7 @@ resources:
 
 # Image digest — updated by promote-and-deploy / candidate-flight.
 images:
-  - name: ghcr.io/cogni-dao/cogni-template
+  - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
     newTag: "candidate-a-placeholder-scheduler-worker"
 
