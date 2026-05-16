@@ -16,7 +16,7 @@ images:
     digest: "sha256:bae514810c27ce38d0602a560fe798f4037f0b033fb2362d4a53eabefc6e793d"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    digest: "sha256:131a37d015452f8257598598fd42a847e3245c13d8ef18e163a396876e34314a"
+    digest: "sha256:e96106e8aae2478a8ee506d3f837024ac2e7a415b0cc6491bee6f4d9f541d014"
   # poly-paper-sidecar built by build-poly-paper-sidecar.yml. Outside the
   # catalog SSOT (which assumes 1 image = 1 overlay = 1 Argo app). Bump the
   # sidecar pin by editing the sha256 above after a new build publishes a
