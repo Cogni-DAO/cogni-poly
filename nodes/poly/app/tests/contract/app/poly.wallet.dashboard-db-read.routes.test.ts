@@ -379,6 +379,7 @@ describe("poly wallet dashboard DB read routes", () => {
       created_at: new Date(Date.now() - 59_000),
       updated_at: syncedAt,
       billing_account_id: ACCOUNT.id,
+      mode: "live",
     };
     mockListTenantPositions.mockResolvedValue([row]);
     mockGetTradingWalletPnlHistory.mockResolvedValue([]);

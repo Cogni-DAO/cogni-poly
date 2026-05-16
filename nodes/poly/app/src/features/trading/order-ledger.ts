@@ -570,11 +570,17 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       });
     },
 
-    async listRecent(opts?: ListRecentOptions): Promise<LedgerRow[]> {
-      const limit = opts?.limit ?? DEFAULT_LIST_LIMIT;
-      const whereClause = opts?.target_id
-        ? eq(polyCopyTradeFills.targetId, opts.target_id)
-        : undefined;
+    async listRecent(opts: ListRecentOptions): Promise<LedgerRow[]> {
+      const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
+      // Tenant clamp is always applied — the adapter runs on the BYPASSRLS
+      // service connection, so this WHERE is the only thing keeping the orders
+      // route from leaking cross-tenant ledger rows.
+      const whereClause = opts.target_id
+        ? and(
+            eq(polyCopyTradeFills.billingAccountId, opts.billing_account_id),
+            eq(polyCopyTradeFills.targetId, opts.target_id)
+          )
+        : eq(polyCopyTradeFills.billingAccountId, opts.billing_account_id);
 
       const rows = await deps.db
         .select()
@@ -660,21 +666,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         .orderBy(polyCopyTradeFills.createdAt)
         .limit(limit);
 
-      return rows.map((r) => ({
-        target_id: r.targetId,
-        fill_id: r.fillId,
-        observed_at: r.observedAt,
-        client_order_id: r.clientOrderId,
-        order_id: r.orderId,
-        status: r.status as LedgerRow["status"],
-        position_lifecycle:
-          (r.positionLifecycle as LedgerPositionLifecycle | null) ?? null,
-        attributes: (r.attributes as Record<string, unknown> | null) ?? null,
-        synced_at: r.syncedAt,
-        created_at: r.createdAt,
-        updated_at: r.updatedAt,
-        billing_account_id: r.billingAccountId,
-      }));
+      return rows.map(mapLedgerRow);
     },
 
     async updateStatus(input: UpdateStatusInput): Promise<void> {
@@ -1007,6 +999,8 @@ function mapLedgerRow(r: typeof polyCopyTradeFills.$inferSelect): LedgerRow {
     created_at: r.createdAt,
     updated_at: r.updatedAt,
     billing_account_id: r.billingAccountId,
+    // Schema CHECK enforces ('live','paper'); cast is safe at the type boundary.
+    mode: r.mode as LedgerRow["mode"],
   };
 }
 

@@ -102,6 +102,7 @@ function makeOpenRow(
     created_at: now,
     updated_at: now,
     billing_account_id: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
+    mode: "live",
   };
 }
 
