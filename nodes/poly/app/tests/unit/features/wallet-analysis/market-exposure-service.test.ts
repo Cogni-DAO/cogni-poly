@@ -281,4 +281,173 @@ describe("buildMarketExposureGroups", () => {
     expect(group?.ourValueUsdc).toBe(0);
     expect(group?.ourEntryValueUsdc).toBe(47.94);
   });
+
+  it("reports realized P/L for a closed loser as -total_buy_notional", async () => {
+    // bug: closed-position P/L hardcoded to $0 across the dashboard.
+    // After the fix: a fully-resolved loser whose shares paid $0 should
+    // surface a P/L equal to -Σ BUY notional, not $0.
+    const closedPosition = ourPosition({
+      positionId: "p-closed-loser",
+      status: "closed",
+      currentValue: 0,
+      pnlUsd: 0,
+      size: 0,
+    });
+    const db = fakeDb([
+      [], // No target snapshots — keep the assertion on our P/L only.
+      [
+        {
+          wallet_address: OUR_WALLET.toLowerCase(),
+          condition_id: "0xCOND1",
+          token_id: "tok-yes-1",
+          total_buy_notional: "100.00",
+          realized_cash: "0",
+          net_shares: "500",
+          market_outcome: "loser",
+        },
+      ],
+    ]);
+
+    const groups = await buildMarketExposureGroups({
+      db,
+      billingAccountId: "ba-1",
+      walletAddress: OUR_WALLET,
+      livePositions: [],
+      closedPositions: [closedPosition],
+    });
+
+    const group = groups[0];
+    const line = group?.lines[0];
+    expect(line?.status).toBe("closed");
+    // Closed loser: full investment lost → $-100 realized.
+    const ourParticipant = line?.participants.find(
+      (p) => p.side === "our_wallet"
+    );
+    expect(ourParticipant?.net.pnlUsdc).toBe(-100);
+    expect(group?.pnlUsd).toBe(-100);
+  });
+
+  it("reports realized P/L for a redeemed winner as netShares - total_buy", async () => {
+    // Redeemed winner: shares were burned at $1/share by CTF redemption.
+    // Polymarket's fills feed doesn't emit a SELL for redemption, so we
+    // infer the credit from (outcome=winner, current_mark≈0, netShares).
+    // Bought 500 shares for $80, redeemed all 500 at $1 → +$420 P/L.
+    const closedPosition = ourPosition({
+      positionId: "p-closed-winner",
+      status: "closed",
+      currentValue: 0,
+      pnlUsd: 0,
+      size: 0,
+    });
+    const db = fakeDb([
+      [],
+      [
+        {
+          wallet_address: OUR_WALLET.toLowerCase(),
+          condition_id: "0xCOND1",
+          token_id: "tok-yes-1",
+          total_buy_notional: "80.00",
+          realized_cash: "0",
+          net_shares: "500",
+          market_outcome: "winner",
+        },
+      ],
+    ]);
+
+    const groups = await buildMarketExposureGroups({
+      db,
+      billingAccountId: "ba-1",
+      walletAddress: OUR_WALLET,
+      livePositions: [],
+      closedPositions: [closedPosition],
+    });
+
+    const line = groups[0]?.lines[0];
+    const ourParticipant = line?.participants.find(
+      (p) => p.side === "our_wallet"
+    );
+    expect(ourParticipant?.net.pnlUsdc).toBe(420);
+  });
+
+  it("recovers realized P/L for a partial-sell-then-resolve winner", async () => {
+    // Bought 1000 shares for $200 ($0.20 each), sold 400 for $200 cash
+    // pre-resolution, redeemed remaining 600 at $1. Total in: $200,
+    // total out: $200 (sells) + $600 (redemption) = $800. P/L = +$600.
+    const closedPosition = ourPosition({
+      positionId: "p-partial-winner",
+      status: "closed",
+      currentValue: 0,
+      pnlUsd: 0,
+      size: 0,
+    });
+    const db = fakeDb([
+      [],
+      [
+        {
+          wallet_address: OUR_WALLET.toLowerCase(),
+          condition_id: "0xCOND1",
+          token_id: "tok-yes-1",
+          total_buy_notional: "200.00",
+          realized_cash: "200.00",
+          net_shares: "600",
+          market_outcome: "winner",
+        },
+      ],
+    ]);
+
+    const groups = await buildMarketExposureGroups({
+      db,
+      billingAccountId: "ba-1",
+      walletAddress: OUR_WALLET,
+      livePositions: [],
+      closedPositions: [closedPosition],
+    });
+
+    const line = groups[0]?.lines[0];
+    const ourParticipant = line?.participants.find(
+      (p) => p.side === "our_wallet"
+    );
+    expect(ourParticipant?.net.pnlUsdc).toBe(600);
+  });
+
+  it("does not double-count redemption when winning shares are still on chain", async () => {
+    // Pre-redemption winner: market resolved, shares not yet burned.
+    // current_mark still ≈ shares × $1, so redemption_proceeds must be 0
+    // or we'd count the payout twice. Bought 100 @ $0.30 = $30; market
+    // resolved YES, mark = 100 × $1 = $100 (held). P/L should be +$70.
+    const livePosition = ourPosition({
+      positionId: "p-pending-redeem",
+      status: "redeemable",
+      currentValue: 100,
+      pnlUsd: 70,
+      size: 100,
+    });
+    const db = fakeDb([
+      [],
+      [
+        {
+          wallet_address: OUR_WALLET.toLowerCase(),
+          condition_id: "0xCOND1",
+          token_id: "tok-yes-1",
+          total_buy_notional: "30.00",
+          realized_cash: "0",
+          net_shares: "100",
+          market_outcome: "winner",
+        },
+      ],
+    ]);
+
+    const groups = await buildMarketExposureGroups({
+      db,
+      billingAccountId: "ba-1",
+      walletAddress: OUR_WALLET,
+      livePositions: [livePosition],
+    });
+
+    const line = groups[0]?.lines[0];
+    const ourParticipant = line?.participants.find(
+      (p) => p.side === "our_wallet"
+    );
+    expect(ourParticipant?.net.pnlUsdc).toBe(70);
+  });
 });

@@ -70,7 +70,9 @@ import { type SQL, sql } from "drizzle-orm";
 
 import {
   blendTargetReturns,
+  computeRealizedPnl,
   edgeGap,
+  type MarketOutcome,
   positionReturnPct,
 } from "./market-return-math";
 
@@ -105,11 +107,27 @@ type RawLeg = {
    * `null` for `copy_target` legs (they have no caller-position concept).
    */
   ourPositionStatus: WalletExecutionMarketLineStatus | null;
+  /**
+   * Realized P/L for the leg computed from
+   * `poly_trader_fills` + `poly_market_outcomes` via `computeRealizedPnl`.
+   * Always present; falls back to `currentValueUsdc − costBasisUsdc` when
+   * the rollup is missing (target leg observed only via snapshot,
+   * fresh-pre-backfill our wallet).
+   */
+  pnlUsdc: number;
+  /**
+   * CTF redemption credit contributed by this leg ($1 × winning shares
+   * already burned). 0 for losers, open winners, and any leg whose
+   * `currentValueUsdc` still reflects on-chain shares.
+   */
+  redemptionProceedsUsdc: number;
 };
 
 type FillRollup = {
   totalBuyNotional: number;
   realizedCash: number;
+  netShares: number;
+  marketOutcome: MarketOutcome;
 };
 
 type TargetPositionRow = {
@@ -152,15 +170,54 @@ export async function buildMarketExposureGroups(params: {
     billingAccountId: params.billingAccountId,
     conditions,
   });
-  const allLegs = [...ourLegs, ...targetLegs];
-  const wallets = [...new Set(allLegs.map((leg) => leg.walletAddress))];
+  const rawLegs = [...ourLegs, ...targetLegs];
+  const wallets = [...new Set(rawLegs.map((leg) => leg.walletAddress))];
   const rollups = await readFillRollups({
     db: params.db,
     conditions,
     walletAddresses: wallets,
   });
+  const enrichedLegs = rawLegs.map((leg) => enrichLegWithRollup(leg, rollups));
 
-  return groupParticipants(allLegs, rollups);
+  return groupParticipants(enrichedLegs, rollups);
+}
+
+/**
+ * Fold fill-rollup truth (BUY notional, SELL proceeds, redemption credit)
+ * into a `RawLeg`. After this pass every leg carries its realized P/L and
+ * a non-zero cost basis whenever the wallet ever bought into the token —
+ * preventing closed positions from collapsing to a 0/0 `currentValue −
+ * costBasis` artifact in `toContractLeg`.
+ */
+function enrichLegWithRollup(
+  leg: RawLeg,
+  rollups: ReadonlyMap<string, FillRollup>
+): RawLeg {
+  const rollup = rollups.get(
+    rollupKey(leg.walletAddress, leg.conditionId, leg.tokenId)
+  );
+  if (rollup === undefined) {
+    return {
+      ...leg,
+      pnlUsdc: roundMoney(leg.currentValueUsdc - leg.costBasisUsdc),
+      redemptionProceedsUsdc: 0,
+    };
+  }
+  const { pnlUsd, redemptionProceeds } = computeRealizedPnl({
+    totalBuyNotional: rollup.totalBuyNotional,
+    realizedCash: rollup.realizedCash,
+    currentMarkValue: leg.currentValueUsdc,
+    netShares: rollup.netShares,
+    marketOutcome: rollup.marketOutcome,
+  });
+  const costBasisUsdc =
+    leg.costBasisUsdc > 0 ? leg.costBasisUsdc : rollup.totalBuyNotional;
+  return {
+    ...leg,
+    costBasisUsdc,
+    pnlUsdc: pnlUsd,
+    redemptionProceedsUsdc: redemptionProceeds,
+  };
 }
 
 function buildOurLegs(
@@ -191,6 +248,11 @@ function buildOurLegs(
       lifecycle: ourPositionStatus === "closed" ? "inactive" : "active",
       lastObservedAt: position.openedAt,
       ourPositionStatus,
+      // Placeholder — `enrichLegWithRollup` overwrites this with the real
+      // realized P/L (fills + market outcome). Leaves the pre-fix
+      // currentValue-minus-costBasis fallback in case no rollup row exists.
+      pnlUsdc: roundMoney(position.currentValue - costBasisUsdc),
+      redemptionProceedsUsdc: 0,
     };
   });
 }
@@ -288,6 +350,7 @@ async function readTargetLegs(params: {
     const avgPrice = nullableNumber(row.avg_price);
     const lifecycle: WalletExecutionMarketLeg["lifecycle"] =
       row.lifecycle === "inactive" ? "inactive" : "active";
+    const currentValueUsdc = toNumber(row.current_value_usdc);
     return [
       {
         side: "copy_target",
@@ -303,12 +366,16 @@ async function readTargetLegs(params: {
         outcome: row.outcome ?? "UNKNOWN",
         shares,
         costBasisUsdc,
-        currentValueUsdc: toNumber(row.current_value_usdc),
+        currentValueUsdc,
         vwap: positionVwap(costBasisUsdc, shares, avgPrice),
         avgPrice,
         lifecycle,
         lastObservedAt: isoOrNull(row.last_observed_at),
         ourPositionStatus: null,
+        // Placeholder — overwritten by `enrichLegWithRollup` once the
+        // fill rollup + market outcome are joined in.
+        pnlUsdc: roundMoney(currentValueUsdc - costBasisUsdc),
+        redemptionProceedsUsdc: 0,
       },
     ];
   });
@@ -349,7 +416,7 @@ function groupParticipants(
   >();
 
   for (const [conditionId, conditionLegs] of byCondition.entries()) {
-    const participants = pivotParticipants(conditionLegs, rollups);
+    const participants = pivotParticipants(conditionLegs);
     const anchor = pickAnchor(conditionLegs);
     if (anchor === null) continue;
     const eventSlug =
@@ -372,6 +439,7 @@ function groupParticipants(
       totalBuyNotional: ourAgg.totalBuyNotional,
       realizedCash: ourAgg.realizedCash,
       currentMarkValue: ourAgg.currentMarkValue,
+      redemptionProceeds: ourAgg.redemptionProceeds,
     });
 
     // Target side: per-target return, then cost-basis-weighted blend.
@@ -393,6 +461,7 @@ function groupParticipants(
           totalBuyNotional: agg.totalBuyNotional,
           realizedCash: agg.realizedCash,
           currentMarkValue: agg.currentMarkValue,
+          redemptionProceeds: agg.redemptionProceeds,
         }),
       });
     }
@@ -558,16 +627,26 @@ function aggregateWalletReturn(
   totalBuyNotional: number;
   realizedCash: number;
   currentMarkValue: number;
+  redemptionProceeds: number;
 } {
   if (legs.length === 0) {
-    return { totalBuyNotional: 0, realizedCash: 0, currentMarkValue: 0 };
+    return {
+      totalBuyNotional: 0,
+      realizedCash: 0,
+      currentMarkValue: 0,
+      redemptionProceeds: 0,
+    };
   }
-  const first = legs[0];
-  if (first === undefined) {
-    return { totalBuyNotional: 0, realizedCash: 0, currentMarkValue: 0 };
+  let rollupNotional = 0;
+  let realizedCash = 0;
+  for (const leg of legs) {
+    const r = rollups.get(
+      rollupKey(leg.walletAddress, leg.conditionId, leg.tokenId)
+    );
+    if (r === undefined) continue;
+    rollupNotional += r.totalBuyNotional;
+    realizedCash += r.realizedCash;
   }
-  const key = rollupKey(first.walletAddress, first.conditionId);
-  const rollup = rollups.get(key);
   const currentMarkValue = legs.reduce(
     (sum, leg) => sum + leg.currentValueUsdc,
     0
@@ -576,11 +655,15 @@ function aggregateWalletReturn(
     (sum, leg) => sum + leg.costBasisUsdc,
     0
   );
-  const rollupNotional = rollup?.totalBuyNotional ?? 0;
+  const redemptionProceeds = legs.reduce(
+    (sum, leg) => sum + leg.redemptionProceedsUsdc,
+    0
+  );
   return {
     totalBuyNotional: Math.max(rollupNotional, snapshotCostBasis),
-    realizedCash: rollup?.realizedCash ?? 0,
+    realizedCash,
     currentMarkValue,
+    redemptionProceeds,
   };
 }
 
@@ -589,8 +672,7 @@ function aggregateWalletReturn(
 // smaller cost-basis leg is the hedge; the other is primary. Singletons go to
 // primary with hedge=null.
 function pivotParticipants(
-  legs: readonly RawLeg[],
-  _rollups: ReadonlyMap<string, FillRollup>
+  legs: readonly RawLeg[]
 ): WalletExecutionMarketParticipantRow[] {
   const byWallet = new Map<string, RawLeg[]>();
   for (const leg of legs) {
@@ -654,7 +736,7 @@ function toContractLeg(leg: RawLeg): WalletExecutionMarketLeg {
     currentValueUsdc: roundMoney(leg.currentValueUsdc),
     costBasisUsdc: roundMoney(leg.costBasisUsdc),
     vwap: leg.vwap,
-    pnlUsdc: roundMoney(leg.currentValueUsdc - leg.costBasisUsdc),
+    pnlUsdc: roundMoney(leg.pnlUsdc),
     lifecycle: leg.lifecycle,
   };
 }
@@ -691,16 +773,28 @@ function sumValue(legs: readonly RawLeg[]): number {
   return legs.reduce((sum, leg) => sum + leg.currentValueUsdc, 0);
 }
 
-function rollupKey(walletAddress: string, conditionId: string): string {
-  return `${walletAddress.toLowerCase()}:${conditionId}`;
+function rollupKey(
+  walletAddress: string,
+  conditionId: string,
+  tokenId: string
+): string {
+  return `${walletAddress.toLowerCase()}:${conditionId}:${tokenId}`;
 }
 
 /**
- * Aggregate `(totalBuyNotional, realizedCash)` per `(wallet, condition)`
- * from `poly_trader_fills`, joined to `poly_trader_wallets` so the caller
- * can supply wallet addresses (lowercased) without needing trader-wallet
- * UUIDs. Bounded SQL aggregation per data-research skill — V8 hydrates one
- * row per (wallet, condition), never raw fills.
+ * Aggregate `(totalBuyNotional, realizedCash, netShares, marketOutcome)`
+ * per `(wallet, condition, token)` from `poly_trader_fills`, joined to
+ * `poly_trader_wallets` so callers can supply wallet addresses (lowercased)
+ * without needing trader-wallet UUIDs, and LEFT-JOINed to
+ * `poly_market_outcomes` so each rollup carries its winner/loser/unknown
+ * classification.
+ *
+ * Per-token (not per-condition) is required because CTF redemption pays
+ * the winning token at $1/share while the losing token pays $0;
+ * `computeRealizedPnl` reads `(marketOutcome, netShares)` per leg.
+ *
+ * Bounded SQL aggregation per data-research skill — V8 hydrates one row
+ * per (wallet, condition, token), never raw fills.
  */
 async function readFillRollups(params: {
   db: Db;
@@ -722,30 +816,57 @@ async function readFillRollups(params: {
     SELECT
       lower(w.wallet_address) AS wallet_address,
       f.condition_id,
+      f.token_id,
       COALESCE(SUM(f.size_usdc) FILTER (WHERE f.side = 'BUY'), 0)::numeric
         AS total_buy_notional,
       COALESCE(SUM(f.size_usdc) FILTER (WHERE f.side = 'SELL'), 0)::numeric
-        AS realized_cash
+        AS realized_cash,
+      (
+        COALESCE(SUM(f.shares) FILTER (WHERE f.side = 'BUY'), 0)
+        - COALESCE(SUM(f.shares) FILTER (WHERE f.side = 'SELL'), 0)
+      )::numeric AS net_shares,
+      pmo.outcome AS market_outcome
     FROM poly_trader_fills f
     JOIN poly_trader_wallets w ON w.id = f.trader_wallet_id
+    LEFT JOIN poly_market_outcomes pmo
+      ON lower(pmo.condition_id) = lower(f.condition_id)
+     AND pmo.token_id = f.token_id
     WHERE f.condition_id IN (${conditionList})
       AND lower(w.wallet_address) IN (${walletList})
-    GROUP BY lower(w.wallet_address), f.condition_id
+    GROUP BY lower(w.wallet_address), f.condition_id, f.token_id, pmo.outcome
   `)) as unknown as ReadonlyArray<{
     wallet_address: string | null;
     condition_id: string | null;
+    token_id: string | null;
     total_buy_notional: string | number | null;
     realized_cash: string | number | null;
+    net_shares: string | number | null;
+    market_outcome: string | null;
   }>;
   const out = new Map<string, FillRollup>();
   for (const row of rows) {
-    if (row.wallet_address === null || row.condition_id === null) continue;
-    out.set(rollupKey(row.wallet_address, row.condition_id), {
+    if (
+      row.wallet_address === null ||
+      row.condition_id === null ||
+      row.token_id === null
+    ) {
+      continue;
+    }
+    out.set(rollupKey(row.wallet_address, row.condition_id, row.token_id), {
       totalBuyNotional: toNumber(row.total_buy_notional),
       realizedCash: toNumber(row.realized_cash),
+      netShares: toNumber(row.net_shares),
+      marketOutcome: normalizeOutcome(row.market_outcome),
     });
   }
   return out;
+}
+
+function normalizeOutcome(value: string | null): MarketOutcome {
+  if (value === "winner" || value === "loser" || value === "unknown") {
+    return value;
+  }
+  return null;
 }
 
 function compareParticipantRow(
