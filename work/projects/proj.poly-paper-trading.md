@@ -80,6 +80,39 @@ Bootstrap CLOB-creds refusal lands in PR 1 (item 5). PR 2 is purely two ConfigMa
 | 6   | `PAPER_ENFORCE_MODE: "paper"` on candidate-a overlay ConfigMap        | [ ]    | `infra/k8s/overlays/candidate-a/poly/kustomization.yaml`           |
 | 7   | `PAPER_ENFORCE_MODE: "paper"` on preview overlay ConfigMap            | [ ]    | `infra/k8s/overlays/preview/poly/kustomization.yaml`               |
 
+#### PR 3 — Upstream-engine wiring (functional paper trading)
+
+PRs 1 + 2 ship the **architecture** for paper trading: the TS dispatcher routes paper-mode intents through `PaperAdapter`, the sidecar runs in candidate-a + preview, and `PAPER_ENFORCE_MODE=paper` is set. But the sidecar's `server.py` is a v0 placeholder — Run-phase endpoints return 501. **No actual paper fills happen.** PR 3 replaces the placeholder with a thin FastAPI wrapper over `agent-next/polymarket-paper-trader`'s `pm_trader` library. After PR 3, every existing trade pathway (`planMirrorFromFill` → ledger insert → executor dispatch → `PaperAdapter` → sidecar) produces real simulated fills against the live Polymarket book.
+
+**Scope is constrained by the same constraints as PRs 1+2:** we write no fill logic. The sidecar is HTTP transport + Zod-compatible response shaping. All matching, fee math, and book-walk logic lives in the pinned upstream commit.
+
+**Touched layer:** `infra/images/poly-paper-sidecar/**` only. Zero TS changes. Zero overlay changes. Single-image rebuild via `build-poly-paper-sidecar.yml`, then bump the digest in candidate-a + preview overlays (Shape 2 manual bump path; Gap 1 of `docs/guides/create-service.md`).
+
+**Hard ordering:** item 1 (Dockerfile install) gates everything; item 7 (background fill loop) gates 6 (`getOrder` returning fills); item 8 (smoke fixture) is the merge gate proving the wiring actually fills an order against a recorded book.
+
+| #   | Deliverable                                                                                                                                                                                                                                                                                           | Status | Files                                                                                     |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------- |
+| 1   | Pin + install `agent-next/polymarket-paper-trader` in the sidecar Dockerfile — `pip install git+https://github.com/agent-next/polymarket-paper-trader@<sha>` under the `UPSTREAM_PAPER_TRADER_SHA` build arg. Audit the fee formula and `orders.py` API before each bump.                             | [ ]    | `infra/images/poly-paper-sidecar/Dockerfile`                                              |
+| 2   | FastAPI lifespan: open `Database` connection, instantiate `Engine`, start fill-poll background task; on shutdown gracefully cancel + close. Single global `asyncio.Lock` guards every Engine call (SQLite WAL gives concurrent reads; our writes serialize).                                          | [ ]    | `infra/images/poly-paper-sidecar/server.py`                                               |
+| 3   | `POST /place-order` — Zod-shaped request body → `engine.place_limit_order(slug, outcome, side, amount, price)` via `asyncio.to_thread` under the lock → map `LimitOrder` → `OrderReceipt` (`status="open"`, `filled_size_usdc=0`, `submitted_at=created_at`). Echo `client_order_id` for correlation. | [ ]    | `infra/images/poly-paper-sidecar/server.py`                                               |
+| 4   | `POST /orders/{order_id}/cancel` — `orders.cancel_order(conn, order_id)` under lock. Return 204 on cancel, 404 if not found (TS adapter swallows 404 as idempotent).                                                                                                                                  | [ ]    | `infra/images/poly-paper-sidecar/server.py`                                               |
+| 5   | `GET /orders/{order_id}` — `orders.get_order(conn, order_id)` under lock. 200 with `OrderReceipt` mapped from `LimitOrder` state (status maps `pending`→`open`, `filled`→`filled`, etc.; `filled_size_usdc` populated from upstream when filled). 404 if not found (TS adapter returns `not_found`).  | [ ]    | `infra/images/poly-paper-sidecar/server.py`                                               |
+| 6   | Background fill-poll task — every `PAPER_CHECK_ORDERS_INTERVAL_SECONDS` (default 10s), call `engine.check_orders()` under the lock. This is the only mechanism by which a resting paper limit ever fills; without it, `getOrder` always returns `status="open"`.                                      | [ ]    | `infra/images/poly-paper-sidecar/server.py`                                               |
+| 7   | `/readyz` + `/version` endpoints per Shape 1 conventions. `/readyz` opens a DB connection round-trip + verifies `engine.api` is live; `/version` returns `{ buildSha, upstreamPaperTraderSha, builtAt }` so `/validate-candidate` can prove the deployed sidecar matches expectations.                | [ ]    | `infra/images/poly-paper-sidecar/server.py`, `infra/images/poly-paper-sidecar/Dockerfile` |
+| 8   | Pinned-fixture smoke test — record one Polymarket order-book snapshot; place a limit at a price that the recorded book would fill; assert `engine.check_orders()` marks it filled with the expected `filled_size_usdc` (within fee-formula tolerance). Runs in pr-build for the sidecar image.        | [ ]    | `infra/images/poly-paper-sidecar/tests/test_fill_against_fixture.py` (new)                |
+| 9   | Bump candidate-a + preview overlay sidecar digests to the new build's `sha-<short>` (manual Shape 2 bump, separate commit on `main` per Gap 1). Verify pod restart and `/version` flips.                                                                                                              | [ ]    | `infra/k8s/overlays/{candidate-a,preview}/poly/kustomization.yaml`                        |
+| 10  | Update `infra/images/poly-paper-sidecar/AGENTS.md` — drop the "501 placeholder" language; document the upstream-pin audit checklist (fee formula, `orders.py` signature changes, schema migrations between SHAs); link to the smoke fixture as the drift detector.                                    | [ ]    | `infra/images/poly-paper-sidecar/AGENTS.md`                                               |
+
+**Definition of done:** one mirror placement under `mode='paper'` on a real candidate-a flight produces a `poly_copy_trade_fills` row with `filled_size_usdc > 0`, sourced from a sidecar fill against the live Polymarket book. The same code path (`planMirrorFromFill` → `mirror-pipeline.ts` → `poly-trade-executor.ts` → `PaperAdapter` → sidecar) runs identically to live, with only the final `placeOrder` swapped — the user's stated goal.
+
+**Out of scope for PR 3:**
+
+- **Paper-redemption job** (PR 1 roadmap item 10) — the on-chain `ConditionResolution` listener stamps paper rows when underlying markets resolve. Separate workstream; the sidecar is uninvolved.
+- **PVC for sidecar SQLite** — v0 ships ephemeral. Pod restart loses open paper orders; the reconciler treats them as orphans (same code path as a CLOB outage). Add only if preview's restart cadence produces real friction.
+- **Multi-account isolation in the sidecar** — single `PM_TRADER_ACCOUNT=cogni-paper` per pod. Per-target paper bucketing is already done in our Postgres via `mode` + `target_id` on fill rows.
+- **`argocd-image-updater` annotations** for sidecar auto-bump (Gap 1) — separate operator-domain PR.
+- **CI fee-drift smoke** in the cogni-poly repo's CI (existing polish item) — the in-image smoke (item 8) is the load-bearing version for PR 3; the cross-repo CI smoke is still a polish item.
+
 #### Polish (post-PR-2, opt-in per friction signal)
 
 Each item below only earns its place by real signal during PR 1 / PR 2 use, not by speculation.
@@ -296,3 +329,202 @@ After invoking `/review-design` properly, the review surfaced one **blocking** i
 5. **C4: sidecar in production overlay** documented as intentional (per-target paper-in-prod is a P0 capability).
 6. **C5: spec update timing**. `task.D`'s PR should also update `docs/spec/poly-copy-trade-execution.md` to document `attributes.mode` as a new discriminator alongside `attributes.placement`.
 7. **C6: `OrderReceipt.filled_size_usdc` is non-optional** (`order.ts:141`). PaperAdapter must populate. Now an explicit acceptance criterion on `task.C`.
+
+## Design — PR 3 (Upstream-Engine Wiring)
+
+> Distinct `/design` pass for the sidecar implementation. The original design (above) covered the TS architecture + deploy topology and pre-committed the sidecar as a process boundary. This pass picks up after that decision and resolves how the FastAPI wrapper actually maps onto `pm_trader`'s API.
+
+### Refined outcome for PR 3
+
+_"Every paper-mode placement that exits `mirror-pipeline.ts` produces a `LimitOrder` row in the sidecar's SQLite, gets evaluated against the live Polymarket book by `engine.check_orders()` running on a 10s background loop, and surfaces its fill state back through `getOrder` polling such that the cogni reconciler stamps `poly_copy_trade_fills.status = 'filled'` + `filled_size_usdc > 0` without any code in this repo touching fill logic, fee math, or book-walk simulation."_
+
+### Upstream surface area (audited at SHA TBD)
+
+`agent-next/polymarket-paper-trader` is sync Python with SQLite (WAL) persistence at `${PM_TRADER_DATA_DIR}/${PM_TRADER_ACCOUNT}/`. The surface we depend on:
+
+- `pm_trader.engine.Engine` — orchestrator. Single instance per pod; binds `db.Database` + `api.PolymarketClient`. Methods we call: `place_limit_order(...)`, `cancel_order(...)`, `check_orders()`. CLI is built on top of this — we skip the CLI/MCP layers entirely.
+- `pm_trader.orders` — DB primitives. `create_order`, `cancel_order`, `get_order`, `get_pending_orders` over the `limit_orders` SQLite table. `LimitOrder` dataclass has the fields we need to project to `OrderReceipt`.
+- `pm_trader.orderbook` — `simulate_buy_fill` / `simulate_sell_fill` walk the live book. Internal to `Engine.check_orders`; we do not call directly.
+- `pm_trader.api.PolymarketClient` — public-API HTTP client; reads books, markets, tick sizes. `get_market(slug_or_id)` accepts both slug and condition_id, which solves our market-identity translation.
+- `pm_trader.db.Database` — opens SQLite, owns schema, owns connection. Public functions for accounts/trades/positions/cache. We instantiate one and hand it to `Engine`.
+
+Confirmed contracts:
+
+- `Engine.check_orders()` is the **only** way a resting limit transitions to filled. There is no callback, no WS, no internal background loop. **Our background poll task is load-bearing** — without it, all paper orders are forever-pending.
+- `LimitOrder.status` ∈ `{pending, filled, cancelled, expired}`. Maps cleanly onto our `OrderStatus`: `pending → "open"`, `filled → "filled"`, `cancelled → "cancelled"`, `expired → "cancelled"` (we don't expose expired separately; the reconciler treats expired identically to cancelled).
+- Fees are computed at fill time by `simulate_*_fill` using the wire-correct formula. They live in `LimitOrder.filled_at`-anchored fields after `check_orders()` runs. The `filled_size_usdc` we surface in `OrderReceipt` is `min(amount, depth_consumed) × fill_price` — net of fees per upstream's convention. Validate at smoke-test time (item 8).
+
+### Invariants extracted (TS-side, must hold through PR 3)
+
+Loaded from `nodes/poly/packages/market-provider/src/adapters/paper/paper.adapter.ts`, `nodes/poly/packages/market-provider/src/domain/order.ts`, `docs/spec/poly-copy-trade-execution.md`.
+
+- `PAPER_POPULATES_FILLED_USDC` (paper.adapter.ts:20) — receipt `filled_size_usdc` must reflect the sidecar's realised fill amount. PR 3 must map `LimitOrder.amount × fill_price` (post-fee) into this field on `getOrder` of a filled order. **Without correct mapping, `CAP_COUNTS_REALIZED_ON_CANCEL` accounting drifts on paper.**
+- `PAPER_GETORDER_NEVER_NULL` (paper.adapter.ts:23) — sidecar must respond 404 (not 200 with null) when an order is absent. TS adapter discriminates on 404. PR 3 maps `get_order` returning `None` → 404.
+- `PAPER_DELEGATES_READS_TO_LIVE` (paper.adapter.ts:17) — `listMarkets` + `getMarketConstraints` go through the TS-side `readSource`, NOT through the sidecar. The sidecar never serves these. Don't add endpoints for them.
+- `MARKET_PROVIDER_SHAPE_FROZEN` (paper.adapter.ts) — the TS HTTP contract is fixed. PR 3 must conform to the existing endpoint shapes (paths, methods, status codes); changing the contract requires also changing the TS adapter, which is out of scope.
+- `IDEMPOTENT_BY_CLIENT_ID` (copy-trade/AGENTS.md) — same `client_order_id` must not double-place. `pm_trader.orders.create_order` generates a fresh upstream id per call; the sidecar must **not** dedupe by `client_order_id` on its side (the TS ledger is the dedupe gate via `INSERT_BEFORE_PLACE`). The receipt echoes `client_order_id` for correlation — that's all.
+- `INSERT_BEFORE_PLACE` (mirror-pipeline.ts:10-11) — `insertPending()` runs before `executor()`. A sidecar failure mid-place leaves a `pending` ledger row that the reconciler handles. PR 3 must surface clean HTTP errors (timeouts, upstream-down, DB-locked) so the TS adapter throws and the reconciler observes a `pending → unknown` transition rather than a silent ledger desync.
+- `PRICE_TICK_NORMALIZED` (copy-trade/AGENTS.md) — `getMarketConstraints` is called pre-place on the TS side. The sidecar receives an already-ticked `limit_price`; passing it through to `engine.place_limit_order` is sufficient.
+
+### Three approaches considered
+
+**Approach A — In-process Python wrapper around `Engine` (chosen).** FastAPI lifespan instantiates `Database` + `Engine` once. Endpoint handlers acquire a single `asyncio.Lock` + `asyncio.to_thread(engine.method, ...)` per call. A lifespan-launched background task wakes every `PAPER_CHECK_ORDERS_INTERVAL_SECONDS` and calls `engine.check_orders()` under the same lock. Single Python process, single SQLite file.
+
+- Pros: simplest. No subprocess management, no IPC marshalling, no MCP transport. Uses upstream as a library (the documented embedding path). Smallest delta from current placeholder. The serialization lock is honest — `Engine` is documented as single-threaded and SQLite-WAL serializes writes anyway, so we're not pessimizing real concurrency, just making it explicit.
+- Cons: a slow `check_orders()` (many open orders × many book fetches) blocks place/cancel for its duration. **Mitigation:** SLO is 10s background period + sub-second per-order fetch; <100 concurrent open paper orders is the realistic ceiling under copy-trade cap sizes. Re-evaluate if open-order count ever rises past 50.
+
+**Approach B — Subprocess `pm-trader` CLI per call.** Each `/place-order` shells out to `pm-trader place-limit ...`; output parsed. State lives in the same SQLite via the CLI.
+
+- Pros: CLI is the documented stable surface; we'd be insulated from `pm_trader.engine` API drift.
+- Cons: subprocess overhead per call (~100-300ms minimum), brittle output parsing, two cold-paths to maintain (CLI argv shape + our parser). The CLI is also designed for human use — it prints colour codes, formats currency, and surfaces are not stable for machine parsing. **Reject.**
+
+**Approach C — MCP stdio server (`pm-trader-mcp`) under the FastAPI process.** Run `pm-trader-mcp` as a subprocess; speak MCP over its stdio; expose HTTP endpoints that translate.
+
+- Pros: MCP is the project's documented agent-facing interface.
+- Cons: MCP transport is a heavy stack for a single-pod loopback IPC. Adds a stdio supervisor, a JSON-RPC client, framing concerns. No benefit over direct import. **Reject.**
+
+**Choose Approach A.** Direct import is the smallest, most legible, and most consistent with how `pm_trader` is documented to be embedded. The single global lock is a feature, not a workaround.
+
+### Concurrency + persistence model
+
+- **One `asyncio.Lock` for the entire Engine.** All endpoint handlers + the background fill task acquire it before calling any `engine.*` method. SQLite WAL is irrelevant for our writer-serialization needs — the lock is at the Python-object level, where it actually matters.
+- **`asyncio.to_thread` wraps every Engine call.** Engine methods are sync; without `to_thread`, FastAPI's event loop blocks for the duration of book fetches + DB writes. With `to_thread`, the event loop stays responsive for `/healthz`/`/readyz` probes during long `check_orders()` cycles. **Liveness probes must remain answerable** during a `check_orders` pass or k8s restarts the pod under load.
+- **SQLite at `/data/pm_trader/cogni-paper/orders.db`.** v0: container-fs, ephemeral. v1 (gated on signal): mount a PVC. Pod restart drops open paper orders → TS adapter's next `getOrder` returns 404 (not_found) → reconciler closes the pending intent as orphan. This matches the live failure mode where a CLOB outage causes the same orphan-pending path. Acceptable for v0.
+- **Account starting balance.** `PM_TRADER_STARTING_BALANCE_USDC=1000000` (1M). Far above any realistic cap exposure; the upstream's own cap-rejection path never fires, so our cogni cap-enforcement code is the only gate. Inspecting the sidecar's account balance is meaningless for our paper-PnL story (we use `poly_copy_trade_fills` rows directly); set high and ignore.
+
+### Request/response mapping
+
+`POST /place-order` request → upstream:
+
+```
+{ client_order_id, market_id, token_id?, outcome, side, size_usdc, limit_price, attributes? }
+                                  ↓
+PolymarketClient.get_market(market_id)         # accepts conditionId or slug
+  → resolves slug + condition_id for upstream
+                                  ↓
+Engine.place_limit_order(
+  slug=<resolved>,
+  outcome=<from request>,
+  side=<BUY|SELL>,
+  amount=<size_usdc>,
+  price=<limit_price>,
+)
+  → returns LimitOrder
+                                  ↓
+OrderReceipt {
+  order_id: limit_order.id,
+  client_order_id: <echo>,
+  status: "open",                    # always — fills only on next check_orders
+  filled_size_usdc: 0,               # always — see above
+  submitted_at: limit_order.created_at.isoformat(),
+  attributes: { upstream_status: limit_order.status, slug: <resolved> },
+}
+```
+
+`GET /orders/{id}` → upstream:
+
+```
+orders.get_order(conn, order_id)
+  → LimitOrder | None
+                                  ↓
+None → HTTP 404 (TS adapter → { status: "not_found" })
+LimitOrder → OrderReceipt {
+  order_id, client_order_id: limit_order.client_order_id_echoed,
+  status: STATUS_MAP[limit_order.status],
+  filled_size_usdc:
+    limit_order.status == "filled" ? limit_order.amount * limit_order.fill_price : 0,
+  submitted_at, attributes: { upstream_status, fill_price?, filled_at? },
+}
+```
+
+`POST /orders/{id}/cancel` → upstream:
+
+```
+orders.cancel_order(conn, order_id)
+  → LimitOrder | None
+                                  ↓
+None → HTTP 404
+LimitOrder → HTTP 204
+```
+
+### Background fill loop semantics
+
+```python
+async def fill_check_loop(app: FastAPI) -> None:
+    while True:
+        await asyncio.sleep(PAPER_CHECK_ORDERS_INTERVAL_SECONDS)
+        try:
+            async with app.state.engine_lock:
+                await asyncio.to_thread(app.state.engine.check_orders)
+        except Exception as exc:           # never let the loop die silently
+            logger.exception("fill_check_loop iteration failed", exc_info=exc)
+```
+
+Key properties:
+
+- **Period 10s default.** Smaller = faster fill detection, more book-fetch load. Larger = slower fill latency, less load. 10s aligns with the live mirror's `MIRROR_POLL_MS=30000` decision cadence (sidecar fills detected within 1/3 of a mirror tick). Tunable via env.
+- **No catch-up.** A missed cycle is just a missed cycle — book state moves on. We never "replay" historical book states; `engine.check_orders` always reads current book.
+- **Loop never exits.** A raised exception logs + continues. The loop only stops at shutdown (lifespan teardown cancels the task). If `engine.check_orders` throws every iteration, `/readyz` still passes (process is alive) but no fills happen — surface as a Grafana alert on `mode='paper'` fill-rate-drop, separate workstream.
+
+### Boundary placement
+
+- **Sidecar Python lives in `infra/images/poly-paper-sidecar/`** (already there). No new directories.
+- **Smoke test** at `infra/images/poly-paper-sidecar/tests/test_fill_against_fixture.py`. Recorded book fixture as a sibling JSON. Runs in pr-build for the sidecar image (extend `build-poly-paper-sidecar.yml` to invoke `pytest` after the build, before the push).
+- **No new TS code.** The PaperAdapter contract already covers everything PR 3 exposes.
+- **No new env vars in the cogni-poly app** (TS side). New env vars are sidecar-internal: `PM_TRADER_DATA_DIR`, `PM_TRADER_ACCOUNT`, `PM_TRADER_STARTING_BALANCE_USDC`, `PAPER_CHECK_ORDERS_INTERVAL_SECONDS`, `UPSTREAM_PAPER_TRADER_SHA` (build-time). Set as Dockerfile `ENV` defaults; overridable via the kustomize container patch's `env:` block if a per-env tuning need arises (none anticipated for v0).
+
+### Operational story end-to-end
+
+1. AI agent opens a PR touching `nodes/poly/app/src/features/copy-trade/**`. Existing code; nothing about it knows or cares that paper exists.
+2. Candidate-flight publishes the new cogni-poly image; the sidecar (v3.0) is already running with its background fill loop.
+3. Mirror tick fires. `planMirrorFromFill` decides `kind="place"` with `attributes.mode="paper"` (forced by `PAPER_ENFORCE_MODE=paper` on candidate-a regardless of target's DB mode).
+4. `mirror-pipeline.ts` calls `insertPending()` (cogni Postgres row with `status='pending'`, `mode='paper'`), then `executor(intent)`. The executor dispatcher routes to the paper `ClobExecutor`, whose `placeOrder` calls `PaperAdapter.placeOrder` → HTTP `POST /place-order` to the sidecar.
+5. Sidecar returns `OrderReceipt` with `status="open"`, `filled_size_usdc=0`. Cogni Postgres row updated to `status='open'`, `order_id=<sidecar id>`.
+6. 0-10s later, sidecar's fill loop runs `check_orders()`. The recorded limit crosses the live Polymarket ask book. `LimitOrder.status` flips to `filled` in SQLite; `LimitOrder.fill_price` is set.
+7. Next reconciler tick: cogni calls `PaperAdapter.getOrder(<sidecar id>)` → HTTP `GET /orders/<id>` → sidecar returns `OrderReceipt` with `status="filled"`, `filled_size_usdc=<amount × fill_price>`. Cogni updates the row.
+8. Eventually, the market resolves on-chain. The `ConditionResolution` listener (live mode's listener, unchanged) emits an event. The paper-redemption job (PR 1 item 10, separate workstream from PR 3) stamps `poly_copy_trade_fills.position_lifecycle="redeemed"` on the paper row.
+
+The user's goal — "all of our existing trade + db logic pathways are used, but instead of using the polymarket real adapter for making + redeeming positions, we use the paper trader adapter" — is satisfied at step 4-7 for placement, and at step 8 for redemption. **The redemption pathway uses the on-chain listener exactly as live mode does**; there is no separate "paper redemption" adapter because there is no fill-side simulation required for redemption (it's a chain event, ground truth).
+
+## Design Review — PR 3
+
+> Critical `/review-design` pass. Goal: find problems with the PR 3 design, not confirm quality.
+
+### Scorecard
+
+| Dimension              | Verdict                 | Rationale                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Simplicity             | **PASS**                | One Python file (`server.py`) gains ~150 lines. One Dockerfile gains a `pip install`. No new directories. Zero TS changes. Single global lock, one background task. The smoke fixture is one recorded JSON + one pytest file. PR 3 is the smallest possible delta from "501 placeholder" to "functional paper trading."                                                                            |
+| OSS-first              | **PASS**                | `pm_trader.Engine` is imported and called as-is. No fill logic, no fee math, no book-walk written by us. Bumping `UPSTREAM_PAPER_TRADER_SHA` is the only paper-engine update path. Smoke fixture (item 8) is the drift detector.                                                                                                                                                                   |
+| Architecture Alignment | **PASS**                | The PaperAdapter contract is unchanged. `PAPER_POPULATES_FILLED_USDC`, `PAPER_GETORDER_NEVER_NULL`, `PAPER_DELEGATES_READS_TO_LIVE`, `MARKET_PROVIDER_SHAPE_FROZEN`, `IDEMPOTENT_BY_CLIENT_ID`, `INSERT_BEFORE_PLACE`, `PRICE_TICK_NORMALIZED` all hold. The sidecar boundary respects `PURE_LIBRARY` on the TS adapter (no env reads added to the adapter; sidecar config is via Dockerfile ENV). |
+| Boundary Placement     | **PASS**                | Sidecar entirely contained in `infra/images/poly-paper-sidecar/`. No imports into TS code, no shared types. The TS adapter speaks HTTP only — no Python coupling. Smoke test lives next to the sidecar, runs in the sidecar's build pipeline, not in pr-build for the TS app.                                                                                                                      |
+| Content Boundaries     | **PASS**                | PR 3 design + review live in this project doc (continues the project's content boundary convention). The sidecar's `AGENTS.md` gets a refresh (item 10) but stays scoped to "what this directory does." No new spec files. No duplicate prose.                                                                                                                                                     |
+| Scope Discipline       | **PASS**                | Explicitly defers: PVC, multi-account, argocd-image-updater wiring, fee-drift CI smoke in cogni-poly repo. Each is gated on a real friction signal, not anticipated need.                                                                                                                                                                                                                          |
+| Risk Surface           | **CONCERN (mitigated)** | Five risks identified, mitigations in line. None are blocking; all are visible.                                                                                                                                                                                                                                                                                                                    |
+
+### Risks identified
+
+1. **`engine.check_orders()` blocks all place/cancel for its duration.** Single global lock + `to_thread` means a long fill cycle stalls placement requests. **Mitigation:** copy-trade cap sizes are small (~50 concurrent open paper orders ceiling); `check_orders` is sub-second per order in upstream's documented profile. Re-architect to a per-order lock or a write-skew tolerant design only if/when concurrent-order count rises past 50. Visible via a Grafana panel on sidecar request latency p95.
+2. **Pod restart drops all open paper orders.** Acceptable per v0 design (reconciler handles orphans), but the operational reality on preview is that day-bridge limit orders never get a chance to fill across a redeploy. **Mitigation:** document the cadence; if preview's deploy frequency drops fill-rate visibly, mount a PVC (1-line overlay change + 2-line Dockerfile env change). Don't pre-build the PVC path.
+3. **Market-identity mismatch.** `PolymarketClient.get_market(slug_or_id)` accepts both but its resolution behaviour for conditionId-only inputs depends on the upstream's market-search cache. If a thinly-traded market isn't cached, the call may fail. **Mitigation:** smoke fixture (item 8) must cover a freshly-discovered conditionId, not just a well-known slug. Audit at each upstream bump.
+4. **Fee formula drift between upstream SHAs.** Polymarket can change fees; upstream may lag. **Mitigation:** item 8 fixture asserts a specific `filled_size_usdc` against a known fill scenario. Bumping the pin without re-blessing the fixture fails the build. The cross-repo fee-drift CI smoke (existing polish item) remains the longer-horizon safety net.
+5. **Background loop silently stops.** If the lifespan task gets cancelled or the loop body raises in a way that escapes the catch, no fills happen but `/readyz` still passes. **Mitigation:** `/readyz` checks `app.state.fill_loop_task.done() is False` in addition to DB liveness; lifespan teardown is the only legitimate way the task should be done.
+
+### Blocking issues
+
+**None.** The design is the smallest path that satisfies the user's stated goal (all existing trade+db pathways used, paper adapter swaps in for placement). Risks are visible and have visible mitigations.
+
+### Non-blocking suggestions
+
+- **Pin the upstream SHA in PR 3 itself, not as a follow-up.** Choose a known-good commit before merging the Dockerfile change. Don't ship `UPSTREAM_PAPER_TRADER_SHA=main`.
+- **Run the smoke fixture in the sidecar build workflow's failure-blocking step**, not as a passive log. CI red ⇒ no image push.
+- **`/version` endpoint should return both `buildSha` (our sidecar build) and `upstreamPaperTraderSha`** so `/validate-candidate` can prove drift detection at-a-glance.
+- **Background loop period should be env-tunable but bounded.** Document the range `5-60s` and the rationale (lower bound = book-fetch rate-limit risk; upper bound = fill-detection latency exceeds reconciler tick). Default 10s.
+- **The "single mirror placement produces a paper fill on candidate-a" gate (DoD)** should be captured as a `/validate-candidate` scorecard row before PR 3 merges, so the next agent doesn't have to invent the verification path.
+
+### What would invalidate this design
+
+- Upstream API breaking change (e.g. `Engine.place_limit_order` signature drift between SHAs). Detected at next pin bump; redo the request mapping subsection.
+- Polymarket killing public-API book reads. Sidecar becomes useless; falls back to live mode for all targets. Out-of-scope risk (Polymarket-level decision).
+- Constraint change to allow SELL or market orders. The fidelity story breaks per the project's strict constraints; revisit the OSS-engine choice before continuing PR 3 work.
+- A migration in `pm_trader.db` between pinned SHAs that's not idempotent. Mitigation: read CHANGELOG before each bump; if a migration is required, wipe the SQLite file at startup (ephemeral v0 makes this free).
