@@ -16,7 +16,9 @@ images:
     digest: "sha256:c18feaf648c48245fc1af5f921c83e1a90681f8f791fae2f48474dfe4ec18eda"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    digest: "sha256:c6968aef1efd55ef2486d4dc59e6dd11c422bd40e9efe5ed2447649cbf77d341"
+    # PR3 v0 — first functional sidecar (pm_trader Engine wrapper).
+    # Source: ghcr.io/cogni-dao/poly-paper-sidecar:sha-bbd5772 (PR #56 build).
+    digest: "sha256:131a37d015452f8257598598fd42a847e3245c13d8ef18e163a396876e34314a"
   # poly-paper-sidecar — built by .github/workflows/build-poly-paper-sidecar.yml
   # on path-triggered pushes to main. Sidecars stay outside the catalog SSOT
   # (which models 1 image = 1 overlay = 1 Argo app); a sibling container shares
