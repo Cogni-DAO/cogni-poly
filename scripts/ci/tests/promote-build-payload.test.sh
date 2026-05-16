@@ -80,6 +80,7 @@ run_case() {
   local expect_promoted="$4"
   local expect_map_exists="$5"
   local expect_rc="${6:-0}"
+  local nodes_scope="${7:-}"
 
   local case_dir="$WORKDIR/$name"
   mkdir -p "$case_dir"
@@ -93,6 +94,7 @@ run_case() {
   local rc=0
   PAYLOAD_FILE="$case_dir/payload.json" \
     OVERLAY_ENV=candidate-a \
+    NODES="$nodes_scope" \
     PROMOTE_SCRIPT="$case_dir/stub-promote.sh" \
     MAP_SCRIPT="$map_script" \
     MAP_FILE="$case_dir/.promote-state/source-sha-by-app.json" \
@@ -144,6 +146,14 @@ run_case "map-script-failing" "/bin/false" "$FULL_TARGETS" "operator,poly,resy,s
 # verify-candidate's job-level gate skips legitimately and release-slot
 # treats it as a green no-op.
 run_case "empty-payload" "$UPDATE_MAP" "$EMPTY_TARGETS" "" "no" 0
+
+# Case 4 — NODES scopes the per-node matrix lane. Without this, the poly
+# lane on a multi-target PR (e.g. infra changes that flip detect-affected
+# to "global build input" → every catalog target rebuilt) tried to write
+# scheduler-worker's overlay into deploy/{env}-poly, which doesn't carry
+# that overlay (only deploy/{env}-scheduler-worker does), and crashed
+# with "Overlay file not found".
+run_case "nodes-scoped-poly" "$UPDATE_MAP" "$FULL_TARGETS" "poly" "yes" 0 "poly"
 
 cd "$REPO_ROOT"
 if [ "$FAILED" -gt 0 ]; then
