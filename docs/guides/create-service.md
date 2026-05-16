@@ -161,14 +161,15 @@ Sibling is justified when the workload **must** share network namespace (localho
   - Tag `sha-<short>` always
   - **Do not** push `:latest` to a tag any deploy manifest references
 - [ ] `infra/k8s/overlays/{candidate-a,preview,production}/<host-node>/kustomization.yaml` — add the sidecar's digest to the `images:` block (alongside the host's), and add a bare-`image:` container patch. Reference: [`infra/k8s/overlays/candidate-a/poly/kustomization.yaml`](../../infra/k8s/overlays/candidate-a/poly/kustomization.yaml).
+
   ```yaml
   images:
-    - name: ghcr.io/cogni-dao/cogni-poly                    # host (already there)
+    - name: ghcr.io/cogni-dao/cogni-poly # host (already there)
       newName: ghcr.io/cogni-dao/cogni-poly
       digest: "sha256:<host-digest>"
-    - name: ghcr.io/cogni-dao/<sidecar-name>                # add this block
+    - name: ghcr.io/cogni-dao/<sidecar-name> # add this block
       newName: ghcr.io/cogni-dao/<sidecar-name>
-      digest: "sha256:<sidecar-digest>"                     # bump after each new build
+      digest: "sha256:<sidecar-digest>" # bump after each new build
 
   patches:
     - target: { kind: Deployment, name: <host-deployment> }
@@ -185,6 +186,7 @@ Sibling is justified when the workload **must** share network namespace (localho
               requests: { memory: 128Mi, cpu: 50m }
               limits:   { memory: 384Mi, cpu: 500m }
   ```
+
 - [ ] If host needs to call the sidecar, add `<NAME>_URL: http://localhost:<port>` (or equivalent) via a separate ConfigMap patch in the same overlay.
 
 ### The digest-only rule (sidesteps the first-newTag-wins bug)
