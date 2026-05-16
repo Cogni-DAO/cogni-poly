@@ -16,7 +16,7 @@ images:
     digest: "sha256:bae514810c27ce38d0602a560fe798f4037f0b033fb2362d4a53eabefc6e793d"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    digest: "sha256:131a37d015452f8257598598fd42a847e3245c13d8ef18e163a396876e34314a"
+    digest: "sha256:4b771d1a93f7746d7f0a4f0bfd86a3e6f9149570259b3fc73516a83c770a71b8"
 
 patches:
   - target:
