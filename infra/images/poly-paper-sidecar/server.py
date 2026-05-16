@@ -40,14 +40,34 @@ from __future__ import annotations
 
 import logging
 import os
+import sqlite3
 import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
-from fastapi import FastAPI, HTTPException, Response
-from pydantic import BaseModel, Field
+# SQLite default: a connection can only be used in the thread that created it.
+# pm_trader.Engine opens its SQLite connection in its constructor (called on
+# the lifespan thread), but our handlers run on FastAPI's threadpool and the
+# fill loop runs on a daemon thread — all different from the lifespan thread.
+# The global asyncio.Lock^W threading.Lock in Sidecar already serialises every
+# Engine call, so the "unsafe cross-thread" SQLite condition isn't actually
+# concurrent. Monkey-patch sqlite3.connect to disable the thread-affinity
+# check BEFORE pm_trader is imported so the engine's connection allows
+# cross-thread use under our lock. SQLite WAL handles file-level consistency.
+_orig_sqlite_connect = sqlite3.connect
+
+
+def _connect_no_thread_check(*args: Any, **kwargs: Any) -> sqlite3.Connection:
+    kwargs.setdefault("check_same_thread", False)
+    return _orig_sqlite_connect(*args, **kwargs)
+
+
+sqlite3.connect = _connect_no_thread_check  # type: ignore[assignment]
+
+from fastapi import FastAPI, HTTPException, Response  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
 
 # ─── Config (env-driven; defaults sourced from Dockerfile ENV) ──────────────
 
