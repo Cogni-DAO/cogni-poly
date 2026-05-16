@@ -284,7 +284,8 @@ export function planMirrorFromFill(input: PlanMirrorInput): MirrorPlan {
     client_order_id,
     config.placement,
     decision.position_branch,
-    normalizedPrice.price
+    normalizedPrice.price,
+    config.mode
   );
 
   return {
@@ -765,6 +766,9 @@ function applyFollowupSizing(params: {
 /**
  * Build a canonical `OrderIntent` from the fill + target config.
  * Mirror size is the selected sizing-policy output, never an adapter concern.
+ * `mode` is stamped into `attributes.mode` per PLACEMENT_DISCRIMINATOR_IN_ATTRIBUTES —
+ * the trade-executor dispatches on this when selecting between the live CLOB
+ * adapter and the paper sidecar.
  */
 function buildIntent(
   fill: PlanMirrorInput["fill"],
@@ -772,7 +776,8 @@ function buildIntent(
   client_order_id: `0x${string}`,
   policy: PlacementPolicy,
   position_branch: PositionBranch,
-  limit_price: number
+  limit_price: number,
+  mode: "live" | "paper"
 ): OrderIntent {
   const placement: "limit" | "market_fok" =
     policy.kind === "mirror_limit" ? "limit" : "market_fok";
@@ -797,6 +802,7 @@ function buildIntent(
       target_wallet: fill.target_wallet,
       placement,
       position_branch,
+      mode,
       title:
         typeof fill.attributes?.title === "string"
           ? fill.attributes.title

@@ -230,6 +230,13 @@ export function buildMirrorTargetConfig(params: {
   createdByUserId: string;
   mirrorFilterPercentile?: number;
   mirrorMaxUsdcPerTrade?: number;
+  /**
+   * Execution mode for this target. Read from `poly_copy_trade_targets.mode`
+   * by the enumerator (`dbTargetSource.listAllActive`) and threaded here.
+   * Defaults to `"live"` for back-compat with envTargetSource + the system
+   * tenant boot path.
+   */
+  mode?: "live" | "paper";
 }): MirrorTargetConfig {
   const mirrorFilterPercentile =
     params.mirrorFilterPercentile ?? DEFAULT_CONVICTION_FILTER_PERCENTILE;
@@ -240,7 +247,7 @@ export function buildMirrorTargetConfig(params: {
     target_wallet: params.targetWallet,
     billing_account_id: params.billingAccountId,
     created_by_user_id: params.createdByUserId,
-    mode: "live", // paper adapter body lands in P3; v0 only places live
+    mode: params.mode ?? "live",
     sizing: buildSizingPolicy({
       targetWallet: params.targetWallet,
       mirrorFilterPercentile,

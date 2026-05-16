@@ -55,6 +55,12 @@ export interface EnumeratedTarget {
   targetWallet: WalletAddress;
   mirrorFilterPercentile: number;
   mirrorMaxUsdcPerTrade: number;
+  /**
+   * Execution mode for this target. Read from `poly_copy_trade_targets.mode`.
+   * `live` orders hit the CLOB; `paper` orders route to the paper sidecar.
+   * Always defined (DB NOT NULL DEFAULT 'live').
+   */
+  mode: "live" | "paper";
 }
 
 /**
@@ -68,6 +74,7 @@ export interface UserTargetRow {
   targetWallet: WalletAddress;
   mirrorFilterPercentile: number;
   mirrorMaxUsdcPerTrade: number;
+  mode: "live" | "paper";
 }
 
 export interface CopyTradeTargetSource {
@@ -117,6 +124,7 @@ export function envTargetSource(
       targetWallet,
       mirrorFilterPercentile: 75,
       mirrorMaxUsdcPerTrade: 5,
+      mode: "live" as const,
     }))
   );
   const enumerated: readonly EnumeratedTarget[] = Object.freeze(
@@ -126,6 +134,7 @@ export function envTargetSource(
       targetWallet,
       mirrorFilterPercentile: 75,
       mirrorMaxUsdcPerTrade: 5,
+      mode: "live" as const,
     }))
   );
   return {
@@ -168,6 +177,7 @@ export function dbTargetSource(
               polyCopyTradeTargets.mirrorFilterPercentile,
             mirror_max_usdc_per_trade:
               polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
+            mode: polyCopyTradeTargets.mode,
           })
           .from(polyCopyTradeTargets)
           .where(isNull(polyCopyTradeTargets.disabledAt))
@@ -178,6 +188,7 @@ export function dbTargetSource(
         targetWallet: r.target_wallet as WalletAddress,
         mirrorFilterPercentile: r.mirror_filter_percentile,
         mirrorMaxUsdcPerTrade: Number(r.mirror_max_usdc_per_trade),
+        mode: r.mode === "paper" ? ("paper" as const) : ("live" as const),
       }));
     },
 
@@ -197,6 +208,7 @@ export function dbTargetSource(
           target_wallet: polyCopyTradeTargets.targetWallet,
           mirror_filter_percentile: polyCopyTradeTargets.mirrorFilterPercentile,
           mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
+          mode: polyCopyTradeTargets.mode,
         })
         .from(polyCopyTradeTargets)
         .innerJoin(
@@ -229,6 +241,7 @@ export function dbTargetSource(
         targetWallet: r.target_wallet as WalletAddress,
         mirrorFilterPercentile: r.mirror_filter_percentile,
         mirrorMaxUsdcPerTrade: Number(r.mirror_max_usdc_per_trade),
+        mode: r.mode === "paper" ? ("paper" as const) : ("live" as const),
       }));
     },
   };

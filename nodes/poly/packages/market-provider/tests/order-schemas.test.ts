@@ -177,27 +177,18 @@ describe("OrderNotSupportedError — read-only adapter surface", () => {
     }
   });
 
-  it("paper adapter throws NotImplementedError on every method (P3 stubs)", async () => {
+  it("paper adapter without readSource throws OrderNotSupportedError on read methods", async () => {
+    // Body landed in proj.poly-paper-trading; the P1 NotImplementedError
+    // contract is superseded by sidecar IPC + readSource delegation. Run-
+    // phase methods now make HTTP calls (tested separately in
+    // paper-adapter.test.ts); read methods without a `readSource` injected
+    // throw the standard OrderNotSupportedError.
     const adapter = new PaperAdapter();
-    await expect(adapter.listMarkets()).rejects.toMatchObject({
-      name: "NotImplementedError",
-    });
-    await expect(
-      adapter.placeOrder({
-        provider: "polymarket",
-        market_id: "m",
-        outcome: "YES",
-        side: "BUY",
-        size_usdc: 1,
-        limit_price: 0.5,
-        client_order_id: "c",
-      })
-    ).rejects.toMatchObject({ name: "NotImplementedError" });
-    await expect(adapter.cancelOrder("x")).rejects.toMatchObject({
-      name: "NotImplementedError",
-    });
-    await expect(adapter.getOrder("x")).rejects.toMatchObject({
-      name: "NotImplementedError",
-    });
+    await expect(adapter.listMarkets()).rejects.toBeInstanceOf(
+      OrderNotSupportedError
+    );
+    await expect(adapter.getMarketConstraints("x")).rejects.toBeInstanceOf(
+      OrderNotSupportedError
+    );
   });
 });
