@@ -11,3 +11,11 @@ candidate_a_branch: deploy/candidate-a-poly
 preview_branch: deploy/preview-poly
 production_branch: deploy/production-poly
 path_prefix: nodes/poly/
+# bug.5002 — per-env public URLs. Verify scripts read these directly
+# instead of computing "${node}-${DOMAIN}" with an "if node = operator"
+# special-case. Each repo's catalog declares the truth for its nodes;
+# no convention-coupling between repos.
+public_url:
+  candidate-a: https://poly-test.cognidao.org
+  preview: https://poly-preview.cognidao.org
+  production: https://poly.cognidao.org
