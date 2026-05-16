@@ -38,6 +38,7 @@ upstream and bump `UPSTREAM_PAPER_TRADER_SHA`.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sqlite3
@@ -82,6 +83,14 @@ CHECK_ORDERS_INTERVAL_SECONDS = float(
 BUILD_SHA = os.environ.get("BUILD_SHA", "unknown")
 UPSTREAM_PAPER_TRADER_SHA = os.environ.get("UPSTREAM_PAPER_TRADER_SHA", "unknown")
 
+# Multi-node identity (docs/spec/observability.md § Multi-Node Identity). The
+# sidecar is currently poly-specific (no envFrom on its container patch); if
+# this image is ever generalised, lift NODE_ID into the ConfigMap and read
+# from env. Hardcoded for now keeps every log + Loki query node-discriminable
+# without a wider overlay change.
+NODE_ID = os.environ.get("NODE_ID", "poly")
+SERVICE_NAME = "poly-paper-sidecar"
+
 # Cogni `market_id` is `"prediction-market:polymarket:<conditionId>"`
 # (nodes/poly/packages/market-provider/src/adapters/polymarket/polymarket.normalize-fill.ts:79).
 # Upstream `Engine.place_limit_order(slug_or_id, ...)` accepts a Polymarket slug
@@ -99,13 +108,88 @@ UPSTREAM_TO_COGNI_STATUS = {
     "expired": "cancelled",
 }
 
-# ─── Structured logging — JSON to stdout for Alloy → Loki pickup ────────────
-# Shape: { ts, level, msg, logger, [event, client_order_id, order_id, ...] }
-# Cogni Pino logs use the same client_order_id field — joins in Grafana.
-logging.basicConfig(
-    level=os.environ.get("PINO_LOG_LEVEL", "info").upper(),
-    format='{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}',
-)
+# ─── Event registry (mirrors nodes/poly/app/src/shared/observability/events) ─
+# Convention: `adapter.<dep>.<verb>` per the repo's `EVENT_NAMES` registry.
+# Listed here so callsites don't inline strings (per observability spec). If
+# this sidecar were a TS service, these would live in its events.ts.
+
+EVENT_SIDECAR_STARTED = "adapter.paper_sidecar.started"
+EVENT_PLACE_COMPLETE = "adapter.paper_sidecar.place_order.complete"
+EVENT_PLACE_ERROR = "adapter.paper_sidecar.place_order.error"
+EVENT_CANCEL_COMPLETE = "adapter.paper_sidecar.cancel_order.complete"
+EVENT_CANCEL_ERROR = "adapter.paper_sidecar.cancel_order.error"
+EVENT_FILL_LOOP_TICK = "adapter.paper_sidecar.fill_loop.tick_complete"
+EVENT_FILL_LOOP_ERROR = "adapter.paper_sidecar.fill_loop.error"
+EVENT_ORDER_FILLED = "adapter.paper_sidecar.order_filled"
+
+# Error code enum — every error log includes one of these so Loki/dashboards
+# can distinguish timeout vs upstream-bug vs our-bug vs market-not-found.
+ERROR_UPSTREAM_ENGINE_FAILED = "upstream_engine_failed"
+ERROR_UPSTREAM_NO_ORDER_ID = "upstream_no_order_id"
+ERROR_NOT_FOUND = "not_found"
+ERROR_INVALID_ORDER_ID = "invalid_order_id"
+ERROR_FILL_LOOP_ITERATION = "fill_loop_iteration_failed"
+
+
+# ─── Structured JSON logging — one JSON object per line for Alloy → Loki ────
+#
+# Required base fields per docs/spec/observability.md § Multi-Node Identity:
+#   - `nodeId` for cross-node disambiguation
+#   - `service` for Loki `{service="..."}` filter
+#   - `event` for stable event-name queries
+# The cogni TS adapter (`PaperAdapter`) carries `client_order_id` through every
+# request — including it here as a structured field lets Grafana join sidecar
+# logs to TS Pino logs on the same `client_order_id`.
+
+_BASE_FIELDS = {"nodeId": NODE_ID, "service": SERVICE_NAME}
+
+
+class _JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        out: dict[str, Any] = {
+            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S%z"),
+            "level": record.levelname.lower(),
+            "logger": record.name,
+            "msg": record.getMessage(),
+            **_BASE_FIELDS,
+        }
+        # Merge any `extra={...}` fields passed at the call site.
+        for k, v in record.__dict__.items():
+            if k in {
+                "name",
+                "msg",
+                "args",
+                "levelname",
+                "levelno",
+                "pathname",
+                "filename",
+                "module",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+                "lineno",
+                "funcName",
+                "created",
+                "msecs",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "processName",
+                "process",
+                "message",
+                "taskName",
+            }:
+                continue
+            out[k] = v
+        if record.exc_info:
+            out["exc"] = self.formatException(record.exc_info)
+        return json.dumps(out, default=str)
+
+
+_handler = logging.StreamHandler()
+_handler.setFormatter(_JsonFormatter())
+logging.root.handlers = [_handler]
+logging.root.setLevel(os.environ.get("PINO_LOG_LEVEL", "info").upper())
 log = logging.getLogger("poly-paper-sidecar")
 
 
@@ -228,19 +312,24 @@ class Sidecar:
         # we accept either and move on.
         try:
             self.engine.init_account(balance=STARTING_BALANCE_USDC)
-        except Exception as e:
-            log.info(
-                f'event=account_init_skipped reason="{e}" account={ACCOUNT}'
-            )
+        except Exception:
+            # Idempotent — already-initialised accounts may raise; not an error.
+            pass
 
         self._fill_thread = threading.Thread(
             target=self._fill_loop, daemon=True, name="paper-fill-loop"
         )
         self._fill_thread.start()
         log.info(
-            f"event=sidecar_started account={ACCOUNT} data_dir={account_dir} "
-            f"check_interval_s={CHECK_ORDERS_INTERVAL_SECONDS} "
-            f"upstream_sha={UPSTREAM_PAPER_TRADER_SHA[:8]}"
+            "sidecar started",
+            extra={
+                "event": EVENT_SIDECAR_STARTED,
+                "account": ACCOUNT,
+                "data_dir": str(account_dir),
+                "check_interval_s": CHECK_ORDERS_INTERVAL_SECONDS,
+                "upstream_sha": UPSTREAM_PAPER_TRADER_SHA[:12],
+                "build_sha": BUILD_SHA[:12],
+            },
         )
 
     def stop(self) -> None:
@@ -255,13 +344,14 @@ class Sidecar:
 
     def _fill_loop(self) -> None:
         """Polls `engine.check_orders()` on a fixed interval. Without this,
-        resting paper limits never transition to filled."""
+        resting paper limits never transition to filled. Emits a per-tick
+        heartbeat so Loki has a presence signal (per observability self-check
+        #4: explicit failure logs + heartbeat for adapter liveness)."""
         while not self._stop.wait(CHECK_ORDERS_INTERVAL_SECONDS):
             try:
                 with self.lock:
                     filled = self.engine.check_orders()  # type: ignore[union-attr]
-                if not filled:
-                    continue
+                filled_count = 0
                 for d in filled:
                     oid = str(d.get("id", ""))
                     st = self.orders.get(oid)
@@ -273,13 +363,38 @@ class Sidecar:
                     # stabilizes realized-cost/fee keys on the check_orders dict.
                     st.filled_size_usdc = st.intent_size_usdc
                     st.extra.update(d)
+                    filled_count += 1
                     log.info(
-                        f"event=order_filled order_id={oid} "
-                        f'client_order_id={st.client_order_id} '
-                        f"filled_size_usdc={st.filled_size_usdc}"
+                        "order filled",
+                        extra={
+                            "event": EVENT_ORDER_FILLED,
+                            "order_id": oid,
+                            "client_order_id": st.client_order_id,
+                            "filled_size_usdc": st.filled_size_usdc,
+                        },
                     )
+                # Heartbeat — emit every tick so an absence alert in Loki can
+                # detect a stuck/crashed fill loop. Low volume (2/min at 30s).
+                log.info(
+                    "fill loop tick",
+                    extra={
+                        "event": EVENT_FILL_LOOP_TICK,
+                        "pending_count": len(
+                            [s for s in self.orders.values() if s.status == "open"]
+                        ),
+                        "filled_count": filled_count,
+                    },
+                )
             except Exception as e:
-                log.exception(f"event=check_orders_failed err={e}")
+                log.error(
+                    "fill loop iteration failed",
+                    extra={
+                        "event": EVENT_FILL_LOOP_ERROR,
+                        "errorCode": ERROR_FILL_LOOP_ITERATION,
+                        "errClass": type(e).__name__,
+                    },
+                    exc_info=True,
+                )
 
     # ── handlers ───────────────────────────────────────────────────────────
 
@@ -296,19 +411,32 @@ class Sidecar:
                     order_type="gtc",
                 )
             except Exception as e:
-                log.exception(
-                    f"event=place_failed client_order_id={req.client_order_id} err={e}"
+                log.error(
+                    "place_order upstream failure",
+                    extra={
+                        "event": EVENT_PLACE_ERROR,
+                        "errorCode": ERROR_UPSTREAM_ENGINE_FAILED,
+                        "errClass": type(e).__name__,
+                        "client_order_id": req.client_order_id,
+                    },
+                    exc_info=True,
                 )
                 raise HTTPException(
-                    status_code=502, detail=f"upstream place_limit_order failed: {e}"
+                    status_code=502, detail=ERROR_UPSTREAM_ENGINE_FAILED
                 )
 
         upstream_id = d.get("id")
         if upstream_id is None:
-            raise HTTPException(
-                status_code=502,
-                detail=f"upstream returned no order id: keys={list(d.keys())}",
+            log.error(
+                "place_order upstream returned no order id",
+                extra={
+                    "event": EVENT_PLACE_ERROR,
+                    "errorCode": ERROR_UPSTREAM_NO_ORDER_ID,
+                    "client_order_id": req.client_order_id,
+                    "upstream_keys": list(d.keys()),
+                },
             )
+            raise HTTPException(status_code=502, detail=ERROR_UPSTREAM_NO_ORDER_ID)
         oid = str(upstream_id)
 
         upstream_status = str(d.get("status", "pending")).lower()
@@ -329,9 +457,16 @@ class Sidecar:
         )
         self.orders[oid] = st
         log.info(
-            f"event=order_placed order_id={oid} client_order_id={req.client_order_id} "
-            f'status={cogni_status} slug_or_id="{slug_or_id}" outcome="{req.outcome}" '
-            f"side={req.side} size_usdc={req.size_usdc} limit_price={req.limit_price}"
+            "order placed",
+            extra={
+                "event": EVENT_PLACE_COMPLETE,
+                "order_id": oid,
+                "client_order_id": req.client_order_id,
+                "status": cogni_status,
+                "side": req.side,
+                "size_usdc": req.size_usdc,
+                "limit_price": req.limit_price,
+            },
         )
         return _to_receipt(st)
 
@@ -339,22 +474,38 @@ class Sidecar:
         try:
             int_id = int(order_id)
         except ValueError:
-            raise HTTPException(status_code=404, detail="not_found")
+            raise HTTPException(status_code=404, detail=ERROR_NOT_FOUND)
 
         with self.lock:
             try:
                 result = self.engine.cancel_limit_order(int_id)  # type: ignore[union-attr]
             except Exception as e:
-                log.exception(f"event=cancel_failed order_id={order_id} err={e}")
+                log.error(
+                    "cancel_order upstream failure",
+                    extra={
+                        "event": EVENT_CANCEL_ERROR,
+                        "errorCode": ERROR_UPSTREAM_ENGINE_FAILED,
+                        "errClass": type(e).__name__,
+                        "order_id": order_id,
+                    },
+                    exc_info=True,
+                )
                 raise HTTPException(
-                    status_code=502, detail=f"upstream cancel failed: {e}"
+                    status_code=502, detail=ERROR_UPSTREAM_ENGINE_FAILED
                 )
         if result is None:
-            raise HTTPException(status_code=404, detail="not_found")
+            raise HTTPException(status_code=404, detail=ERROR_NOT_FOUND)
         st = self.orders.get(order_id)
         if st is not None:
             st.status = "cancelled"
-        log.info(f"event=order_cancelled order_id={order_id}")
+        log.info(
+            "order cancelled",
+            extra={
+                "event": EVENT_CANCEL_COMPLETE,
+                "order_id": order_id,
+                "client_order_id": st.client_order_id if st else None,
+            },
+        )
 
     def get(self, order_id: str) -> OrderReceipt:
         st = self.orders.get(order_id)
