@@ -16,12 +16,9 @@ images:
     digest: "sha256:78af980b68e4dfe1ede72f02923b9817ea525f1e0b258c4e0a870688af5090b8"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    # PR3 v0 — first functional sidecar (pm_trader Engine wrapper).
-    # Source: ghcr.io/cogni-dao/poly-paper-sidecar:sha-bbd5772 (PR #56 build).
     digest: "sha256:131a37d015452f8257598598fd42a847e3245c13d8ef18e163a396876e34314a"
-  # poly-paper-sidecar — see candidate-a overlay for the rationale on `digest:`
-  # vs `newTag:` (sidesteps promote-k8s-image.sh's first-newTag-wins sed bug).
-  # Bump by editing this digest after a new build-poly-paper-sidecar.yml run.
+  # poly-paper-sidecar built by build-poly-paper-sidecar.yml. See candidate-a
+  # overlay for rationale. Bump the sha256 above after a new build.
 
 patches:
   # Node-specific ConfigMap values.

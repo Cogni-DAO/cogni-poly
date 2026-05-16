@@ -13,21 +13,14 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    digest: "sha256:c18feaf648c48245fc1af5f921c83e1a90681f8f791fae2f48474dfe4ec18eda"
+    digest: "sha256:bae514810c27ce38d0602a560fe798f4037f0b033fb2362d4a53eabefc6e793d"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    # PR3 v0 — first functional sidecar (pm_trader Engine wrapper).
-    # Source: ghcr.io/cogni-dao/poly-paper-sidecar:sha-bbd5772 (PR #56 build).
     digest: "sha256:131a37d015452f8257598598fd42a847e3245c13d8ef18e163a396876e34314a"
-  # poly-paper-sidecar — built by .github/workflows/build-poly-paper-sidecar.yml
-  # on path-triggered pushes to main. Sidecars stay outside the catalog SSOT
-  # (which models 1 image = 1 overlay = 1 Argo app); a sibling container shares
-  # its host's overlay. Both entries use `digest:` (not `newTag:`) so
-  # promote-k8s-image.sh's elif/digest branch runs — that branch targets the
-  # FIRST `digest:` line, which is cogni-poly, correctly. A `newTag:` entry
-  # here would trip the script's first-newTag-wins sed and write cogni-poly's
-  # digest into the sidecar slot. Bump by editing this digest after a new
-  # build-poly-paper-sidecar.yml run publishes a new `sha-<short>` tag.
+  # poly-paper-sidecar built by build-poly-paper-sidecar.yml. Outside the
+  # catalog SSOT (which assumes 1 image = 1 overlay = 1 Argo app). Bump the
+  # sidecar pin by editing the sha256 above after a new build publishes a
+  # sha-<short> tag. See proj.poly-paper-trading roadmap.
 
 patches:
   - target:
