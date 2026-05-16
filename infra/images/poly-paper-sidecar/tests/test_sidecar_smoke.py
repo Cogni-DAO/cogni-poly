@@ -41,8 +41,6 @@ import pytest
 # Fast poll so the test isn't slow.
 os.environ.setdefault("PAPER_CHECK_ORDERS_INTERVAL_SECONDS", "0.1")
 os.environ.setdefault("PM_TRADER_DATA_DIR", "/tmp/pm_trader-test")
-os.environ.setdefault("BUILD_SHA", "test-build")
-os.environ.setdefault("UPSTREAM_PAPER_TRADER_SHA", "test-upstream-sha")
 
 
 class FakeEngine:
@@ -157,10 +155,15 @@ def test_readyz_reports_engine_and_fill_loop(client):
 
 
 def test_version_returns_pinned_shas(client):
+    # Reads whatever the actual env is (Dockerfile-set in CI; defaults locally).
+    # The test asserts shape + non-empty, not specific values — CI's real SHA
+    # values are the source of truth, not a literal in this file.
     r = client.get("/version")
     assert r.status_code == 200
     body = r.json()
-    assert body == {"buildSha": "test-build", "upstreamPaperTraderSha": "test-upstream-sha"}
+    assert set(body.keys()) == {"buildSha", "upstreamPaperTraderSha"}
+    assert isinstance(body["buildSha"], str) and body["buildSha"]
+    assert isinstance(body["upstreamPaperTraderSha"], str) and body["upstreamPaperTraderSha"]
 
 
 def test_place_order_returns_open_receipt(client):
