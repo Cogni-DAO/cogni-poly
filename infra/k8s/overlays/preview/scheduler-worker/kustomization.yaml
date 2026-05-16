@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cogni-preview
+
+resources:
+  - ../../../base/scheduler-worker
+
+# Image digest — updated by promote-and-deploy.
+images:
+  - name: ghcr.io/cogni-dao/cogni-poly
+    newName: ghcr.io/cogni-dao/cogni-poly
+    digest: "sha256:ef9e536d9d3d454294badd1f72cb3f47db6054cf39f5ee6e487c01e53d668c3b"
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: scheduler-worker-config
+    patch: |
+      - op: replace
+        path: /data/TEMPORAL_NAMESPACE
+        value: "cogni-preview"
+      - op: replace
+        path: /data/IMAGE_DIGEST
+        value: "preview-placeholder-scheduler-worker"
+
+  # bug.0295: VM discovery via DNS (preview.vm.cognidao.org).
+  # Convert base headless Services → ExternalName; delete EndpointSlices.
+  - target: { kind: Service, name: temporal }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: temporal
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: postgres }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: postgres
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: app }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: app
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: poly-app }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: poly-app
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: resy-app }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: resy-app
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: EndpointSlice, name: temporal-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: temporal-1
+  - target: { kind: EndpointSlice, name: postgres-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: postgres-1
+  - target: { kind: EndpointSlice, name: app-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: app-1
+  - target: { kind: EndpointSlice, name: poly-app-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: poly-app-1
+  - target: { kind: EndpointSlice, name: resy-app-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: resy-app-1
