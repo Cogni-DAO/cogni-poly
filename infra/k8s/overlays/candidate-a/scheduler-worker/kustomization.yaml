@@ -12,7 +12,7 @@ resources:
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-poly
-    newTag: "candidate-a-placeholder-scheduler-worker"
+    digest: "sha256:af075cc6d393dc6fb25a4fd8651531042b1445133b4f13ecfa70f097a0ad7d4c"
 
 patches:
   - target:
