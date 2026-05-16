@@ -26,15 +26,6 @@
 # Env:
 #   PAYLOAD_FILE    (required) path to resolved-pr-images.json
 #   OVERLAY_ENV     (required) candidate-a | preview | production
-#   NODES           (optional) CSV of apps to promote. Per-node matrix
-#                   lanes (candidate-flight.yml, promote-and-deploy.yml)
-#                   pass their single matrix.node here so the script only
-#                   touches that overlay — without it, the script tries
-#                   to promote every app in the payload and fails on
-#                   missing overlay files in per-node deploy branches
-#                   (e.g. deploy/candidate-a-poly has no scheduler-worker
-#                   overlay). Empty/unset = promote every app in payload
-#                   (legacy aggregate-deploy behavior).
 #   MAP_FILE        (optional) .promote-state/source-sha-by-app.json path
 #   PROMOTE_SCRIPT  (optional) path to promote-k8s-image.sh
 #   MAP_SCRIPT      (optional) path to update-source-sha-map.sh
@@ -43,7 +34,6 @@ set -euo pipefail
 
 PAYLOAD_FILE=${PAYLOAD_FILE:-}
 OVERLAY_ENV=${OVERLAY_ENV:-}
-NODES=${NODES:-}
 PROMOTE_SCRIPT=${PROMOTE_SCRIPT:-../app-src/scripts/ci/promote-k8s-image.sh}
 # Per-app source-SHA map writer (bug.0321 Fix 4). Same relative path
 # convention as PROMOTE_SCRIPT: callers run from the deploy-branch
@@ -159,21 +149,10 @@ update_source_sha_map() {
 }
 
 # Pass 1 — promotions. Each appends to PROMOTED and emits $GITHUB_OUTPUT.
-# NODES scopes the matrix lane to its own overlay; empty = legacy
-# aggregate behavior (every supported app in the payload).
-if [ -n "$NODES" ]; then
-  IFS=',' read -r -a _node_list <<<"${NODES// /}"
-  for _n in "${_node_list[@]}"; do
-    [ -z "$_n" ] && continue
-    promote_target "$_n"
-  done
-  unset _node_list _n
-else
-  promote_target operator
-  promote_target poly
-  promote_target resy
-  promote_target scheduler-worker
-fi
+promote_target operator
+promote_target poly
+promote_target resy
+promote_target scheduler-worker
 
 # Pass 2 — source-sha-map. Non-fatal on per-app failure.
 for app in "${PROMOTED[@]}"; do
