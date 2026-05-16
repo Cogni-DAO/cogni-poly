@@ -3,16 +3,16 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: cogni-production
+namespace: cogni-preview
 
 resources:
   - ../../../base/scheduler-worker
 
-# Image digest — updated by manual PR for production promotion.
+# Image digest — updated by promote-and-deploy.
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    newTag: "production-placeholder-scheduler-worker"
+    newTag: "preview-placeholder-scheduler-worker"
 
 patches:
   - target:
@@ -21,12 +21,12 @@ patches:
     patch: |
       - op: replace
         path: /data/TEMPORAL_NAMESPACE
-        value: "cogni-production"
+        value: "cogni-preview"
       - op: replace
         path: /data/IMAGE_DIGEST
-        value: "production-placeholder-scheduler-worker"
+        value: "preview-placeholder-scheduler-worker"
 
-  # bug.0295: VM discovery via DNS (poly.vm.cognidao.org).
+  # bug.0295: VM discovery via DNS (preview.vm.cognidao.org).
   # Convert base headless Services → ExternalName; delete EndpointSlices.
   - target: { kind: Service, name: temporal }
     patch: |
@@ -36,7 +36,7 @@ patches:
         name: temporal
       spec:
         type: ExternalName
-        externalName: poly.vm.cognidao.org
+        externalName: preview.vm.cognidao.org
         clusterIP: null
   - target: { kind: Service, name: postgres }
     patch: |
@@ -46,7 +46,7 @@ patches:
         name: postgres
       spec:
         type: ExternalName
-        externalName: poly.vm.cognidao.org
+        externalName: preview.vm.cognidao.org
         clusterIP: null
   - target: { kind: Service, name: app }
     patch: |
@@ -56,7 +56,7 @@ patches:
         name: app
       spec:
         type: ExternalName
-        externalName: poly.vm.cognidao.org
+        externalName: preview.vm.cognidao.org
         clusterIP: null
   - target: { kind: Service, name: poly-app }
     patch: |
@@ -66,7 +66,7 @@ patches:
         name: poly-app
       spec:
         type: ExternalName
-        externalName: poly.vm.cognidao.org
+        externalName: preview.vm.cognidao.org
         clusterIP: null
   - target: { kind: Service, name: resy-app }
     patch: |
@@ -76,7 +76,7 @@ patches:
         name: resy-app
       spec:
         type: ExternalName
-        externalName: poly.vm.cognidao.org
+        externalName: preview.vm.cognidao.org
         clusterIP: null
   - target: { kind: EndpointSlice, name: temporal-1 }
     patch: |
