@@ -15,27 +15,33 @@ set -euo pipefail
 DOMAIN="${DOMAIN:?DOMAIN is required}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-30}"
 SLEEP="${SLEEP:-15}"
+# bug.5002 — DEPLOY_ENV picks the catalog public_url key. Callers
+# (promote-and-deploy.yml) export DEPLOY_ENVIRONMENT; accept either,
+# fall back to the legacy URL builder when neither is set.
+DEPLOY_ENV="${DEPLOY_ENV:-${OVERLAY_ENV:-${DEPLOY_ENVIRONMENT:-}}}"
 
-# Node-app list comes from infra/catalog (CATALOG_IS_SSOT, docs/spec/ci-cd.md
-# axiom 16). Adding/removing a node in catalog updates the health-poll set
-# automatically. Replaces a previously-hardcoded operator/poly/resy iteration
-# that was stale in both cogni and cogni-poly after the poly extraction
-# (bug.5052).
 _verify_deployment_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/image-tags.sh
 . "${_verify_deployment_dir}/lib/image-tags.sh"
 
+# Legacy URL builder kept as fallback for laptop CLI runs and pre-migration
+# catalogs that don't declare public_url yet.
 if [[ "$DOMAIN" == *.*.* ]]; then
   NODE_JOIN="-"
 else
   NODE_JOIN="."
 fi
 
-# Hostname convention (mirrors verify-buildsha.sh): operator → DOMAIN directly;
-# every other node → ${node}${NODE_JOIN}${DOMAIN}.
+# Hostname convention: catalog-first (bug.5002), else legacy
+# operator → DOMAIN / others → ${node}${NODE_JOIN}${DOMAIN}.
 url_for_node() {
-  local node="$1"
-  if [ "$node" = "operator" ]; then
+  local node="$1" catalog_url=""
+  if [ -n "$DEPLOY_ENV" ]; then
+    catalog_url=$(public_url_for_target "$DEPLOY_ENV" "$node" 2>/dev/null || true)
+  fi
+  if [ -n "$catalog_url" ]; then
+    printf '%s' "$catalog_url"
+  elif [ "$node" = "operator" ]; then
     printf 'https://%s' "$DOMAIN"
   else
     printf 'https://%s%s%s' "$node" "$NODE_JOIN" "$DOMAIN"
