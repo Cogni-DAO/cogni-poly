@@ -934,7 +934,19 @@ function createContainer(): Container {
               createdByUserId: enumeratedTarget.createdByUserId,
               mirrorFilterPercentile: enumeratedTarget.mirrorFilterPercentile,
               mirrorMaxUsdcPerTrade: enumeratedTarget.mirrorMaxUsdcPerTrade,
-              mode: enumeratedTarget.mode,
+              // PAPER_ENFORCE_MODE=paper (candidate-a + preview) forces the
+              // effective mode regardless of the target row's nominal mode.
+              // This propagates through `MirrorTargetConfig.mode` → planner
+              // → `intent.attributes.mode` AND → DB writes (`poly_copy_trade_
+              // fills.mode` + `poly_copy_trade_decisions.mode`), so paper
+              // placements end up labeled `mode='paper'` instead of inheriting
+              // the target's default `'live'`. Without this, every paper fill
+              // looks like a live one in cogni Postgres — analytics + the
+              // planned paper-redemption job (PR1 item 10) can't find them.
+              mode:
+                env.PAPER_ENFORCE_MODE === "paper"
+                  ? "paper"
+                  : enumeratedTarget.mode,
             });
             const source = createPolymarketChainActivitySource({
               publicClient: chainPublicClient,
