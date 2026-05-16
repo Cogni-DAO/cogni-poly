@@ -145,7 +145,7 @@ Pick one and stick to it for the PR.
 
 A second container in an existing pod's Deployment, patched in via the host's overlay. Shares network namespace and lifecycle with the host.
 
-**Precedent**: `poly-paper-sidecar`. The canonical pattern is commit `3ee5913f8` ("pin poly-paper-sidecar to sha-c18eed2"). Earlier commit `377134f42` tried the `images:` block route but that path was abandoned for the inline-pin pattern below.
+**Precedent**: `poly-paper-sidecar`. Canonical pattern is commit `ce9e5fc66` ("canonical Shape 2 sidecar pinning"). The journey there: `377134f42` (`newTag:` in `images:` block — broken by first-newTag-wins) → `a391d026c` (inline-pin in container patch — works but harder to argocd-image-updater) → `ce9e5fc66` (**`digest:` in `images:` block for both host + sidecar; bare `image:` in container patch** — works AND is image-updater-friendly).
 
 ### When
 
@@ -160,8 +160,17 @@ Sibling is justified when the workload **must** share network namespace (localho
   - Path-triggered on `infra/images/<sidecar-name>/**` + `workflow_dispatch`
   - Tag `sha-<short>` always
   - **Do not** push `:latest` to a tag any deploy manifest references
-- [ ] `infra/k8s/overlays/{candidate-a,preview,production}/<host-node>/kustomization.yaml` — append the sidecar **as a container patch with the tag pinned INLINE**. Reference: [`infra/k8s/overlays/candidate-a/poly/kustomization.yaml`](../../infra/k8s/overlays/candidate-a/poly/kustomization.yaml) lines 96-132.
+- [ ] `infra/k8s/overlays/{candidate-a,preview,production}/<host-node>/kustomization.yaml` — add the sidecar's digest to the `images:` block (alongside the host's), and add a bare-`image:` container patch. Reference: [`infra/k8s/overlays/candidate-a/poly/kustomization.yaml`](../../infra/k8s/overlays/candidate-a/poly/kustomization.yaml).
+
   ```yaml
+  images:
+    - name: ghcr.io/cogni-dao/cogni-poly # host (already there)
+      newName: ghcr.io/cogni-dao/cogni-poly
+      digest: "sha256:<host-digest>"
+    - name: ghcr.io/cogni-dao/<sidecar-name> # add this block
+      newName: ghcr.io/cogni-dao/<sidecar-name>
+      digest: "sha256:<sidecar-digest>" # bump after each new build
+
   patches:
     - target: { kind: Deployment, name: <host-deployment> }
       patch: |
@@ -169,7 +178,7 @@ Sibling is justified when the workload **must** share network namespace (localho
           path: /spec/template/spec/containers/-
           value:
             name: <sidecar-name>
-            image: ghcr.io/cogni-dao/<sidecar-name>:sha-<short>   # bump inline
+            image: ghcr.io/cogni-dao/<sidecar-name>           # bare — kustomize substitutes from images: block
             ports: [{ containerPort: <port>, name: <port-name>, protocol: TCP }]
             livenessProbe:  { httpGet: { path: /healthz, port: <port-name> }, initialDelaySeconds: 5, periodSeconds: 30 }
             readinessProbe: { httpGet: { path: /healthz, port: <port-name> }, initialDelaySeconds: 3, periodSeconds: 10 }
@@ -177,11 +186,19 @@ Sibling is justified when the workload **must** share network namespace (localho
               requests: { memory: 128Mi, cpu: 50m }
               limits:   { memory: 384Mi, cpu: 500m }
   ```
+
 - [ ] If host needs to call the sidecar, add `<NAME>_URL: http://localhost:<port>` (or equivalent) via a separate ConfigMap patch in the same overlay.
 
-### The inline-pin rule
+### The digest-only rule (sidesteps the first-newTag-wins bug)
 
-**The sidecar tag is pinned inline in the container patch, NOT in the kustomize `images:` block.** Reason: [`promote-k8s-image.sh`](../../scripts/ci/promote-k8s-image.sh) is image-name-blind and would clobber the wrong slot via first-newTag-wins. See the design comment in the poly overlay file. Fixing the script is a follow-up; until then, inline-pin is the contract.
+**Both host and sidecar entries in `images:` MUST use `digest:`, never `newTag:`.** Reason: [`promote-k8s-image.sh:77-81`](../../scripts/ci/promote-k8s-image.sh) is image-name-blind. Its branches:
+
+```bash
+if grep -q 'newTag:'  → rewrites the FIRST newTag: in the file (clobbers wrong slot if a sidecar uses newTag:)
+elif grep -q 'digest:' → rewrites the FIRST digest:  in the file (= host app, correctly)
+```
+
+If both entries use `digest:`, the `newTag:` branch never fires, the elif branch targets the first `digest:` (host), and the sidecar's `digest:` is never touched by host promotion. Sidecar digest bumps are manual edits to that block. Fixing the script to be image-name-aware is a follow-up that would let this become single-form `newTag:` for everyone.
 
 ### Production overlay decision
 
@@ -189,12 +206,12 @@ Decide explicitly whether the sidecar runs in production. The paper-trading side
 
 ### Flight phase 3 (pre-merge candidate-a)
 
-Sidecar-only PRs **can** flight pre-merge via standard `candidate-flight.yml`. Mechanism: [`detect-affected.sh:155`](../../scripts/ci/detect-affected.sh) lights up `<host-node>` when its overlay changes; [`candidate-flight.yml`](../../.github/workflows/candidate-flight.yml) rsyncs the PR overlay onto `deploy/candidate-a-<host-node>` before promotion; the snapshot-and-restore step preserves the host digest while the inline sidecar tag advances.
+Sidecar-only PRs **can** flight pre-merge via standard `candidate-flight.yml`. Mechanism: [`detect-affected.sh:155`](../../scripts/ci/detect-affected.sh) lights up `<host-node>` when its overlay changes; [`candidate-flight.yml`](../../.github/workflows/candidate-flight.yml) rsyncs the PR overlay onto `deploy/candidate-a-<host-node>` before promotion; the snapshot-and-restore step preserves the host digest while the sidecar's `digest:` entry advances.
 
 Procedure:
 
-1. Push the branch — `build-<sidecar-name>.yml` builds + pushes `sha-<short>` to GHCR
-2. Bump the inline `image: ghcr.io/cogni-dao/<sidecar-name>:sha-<short>` in the candidate-a overlay → commit, push
+1. Push the branch — `build-<sidecar-name>.yml` builds + pushes `sha-<short>` to GHCR. Resolve the resulting digest: `docker buildx imagetools inspect ghcr.io/cogni-dao/<sidecar-name>:sha-<short> --format '{{.Manifest.Digest}}'`
+2. Bump the sidecar's `digest: "sha256:..."` in `infra/k8s/overlays/candidate-a/<host-node>/kustomization.yaml`'s `images:` block → commit, push
 3. `gh workflow run candidate-flight.yml -R Cogni-DAO/cogni-poly --ref <branch> -f pr_number=<N>`
 4. `/validate-candidate`
 
@@ -202,7 +219,7 @@ Procedure:
 
 ### Flight phase 4 → 5 (post-merge promote)
 
-- **Preview**: bump the inline `image:` field in `infra/k8s/overlays/preview/<host-node>/kustomization.yaml` on `main`. Push triggers `flight-preview.yml`. Since only the sidecar tag changed, no host-image promote step runs — the inline bump IS the digest advance.
+- **Preview**: bump the sidecar's `digest:` in `infra/k8s/overlays/preview/<host-node>/kustomization.yaml`'s `images:` block on `main`. Push triggers `flight-preview.yml`. Since only the sidecar digest changed, no host-image promote step runs — the `digest:` edit IS the advance.
 - **Production**: same on `infra/k8s/overlays/production/<host-node>/kustomization.yaml`. Production overlay edits are human-gated by the standard merge gate.
 
 ### Validate
@@ -347,7 +364,7 @@ Image / build:
 
 Deploy state:
 
-- Sibling container with its tag in the kustomize `images:` block (Shape 2 inline-pin rule)
+- Sibling container with `newTag:` in `images:` block (Shape 2 digest-only rule — clobbers host slot via first-newTag-wins)
 - Catalog entry without a matching AppSet generator block (silent: pipeline goes green, service never deploys)
 - Sidecar without its own `livenessProbe`/`readinessProbe` (host pod becomes Ready while sidecar is broken)
 - Hand-editing `deploy/<env>-<name>` directly instead of patching the `main` overlay (bypasses review + single-domain-scope)
@@ -380,7 +397,7 @@ Process:
 | Shape                | Forward                                                                                              | Rollback                                                                                                                                   |
 | -------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1. Standalone k8s    | `gh workflow run promote-and-deploy.yml -f environment=<env> -f source_sha=<new> -f build_sha=<new>` | Same workflow with the prior `source_sha` — look up via `git log deploy/<env>-<name> --oneline` or `.promote-state/source-sha-by-app.json` |
-| 2. Sibling container | Edit inline `image:` tag on `main`'s overlay → reconcile                                             | `git revert <overlay-commit>` on `main` (preview auto-reconciles; candidate-a re-flight on a revert branch)                                |
+| 2. Sibling container | Edit sidecar `digest:` in `images:` block on `main`'s overlay → reconcile                            | `git revert <overlay-commit>` on `main` (preview auto-reconciles; candidate-a re-flight on a revert branch)                                |
 | 4. Compose           | `candidate-flight-infra` / `promote-and-deploy` with new `infra/compose/**`                          | Same workflow with `--ref <older-sha>`                                                                                                     |
 | 5. Cron handler      | Standard Shape 1 rollback                                                                            | Same. For "stop the cron immediately" without a redeploy, document a runtime feature-flag at handler creation.                             |
 
