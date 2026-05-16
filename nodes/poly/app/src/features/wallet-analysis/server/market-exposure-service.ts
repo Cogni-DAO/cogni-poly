@@ -466,6 +466,7 @@ function groupParticipants(
     const ourAgg = aggregateWalletReturn(ourLegs, rollups);
     const ourReturnPct = positionReturnPct({
       totalBuyNotional: ourAgg.totalBuyNotional,
+      realizedCash: ourAgg.realizedCash,
       currentMarkValue: ourAgg.currentMarkValue,
       redemptionProceeds: ourAgg.redemptionProceeds,
     });
@@ -488,6 +489,7 @@ function groupParticipants(
         totalBuyNotional: agg.totalBuyNotional,
         returnPct: positionReturnPct({
           totalBuyNotional: agg.totalBuyNotional,
+          realizedCash: agg.realizedCash,
           currentMarkValue: agg.currentMarkValue,
           redemptionProceeds: agg.redemptionProceeds,
         }),

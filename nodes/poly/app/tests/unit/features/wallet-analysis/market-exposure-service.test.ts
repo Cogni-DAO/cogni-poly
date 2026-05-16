@@ -260,8 +260,11 @@ describe("buildMarketExposureGroups", () => {
         {
           wallet_address: TARGET_WALLET.toLowerCase(),
           condition_id: "0xCOND1",
+          token_id: "tok-no-1",
           total_buy_notional: "36215.52",
           realized_cash: "0",
+          net_shares: "4834.27",
+          market_outcome: null,
         },
       ],
     ]);
@@ -309,14 +312,20 @@ describe("buildMarketExposureGroups", () => {
         {
           wallet_address: OUR_WALLET.toLowerCase(),
           condition_id: "0xCOND1",
+          token_id: "tok-yes-1",
           total_buy_notional: "42.00",
           realized_cash: "0",
+          net_shares: "0",
+          market_outcome: null,
         },
         {
           wallet_address: TARGET_WALLET.toLowerCase(),
           condition_id: "0xCOND1",
+          token_id: "tok-yes-1",
           total_buy_notional: "1234.50",
           realized_cash: "0",
+          net_shares: "0",
+          market_outcome: null,
         },
       ],
     ]);

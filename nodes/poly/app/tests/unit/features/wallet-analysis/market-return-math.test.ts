@@ -34,7 +34,11 @@ describe("positionReturnPct — held P/L on snapshot basis", () => {
   it("simple long, still open → +30.0%", () => {
     // 100 shares bought avg $0.50, current mark $0.65 → cost $50, value $65.
     expect(
-      positionReturnPct({ totalBuyNotional: 50, currentMarkValue: 65 })
+      positionReturnPct({
+        totalBuyNotional: 50,
+        realizedCash: 0,
+        currentMarkValue: 65,
+      })
     ).toBe(0.3);
   });
 
@@ -46,6 +50,7 @@ describe("positionReturnPct — held P/L on snapshot basis", () => {
     expect(
       positionReturnPct({
         totalBuyNotional: 3200.75,
+        realizedCash: 0,
         currentMarkValue: 4832.44,
       })
     ).toBeCloseTo(0.5098, 4);
@@ -55,7 +60,11 @@ describe("positionReturnPct — held P/L on snapshot basis", () => {
     // cost basis sum 41.50 (Σ snapshot.cost across both legs),
     // current value sum 43.00.
     expect(
-      positionReturnPct({ totalBuyNotional: 41.5, currentMarkValue: 43.0 })
+      positionReturnPct({
+        totalBuyNotional: 41.5,
+        realizedCash: 0,
+        currentMarkValue: 43.0,
+      })
     ).toBe(0.0361);
   });
 
@@ -64,19 +73,31 @@ describe("positionReturnPct — held P/L on snapshot basis", () => {
     // the snapshot. Held basis is undefined here; realized P/L is not
     // recoverable without redemption-event tracking (future PR).
     expect(
-      positionReturnPct({ totalBuyNotional: 0, currentMarkValue: 0 })
+      positionReturnPct({
+        totalBuyNotional: 0,
+        realizedCash: 0,
+        currentMarkValue: 0,
+      })
     ).toBeNull();
   });
 
   it("zero buy notional → null", () => {
     expect(
-      positionReturnPct({ totalBuyNotional: 0, currentMarkValue: 0 })
+      positionReturnPct({
+        totalBuyNotional: 0,
+        realizedCash: 0,
+        currentMarkValue: 0,
+      })
     ).toBeNull();
   });
 
   it("negative buy notional (data bug) → null", () => {
     expect(
-      positionReturnPct({ totalBuyNotional: -10, currentMarkValue: 5 })
+      positionReturnPct({
+        totalBuyNotional: -10,
+        realizedCash: 0,
+        currentMarkValue: 5,
+      })
     ).toBeNull();
   });
 
@@ -84,12 +105,14 @@ describe("positionReturnPct — held P/L on snapshot basis", () => {
     expect(
       positionReturnPct({
         totalBuyNotional: Number.NaN,
+        realizedCash: 0,
         currentMarkValue: 50,
       })
     ).toBeNull();
     expect(
       positionReturnPct({
         totalBuyNotional: 50,
+        realizedCash: 0,
         currentMarkValue: Number.NaN,
       })
     ).toBeNull();
