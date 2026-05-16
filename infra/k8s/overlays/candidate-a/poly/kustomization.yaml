@@ -14,18 +14,15 @@ images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
     digest: "sha256:c18feaf648c48245fc1af5f921c83e1a90681f8f791fae2f48474dfe4ec18eda"
-  # poly-paper-sidecar is built by the standalone .github/workflows/
-  # build-poly-paper-sidecar.yml on path-triggered pushes to main. The catalog
-  # SSOT (infra/catalog/*.yaml) does not model sibling containers — the sidecar
-  # is a sibling container in the poly pod, not a standalone deployment with
-  # its own Argo Application — so it deliberately stays outside the catalog and
-  # rides its own build workflow. Until argocd-image-updater is wired for this
-  # image (follow-up), bumps happen via a manual `newTag` edit here pointing
-  # at the workflow's `sha-<short>` output. Bare image reference in the
-  # container patch below resolves through this entry.
-  - name: ghcr.io/cogni-dao/poly-paper-sidecar
-    newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    newTag: "sha-c18eed2"
+  # poly-paper-sidecar deliberately stays OUT of this images: block.
+  # promote-k8s-image.sh's sed-based digest writer is image-name-blind: when
+  # candidate-flight promotes cogni-poly, its `0,/newTag: .*/s|...` pattern
+  # matches the FIRST newTag in the file regardless of which `- name:` block
+  # owns it. With a sidecar `newTag:` entry here, the cogni-poly promotion
+  # writes cogni-poly's digest into the sidecar slot AND skips updating
+  # cogni-poly's actual digest line — both pulls then fail. Sidecar tag is
+  # pinned inline in the container patch below until promote-k8s-image.sh
+  # gains per-image-name awareness (bug.NEW follow-up).
 
 patches:
   - target:
@@ -108,9 +105,11 @@ patches:
         path: /spec/template/spec/containers/-
         value:
           name: poly-paper-sidecar
-          # No tag — kustomize rewrites this to the digest pinned in the
-          # `images:` block above (and advanced by argocd-image-updater).
-          image: ghcr.io/cogni-dao/poly-paper-sidecar
+          # Tag pinned inline here, NOT via the kustomize images: block, to
+          # sidestep the promote-k8s-image.sh first-newTag-wins bug. Bump by
+          # editing this string after a new build-poly-paper-sidecar.yml run
+          # publishes a new `sha-<short>` tag to GHCR.
+          image: ghcr.io/cogni-dao/poly-paper-sidecar:sha-c18eed2
           ports:
             - containerPort: 9100
               name: paper

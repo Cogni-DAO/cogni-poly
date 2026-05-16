@@ -14,16 +14,10 @@ images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
     digest: "sha256:78af980b68e4dfe1ede72f02923b9817ea525f1e0b258c4e0a870688af5090b8"
-  # poly-paper-sidecar is built by the standalone
-  # .github/workflows/build-poly-paper-sidecar.yml on path-triggered pushes to
-  # main. The catalog SSOT does not model sibling containers — see the
-  # candidate-a overlay's same block for the long explanation. Bare image ref
-  # in the container patch below resolves through this entry. Until
-  # argocd-image-updater is wired for this image, bumps happen via a manual
-  # `newTag` edit here pointing at the workflow's `sha-<short>` output.
-  - name: ghcr.io/cogni-dao/poly-paper-sidecar
-    newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    newTag: "sha-c18eed2"
+  # poly-paper-sidecar deliberately stays OUT of this images: block — see the
+  # candidate-a overlay's same block for the promote-k8s-image.sh first-newTag-
+  # wins bug explanation. Sidecar tag is pinned inline in the container patch
+  # below.
 
 patches:
   # Node-specific ConfigMap values.
@@ -109,9 +103,9 @@ patches:
         path: /spec/template/spec/containers/-
         value:
           name: poly-paper-sidecar
-          # No tag — kustomize rewrites this to the digest pinned in the
-          # `images:` block above (and advanced by argocd-image-updater).
-          image: ghcr.io/cogni-dao/poly-paper-sidecar
+          # Tag pinned inline to sidestep promote-k8s-image.sh first-newTag-wins
+          # bug — see candidate-a overlay for full explanation.
+          image: ghcr.io/cogni-dao/poly-paper-sidecar:sha-c18eed2
           ports:
             - containerPort: 9100
               name: paper
