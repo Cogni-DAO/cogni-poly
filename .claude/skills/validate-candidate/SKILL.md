@@ -122,14 +122,15 @@ For each row, try **both** the agent axis and the human axis. Skip an axis only 
 
 Drive the UI with **`playwright-cli`** (available as a skill-allowed tool). Its `state-load` reads the same JSON schema `capture-authed-state.mjs` writes, so captured storageState works as-is. Prefer it over inline Node / `@playwright/test` heredocs — one bash call per action, snapshots give accessibility refs, built-in `network` / `console` taps remove event-listener boilerplate.
 
-- **`ui-page`** — load state, open, snapshot to get element refs, click/type, snapshot again to verify, read `network` to confirm the downstream API call fired.
+- **`ui-page`** — open, load state, reload, snapshot to get element refs, click/type, snapshot again to verify, read `network` to confirm the downstream API call fired.
 - **`graph` or `tool` behind the UI** — open the chat page, snapshot, find the agent/graph picker, open it, re-snapshot. If the new graph's displayName is absent from the opened-menu snapshot → row is 🔴 **drift**: "graph `<name>` registered backend-side but not exposed in chat UI". That's the drift the matrix exists to catch.
 
 **Canonical sequence** (one ephemeral session, zero durable artifacts):
 
 ```bash
-playwright-cli -s=validate state-load .local-auth/candidate-a-<node>.storageState.json
 playwright-cli -s=validate open https://<node>.cognidao.org/<route>
+playwright-cli -s=validate state-load .local-auth/candidate-a-<node>.storageState.json
+playwright-cli -s=validate reload                   # cookies pick up; do NOT re-open (that wipes state)
 playwright-cli -s=validate snapshot                 # element refs
 playwright-cli -s=validate click e<N>               # exercise the change
 playwright-cli -s=validate snapshot                 # verify outcome
@@ -137,6 +138,8 @@ playwright-cli -s=validate network                  # downstream API calls
 playwright-cli -s=validate console                  # client-side errors
 playwright-cli -s=validate close                    # tear down
 ```
+
+Order matters: `state-load` requires an already-open browser, and a second `open` resets the in-memory user-data-dir and discards the loaded cookies. Use `goto <url>` or `reload` to move around after `state-load`.
 
 Record per row: the refs clicked, the post-click snapshot excerpt proving the outcome, the `network` line (method + path + status), any `console` errors. Snapshot yaml files playwright-cli writes under `.playwright-cli/` are its own working state — not validation artifacts we author; never reference them in the scorecard, and ensure `.playwright-cli/` is gitignored.
 
