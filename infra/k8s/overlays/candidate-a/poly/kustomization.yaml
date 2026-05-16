@@ -14,15 +14,18 @@ images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
     digest: "sha256:c18feaf648c48245fc1af5f921c83e1a90681f8f791fae2f48474dfe4ec18eda"
-  # poly-paper-sidecar deliberately stays OUT of this images: block.
-  # promote-k8s-image.sh's sed-based digest writer is image-name-blind: when
-  # candidate-flight promotes cogni-poly, its `0,/newTag: .*/s|...` pattern
-  # matches the FIRST newTag in the file regardless of which `- name:` block
-  # owns it. With a sidecar `newTag:` entry here, the cogni-poly promotion
-  # writes cogni-poly's digest into the sidecar slot AND skips updating
-  # cogni-poly's actual digest line — both pulls then fail. Sidecar tag is
-  # pinned inline in the container patch below until promote-k8s-image.sh
-  # gains per-image-name awareness (bug.NEW follow-up).
+  - name: ghcr.io/cogni-dao/poly-paper-sidecar
+    newName: ghcr.io/cogni-dao/poly-paper-sidecar
+    digest: "sha256:c6968aef1efd55ef2486d4dc59e6dd11c422bd40e9efe5ed2447649cbf77d341"
+  # poly-paper-sidecar — built by .github/workflows/build-poly-paper-sidecar.yml
+  # on path-triggered pushes to main. Sidecars stay outside the catalog SSOT
+  # (which models 1 image = 1 overlay = 1 Argo app); a sibling container shares
+  # its host's overlay. Both entries use `digest:` (not `newTag:`) so
+  # promote-k8s-image.sh's elif/digest branch runs — that branch targets the
+  # FIRST `digest:` line, which is cogni-poly, correctly. A `newTag:` entry
+  # here would trip the script's first-newTag-wins sed and write cogni-poly's
+  # digest into the sidecar slot. Bump by editing this digest after a new
+  # build-poly-paper-sidecar.yml run publishes a new `sha-<short>` tag.
 
 patches:
   - target:
@@ -94,9 +97,8 @@ patches:
   # agent-next/polymarket-paper-trader (MIT) behind an HTTP API. The TS
   # PaperAdapter speaks to it over pod-loopback at http://localhost:9100.
   # v0 image is a placeholder (501 on Run-phase endpoints); the actual
-  # upstream-engine wiring lands in a follow-up commit. Pinned to :latest;
-  # bump UPSTREAM_PAPER_TRADER_SHA in infra/images/poly-paper-sidecar/Dockerfile
-  # and re-run the Build poly-paper-sidecar workflow to refresh.
+  # upstream-engine wiring lands in a follow-up commit (PR3 design pass
+  # forthcoming).
   - target:
       kind: Deployment
       name: node-app
@@ -105,11 +107,9 @@ patches:
         path: /spec/template/spec/containers/-
         value:
           name: poly-paper-sidecar
-          # Tag pinned inline here, NOT via the kustomize images: block, to
-          # sidestep the promote-k8s-image.sh first-newTag-wins bug. Bump by
-          # editing this string after a new build-poly-paper-sidecar.yml run
-          # publishes a new `sha-<short>` tag to GHCR.
-          image: ghcr.io/cogni-dao/poly-paper-sidecar:sha-c18eed2
+          # No tag — kustomize substitutes the digest pinned in the `images:`
+          # block above.
+          image: ghcr.io/cogni-dao/poly-paper-sidecar
           ports:
             - containerPort: 9100
               name: paper
