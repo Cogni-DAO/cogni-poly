@@ -68,11 +68,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Smoke gate — builds the `test` stage which runs pytest under a stubbed
+      # pm_trader.Engine. CI red here ⇒ no image push. Cheap insurance against
+      # a server.py regression sneaking into candidate-a.
+      - name: Build + run smoke test (build-blocker)
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: infra/images/poly-paper-sidecar
+          file: infra/images/poly-paper-sidecar/Dockerfile
+          target: test
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=poly-paper-sidecar
+          cache-to: type=gha,mode=max,scope=poly-paper-sidecar
+
       - name: Build and push
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: infra/images/poly-paper-sidecar
           file: infra/images/poly-paper-sidecar/Dockerfile
+          target: base
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
           platforms: linux/amd64
           push: |
             ${{
