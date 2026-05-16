@@ -9,13 +9,14 @@
 
 ## Purpose
 
-Python sidecar container that wraps [`agent-next/polymarket-paper-trader`](https://github.com/agent-next/polymarket-paper-trader) (MIT) behind an HTTP API. The TS `PaperAdapter` in `@cogni/poly-market-provider/adapters/paper` speaks HTTP to this sidecar over pod-loopback. Together they implement the paper-trading backend used by `mode='paper'` copy-trade targets and the always-paper `candidate-a` / `preview` overlays.
+Python sidecar wrapping [`agent-next/polymarket-paper-trader`](https://github.com/agent-next/polymarket-paper-trader) (MIT) behind an HTTP API. The TS `PaperAdapter` in `@cogni/poly-market-provider/adapters/paper` speaks HTTP to this sidecar over pod-loopback. Together they implement the paper-trading backend used by `mode='paper'` copy-trade targets and the always-paper `candidate-a` / `preview` overlays.
 
 ## Pointers
 
-- [Project](../../../work/projects/proj.poly-paper-trading.md)
-- [Research](../../../docs/research/poly-paper-trading-mode.md)
+- [Project](../../../work/projects/proj.poly-paper-trading.md) — design + roadmap
+- [Research](../../../docs/research/poly-paper-trading-mode.md) — OSS survey
 - [TS adapter](../../../nodes/poly/packages/market-provider/src/adapters/paper/paper.adapter.ts)
+- Upstream: `agent-next/polymarket-paper-trader` (MIT) — pinned via `UPSTREAM_PAPER_TRADER_SHA` build-arg
 
 ## Boundaries
 
@@ -36,42 +37,47 @@ Python sidecar container that wraps [`agent-next/polymarket-paper-trader`](https
 }
 ```
 
-**External deps:** `agent-next/polymarket-paper-trader` (MIT, pinned commit), `fastapi`, `uvicorn`, `httpx`, `pydantic`.
+**External deps:** `agent-next/polymarket-paper-trader` (MIT, pinned commit), `fastapi`, `uvicorn`, `pydantic`.
 
 ## Public Surface
 
-- `Dockerfile` — builds the sidecar image; `UPSTREAM_PAPER_TRADER_SHA` is the pin point for the agent-next commit.
-- `server.py` — FastAPI app exposing `GET /healthz`, `POST /place-order`, `GET /orders/{id}`, `POST /orders/{id}/cancel`. v0 placeholder.
+- `Dockerfile` — multi-stage. `base` is the runtime image; `test` runs pytest under a stubbed `pm_trader.Engine` as a build-blocker. `UPSTREAM_PAPER_TRADER_SHA` build-arg pins the upstream commit (current: `8a0a3ee2` = upstream v0.1.6).
+- `server.py` — FastAPI app: `/healthz`, `/readyz`, `/version`, `POST /place-order`, `POST /orders/{id}/cancel`, `GET /orders/{id}`. Single global `threading.Lock` serializes Engine access. Daemon thread polls `engine.check_orders()` every `PAPER_CHECK_ORDERS_INTERVAL_SECONDS` (default 30s, aligns with cogni reconciler's 60s tick).
+- `tests/test_sidecar_smoke.py` — 12 tests, ~0.4s. Stubs `pm_trader.engine` via `sys.modules`. Wired into `.github/workflows/build-poly-paper-sidecar.yml` as a CI build-blocker (red ⇒ no image push).
 
 ## HTTP contract (consumed by `PaperAdapter`)
 
-| Method + Path                    | Purpose                    | Success        | Error                            |
-| -------------------------------- | -------------------------- | -------------- | -------------------------------- |
-| `GET /healthz`                   | Liveness probe             | `200 {status}` | —                                |
-| `POST /place-order`              | Submit a paper limit order | `200 receipt`  | `5xx` / `4xx` per upstream cause |
-| `POST /orders/{order_id}/cancel` | Idempotent cancel          | `204`          | `404` swallowed by adapter       |
-| `GET /orders/{order_id}`         | Status lookup              | `200 receipt`  | `404` → `not_found` in adapter   |
+| Method + Path                    | Purpose                      | Success                                  | Error                          |
+| -------------------------------- | ---------------------------- | ---------------------------------------- | ------------------------------ |
+| `GET /healthz`                   | Liveness probe               | `200 {status}`                           | —                              |
+| `GET /readyz`                    | Readiness (fill loop alive)  | `200 {status}`                           | `503` if fill loop dead        |
+| `GET /version`                   | Pinned build + upstream SHAs | `200 {buildSha, upstreamPaperTraderSha}` | —                              |
+| `POST /place-order`              | Submit a paper limit order   | `200 OrderReceipt`                       | `502` per upstream cause       |
+| `POST /orders/{order_id}/cancel` | Idempotent cancel            | `204`                                    | `404` swallowed by adapter     |
+| `GET /orders/{order_id}`         | Status lookup                | `200 OrderReceipt`                       | `404` → `not_found` in adapter |
 
-Response shape on `200`: matches `OrderReceiptSchema` from `@cogni/poly-market-provider`. `filled_size_usdc` MUST reflect realised fill amount (PAPER_POPULATES_FILLED_USDC) — without it, the TS-side cap accounting (`CAP_COUNTS_REALIZED_ON_CANCEL`) drifts.
+Response shape on `200`: matches `OrderReceiptSchema` from `@cogni/poly-market-provider`. **v0 fill-amount convention:** when upstream reports `status="filled"`, sidecar sets `filled_size_usdc = intent.size_usdc` (full-fill assumption). Partial-fill fidelity is a documented limitation; the realized-cost/fee keys on the upstream check_orders dict aren't stable enough yet to lift safely.
 
-## v0 status
+## Market identity translation
 
-- `server.py` is a placeholder. `/healthz` returns OK; Run-phase endpoints return 501 / 404. This ships the architecture without functional paper trading — the actual upstream-engine wiring lands in a follow-up commit.
-- In the candidate-a and preview overlays (where `PAPER_ENFORCE_MODE=paper` is set in PR 2), this means every mirror placement attempt will emit a clean `paper sidecar place-order failed: 501` error in Loki. That's the intended signal — the deployment is paper-enforced; no real money can be spent; the only thing missing is the upstream-engine glue.
+Cogni `market_id` is shaped `"prediction-market:polymarket:<conditionId>"` (per `polymarket.normalize-fill.ts:79`). Upstream `Engine.place_limit_order(slug_or_id, ...)` accepts either a Polymarket slug or a conditionId. The sidecar strips the cogni prefix and passes the bare conditionId; falls back to `attributes.condition_id` if the prefix is absent.
 
 ## Responsibilities
 
-- This directory **does**: build a Python sidecar image; expose the HTTP contract above; pin the upstream `agent-next/polymarket-paper-trader` commit SHA.
+- This directory **does**: build a Python sidecar image; expose the HTTP contract above; map cogni request/response shapes to upstream's; run a background fill-poll loop; pin the upstream `agent-next/polymarket-paper-trader` commit SHA.
 - This directory **does not**: implement fill logic, fee math, queue-position modelling, or any other simulation behaviour. All of that is upstream property — if it's wrong, file upstream and bump `UPSTREAM_PAPER_TRADER_SHA`. (This is the "we write no fill logic" constraint from `proj.poly-paper-trading`.)
 
-## Bumping the upstream pin
+## Bumping `UPSTREAM_PAPER_TRADER_SHA`
 
-1. Audit the upstream diff — focus on `orderbook.py`, `engine.py`, and the fee formula (`bps/10000 × min(p, 1-p) × shares`).
-2. Update `UPSTREAM_PAPER_TRADER_SHA` in the `Dockerfile` build arg.
-3. Build + push the new image.
-4. Run the (forthcoming) CI fee-drift smoke test against a known fixture.
+1. Audit the upstream diff — focus on `engine.py` (method signatures), `orders.py` (LimitOrder dataclass fields), `orderbook.py` (`simulate_*_fill` return shape), and the fee formula (`bps/10000 × min(p, 1-p) × shares`).
+2. Verify `Engine.place_limit_order`, `cancel_limit_order`, `check_orders` signatures match what `server.py` calls. If a signature changes, update server.py + tests in the same commit.
+3. Update `UPSTREAM_PAPER_TRADER_SHA` in the `Dockerfile` `ARG` line.
+4. Re-run the in-image pytest (`docker build --target=test`). CI runs this automatically on push to `infra/images/poly-paper-sidecar/**`.
+5. The smoke uses a stubbed Engine, so it WILL pass an API-shape regression. A real fee/fill-fidelity smoke against a recorded book fixture is planned (see project roadmap PR3 follow-up).
 
 ## Notes
 
-- v0 ships a placeholder server so the deployment shape can land independently of the upstream-engine glue. The architecture is in place; functional paper trading arrives when the FastAPI wrapper maps `agent-next/polymarket-paper-trader`'s `orderbook.py` + `engine.py` onto our HTTP contract.
-- This image is consumed only as a pod-loopback sidecar. It must never be exposed to a Service or Ingress — `PaperAdapter`'s base URL defaults to `http://localhost:9100` and is only constructor-injected, never DNS-resolved.
+- v0 ships **ephemeral SQLite** at `${PM_TRADER_DATA_DIR}/${PM_TRADER_ACCOUNT}/`. Pod restart wipes open paper orders; the cogni reconciler treats orphan `pending` rows the same as a CLOB outage (closes after grace window). Add a PVC only if/when preview's redeploy cadence produces visible fill-rate friction.
+- Account starting balance is `PM_TRADER_STARTING_BALANCE_USDC=1000000` (1M). Upstream cap-rejection never fires; cogni's own cap-enforcement code is the real gate. Don't tune balance for paper-PnL bookkeeping — use cogni Postgres `poly_copy_trade_fills WHERE mode='paper'` for that.
+- This image is consumed **only** as a pod-loopback sidecar. Must never be exposed to a Service or Ingress — `PaperAdapter`'s base URL defaults to `http://localhost:9100` and is only constructor-injected, never DNS-resolved.
+- Logging: JSON-ish single-line to stdout, with `event=…` keys + `client_order_id=…` for cross-service joins in Grafana/Loki.

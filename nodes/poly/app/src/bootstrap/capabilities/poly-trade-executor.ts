@@ -282,7 +282,18 @@ export function createPolyTradeExecutorFactory(
     const existing = inflight.get(billingAccountId);
     if (existing) return (await existing).executor;
 
-    const buildPromise = buildExecutor(billingAccountId, deps).then((built) => {
+    // PAPER_ENFORCE_MODE=paper short-circuit (closes the TODO on
+    // PolyTradeExecutorFactoryDeps.paperEnforceMode): skip wallet.resolve
+    // entirely so a deployment without live CLOB credentials boots cleanly.
+    // The mirror BUY path needs only `placeIntent` + `getMarketConstraints`;
+    // both work without a tenant trader wallet because placement routes
+    // through the paper sidecar (no signing) and constraints hit Polymarket's
+    // public CLOB read endpoints.
+    const builder =
+      deps.paperEnforceMode === "paper"
+        ? buildPaperOnlyExecutor(billingAccountId, deps)
+        : buildExecutor(billingAccountId, deps);
+    const buildPromise = builder.then((built) => {
       cache.set(billingAccountId, built);
       inflight.delete(billingAccountId);
       return built;
@@ -690,6 +701,143 @@ async function buildExecutor(
   };
 
   return { executor, funderAddress };
+}
+
+/**
+ * Paper-enforced executor builder. Used when `PAPER_ENFORCE_MODE=paper`.
+ *
+ * Differences from `buildExecutor`:
+ *   - Skips `walletPort.resolve()` — no trader wallet required for paper.
+ *   - Skips `walletPort.authorizeIntent()` — caps + scope checks live on the
+ *     same tenant gate, but in paper mode there's nothing to authorize against
+ *     (no signing, no real USDC). Logged as `paper_enforced` so the bypass is
+ *     visible in audit.
+ *   - Constructs `PolymarketClobAdapter` with a deterministic no-op signer +
+ *     empty CLOB creds. The SDK's `getOrderBook` and `getTickSize` read paths
+ *     (used by `getMarketConstraints`) hit Polymarket's public endpoints that
+ *     don't auth, so this works for the mirror BUY path's tick/min-size lookup.
+ *   - Wires `paperPlace` as the only placement path. `livePlace` doesn't exist
+ *     in this builder — every intent routes to the sidecar.
+ *   - `closePosition` / `exitPosition` / `listPositions` /
+ *     `getPositionShareBalance` throw `paper_enforced_not_supported`. These
+ *     are user-driven flows (manual wallet close, position UI) that have no
+ *     meaning when the entire deployment is paper-only. The mirror BUY path
+ *     does not call them.
+ */
+async function buildPaperOnlyExecutor(
+  billingAccountId: string,
+  deps: PolyTradeExecutorFactoryDeps
+): Promise<CachedExecutor> {
+  const { PolymarketClobAdapter, PolymarketDataApiClient } = await import(
+    "@cogni/poly-market-provider/adapters/polymarket"
+  );
+  const { PaperAdapter } = await import(
+    "@cogni/poly-market-provider/adapters/paper"
+  );
+  const { createWalletClient, http } = await import("viem");
+  const { privateKeyToAccount } = await import("viem/accounts");
+  const { polygon } = await import("viem/chains");
+
+  // Stable, well-known throwaway private key. Used only to satisfy the
+  // ClobClient SDK constructor's signer requirement — paper mode never signs.
+  // pubkey: 0x7e5f4552091a69125d5dfcb7b8c2659029395bdf
+  const PAPER_NOOP_PRIVATE_KEY =
+    "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
+  const PAPER_FUNDER_ADDRESS =
+    "0x0000000000000000000000000000000000000000" as const;
+
+  // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
+  const noopAccount: any = privateKeyToAccount(PAPER_NOOP_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account: noopAccount,
+    chain: polygon,
+    transport: http(deps.polygonRpcUrl),
+  });
+  // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
+  const signerAny: any = walletClient;
+
+  const loggerPort = adaptLogger(
+    deps.logger.child({
+      subcomponent: "poly-trade-executor",
+      billing_account_id: billingAccountId,
+      paper_enforced: true,
+    })
+  );
+
+  // CLOB adapter exists ONLY as the read source for getMarketConstraints.
+  // Its placeOrder would fail with empty creds — but the dispatcher never
+  // calls it because paperPlace is the only placement path.
+  const adapter = new PolymarketClobAdapter({
+    signer: signerAny,
+    creds: { key: "", secret: "", passphrase: "" },
+    funderAddress: PAPER_FUNDER_ADDRESS,
+    host: deps.host ?? DEFAULT_CLOB_HOST,
+    logger: loggerPort,
+    metrics: deps.metrics,
+  });
+
+  const dataApiClient = new PolymarketDataApiClient();
+
+  const paperAdapter = new PaperAdapter({
+    ...(deps.paperSidecarUrl !== undefined
+      ? { sidecarBaseUrl: deps.paperSidecarUrl }
+      : {}),
+    readSource: adapter,
+  });
+
+  const paperPlace: ClobExecutor = createClobExecutor({
+    placeOrder: paperAdapter.placeOrder.bind(paperAdapter),
+    logger: loggerPort.child({ adapter: "paper" }),
+    metrics: deps.metrics,
+  });
+
+  const authorizedPlace = async (
+    intent: OrderIntent
+  ): Promise<OrderReceipt> => {
+    // In paper-enforced mode we skip walletPort.authorizeIntent — there's no
+    // wallet to authorize against, and paper placements cannot burn real
+    // USDC. The decision is audited via the `paper_enforced` log key.
+    deps.logger.info(
+      {
+        event: "poly.mirror.place.tenant",
+        billing_account_id: billingAccountId,
+        intent_side: intent.side,
+        intent_usdc: intent.size_usdc,
+        market_id: intent.market_id,
+        client_order_id: intent.client_order_id,
+        execution_mode: "paper",
+        paper_enforced: true,
+        authorize_bypassed: true,
+      },
+      "poly-trade-executor (paper-enforced): authorize bypassed → placeOrder"
+    );
+    return paperPlace(intent);
+  };
+
+  function paperNotSupported(operation: string): never {
+    throw new PolyTradeExecutorError(
+      "not_authorized",
+      `poly-trade-executor: ${operation} not supported in PAPER_ENFORCE_MODE=paper (no trader wallet)`,
+      "no_connection"
+    );
+  }
+
+  const executor: PolyTradeExecutor = {
+    billingAccountId,
+    placeIntent: authorizedPlace,
+    closePosition: async () => paperNotSupported("closePosition"),
+    exitPosition: async () => paperNotSupported("exitPosition"),
+    listPositions: async () =>
+      dataApiClient.listAllUserPositions(PAPER_FUNDER_ADDRESS),
+    getOrder: paperAdapter.getOrder.bind(paperAdapter),
+    cancelOrder: paperAdapter.cancelOrder.bind(paperAdapter),
+    getMarketConstraints: adapter.getMarketConstraints.bind(adapter),
+    listOpenOrders: async () => [],
+    getPositionShareBalance: async () => 0,
+    funderAddress: PAPER_FUNDER_ADDRESS,
+  };
+
+  return { executor, funderAddress: PAPER_FUNDER_ADDRESS };
 }
 
 function mapOpenOrderSummary(

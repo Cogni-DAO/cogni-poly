@@ -156,6 +156,19 @@ export interface DbTargetSourceDeps {
    * `listAllActive` — every other code path goes through `appDb`.
    */
   serviceDb: PostgresJsDatabase<Record<string, unknown>>;
+  /**
+   * When true, `listAllActive` skips the wallet_connections + wallet_grants
+   * joins. The deploy-wide `PAPER_ENFORCE_MODE=paper` makes every placement
+   * route through the paper sidecar (no signing → no trader wallet needed),
+   * so requiring a Privy-provisioned wallet to activate a target excludes
+   * exactly the population this env is meant to serve. Set by bootstrap from
+   * the same env var the executor dispatcher reads.
+   *
+   * In live deployments (paperEnforced=false), the joins remain — a target
+   * without a wallet has no way to sign live CLOB orders, which is the
+   * pre-existing activation invariant.
+   */
+  paperEnforced?: boolean;
 }
 
 /**
@@ -193,15 +206,26 @@ export function dbTargetSource(
     },
 
     async listAllActive(): Promise<readonly EnumeratedTarget[]> {
-      // The ONE sanctioned BYPASSRLS read. Joins (bug.0438 dropped the
-      // poly_copy_trade_config kill-switch join):
+      // The ONE sanctioned BYPASSRLS read.
+      //
+      // Live-mode joins (bug.0438 dropped the poly_copy_trade_config
+      // kill-switch join):
       //   targets (disabled_at IS NULL)         — active tracked rows only
-      //   × wallet_connections (revoked_at IS NULL) — tenants with a live trader wallet
-      //   × wallet_grants (revoked_at IS NULL, expires_at > now or NULL) — active grant
-      // Net effect: returns exactly the tenants for whom the per-tenant path
-      // can actually sign + `authorizeIntent` will let through. The act of
-      // having an active target row IS the user's opt-in signal.
-      const rows = await deps.serviceDb
+      //   × wallet_connections (revoked_at IS NULL) — tenant has a live trader wallet
+      //   × wallet_grants (revoked_at IS NULL, expires_at > now or NULL)
+      //
+      // Net effect (live): only tenants whose per-tenant path can actually
+      // sign + that `authorizeIntent` will let through. The act of having an
+      // active target row IS the user's opt-in signal.
+      //
+      // PAPER_ENFORCE_MODE=paper bypass: in candidate-a + preview the
+      // executor dispatcher forces every placement through the paper sidecar
+      // (no signing, no wallet load). Requiring wallet_connections +
+      // wallet_grants there excludes the exact population this env is meant
+      // to serve — users iterating on the algorithm without setting up real
+      // wallets. When `paperEnforced=true`, drop those joins and activate
+      // every target row directly.
+      const baseSelect = deps.serviceDb
         .select({
           billing_account_id: polyCopyTradeTargets.billingAccountId,
           created_by_user_id: polyCopyTradeTargets.createdByUserId,
@@ -210,30 +234,39 @@ export function dbTargetSource(
           mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
           mode: polyCopyTradeTargets.mode,
         })
-        .from(polyCopyTradeTargets)
-        .innerJoin(
-          polyWalletConnections,
-          and(
-            eq(
-              polyWalletConnections.billingAccountId,
-              polyCopyTradeTargets.billingAccountId
-            ),
-            isNull(polyWalletConnections.revokedAt)
-          )
-        )
-        .innerJoin(
-          polyWalletGrants,
-          and(
-            eq(polyWalletGrants.walletConnectionId, polyWalletConnections.id),
-            isNull(polyWalletGrants.revokedAt),
-            or(
-              isNull(polyWalletGrants.expiresAt),
-              gt(polyWalletGrants.expiresAt, sql`now()`)
+        .from(polyCopyTradeTargets);
+
+      const rows = deps.paperEnforced
+        ? await baseSelect
+            .where(isNull(polyCopyTradeTargets.disabledAt))
+            .orderBy(polyCopyTradeTargets.createdAt)
+        : await baseSelect
+            .innerJoin(
+              polyWalletConnections,
+              and(
+                eq(
+                  polyWalletConnections.billingAccountId,
+                  polyCopyTradeTargets.billingAccountId
+                ),
+                isNull(polyWalletConnections.revokedAt)
+              )
             )
-          )
-        )
-        .where(isNull(polyCopyTradeTargets.disabledAt))
-        .orderBy(polyCopyTradeTargets.createdAt);
+            .innerJoin(
+              polyWalletGrants,
+              and(
+                eq(
+                  polyWalletGrants.walletConnectionId,
+                  polyWalletConnections.id
+                ),
+                isNull(polyWalletGrants.revokedAt),
+                or(
+                  isNull(polyWalletGrants.expiresAt),
+                  gt(polyWalletGrants.expiresAt, sql`now()`)
+                )
+              )
+            )
+            .where(isNull(polyCopyTradeTargets.disabledAt))
+            .orderBy(polyCopyTradeTargets.createdAt);
 
       return rows.map((r) => ({
         billingAccountId: r.billing_account_id,
