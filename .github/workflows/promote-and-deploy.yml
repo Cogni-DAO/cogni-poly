@@ -595,6 +595,11 @@ jobs:
     env:
       VM_HOST: ${{ secrets.VM_HOST }}
       DOMAIN: ${{ vars.DOMAIN }}
+      # bug.5002 — verify-deployment.sh reads catalog public_url[$DEPLOY_ENVIRONMENT]
+      # for each node's URL; without this var it falls back to the legacy
+      # `${node}-${DOMAIN}` builder, which on single-node forks produces
+      # double-prefixed NXDOMAIN URLs (poly-poly-preview.cognidao.org).
+      DEPLOY_ENVIRONMENT: ${{ needs.decide.outputs.environment }}
       K8S_NAMESPACE: cogni-${{ needs.decide.outputs.environment }}
     steps:
       - uses: actions/checkout@v6

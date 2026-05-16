@@ -143,6 +143,22 @@ Create A records for both:
 
 **Gate:** `dig +short <user-fqdn> @1.1.1.1` AND `dig +short <env>.vm.cognidao.org @1.1.1.1` both return the new VM IP.
 
+### Phase 6b: Declare per-env public URLs in the catalog (bug.5002)
+
+**Every new node in this repo MUST add `public_url` to its `infra/catalog/<name>.yaml` entry for each env it serves.** Verify scripts (`wait-for-candidate-ready.sh`, `smoke-candidate.sh`, `verify-buildsha.sh`, `verify-deployment.sh`) read URLs from here — without it they fall back to a legacy `${node}-${DOMAIN}` builder that produces NXDOMAIN URLs on single-node-shaped forks. Schema is enforced by `infra/catalog/_schema.json`.
+
+```yaml
+# infra/catalog/<your-node>.yaml
+public_url:
+  candidate-a: https://<user-fqdn-for-candidate-a>
+  preview: https://<user-fqdn-for-preview>
+  production: https://<user-fqdn-for-production>
+```
+
+URLs MUST match the `<user-fqdn>` A records you just created in Phase 6. Service-type entries (e.g. `scheduler-worker`) that have no Ingress omit this block.
+
+**Gate:** `bash -c '. scripts/ci/lib/image-tags.sh && public_url_for_target candidate-a <your-node>'` prints the candidate-a URL non-empty.
+
 ### Phase 7: Deploy & Verify
 
 **Goal:** Green CI run, app responding.
@@ -164,6 +180,7 @@ Wire the new VM's Postgres into Grafana Cloud so agents can query DB state witho
 - [ ] Production deployment green
 - [ ] DNS resolves for both environments
 - [ ] `/readyz` returns 200 on both domains
+- [ ] `infra/catalog/<node>.yaml::public_url` declared for every env the node serves (bug.5002)
 
 ## Anti-patterns
 
