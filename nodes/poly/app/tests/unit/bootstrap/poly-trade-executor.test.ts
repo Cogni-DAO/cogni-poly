@@ -459,6 +459,48 @@ describe("createPolyTradeExecutorFactory", () => {
     });
     expect(walletPort.authorizeIntent).toHaveBeenCalledTimes(1);
   });
+
+  it("PAPER_DISPATCH_IS_ENV_ONLY — placeIntent with attributes.mode='paper' still routes to the live CLOB when PAPER_ENFORCE_MODE is unset", async () => {
+    // Regression guard for the per-target paper-dispatch trapdoor closed in
+    // the env-only-dispatch hardening. Even with `intent.attributes.mode='paper'`,
+    // a non-paper-enforced executor must hit the live CLOB adapter — never the
+    // paper sidecar. The only paper path is `PAPER_ENFORCE_MODE=paper` at
+    // process start, which selects `buildPaperOnlyExecutor` ahead of time.
+    const receipt: OrderReceipt = {
+      order_id: "0xlive",
+      client_order_id: "0xclient",
+      status: "pending",
+      filled_size_usdc: 0,
+      submitted_at: "2026-04-23T00:00:00.000Z",
+    };
+    placeOrder.mockResolvedValue(receipt);
+    const walletPort = makeWalletPort();
+
+    const factory = createPolyTradeExecutorFactory({
+      walletPort,
+      logger: makeLogger() as never,
+      metrics: makeMetrics() as never,
+      host: "https://clob.polymarket.com",
+      polygonRpcUrl: "https://polygon.example",
+      // paperEnforceMode intentionally unset → `buildExecutor` runs
+    });
+    const executor = await factory.getPolyTradeExecutorFor(BILLING_ACCOUNT_ID);
+
+    const result = await executor.placeIntent({
+      provider: "polymarket",
+      market_id: `prediction-market:polymarket:${CONDITION_ID}`,
+      outcome: "YES",
+      side: "BUY",
+      size_usdc: 1,
+      limit_price: 0.5,
+      client_order_id: "0xclient",
+      attributes: { mode: "paper" }, // adversarial — must NOT route to paper
+    });
+
+    expect(result).toEqual(receipt);
+    expect(placeOrder).toHaveBeenCalledTimes(1);
+    expect(walletPort.authorizeIntent).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("createOrDerivePolymarketApiKeyForSigner", () => {

@@ -911,10 +911,10 @@ async function processSellFill(args: {
       source_fill_id: fill.fill_id,
       target_wallet: fill.target_wallet,
       position_branch: "sell_close",
-      // PLACEMENT_DISCRIMINATOR_IN_ATTRIBUTES — propagate target mode to the
-      // executor so paper-mode targets route their SELL-close through the
-      // sidecar (NO_SELL_IN_MIRROR forbids autonomous SELL except for target
-      // SELL mirroring; the path still routes through this seam).
+      // Advisory metadata only — see PAPER_DISPATCH_IS_ENV_ONLY in
+      // poly-trade-executor.ts. Stamped on the intent + ledger row so Loki
+      // queries can filter by execution_mode, but the executor never
+      // dispatches on this value. Routing is env-driven (PAPER_ENFORCE_MODE).
       mode: deps.target.mode,
     },
   };
