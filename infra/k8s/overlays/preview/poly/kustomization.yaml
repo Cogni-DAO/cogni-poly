@@ -23,7 +23,7 @@ images:
   # `newTag` edit here pointing at the workflow's `sha-<short>` output.
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    newTag: "sha-pending-first-build"
+    newTag: "sha-c18eed2"
 
 patches:
   # Node-specific ConfigMap values.

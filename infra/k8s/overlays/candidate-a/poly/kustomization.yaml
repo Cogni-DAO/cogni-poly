@@ -25,7 +25,7 @@ images:
   # container patch below resolves through this entry.
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    newTag: "sha-pending-first-build"
+    newTag: "sha-c18eed2"
 
 patches:
   - target:
