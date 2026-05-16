@@ -779,6 +779,12 @@ function createContainer(): Container {
       serviceDb as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase<
         Record<string, unknown>
       >,
+    // candidate-a + preview set PAPER_ENFORCE_MODE=paper; in those envs the
+    // executor dispatcher forces every placement through the paper sidecar
+    // (no wallet signing). Skip the wallet_connections + wallet_grants
+    // activation joins so targets activate the moment they're added, without
+    // requiring Privy wallet onboarding the user doesn't need for paper.
+    paperEnforced: env.PAPER_ENFORCE_MODE === "paper",
   });
 
   // Per-tenant trade-executor factory. Lazily constructs a
