@@ -111,11 +111,14 @@ Two valid consumers:
 **1. Ad-hoc / `/validate-candidate` skill — `playwright-cli`** (preferred for one-off validation runs):
 
 ```bash
-playwright-cli -s=validate state-load .local-auth/candidate-a-poly.storageState.json
 playwright-cli -s=validate open https://poly-test.cognidao.org
+playwright-cli -s=validate state-load .local-auth/candidate-a-poly.storageState.json
+playwright-cli -s=validate reload   # cookies pick up; do NOT re-open (that wipes state)
 playwright-cli -s=validate snapshot
 playwright-cli -s=validate close
 ```
+
+Order matters: `state-load` requires an already-open browser, and a second `open` resets the in-memory user-data-dir and discards the loaded cookies. Use `goto <url>` or `reload` to move around after `state-load`.
 
 **2. Committed Playwright test files — `@playwright/test`** (for code that lives in the repo and runs in CI):
 
