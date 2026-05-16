@@ -33,11 +33,113 @@ Run the **full mirror algorithm end-to-end** — `planMirrorFromFill`, `OrderLed
 
 - `candidate-a` (every flighted PR) is paper-enforced — bugs never burn real money.
 - `preview` is the continuous always-paper twin where the AI iterates against live order books over days/weeks.
-- `production` continues as today; per-target `mode` lets new wallets enter as `paper` before promoting to `live`.
+- `production` continues as today, **live-only**. The original spec sketched a per-target `mode='paper'` trapdoor in PROD; that path was hardened out as `PAPER_DISPATCH_IS_ENV_ONLY` — see Current Status below.
 
 The strict constraint is that **we write no fill logic**. The fill model lives in [`agent-next/polymarket-paper-trader`](https://github.com/agent-next/polymarket-paper-trader) (MIT). Strategy constraints — limit-orders-only and ride-to-redemption — eliminate the failure modes (SELL slippage, neg-risk SELL routing, market-order partial fills) that would otherwise force us to model matching engine behaviour. Realistic fidelity under these constraints: ~96-98%, irreducible gap is queue position at congested price levels.
 
+## Current Status (2026-05-16)
+
+PR1–PR3 of the original roadmap (below) shipped in PR #56 (merged to `main` as `fdbc11399`). Verified:
+
+| Surface                                                 | State                                                                                                                                                                                                                             |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `poly-test` (cand-a)                                    | `PAPER_ENFORCE_MODE=paper`. Sidecar running. 20 paper placements in last 1h against `swisstony` (verified via Loki).                                                                                                              |
+| `poly-preview`                                          | `PAPER_ENFORCE_MODE=paper`. Sidecar running. Same envelope as cand-a, more stable (no per-PR rebuilds).                                                                                                                           |
+| `poly` (PROD)                                           | Live trading. Sidecar NOT deployed. Per-target `mode='paper'` would fail today (no sidecar). Not yet needed.                                                                                                                      |
+| `/api/v1/agent/register` (poly-test)                    | Live. Mints `cogni_ag_sk_v1_...` bearer + `billing_account_id`. **The AI-authable entry point.**                                                                                                                                  |
+| `/api/v1/poly/copy-trade/{targets,targets/[id],orders}` | All accept bearer via `resolveRequestIdentity` (bearer-first, cookie fallback).                                                                                                                                                   |
+| Multi-tenant data layer                                 | RLS enforced on `poly_copy_trade_{targets,fills,decisions,attribution}` per `billing_account_id`. Cross-tenant enumerator (`listAllActive`) does NOT dedupe by target_wallet — every tenant's row produces independent decisions. |
+
+**In-flight PRs (2026-05-16):**
+
+- **PR #60** — `mode='paper'` DB stamping (the `5b545b627` commit). Closes the gap where paper-enforced envs wrote `mode='live'` on every ledger row. **Superseded by the hardening PR below**, which also fixes the analytics gap and additionally rips out the per-target dispatch trapdoor.
+- **Hardening PR (this branch, `derekg1729/paper-mode-env-only-dispatch`)** — establishes `PAPER_DISPATCH_IS_ENV_ONLY`. `PAPER_ENFORCE_MODE` is the sole switch that activates paper routing. Per-target `mode` column on `poly_copy_trade_targets` becomes pure advisory metadata (still stamped for analytics, no longer dispatched on). `intent.attributes.mode` retained for Loki visibility, ignored by the executor. Closes a latent trapdoor where a DB row with `mode='paper'` in PROD could (in theory, given a sidecar deployment) silently mis-route money-path placements to a paper sidecar.
+
+**Real gaps blocking the next phase** (each verified against code, NOT speculation):
+
+1. **`/copy-trade/orders` ignores tenant.** `nodes/poly/app/src/app/api/v1/poly/copy-trade/orders/route.ts:89` — `TODO(HARDCODED_USER)`. Calls `ledger.listRecent({limit, target_id})` with zero tenant scoping; every authenticated caller sees every tenant's ledger rows. This is the **#1 blocker for multi-tenant paper experimentation** because each agent must observe its own PnL, not the global pool. **A worktree subagent is closing this on `derekg1729/orders-route-tenant-scope` (separate PR).**
+2. **~80% of paper orders show `status=cancelled` in cogni DB.** Reported in PR #56 handoff as bug #6, never investigated. Could be reconciler grace-window aging, could be a real sidecar/pm_trader bug. **Until diagnosed, no paper PnL number is trustworthy.**
+3. **PROD has no paper sidecar.** With `PAPER_DISPATCH_IS_ENV_ONLY` in force, that's now by design — PROD is live-only and any `mode='paper'` target row there is advisory metadata only. If we ever want PROD shadow-paper later, it would require deploying the sidecar AND changing the env-only invariant (deliberate, not accidental).
+
+**Routes that do NOT need to be built** (prior handoff claimed otherwise; verified false):
+
+- `/api/v1/poly/copy-trade/config` — zero source references. `poly_copy_trade_config` table dropped in migration 0036. The two tunable knobs (`mirror_filter_percentile`, `mirror_max_usdc_per_trade`) already live on `poly_copy_trade_targets` and are already PATCH-able via `/copy-trade/targets/[id]`.
+- Bearer auth on copy-trade routes — already wired. `auth: { getSessionUser }` aliases to `resolveRequestIdentity` (bearer-first). The "missing bearer support" claim came from a token-scope mistake (operator-domain token used against poly-domain; HMAC `AUTH_SECRET` is per-environment).
+
+## Next Phase — MVP: Trustworthy Multi-Tenant Paper Experimentation
+
+> The goal of paper trading is NOT just "place fake orders." It is to find a more profitable copy-trade config than Derek's current `swisstony p80 $15` real-money policy, _without burning real USDC during the search_. Every part of this MVP is in service of that.
+
+### Outcome
+
+Within 2 weeks, we have:
+
+1. **A trust anchor** — a paper-mode agent on `preview` running Derek's exact PROD config (`swisstony, mirror_filter_percentile=80, mirror_max_usdc_per_trade=15`), whose daily PnL tracks Derek's PROD PnL within ±X% over a rolling window. Trust score is reviewable on the dashboard.
+2. **N concurrent experimental agents** — each a separate `billing_account_id` on `preview`, each with one (target, percentile, max_usdc) triple. Each agent's PnL is observable in isolation. Comparison ranks them against the trust anchor.
+3. **A clean promotion path** — winning config → manual PATCH to Derek's PROD `copy_trade_targets` row → live capture of the alpha. No re-arch needed; the same DB row, same enumerator, same executor.
+
+### Plan
+
+**Phase 0 — Unblock observability + harden the dispatcher (2 PRs).** Don't run any experiments until both land.
+
+| #   | Deliverable                                                                                                                                                                                                                                                                                               | Status                        | Files                                                                                                                                            |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0.1 | `mode='paper'` DB stamping + hardened env-only dispatch (`PAPER_DISPATCH_IS_ENV_ONLY`). Removes the per-target trapdoor in `buildExecutor`; collapses `getOrder`/`cancelOrder` to live-only. Adds a regression test asserting `intent.attributes.mode='paper'` does NOT alter routing. Supersedes PR #60. | in flight — this branch       | `bootstrap/container.ts`, `bootstrap/capabilities/poly-trade-executor.ts`, `features/copy-trade/{plan-mirror,mirror-pipeline}.ts`, executor test |
+| 0.2 | Close `HARDCODED_USER` on `/copy-trade/orders`. Scope to `sessionUser`'s `billing_account_id`. Add `mode` to response shape. Add a `mode=paper\|live\|all` query param (default `all`). Mirror the pattern from `/targets` route's `withTenantScope`.                                                     | in flight — worktree subagent | `nodes/poly/app/src/app/api/v1/poly/copy-trade/orders/route.ts` + contract                                                                       |
+| 0.3 | Audit other ledger-reading routes for the same gap (`/wallet/execution`, `/wallet/overview`, `/internal/sync-health`, etc). File bugs for any that leak.                                                                                                                                                  | not started                   | grep `HARDCODED_USER` — known list above                                                                                                         |
+| 0.4 | Diagnose the 80% cancel rate. Run the kubectl-pg-pod query against cand-a `poly_copy_trade_fills WHERE mode='paper'` after 0.1 lands. Decide: reconciler grace-window tuning, sidecar OrderState bug, or pm_trader behavior. **Cannot trust paper PnL until known.**                                      | not started                   | likely `features/redeem/`, `infra/images/poly-paper-sidecar/server.py`, or both                                                                  |
+
+**Phase 1 — Establish the trust anchor (no code; ~1 day to set up + 1 week to observe).**
+
+| #   | Action                                                                                                                                                                                                                                                                                |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.1 | `curl POST https://poly-preview.cognidao.org/api/v1/agent/register -d '{"name":"trust-twin-swisstony"}'`. Save the bearer + `billing_account_id`.                                                                                                                                     |
+| 1.2 | `POST /copy-trade/targets` with `target_wallet=0x204f72…` (swisstony). PATCH the returned `target_id` with `mirror_filter_percentile=80, mirror_max_usdc_per_trade=15`. Identical to Derek's PROD config.                                                                             |
+| 1.3 | Daily comparison: PROD swisstony PnL (from Derek's tenant ledger on `poly.cognidao.org`) vs preview trust-twin PnL (from the bearer's tenant ledger on `poly-preview.cognidao.org`). Both poll the same external target → same fills → comparable.                                    |
+| 1.4 | Track divergence in a memo. Expected divergence: bid/ask spread + queue position (the irreducible ~2-4% fidelity gap). If actual divergence is >10% in either direction, halt and investigate. Likely culprits: cancel-rate bug, mode-stamp bug, sidecar fill-loop, neg-risk markets. |
+
+**Phase 2 — Multi-tenant experimentation (no code beyond Phase 0; ~ongoing).**
+
+Once the trust twin is calibrated:
+
+| #   | Action                                                                                                                                                                                                                                                                      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2.1 | For each experimental config: register a new agent, POST the target(s), PATCH the knobs. One config = one tenant. Knob space today: `mirror_filter_percentile ∈ {50, 75, 80, 90, 95, 99}` × `mirror_max_usdc_per_trade ∈ {5, 15, 30}` × `target_wallet ∈ {swisstony, RN1}`. |
+| 2.2 | Daily PnL ranking across tenants. Trust-twin tenant is the baseline. Any tenant outperforming by >10% sustained over 5 days is a promotion candidate.                                                                                                                       |
+| 2.3 | Promotion = PATCH Derek's PROD target row to the winning config. The data layer already isolates everything; no rollout work.                                                                                                                                               |
+
+**Phase 3 — Knob expansion (only if Phase 2 hits a ceiling; needs research, not coding-first).**
+
+Knobs currently hardcoded in `nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts`:
+
+- pXX ladder values for swisstony / RN1 (the actual dollar thresholds at p50/p75/p90/p95/p99 — captured 2026-05-03, may be stale)
+- Position-followup defaults: `min_mirror_position_usdc`, `market_floor_multiple`, `min_target_hedge_ratio`, `max_hedge_fraction_of_position`, `max_layer_fraction_of_position`
+- Sizing-policy dispatch by wallet (`sizingPolicyKindForTargetWallet`)
+
+If experimentation in Phase 2 shows these are the binding constraints, promote each to a per-target DB column + PATCH-route field. Each is a migration + 1 line in `buildMirrorTargetConfig`. **Do not preemptively promote knobs — let experimental signal drive what gets DB-backed.**
+
+**Phase 4 — `/delta-minimizer` spikes against paper.** Once Phase 2 produces a config that beats trust-twin but differs from swisstony's apparent positioning, run `/delta-minimizer` on individual markets to understand WHY the config wins (or surfaces a bug). This is the loop the user named as "many delta-minimizer research spikes."
+
+### Why this MVP is the pareto optimum
+
+- **Zero new infra.** Sidecar, multi-tenant DB schema, bearer auth, RLS, agent-register — all already exist.
+- **Zero new auth code.** `resolveRequestIdentity` already does bearer + cookie. Per-tenant scoping needs ONE route fix (`/orders`), not a re-architecture.
+- **PROD untouched, hardened.** `PAPER_DISPATCH_IS_ENV_ONLY` removes the latent per-target trapdoor. Paper-trust validation happens entirely on `preview` because both PROD and preview observe the same external target wallet — no PROD-side paper sidecar needed.
+- **Failure-mode aware.** Phase 0.4 (cancel-rate diagnosis) is mandatory before any experiment — without it the trust anchor itself is unreliable.
+- **Future-proofed against accidental paper-routing.** Adding paper alongside live in PROD now requires an explicit env-flag change + sidecar deployment, not just a DB column flip. Both gates have to fail open at the same time.
+
+### What this MVP explicitly does NOT include
+
+- Building `/copy-trade/config` route. Non-existent. Doesn't need to exist.
+- Adding bearer auth code. Already shipped.
+- Deploying paper sidecar to PROD. Not required for the trust-validation path chosen here.
+- Per-target paper-mode dispatch in `buildExecutor`. **Hardened out** as `PAPER_DISPATCH_IS_ENV_ONLY` — see in-flight PRs above.
+- New "AI agent identity" abstractions beyond the existing `users + billing_accounts + bearer keys` triple.
+- A "shadow account" auto-mirroring abstraction. Manual config-mirroring on the trust anchor is sufficient for v0; auto-mirror is friction for future Derek.
+
 ## Roadmap
+
+> **Original PR1–PR3 plan below is preserved for historical context. All three shipped in PR #56 (merged `fdbc11399`).** The "Status" checkboxes were never ticked because the work moved to a single combined PR, but the design notes that follow are the as-built spec.
 
 ### Execution plan — 2 PRs
 
