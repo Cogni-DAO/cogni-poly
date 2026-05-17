@@ -190,20 +190,20 @@ Anything that could run independently → Shape A instead.
         test_target: test                           # optional pre-push smoke (no --push)
   ```
 
-- [ ] Add an entry to the host's overlay's `images:` block (per env where the image should run):
+- [ ] Add an entry to the host's overlay's `images:` block (per env where the image should run). Example for poly + a hypothetical sidecar:
 
   ```yaml
-  # infra/k8s/overlays/<env>/<host>/kustomization.yaml
+  # infra/k8s/overlays/<env>/poly/kustomization.yaml
   images:
-    - name: ghcr.io/cogni-dao/<host> # host app — already there
-      newName: ghcr.io/cogni-dao/<host>
+    - name: ghcr.io/cogni-dao/cogni-poly # host app's image_name (from catalog) — already there
+      newName: ghcr.io/cogni-dao/cogni-poly
       digest: "sha256:..."
-    - name: ghcr.io/cogni-dao/<host>-<sub> # add this entry
-      newName: ghcr.io/cogni-dao/<host>-<sub>
-      newTag: "<env>-placeholder-<host>-<sub>" # placeholder; promote-k8s-image overwrites
+    - name: ghcr.io/cogni-dao/poly-<sub> # new sidecar — must match catalog images[].image_name
+      newName: ghcr.io/cogni-dao/poly-<sub>
+      newTag: "<env>-placeholder-poly-<sub>" # placeholder; promote-k8s-image overwrites
   ```
 
-  `promote-build-payload.sh` rewrites BOTH entries on flight — host and sidecar are independent because the script matches by `name:`.
+  `promote-build-payload.sh` rewrites BOTH entries on flight — host and sidecar are independent because `promote-k8s-image.sh` matches by `name:`. **The overlay `images[]` entry MUST exist before the first promote** — otherwise `promote-k8s-image` returns exit-2 (legitimate skip, no overlay write), and the deploy unit's `promoted_apps` excludes that image. Add the entry as a placeholder in the same PR that adds the catalog `images[]` entry.
 
 - [ ] If sidecar: add a container patch to inject the second container in the host's Deployment. Reference: [`infra/k8s/overlays/candidate-a/poly/kustomization.yaml`](../../infra/k8s/overlays/candidate-a/poly/kustomization.yaml).
 - [ ] If host needs to call the sidecar, add `<NAME>_URL: http://localhost:<port>` via a ConfigMap patch in the same overlay.
@@ -354,7 +354,7 @@ Deploy state:
 
 Compose / legacy:
 
-- Compose service for code we author (Shape A, no exceptions)
+- Compose service for code we author — use Shape A instead, no exceptions
 - Compose service with bare `image: vendor/foo` (no tag → drift on every VM rebuild)
 - Compose service with `restart: always` masking a crash loop — use `restart: unless-stopped` + alerting
 
@@ -378,10 +378,10 @@ Process:
 
 | Shape                     | Forward                                                                                              | Rollback                                                                                                                                   |
 | ------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1. Standalone k8s         | `gh workflow run promote-and-deploy.yml -f environment=<env> -f source_sha=<new> -f build_sha=<new>` | Same workflow with the prior `source_sha` — look up via `git log deploy/<env>-<name> --oneline` or `.promote-state/source-sha-by-app.json` |
+| A. New deploy unit        | `gh workflow run promote-and-deploy.yml -f environment=<env> -f source_sha=<new> -f build_sha=<new>` | Same workflow with the prior `source_sha` — look up via `git log deploy/<env>-<name> --oneline` or `.promote-state/source-sha-by-app.json` |
 | B. Image on existing unit | Standard catalog v2 path — promote-build-payload bumps every image of the host's deploy unit         | `git revert <catalog-or-source-commit>` → re-promote                                                                                       |
-| 4. Compose                | `candidate-flight-infra` / `promote-and-deploy` with new `infra/compose/**`                          | Same workflow with `--ref <older-sha>`                                                                                                     |
-| 5. Cron handler           | Standard Shape A rollback                                                                            | Same. For "stop the cron immediately" without a redeploy, document a runtime feature-flag at handler creation.                             |
+| Compose (legacy)          | `candidate-flight-infra` / `promote-and-deploy` with new `infra/compose/**`                          | Same workflow with `--ref <older-sha>`                                                                                                     |
+| Cron handler              | Standard Shape A rollback                                                                            | Same. For "stop the cron immediately" without a redeploy, document a runtime feature-flag at handler creation.                             |
 
 For new services, "rollback = remove" — see Deprecation in [Services Architecture Spec](../spec/services-architecture.md) or run the Shape A steps in reverse (empty deploy state → remove AppSet generator → remove catalog → delete deploy branches → remove source).
 
