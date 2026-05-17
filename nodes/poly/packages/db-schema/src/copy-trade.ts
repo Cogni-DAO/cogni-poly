@@ -107,7 +107,7 @@ export const polyCopyTradeTargets = pgTable(
     ),
     check(
       "poly_copy_trade_targets_sizing_policy_kind_check",
-      sql`${table.sizingPolicyKind} IN ('auto','min_bet','target_percentile_scaled')`
+      sql`${table.sizingPolicyKind} IN ('auto','min_bet','target_percentile_scaled','position_gap')`
     ),
     // One active row per (tenant, wallet). Soft-deleted rows allowed to coexist
     // so a previously-disabled wallet can be re-added without violating uniqueness.

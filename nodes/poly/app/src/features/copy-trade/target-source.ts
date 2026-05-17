@@ -49,7 +49,11 @@ export type WalletAddress = `0x${string}`;
  * One enumerated target row carrying enough tenant attribution for the
  * mirror-coordinator to set `withTenantScope` for fills/decisions writes.
  */
-export type SizingPolicyKind = "auto" | "min_bet" | "target_percentile_scaled";
+export type SizingPolicyKind =
+  | "auto"
+  | "min_bet"
+  | "target_percentile_scaled"
+  | "position_gap";
 
 export interface EnumeratedTarget {
   billingAccountId: string;
@@ -306,7 +310,8 @@ function coerceSizingPolicyKind(value: string): SizingPolicyKind {
   if (
     value === "auto" ||
     value === "min_bet" ||
-    value === "target_percentile_scaled"
+    value === "target_percentile_scaled" ||
+    value === "position_gap"
   ) {
     return value;
   }

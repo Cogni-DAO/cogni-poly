@@ -66,7 +66,11 @@ function buildTargetView(params: {
   createdByUserId: string;
   mirrorFilterPercentile: number;
   mirrorMaxUsdcPerTrade: number;
-  sizingPolicyKind: "auto" | "min_bet" | "target_percentile_scaled";
+  sizingPolicyKind:
+    | "auto"
+    | "min_bet"
+    | "target_percentile_scaled"
+    | "position_gap";
   source: "env" | "db";
 }): PolyCopyTradeTarget {
   const config = buildMirrorTargetConfig({
@@ -282,11 +286,12 @@ export const POST = wrapRouteHandlerWithLogging(
  */
 function coerceStoredSizingPolicyKind(
   value: string
-): "auto" | "min_bet" | "target_percentile_scaled" {
+): "auto" | "min_bet" | "target_percentile_scaled" | "position_gap" {
   if (
     value === "auto" ||
     value === "min_bet" ||
-    value === "target_percentile_scaled"
+    value === "target_percentile_scaled" ||
+    value === "position_gap"
   ) {
     return value;
   }
