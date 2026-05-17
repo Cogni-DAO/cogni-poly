@@ -96,6 +96,12 @@ class FakeEngine:
         return d
 
     def check_orders(self) -> list[dict[str, Any]]:
+        # Match real upstream contract from vendor/pm_trader/engine.py: each
+        # result is ``{"order": <order_dict>, "action": "filled"|"rejected"|"expired"}``.
+        # The flat-dict shape this fake used previously lined up with a
+        # matching bug in server.py (reading ``d["id"]`` instead of
+        # ``d["order"]["id"]``) — both wrongs cancelled and every paper fill
+        # was silently dropped in production.
         filled = []
         for oid in list(self.fill_on_next_check):
             d = self._orders.get(oid)
@@ -104,7 +110,7 @@ class FakeEngine:
             d["status"] = "filled"
             d["filled_at"] = "2026-05-16T18:00:30+00:00"
             d["fill_price"] = d["limit_price"]
-            filled.append(d)
+            filled.append({"order": dict(d), "action": "filled"})
             self.fill_on_next_check.discard(oid)
         return filled
 
@@ -295,6 +301,89 @@ def test_cancel_existing_order_returns_204_and_flips_status(client):
 def test_cancel_invalid_id_format_returns_404(client):
     r = client.post("/orders/not-an-int/cancel")
     assert r.status_code == 404
+
+
+# ─── Regression: engine return shape contract (silent-drop bug 2026-05-17) ──
+
+
+def test_fill_loop_reads_wrapped_engine_result_not_flat(client):
+    """The real ``Engine.check_orders`` returns wrapped entries:
+    ``[{"order": {"id": N, ...}, "action": "filled"}]`` — not a flat list of
+    order dicts. The prior server.py read ``d["id"]`` from the wrapper, which
+    is always missing, so every fill was silently dropped. This test asserts
+    the wrapped shape is what propagates state, by injecting a raw wrapped
+    result directly into ``_fill_loop``'s code path through a one-shot
+    check_orders override.
+    """
+    r = client.post(
+        "/place-order",
+        json={
+            "client_order_id": "regression-wrapped-1",
+            "market_id": "prediction-market:polymarket:0xWRAP",
+            "outcome": "Yes",
+            "side": "BUY",
+            "size_usdc": 6.0,
+            "limit_price": 0.5,
+        },
+    )
+    oid = r.json()["order_id"]
+    upstream_int = server._to_upstream_int(oid)
+    assert upstream_int is not None
+    engine: FakeEngine = server.sidecar.engine  # type: ignore[assignment]
+    engine.fill_on_next_check.add(upstream_int)
+
+    deadline = time.time() + 2.0
+    while time.time() < deadline:
+        if client.get(f"/orders/{oid}").json().get("status") == "filled":
+            break
+        time.sleep(0.05)
+
+    body = client.get(f"/orders/{oid}").json()
+    assert body["status"] == "filled", f"wrapped-shape mapping broken; body={body}"
+    assert body["filled_size_usdc"] == 6.0
+
+
+def test_fill_loop_ignores_non_filled_actions(client):
+    """Engine return entries with action != 'filled' (e.g. 'expired',
+    'rejected') must NOT flip OrderState to filled. The fix added an
+    ``action != "filled"`` guard precisely for this.
+    """
+    r = client.post(
+        "/place-order",
+        json={
+            "client_order_id": "regression-action-1",
+            "market_id": "prediction-market:polymarket:0xEXP",
+            "outcome": "Yes",
+            "side": "BUY",
+            "size_usdc": 2.0,
+            "limit_price": 0.3,
+        },
+    )
+    oid = r.json()["order_id"]
+    upstream_int = server._to_upstream_int(oid)
+    engine: FakeEngine = server.sidecar.engine  # type: ignore[assignment]
+
+    # Monkey-patch a single tick to emit an action=expired entry for this id.
+    original = engine.check_orders
+    emitted = {"done": False}
+
+    def one_shot_expired() -> list[dict[str, Any]]:
+        if emitted["done"]:
+            return []
+        emitted["done"] = True
+        d = engine._orders[upstream_int]
+        return [{"order": dict(d), "action": "expired"}]
+
+    engine.check_orders = one_shot_expired  # type: ignore[assignment]
+    try:
+        time.sleep(0.5)  # several fill-loop ticks at 0.1s
+    finally:
+        engine.check_orders = original  # type: ignore[assignment]
+
+    body = client.get(f"/orders/{oid}").json()
+    assert body["status"] == "open", (
+        f"expired action incorrectly flipped status to filled; body={body}"
+    )
 
 
 def test_place_returns_boot_prefixed_order_id(client):
