@@ -8,6 +8,12 @@ namespace: cogni-preview
 resources:
   - ../../../base/node-app
 
+# Sidecar container shape lives next to its source (catalog v2). Digests still
+# resolved from `images:` block below by promote-k8s-image.sh.
+components:
+  - ../../../../../nodes/poly/sidecars/paper-trader/k8s
+  - ../../../../../nodes/poly/sidecars/echo/k8s
+
 namePrefix: poly-
 
 images:
@@ -17,8 +23,12 @@ images:
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
     digest: "sha256:e96106e8aae2478a8ee506d3f837024ac2e7a415b0cc6491bee6f4d9f541d014"
-  # poly-paper-sidecar is a catalog-v2 image; promote-build-payload manages
-  # this digest automatically. See candidate-a overlay + docs/spec/catalog-v2.md.
+  - name: ghcr.io/cogni-dao/poly-echo-sidecar
+    newName: ghcr.io/cogni-dao/poly-echo-sidecar
+    newTag: "preview-placeholder-poly-echo-sidecar"
+  # Sidecar digests written automatically by promote-build-payload (catalog v2).
+  # poly-echo-sidecar placeholder is overwritten on first promote. Container
+  # shape lives in each sidecar's k8s/ Component (referenced under `components:`).
 
 patches:
   # Node-specific ConfigMap values.
@@ -89,42 +99,6 @@ patches:
       - op: add
         path: /spec/template/metadata/labels/app.kubernetes.io~1instance
         value: "poly"
-
-  # proj.poly-paper-trading PR 2: poly-paper-sidecar — Python sidecar wrapping
-  # agent-next/polymarket-paper-trader (MIT). The TS PaperAdapter speaks to it
-  # over pod-loopback at http://localhost:9100. v0 image is a placeholder
-  # (501 on Run-phase endpoints); upstream-engine wiring lands in a follow-up
-  # commit (PR3 design pass forthcoming).
-  - target:
-      kind: Deployment
-      name: node-app
-    patch: |
-      - op: add
-        path: /spec/template/spec/containers/-
-        value:
-          name: poly-paper-sidecar
-          # No tag — kustomize substitutes the digest pinned in the `images:`
-          # block above.
-          image: ghcr.io/cogni-dao/poly-paper-sidecar
-          ports:
-            - containerPort: 9100
-              name: paper
-              protocol: TCP
-          livenessProbe:
-            httpGet: { path: /healthz, port: paper }
-            initialDelaySeconds: 5
-            periodSeconds: 30
-            timeoutSeconds: 3
-            failureThreshold: 3
-          readinessProbe:
-            httpGet: { path: /healthz, port: paper }
-            initialDelaySeconds: 3
-            periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
-          resources:
-            requests: { memory: "128Mi", cpu: "50m" }
-            limits: { memory: "384Mi", cpu: "500m" }
 
   # task.0370 step 1: Doltgres knowledge-plane migrator runs as a second initContainer
   # on the poly Deployment. DATABASE_URL maps to DOLTGRES_URL_POLY (separate from

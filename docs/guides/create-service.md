@@ -9,6 +9,8 @@ read_when: Adding any new service, sidecar, MCP server, cron job, or Compose pro
 owner: derekg1729
 created: 2026-02-06
 verified: 2026-05-16
+revisions:
+  - 2026-05-16: Shape B rewritten — sidecar container shape lives in kustomize Component co-located with source; host overlays use `components:` line + `images:` placeholder only. Zero inline container patches.
 tags: [deployment, infra, k8s, argo]
 ---
 
@@ -151,9 +153,9 @@ The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile
 
 ## Shape B: New Image on an Existing Deploy Unit
 
-A new sidecar, migrator, or stdio MCP that ships **inside an existing deploy unit's pod**. Catalog v2 makes this a one-line edit — no parallel build workflow, no manual digest dance.
+A new **in-pod image** — sidecar, migrator initContainer, or stdio MCP — that ships **inside an existing deploy unit's pod**. "In-pod image" ≠ "service": a service is a deploy unit (Shape A). Catalog v2 + kustomize Components make Shape B a thin, declarative add — no inline container patches in host overlays.
 
-**Precedent**: `poly-paper-sidecar` (catalog file [`infra/catalog/poly.yaml`](../../infra/catalog/poly.yaml)). The first-newTag-wins / `digest:`-only-rule workaround from v1 is retired — `promote-k8s-image.sh` is now image-name-aware ([Layer 4d](../spec/catalog-v2.md)).
+**Precedent**: `poly-paper-sidecar` ([`nodes/poly/sidecars/paper-trader/`](../../nodes/poly/sidecars/paper-trader/)) and `poly-echo-sidecar` ([`nodes/poly/sidecars/echo/`](../../nodes/poly/sidecars/echo/)). Both live entirely under `nodes/poly/sidecars/<name>/` (source + Dockerfile + `k8s/` Component). Host overlays reference each via one `components:` line per env where the sidecar runs.
 
 ### When
 
@@ -170,6 +172,30 @@ Anything that could run independently → Shape A instead.
 - [ ] Source + `Dockerfile` under the host's tree:
   - Sidecar: `nodes/<host>/sidecars/<name>/Dockerfile`
   - Migrator: `nodes/<host>/db/Dockerfile`
+- [ ] A kustomize Component holding the container patch — co-located with the source so shape lives once:
+
+  ```yaml
+  # nodes/<host>/sidecars/<name>/k8s/kustomization.yaml
+  apiVersion: kustomize.config.k8s.io/v1alpha1
+  kind: Component
+
+  patches:
+    - target: { kind: Deployment, name: node-app }
+      patch: |
+        - op: add
+          path: /spec/template/spec/containers/-
+          value:
+            name: <host>-<name>-sidecar
+            image: ghcr.io/cogni-dao/<host>-<name>-sidecar
+            ports:
+              - { containerPort: <port>, name: <short>, protocol: TCP }
+            livenessProbe: { httpGet: { path: /healthz, port: <short> } }
+            readinessProbe: { httpGet: { path: /healthz, port: <short> } }
+            resources:
+              requests: { memory: "64Mi", cpu: "20m" }
+              limits: { memory: "128Mi", cpu: "100m" }
+  ```
+
 - [ ] Add an entry to the host's catalog file's `images:[]`:
 
   ```yaml
@@ -178,34 +204,35 @@ Anything that could run independently → Shape A instead.
     - name: <host>          # existing role:app entry — don't touch
       role: app
       ...
-    - name: <host>-<sub>    # new — repo-wide unique
-      role: sidecar          # or "migrator"
-      dockerfile: nodes/<host>/sidecars/<sub>/Dockerfile
-      image_name: ghcr.io/cogni-dao/<host>-<sub>   # own GHCR repo, OR shared with suffix
-      image_tag_suffix: ""                          # empty when image_name is unique
-      path_prefix: nodes/<host>/sidecars/<sub>/
+    - name: <host>-<name>-sidecar    # new — repo-wide unique
+      role: sidecar                  # or "migrator"
+      dockerfile: nodes/<host>/sidecars/<name>/Dockerfile
+      image_name: ghcr.io/cogni-dao/<host>-<name>-sidecar
+      image_tag_suffix: ""
+      path_prefix: nodes/<host>/sidecars/<name>/
       build:
-        context: nodes/<host>/sidecars/<sub>
-        target: base                                # optional --target
-        test_target: test                           # optional pre-push smoke (no --push)
+        context: nodes/<host>/sidecars/<name>
+        target: base                 # optional --target
+        test_target: test            # optional pre-push smoke (no --push)
   ```
 
-- [ ] Add an entry to the host's overlay's `images:` block (per env where the image should run). Example for poly + a hypothetical sidecar:
+- [ ] Activate the sidecar in each overlay where it runs — **one line** under `components:` and **one entry** in `images:` (placeholder digest, overwritten on first promote):
 
   ```yaml
-  # infra/k8s/overlays/<env>/poly/kustomization.yaml
+  # infra/k8s/overlays/<env>/<host>/kustomization.yaml
+  components:
+    - ../../../../../nodes/<host>/sidecars/<name>/k8s   # NEW — Component holds the container patch
+
   images:
-    - name: ghcr.io/cogni-dao/cogni-poly # host app's image_name (from catalog) — already there
-      newName: ghcr.io/cogni-dao/cogni-poly
-      digest: "sha256:..."
-    - name: ghcr.io/cogni-dao/poly-<sub> # new sidecar — must match catalog images[].image_name
-      newName: ghcr.io/cogni-dao/poly-<sub>
-      newTag: "<env>-placeholder-poly-<sub>" # placeholder; promote-k8s-image overwrites
+    - name: ghcr.io/cogni-dao/<host>                    # host app (already there)
+      ...
+    - name: ghcr.io/cogni-dao/<host>-<name>-sidecar     # NEW — must match catalog image_name
+      newName: ghcr.io/cogni-dao/<host>-<name>-sidecar
+      newTag: "<env>-placeholder-<host>-<name>-sidecar" # overwritten by promote-k8s-image
   ```
 
-  `promote-build-payload.sh` rewrites BOTH entries on flight — host and sidecar are independent because `promote-k8s-image.sh` matches by `name:`. **The overlay `images[]` entry MUST exist before the first promote** — otherwise `promote-k8s-image` returns exit-2 (legitimate skip, no overlay write), and the deploy unit's `promoted_apps` excludes that image. Add the entry as a placeholder in the same PR that adds the catalog `images[]` entry.
+  `promote-build-payload.sh` rewrites BOTH `images:` entries on flight — host and sidecar are independent because `promote-k8s-image.sh` matches by `name:`. **The overlay `images[]` entry MUST exist before the first promote** — otherwise `promote-k8s-image` returns exit-2 (legitimate skip, no overlay write). Container _shape_ (port, probes, resources) lives in the Component file and is never edited per overlay.
 
-- [ ] If sidecar: add a container patch to inject the second container in the host's Deployment. Reference: [`infra/k8s/overlays/candidate-a/poly/kustomization.yaml`](../../infra/k8s/overlays/candidate-a/poly/kustomization.yaml).
 - [ ] If host needs to call the sidecar, add `<NAME>_URL: http://localhost:<port>` via a ConfigMap patch in the same overlay.
 
 ### Production overlay decision
@@ -349,6 +376,7 @@ Deploy state:
 - Adding an `images:` entry to an overlay without a matching `images[]` entry in the host catalog file — `pnpm check:catalog` won't catch this end of the contract, but promote-build-payload won't promote the unknown digest either (silent stale-image).
 - Catalog entry without a matching AppSet generator block (silent: pipeline goes green, service never deploys)
 - Sidecar without its own `livenessProbe`/`readinessProbe` (host pod becomes Ready while sidecar is broken)
+- **Sidecar container patch written inline in a host overlay** — container _shape_ (port, probes, resources) lives in the sidecar's own `k8s/` Component, not in `infra/k8s/overlays/<env>/<host>/kustomization.yaml`. Inline = duplicated across envs = drift.
 - Hand-editing `deploy/<env>-<name>` directly instead of patching the `main` overlay (bypasses review + single-domain-scope)
 - Adding to the catalog a service that should not gate flights — drop it from the catalog instead
 
