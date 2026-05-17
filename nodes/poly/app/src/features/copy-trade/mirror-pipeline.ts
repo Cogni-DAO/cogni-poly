@@ -8,7 +8,7 @@
  * Invariants:
  *   - COPY_TRADE_ONLY_PIPES — the pipeline is the only slice file that imports both `trading/` and `wallet-watch/`.
  *   - INSERT_BEFORE_PLACE — `order-ledger.insertPending` runs BEFORE the placeIntent executor. `markOrderId` / `markError` run AFTER. Crash between insert and place leaves a pending row whose `client_order_id` will be in the next tick's `already_placed_ids`, so `planMirrorFromFill()` returns `skip/already_placed`.
- *   - IDEMPOTENT_BY_CLIENT_ID — `client_order_id = clientOrderIdFor(target.target_id, fill.fill_id)`, pinned helper. Deterministic from the PK pair so re-runs dedupe.
+ *   - IDEMPOTENT_BY_CLIENT_ID — `client_order_id = clientOrderIdFor(target.billing_account_id, target.target_id, fill.fill_id)`, pinned helper. Deterministic from the per-tenant PK triple so re-runs dedupe within a tenant; N tenants mirroring the same fill produce N distinct client_order_ids.
  *   - RECORD_EVERY_DECISION — `order-ledger.recordDecision` fires for EVERY planMirrorFromFill() outcome (placed, skipped, or error). Supports divergence analysis without the fills ledger.
  *   - DECISIONS_TOTAL_HAS_SOURCE — `poly_mirror_decisions_total{outcome, reason, source, placement}` always carries `source` (v0 = `"data-api"`) AND `placement` (`"limit"` | `"market_fok"`).
  *   - DECISION_LAG_OBSERVED_ONCE (task.5042) — every fill emits exactly one `poly_mirror_decision_lag_ms{source}` observation, measured as `decided_at - fill.observed_at`, clamped ≥0. The same `lag_ms_total` is attached as a logger-child field so every downstream decision log line (skip / placed / error / SELL-close) inherits it without per-site edits. Measurement-first lever for root-causing target-fill → mirror-decision lag before any fill-source rebuild.
@@ -260,7 +260,11 @@ async function processFill(
   clock: () => Date,
   parentLog: LoggerPort
 ): Promise<void> {
-  const client_order_id = clientOrderIdFor(deps.target.target_id, fill.fill_id);
+  const client_order_id = clientOrderIdFor(
+    deps.target.billing_account_id,
+    deps.target.target_id,
+    fill.fill_id
+  );
   const placement: PlacementWire =
     deps.target.placement.kind === "mirror_limit" ? "limit" : "market_fok";
 
@@ -370,6 +374,7 @@ async function processFill(
     config: deps.target,
     state: {
       already_placed_ids: snapshot.already_placed_ids,
+      placed_fill_ids: snapshot.placed_fill_ids,
       cumulative_intent_usdc_for_market,
       position,
       ...(targetPosition !== undefined

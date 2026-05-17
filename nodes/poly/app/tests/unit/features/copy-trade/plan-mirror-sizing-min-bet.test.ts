@@ -20,10 +20,12 @@ import type {
 } from "@/features/copy-trade/types";
 
 const TARGET_ID = "11111111-1111-4111-8111-111111111111";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
 
 const CLEAN_STATE: RuntimeState = {
   already_placed_ids: [],
+  placed_fill_ids: [],
 };
 
 function makeConfig(max_usdc_per_condition: number): MirrorTargetConfig {
@@ -63,7 +65,11 @@ describe("planMirrorFromFill() — sizing policy: kind=min_bet (task.0404)", () 
       fill,
       config: makeConfig(5),
       state: CLEAN_STATE,
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 5, // 5 shares × $0.5 = $2.5 — share-floor below USDC floor
       min_usdc_notional: 2,
     });
@@ -79,7 +85,11 @@ describe("planMirrorFromFill() — sizing policy: kind=min_bet (task.0404)", () 
       fill,
       config: makeConfig(5),
       state: CLEAN_STATE,
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 3,
     });
@@ -93,7 +103,11 @@ describe("planMirrorFromFill() — sizing policy: kind=min_bet (task.0404)", () 
       fill,
       config: makeConfig(5),
       state: CLEAN_STATE,
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 5,
       min_usdc_notional: undefined,
     });
@@ -107,7 +121,11 @@ describe("planMirrorFromFill() — sizing policy: kind=min_bet (task.0404)", () 
       fill,
       config: makeConfig(5), // ceiling $5
       state: CLEAN_STATE,
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 10, // market wants $10 → above ceiling
     });
@@ -121,7 +139,11 @@ describe("planMirrorFromFill() — sizing policy: kind=min_bet (task.0404)", () 
       fill,
       config: makeConfig(5), // ceiling $5
       state: CLEAN_STATE,
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 6, // 6 × 0.99 = $5.94 — share-floor exceeds ceiling
       min_usdc_notional: 1,
     });
@@ -137,7 +159,11 @@ describe("planMirrorFromFill() — sizing policy: kind=min_bet (task.0404)", () 
       fill,
       config: makeConfig(5),
       state: CLEAN_STATE,
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: undefined,
       min_usdc_notional: 1,
     });
@@ -152,9 +178,14 @@ describe("planMirrorFromFill() — sizing policy: kind=min_bet (task.0404)", () 
       config: makeConfig(5),
       state: {
         already_placed_ids: [],
+        placed_fill_ids: [],
         cumulative_intent_usdc_for_market: 4.5,
       },
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });

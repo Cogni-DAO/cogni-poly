@@ -22,6 +22,7 @@ import type {
 } from "@/features/copy-trade/types";
 
 const TARGET_ID = "11111111-1111-1111-1111-111111111111";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea";
 const CONDITION = "prediction-market:polymarket:0xcondition";
 const TOKEN_YES = "1111111111";
@@ -53,7 +54,7 @@ const CONFIG: MirrorTargetConfig = {
   placement: { kind: "mirror_limit" },
 };
 
-const COID = clientOrderIdFor(TARGET_ID, FILL.fill_id);
+const COID = clientOrderIdFor(BILLING_ACCOUNT_ID, TARGET_ID, FILL.fill_id);
 
 const POSITION_VIEW: MirrorPositionView = {
   condition_id: CONDITION,
@@ -66,9 +67,13 @@ const POSITION_VIEW: MirrorPositionView = {
 
 describe("planMirrorFromFill — state.position passthrough (v0)", () => {
   it("accepts state.position without affecting outcome (pure passthrough in v0)", () => {
-    const stateNoPos: RuntimeState = { already_placed_ids: [] };
+    const stateNoPos: RuntimeState = {
+      already_placed_ids: [],
+      placed_fill_ids: [],
+    };
     const stateWithPos: RuntimeState = {
       already_placed_ids: [],
+      placed_fill_ids: [],
       position: POSITION_VIEW,
     };
     const planA = planMirrorFromFill({
@@ -91,6 +96,7 @@ describe("planMirrorFromFill — state.position passthrough (v0)", () => {
   it("PLAN_IS_PURE — repeat invocations with same inputs return deep-equal outputs", () => {
     const state: RuntimeState = {
       already_placed_ids: [],
+      placed_fill_ids: [],
       position: POSITION_VIEW,
     };
     const args = {
@@ -111,6 +117,7 @@ describe("planMirrorFromFill — state.position passthrough (v0)", () => {
     const before = JSON.parse(JSON.stringify(POSITION_VIEW));
     const state: RuntimeState = {
       already_placed_ids: [],
+      placed_fill_ids: [],
       position: POSITION_VIEW,
     };
     planMirrorFromFill({

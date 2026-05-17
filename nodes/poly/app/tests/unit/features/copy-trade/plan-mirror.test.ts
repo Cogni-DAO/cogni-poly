@@ -21,6 +21,7 @@ import type {
 } from "@/features/copy-trade/types";
 
 const TARGET_ID = "11111111-1111-1111-1111-111111111111";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea";
 
 const FILL: Fill = {
@@ -51,9 +52,10 @@ const CONFIG: MirrorTargetConfig = {
 
 const CLEAN_STATE: RuntimeState = {
   already_placed_ids: [],
+  placed_fill_ids: [],
 };
 
-const COID = clientOrderIdFor(TARGET_ID, FILL.fill_id);
+const COID = clientOrderIdFor(BILLING_ACCOUNT_ID, TARGET_ID, FILL.fill_id);
 
 describe("planMirrorFromFill() — skip branches", () => {
   it("already_placed when client_order_id is in already_placed_ids", () => {
@@ -62,6 +64,35 @@ describe("planMirrorFromFill() — skip branches", () => {
       config: CONFIG,
       state: { ...CLEAN_STATE, already_placed_ids: [COID] },
       client_order_id: COID,
+    });
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "already_placed",
+      position_branch: "new_entry",
+    });
+  });
+
+  it("already_placed when fill_id is in placed_fill_ids even if COID differs (regression guard for clientOrderIdFor shape migration)", () => {
+    // Models the post-multi-tenant-PK-migration catch-up scenario: an
+    // existing row was written with the legacy 2-arg
+    // `clientOrderIdFor(target, fill)` shape, so its stored COID does NOT
+    // match the new 3-arg form we'd compute now. `already_placed_ids` —
+    // populated from stored COIDs — therefore misses. Without the
+    // `placed_fill_ids` backstop, plan-mirror would proceed to place; the
+    // `(billing, target, fill)` PK silently no-ops the insertPending, but
+    // placeOrder still runs → real duplicate placement at the CLOB on a
+    // PROD environment where the position is still open.
+    const newCOID = COID; // freshly computed (3-arg)
+    const legacyStoredCOID = "0xdeadbeef" as const; // simulating pre-cutover COID
+    const d = planMirrorFromFill({
+      fill: FILL,
+      config: CONFIG,
+      state: {
+        ...CLEAN_STATE,
+        already_placed_ids: [legacyStoredCOID], // does not match newCOID
+        placed_fill_ids: [FILL.fill_id], // but the (target, fill) row IS in ledger
+      },
+      client_order_id: newCOID,
     });
     expect(d).toEqual({
       kind: "skip",
@@ -289,7 +320,11 @@ describe("planMirrorFromFill() — market_past_end_date gate (bug.5043)", () => 
 
 describe("planMirrorFromFill() — idempotency round-trip", () => {
   it("client_order_id from clientOrderIdFor is what gates already_placed", () => {
-    const coid = clientOrderIdFor(CONFIG.target_id, FILL.fill_id);
+    const coid = clientOrderIdFor(
+      CONFIG.billing_account_id,
+      CONFIG.target_id,
+      FILL.fill_id
+    );
     const first = planMirrorFromFill({
       fill: FILL,
       config: CONFIG,

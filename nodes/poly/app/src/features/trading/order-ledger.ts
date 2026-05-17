@@ -179,7 +179,10 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
               )
             ),
           deps.db
-            .select({ cid: polyCopyTradeFills.clientOrderId })
+            .select({
+              cid: polyCopyTradeFills.clientOrderId,
+              fill_id: polyCopyTradeFills.fillId,
+            })
             .from(polyCopyTradeFills)
             .where(eq(polyCopyTradeFills.targetId, target_id)),
           // Generic per-(market_id, token_id) intent aggregation — net shares
@@ -235,12 +238,14 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         const today_spent_usdc = Number(spendRows[0]?.spent ?? 0);
         const fills_last_hour = Number(rateRows[0]?.n ?? 0);
         const already_placed_ids = cidRows.map((r) => r.cid);
+        const placed_fill_ids = cidRows.map((r) => r.fill_id);
         const position_aggregates = materializeIntentAggregates(positionRows);
 
         return {
           today_spent_usdc,
           fills_last_hour,
           already_placed_ids,
+          placed_fill_ids,
           position_aggregates,
         };
       } catch (err: unknown) {
@@ -259,6 +264,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           today_spent_usdc: 0,
           fills_last_hour: 0,
           already_placed_ids: [],
+          placed_fill_ids: [],
           position_aggregates: [],
         };
       }
@@ -424,7 +430,11 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           .insert(polyCopyTradeFills)
           .values(values)
           .onConflictDoNothing({
-            target: [polyCopyTradeFills.targetId, polyCopyTradeFills.fillId],
+            target: [
+              polyCopyTradeFills.billingAccountId,
+              polyCopyTradeFills.targetId,
+              polyCopyTradeFills.fillId,
+            ],
           });
       };
 

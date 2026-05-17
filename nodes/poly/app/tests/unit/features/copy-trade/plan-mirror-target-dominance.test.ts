@@ -26,6 +26,7 @@ import type {
 } from "@/features/copy-trade/types";
 
 const TARGET_ID = "11111111-1111-4111-8111-111111111111";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0x204f72f35326db932158cba6adff0b9a1da95e14" as const;
 const CONDITION_ID = "prediction-market:polymarket:0xcondition";
 const OVER_TOKEN = "0xover";
@@ -94,6 +95,7 @@ function makeState(args: {
 }): RuntimeState {
   return {
     already_placed_ids: [],
+    placed_fill_ids: [],
     cumulative_intent_usdc_for_market: 0,
     ...(args.targetPosition !== undefined
       ? { target_position: args.targetPosition }
@@ -134,7 +136,11 @@ describe("planMirrorFromFill — target-dominance branch table (bug.5048)", () =
         fill,
         config: BASE_CONFIG,
         state: makeState({ targetPosition: ASYMMETRIC_OVER }),
-        client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+        client_order_id: clientOrderIdFor(
+          BILLING_ACCOUNT_ID,
+          TARGET_ID,
+          fill.fill_id
+        ),
         min_shares: 5,
         min_usdc_notional: 1,
       });
@@ -163,7 +169,11 @@ describe("planMirrorFromFill — target-dominance branch table (bug.5048)", () =
             opposite_qty_shares: 0,
           },
         }),
-        client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+        client_order_id: clientOrderIdFor(
+          BILLING_ACCOUNT_ID,
+          TARGET_ID,
+          fill.fill_id
+        ),
         min_shares: 1,
         min_usdc_notional: 1,
       });
@@ -192,7 +202,11 @@ describe("planMirrorFromFill — target-dominance branch table (bug.5048)", () =
             opposite_qty_shares: 0,
           },
         }),
-        client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+        client_order_id: clientOrderIdFor(
+          BILLING_ACCOUNT_ID,
+          TARGET_ID,
+          fill.fill_id
+        ),
         min_shares: 5,
         min_usdc_notional: 1,
       });
@@ -238,7 +252,11 @@ describe("planMirrorFromFill — target-dominance branch table (bug.5048)", () =
             opposite_qty_shares: 0,
           },
         }),
-        client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+        client_order_id: clientOrderIdFor(
+          BILLING_ACCOUNT_ID,
+          TARGET_ID,
+          fill.fill_id
+        ),
         min_shares: 1,
         min_usdc_notional: 1,
       });
@@ -258,7 +276,11 @@ describe("planMirrorFromFill — target-dominance branch table (bug.5048)", () =
         fill,
         config: BASE_CONFIG,
         state: makeState({ targetPosition: ASYMMETRIC_OVER }),
-        client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+        client_order_id: clientOrderIdFor(
+          BILLING_ACCOUNT_ID,
+          TARGET_ID,
+          fill.fill_id
+        ),
         min_shares: 5,
         min_usdc_notional: 1,
       });
@@ -290,7 +312,11 @@ describe("planMirrorFromFill — target-dominance branch table (bug.5048)", () =
             opposite_qty_shares: 0,
           },
         }),
-        client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+        client_order_id: clientOrderIdFor(
+          BILLING_ACCOUNT_ID,
+          TARGET_ID,
+          fill.fill_id
+        ),
         min_shares: 1,
         min_usdc_notional: 1,
       });
@@ -319,7 +345,11 @@ describe("planMirrorFromFill — target-dominance branch table (bug.5048)", () =
             opposite_qty_shares: 0,
           },
         }),
-        client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+        client_order_id: clientOrderIdFor(
+          BILLING_ACCOUNT_ID,
+          TARGET_ID,
+          fill.fill_id
+        ),
         min_shares: 5,
         min_usdc_notional: 1,
       });
@@ -355,7 +385,11 @@ describe("planMirrorFromFill — target-dominance branch table (bug.5048)", () =
         fill,
         config: BASE_CONFIG,
         state: makeState({ targetPosition: balanced }),
-        client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+        client_order_id: clientOrderIdFor(
+          BILLING_ACCOUNT_ID,
+          TARGET_ID,
+          fill.fill_id
+        ),
         min_shares: 5,
         min_usdc_notional: 1,
       });
@@ -397,7 +431,11 @@ describe("planMirrorFromFill — target-dominance branch table (bug.5048)", () =
         fill,
         config: cfg,
         state: makeState({ targetPosition: multi }),
-        client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+        client_order_id: clientOrderIdFor(
+          BILLING_ACCOUNT_ID,
+          TARGET_ID,
+          fill.fill_id
+        ),
         min_shares: 5,
         min_usdc_notional: 1,
       });
@@ -416,7 +454,11 @@ describe("planMirrorFromFill — VWAP gate (bug.5048)", () => {
       fill,
       config: BASE_CONFIG,
       state: makeState({ targetPosition: ASYMMETRIC_OVER }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 5,
       min_usdc_notional: 1,
     });
@@ -431,7 +473,11 @@ describe("planMirrorFromFill — VWAP gate (bug.5048)", () => {
       fill,
       config: BASE_CONFIG,
       state: makeState({ targetPosition: ASYMMETRIC_OVER }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 5,
       min_usdc_notional: 1,
     });
@@ -444,7 +490,11 @@ describe("planMirrorFromFill — VWAP gate (bug.5048)", () => {
       fill,
       config: BASE_CONFIG,
       state: makeState({}),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 5,
       min_usdc_notional: 1,
     });
@@ -463,7 +513,11 @@ describe("planMirrorFromFill — VWAP gate (bug.5048)", () => {
       fill,
       config: cfg,
       state: makeState({ targetPosition: ASYMMETRIC_OVER }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 5,
       min_usdc_notional: 1,
     });
@@ -483,7 +537,11 @@ describe("planMirrorFromFill — skip precedence (bug.5048)", () => {
       fill,
       config: BASE_CONFIG,
       state: makeState({ targetPosition: ASYMMETRIC_OVER }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 5,
       min_usdc_notional: 1,
     });
@@ -494,13 +552,14 @@ describe("planMirrorFromFill — skip precedence (bug.5048)", () => {
 
   it("already_placed wins over dominance", () => {
     const fill = makeFill(UNDER_TOKEN, 1);
-    const cid = clientOrderIdFor(TARGET_ID, fill.fill_id);
+    const cid = clientOrderIdFor(BILLING_ACCOUNT_ID, TARGET_ID, fill.fill_id);
     const d = planMirrorFromFill({
       fill,
       config: BASE_CONFIG,
       state: {
         ...makeState({ targetPosition: ASYMMETRIC_OVER }),
         already_placed_ids: [cid],
+        placed_fill_ids: [],
       },
       client_order_id: cid,
       min_shares: 5,
@@ -525,7 +584,11 @@ describe("planMirrorFromFill — gate disabled fallback", () => {
       fill,
       config: cfg,
       state: makeState({ targetPosition: ASYMMETRIC_OVER }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 5,
       min_usdc_notional: 1,
     });

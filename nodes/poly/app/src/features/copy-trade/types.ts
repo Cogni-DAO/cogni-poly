@@ -331,8 +331,20 @@ export function aggregatePositionRows(
  * to `authorizeIntent` and is no longer part of this snapshot.
  */
 export const RuntimeStateSchema = z.object({
-  /** client_order_id values that already exist in poly_copy_trade_fills — idempotency gate. */
+  /**
+   * `client_order_id` values that already exist in poly_copy_trade_fills.
+   * Fast-path for fresh in-tick placements. Note: after the multi-tenant
+   * COID shape change, this set will MISS rows whose COID was computed with
+   * the legacy 2-arg formula; `placed_fill_ids` is the durable backstop.
+   */
   already_placed_ids: z.array(z.string()),
+  /**
+   * `fill_id` values already in poly_copy_trade_fills for this target_id.
+   * Idempotency by the actual fill-identity pair, independent of COID shape.
+   * Catches pre-cutover rows that the COID check would miss after the
+   * `clientOrderIdFor(billing, target, fill)` migration.
+   */
+  placed_fill_ids: z.array(z.string()),
   /**
    * Sum of `intent` `size_usdc` for non-canceled rows for this tenant ×
    * market (includes `error` rows; bug.0430). Drives the per-position cap

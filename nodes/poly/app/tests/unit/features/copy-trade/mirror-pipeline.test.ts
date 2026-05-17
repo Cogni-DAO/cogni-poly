@@ -34,6 +34,7 @@ import type { MirrorTargetConfig } from "@/features/copy-trade/types";
 import type { WalletActivitySource } from "@/features/wallet-watch";
 
 const TARGET_ID = "11111111-1111-1111-1111-111111111111";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0xAAaaaaaAAaAaAaAAaAaaaAaaAaaAAaAaAaaAAaaa" as const;
 
 const BASE_TARGET: MirrorTargetConfig = {
@@ -94,7 +95,7 @@ function makeReceipt(order_id: string, cid: string): OrderReceipt {
 }
 
 function cidFor(fill: Fill, target_id = TARGET_ID): `0x${string}` {
-  return clientOrderIdFor(target_id, fill.fill_id);
+  return clientOrderIdFor(BILLING_ACCOUNT_ID, target_id, fill.fill_id);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -626,6 +627,7 @@ describe("mirror-pipeline.runMirrorTick — BUY fill smoke", () => {
           fill_id: "data-api:prior:12345:BUY:1713300000",
           observed_at: new Date(fill.observed_at),
           client_order_id: clientOrderIdFor(
+            BILLING_ACCOUNT_ID,
             TARGET_ID,
             "data-api:prior:12345:BUY:1713300000"
           ),
@@ -844,7 +846,11 @@ describe("mirror-pipeline.runMirrorTick — happy path", () => {
       logger: noopLogger,
       metrics: createRecordingMetrics(),
     });
-    const expectedCid = clientOrderIdFor(TARGET_ID, fill.fill_id);
+    const expectedCid = clientOrderIdFor(
+      BILLING_ACCOUNT_ID,
+      TARGET_ID,
+      fill.fill_id
+    );
     expect(ledger.rows[0]?.client_order_id).toBe(expectedCid);
     expect(placeIntent.mock.calls[0]?.[0].client_order_id).toBe(expectedCid);
   });
@@ -968,6 +974,7 @@ describe("mirror-pipeline.runMirrorTick — bug.5048 target dominance + wrong-si
     // Seed wallet with a prior UNDER fill (from another target's mirror loop).
     // This pins MirrorPositionView.our_token_id = UNDER (the minority side).
     const priorCid = clientOrderIdFor(
+      BILLING_ACCOUNT_ID,
       TARGET_ID,
       "data-api:0xother:99999:BUY:1713000000"
     );

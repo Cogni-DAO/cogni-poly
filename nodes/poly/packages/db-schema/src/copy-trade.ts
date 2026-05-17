@@ -11,7 +11,7 @@
  *   - TENANT_SCOPED_ROWS: every row has `billing_account_id NOT NULL` (data column, FK → billing_accounts) +
  *     `created_by_user_id NOT NULL` (RLS key, FK → users). Mirrors the `connections` pattern from migration 0025.
  *   - FILL_ID_SHAPE_DECIDED: composite `<source>:<native_id>` per task.0315 P0.2, enforced by CHECK.
- *   - IDEMPOTENT_BY_CLIENT_ID: `client_order_id = clientOrderIdFor(target_id, fill_id)` (pinned helper).
+ *   - IDEMPOTENT_BY_CLIENT_ID: `client_order_id = clientOrderIdFor(billing_account_id, target_id, fill_id)` (pinned helper).
  *   - NO_PER_TARGET_ENABLED: `poly_copy_trade_targets` has no per-row enable flag. Operators add/remove rows.
  *   - NO_KILL_SWITCH (bug.0438): copy-trade has no per-tenant kill-switch table. Active target row +
  *     active wallet connection + active grant is the gate; explicit user opt-in (POST a target) is the
@@ -108,10 +108,12 @@ export const polyCopyTradeTargets = pgTable(
 
 /**
  * Observed fills from tracked target wallets + their mirror placement state.
- * Composite PK `(target_id, fill_id)` is the canonical dedupe gate. Tenant-scoped
- * via `billing_account_id` (data) + `created_by_user_id` (RLS key).
+ * Composite PK `(billing_account_id, target_id, fill_id)` is the per-tenant dedupe gate.
+ * `target_id` is `uuidv5(target_wallet)` — deterministic and SHARED across tenants —
+ * so N tenants mirroring the same wallet's same fill each get their own row.
  *
- * `client_order_id` is deterministic from `(target_id, fill_id)` per IDEMPOTENT_BY_CLIENT_ID.
+ * `client_order_id` is deterministic from `(billing_account_id, target_id, fill_id)`
+ * per IDEMPOTENT_BY_CLIENT_ID — see `clientOrderIdFor` in `@cogni/poly-market-provider`.
  */
 export const polyCopyTradeFills = pgTable(
   "poly_copy_trade_fills",
@@ -135,7 +137,7 @@ export const polyCopyTradeFills = pgTable(
     marketId: text("market_id").notNull(),
     /** ISO timestamp the fill was observed (match-time for WS, settlement-time for DA). */
     observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
-    /** Deterministic from `(target_id, fill_id)` — see IDEMPOTENT_BY_CLIENT_ID. */
+    /** Deterministic from `(billing_account_id, target_id, fill_id)` — see IDEMPOTENT_BY_CLIENT_ID. */
     clientOrderId: text("client_order_id").notNull(),
     /** Platform-assigned order id. Non-null iff the mirror order was placed. */
     orderId: text("order_id"),
@@ -170,7 +172,9 @@ export const polyCopyTradeFills = pgTable(
       .defaultNow(),
   },
   (table) => [
-    primaryKey({ columns: [table.targetId, table.fillId] }),
+    primaryKey({
+      columns: [table.billingAccountId, table.targetId, table.fillId],
+    }),
     // Dashboard card query: `SELECT ... ORDER BY observed_at DESC LIMIT 50`.
     index("poly_copy_trade_fills_observed_at_idx").on(table.observedAt),
     // `client_order_id` is unique-by-construction across all rows (deterministic

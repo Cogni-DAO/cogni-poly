@@ -22,6 +22,7 @@ import type {
 } from "@/features/copy-trade/types";
 
 const TARGET_ID = "11111111-1111-1111-1111-111111111111";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea";
 
 const FILL: Fill = {
@@ -52,8 +53,8 @@ function makeConfig(
   };
 }
 
-const STATE: RuntimeState = { already_placed_ids: [] };
-const COID = clientOrderIdFor(TARGET_ID, FILL.fill_id);
+const STATE: RuntimeState = { already_placed_ids: [], placed_fill_ids: [] };
+const COID = clientOrderIdFor(BILLING_ACCOUNT_ID, TARGET_ID, FILL.fill_id);
 
 describe("planMirrorFromFill() — placement → intent.attributes.placement", () => {
   it("mirror_limit policy → intent.attributes.placement === 'limit'", () => {

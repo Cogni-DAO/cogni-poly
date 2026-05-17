@@ -23,15 +23,18 @@ import type {
 } from "@/features/copy-trade/types";
 
 const TARGET_ID = "11111111-1111-4111-8111-111111111111";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea" as const;
 
 const CLEAN_STATE: RuntimeState = {
   already_placed_ids: [],
+  placed_fill_ids: [],
 };
 
 function stateWithTargetPosition(cost_usdc: number): RuntimeState {
   return {
     already_placed_ids: [],
+    placed_fill_ids: [],
     target_position: {
       condition_id: "prediction-market:polymarket:0xcondition",
       tokens: [
@@ -90,7 +93,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile", () =>
       fill,
       config: CONFIG,
       state: stateWithTargetPosition(64.1),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -107,7 +114,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile", () =>
       fill,
       config: CONFIG,
       state: stateWithTargetPosition(888.12),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -121,7 +132,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile", () =>
       fill,
       config: CONFIG,
       state: stateWithTargetPosition(64.11),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -135,7 +150,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile", () =>
       fill,
       config: CONFIG,
       state: stateWithTargetPosition(70),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 5,
       min_usdc_notional: 1,
     });
@@ -149,7 +168,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile", () =>
       fill,
       config: CONFIG,
       state: stateWithTargetPosition(70),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 6,
       min_usdc_notional: 1,
     });
@@ -185,7 +208,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile_scaled"
       fill,
       config: scaledConfig,
       state: stateWithTargetPosition(100),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -199,7 +226,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile_scaled"
       fill,
       config: scaledConfig,
       state: CLEAN_STATE,
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -217,6 +248,7 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile_scaled"
       config: scaledConfig,
       state: {
         already_placed_ids: [],
+        placed_fill_ids: [],
         target_position: {
           condition_id: fill.market_id,
           tokens: [
@@ -229,7 +261,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile_scaled"
           ],
         },
       },
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -244,7 +280,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile_scaled"
       fill,
       config: scaledConfig,
       state: stateWithTargetPosition(500),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -258,7 +298,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile_scaled"
       fill,
       config: scaledConfig,
       state: stateWithTargetPosition(300),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
