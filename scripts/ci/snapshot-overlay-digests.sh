@@ -32,12 +32,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib/overlay-digest.sh
 . "$SCRIPT_DIR/lib/overlay-digest.sh"
 
+# Emit 3-column TSV: <deploy_unit>\t<image_name>\t<image-ref>
+# One row per IMAGE per overlay (catalog v2). The restore loop in
+# candidate-flight.yml iterates this TSV and calls promote-k8s-image with
+# --image-name so multi-image overlays (Shape B sidecars) all get restored,
+# not just the role:app one.
 for target in "${DEPLOY_UNITS[@]}"; do
   file="infra/k8s/overlays/${OVERLAY_ENV}/${target}/kustomization.yaml"
   if [ ! -f "$file" ]; then
     continue
   fi
-  if ref=$(extract_overlay_image_ref "$OVERLAY_ENV" "$target"); then
-    printf '%s\t%s\n' "$target" "$ref"
-  fi
+  extract_overlay_image_refs_all "$OVERLAY_ENV" "$target" | while IFS=$'\t' read -r image_name ref; do
+    [ -z "$image_name" ] && continue
+    printf '%s\t%s\t%s\n' "$target" "$image_name" "$ref"
+  done
 done

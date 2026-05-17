@@ -266,6 +266,13 @@ jobs:
           mkdir -p deploy-branch/infra/catalog
           cp "app-src/infra/catalog/${NODE}.yaml" "deploy-branch/infra/catalog/${NODE}.yaml"
 
+      - name: Restore overlay digests from pre-rsync snapshot
+        working-directory: deploy-branch
+        env:
+          SNAPSHOT_FILE: ${{ runner.temp }}/candidate-a-overlay-snapshot.tsv
+          OVERLAY_ENV: candidate-a
+        run: bash ../ci-src/scripts/ci/restore-overlay-from-snapshot.sh
+
       - name: Promote this node's digest
         id: promote
         working-directory: deploy-branch
@@ -275,35 +282,6 @@ jobs:
           NODE: ${{ matrix.node }}
           HEAD_SHA: ${{ needs.decide.outputs.head_sha }}
         run: bash ../ci-src/scripts/ci/promote-build-payload.sh
-
-      - name: Restore non-promoted overlay digests (post-rsync self-heal)
-        working-directory: deploy-branch
-        env:
-          PROMOTED_APPS: ${{ steps.promote.outputs.promoted_apps }}
-          SNAPSHOT_FILE: ${{ runner.temp }}/candidate-a-overlay-snapshot.tsv
-        run: |
-          set -euo pipefail
-          if [ ! -s "$SNAPSHOT_FILE" ]; then
-            echo "ℹ️  No snapshot rows (cold-start) — nothing to restore"
-            exit 0
-          fi
-          # shellcheck source=../ci-src/scripts/ci/lib/image-tags.sh
-          . ../ci-src/scripts/ci/lib/image-tags.sh
-          declare -A snap=()
-          while IFS=$'\t' read -r app ref; do
-            [ -n "$app" ] && snap["$app"]="$ref"
-          done < "$SNAPSHOT_FILE"
-          promoted_padded=" $(echo "$PROMOTED_APPS" | tr ',' ' ' | tr -s ' ') "
-          for unit in "${DEPLOY_UNITS[@]}"; do
-            if [[ "$promoted_padded" == *" $unit "* ]]; then
-              continue
-            fi
-            ref="${snap[$unit]:-}"
-            [ -z "$ref" ] && continue
-            [[ "$ref" != *"@sha256:"* ]] && continue
-            bash ../ci-src/scripts/ci/promote-k8s-image.sh --no-commit \
-              --env candidate-a --app "$unit" --digest "$ref"
-          done
 
       - name: Commit and push to per-node deploy branch
         id: push-deploy
