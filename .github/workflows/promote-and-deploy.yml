@@ -217,6 +217,29 @@ jobs:
           token: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
           path: deploy-branch
 
+      # bug.5012 — snapshot deploy-branch overlay digest pins BEFORE the
+      # main-rsync. If main's overlay still carries cold-start placeholder
+      # newTags for any image (because that image's source paths never got
+      # built+merged via affected-only CI), the rsync would propagate the
+      # placeholder → promote-build-payload only writes affected images →
+      # placeholder reaches Argo → ImagePullBackOff. The restore step
+      # (after rsync) uses this snapshot to fill placeholder holes with
+      # the deploy-branch's known-good digest. Mirrors task.0373's chain
+      # for candidate-flight, with `RESTORE_MODE=only-when-placeholder`
+      # so main's real digests (the canonical source per Axiom 17) are
+      # preserved when present.
+      - name: Snapshot deploy-branch overlay digests (pre-rsync, bug.5012)
+        if: steps.payload.outputs.has_payload == 'true'
+        id: snapshot
+        working-directory: deploy-branch
+        env:
+          OVERLAY_ENV: ${{ needs.decide.outputs.environment }}
+          SNAPSHOT_FILE: ${{ runner.temp }}/overlay-snapshot.tsv
+        run: |
+          bash ../app-src/scripts/ci/snapshot-overlay-digests.sh > "$SNAPSHOT_FILE"
+          echo "ℹ️  Pre-rsync overlay snapshot ($(wc -l < "$SNAPSHOT_FILE" | tr -d ' ') rows):"
+          sed 's/^/  /' "$SNAPSHOT_FILE"
+
       - name: Sync infra/k8s + per-node catalog from app-src
         if: steps.payload.outputs.has_payload == 'true'
         env:
@@ -245,6 +268,19 @@ jobs:
             "deploy-branch/infra/k8s/overlays/${OVERLAY_ENV}/${NODE}/"
           mkdir -p deploy-branch/infra/catalog
           cp "app-src/infra/catalog/${NODE}.yaml" "deploy-branch/infra/catalog/${NODE}.yaml"
+
+      # bug.5012 — fill placeholder holes with snapshot digests. Main wins
+      # when it carries a real digest (Axiom 17 INFRA_K8S_MAIN_DERIVED);
+      # snapshot wins only where main shipped a tag pin (cold-start
+      # placeholder).
+      - name: Restore overlay digests from snapshot (placeholder-fill, bug.5012)
+        if: steps.payload.outputs.has_payload == 'true'
+        working-directory: deploy-branch
+        env:
+          SNAPSHOT_FILE: ${{ runner.temp }}/overlay-snapshot.tsv
+          OVERLAY_ENV: ${{ needs.decide.outputs.environment }}
+          RESTORE_MODE: only-when-placeholder
+        run: bash ../app-src/scripts/ci/restore-overlay-from-snapshot.sh
 
       - name: Promote payload via promote-build-payload.sh
         id: promote
