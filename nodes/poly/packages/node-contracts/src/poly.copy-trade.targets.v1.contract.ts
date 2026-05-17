@@ -48,6 +48,7 @@ const sizingPolicyKindSchema = z.enum([
   "auto",
   "min_bet",
   "target_percentile_scaled",
+  "position_gap",
 ]);
 
 const targetPolicySchema = z.object({

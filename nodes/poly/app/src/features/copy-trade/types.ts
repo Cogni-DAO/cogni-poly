@@ -109,10 +109,41 @@ export type TargetPercentileScaledSizingPolicy = z.infer<
   typeof TargetPercentileScaledSizingPolicySchema
 >;
 
+/**
+ * Position-gap sizing (D2 phase 2). Sizes from gaps instead of fills:
+ * `desired_shares = target_shares × target_scale`, `gap_shares = desired − ours`.
+ * Each fill is just a re-evaluation trigger; sizing is independent of the
+ * incoming fill's size. Asymmetric target positions no longer invert the
+ * mirror's per-side weighting (cf. swisstony ATP Sinner/Ruud 2026-05-17,
+ * target 99.5/0.5 → legacy mirror 28/72; position_gap collapses the minority
+ * side to `below_market_min` before placement).
+ *
+ * `target_scale` is the per-target fraction of target's per-token share count
+ * the mirror aims to hold (e.g. `1e-4` = 0.01% of target's shares). Lives on
+ * the policy so individual targets can A/B different allocations without
+ * changing the bootstrap default.
+ *
+ * Phase-2 scope: gap math is computed only for the new_entry path
+ * (`decideMirrorBranch` short-circuits layer/hedge routing when this kind is
+ * active — gap math naturally produces layering via `desired − ours`). Phase 4
+ * dissolves the layer/hedge branches entirely under `GapExecutor`.
+ */
+export const PositionGapSizingPolicySchema = z.object({
+  kind: z.literal("position_gap"),
+  /** Per-(conditionId, token_id) cumulative-intent ceiling. Same semantics as the other variants. */
+  max_usdc_per_condition: z.number().positive(),
+  /** Per-target fraction of target's per-token shares we aim to hold. Bounded (0,1]. */
+  target_scale: z.number().positive().max(1),
+});
+export type PositionGapSizingPolicy = z.infer<
+  typeof PositionGapSizingPolicySchema
+>;
+
 export const SizingPolicySchema = z.discriminatedUnion("kind", [
   MinBetSizingPolicySchema,
   TargetPercentileSizingPolicySchema,
   TargetPercentileScaledSizingPolicySchema,
+  PositionGapSizingPolicySchema,
 ]);
 export type SizingPolicy = z.infer<typeof SizingPolicySchema>;
 

@@ -99,7 +99,23 @@ const DEFAULT_POSITION_FOLLOWUP_POLICY: PositionFollowupPolicy = {
  * `SizingPolicySchema` discriminated union — adding a variant requires
  * updating all three together.
  */
-type SizingPolicyKindInput = "auto" | "min_bet" | "target_percentile_scaled";
+type SizingPolicyKindInput =
+  | "auto"
+  | "min_bet"
+  | "target_percentile_scaled"
+  | "position_gap";
+
+/**
+ * Default per-target share allocation for `position_gap`. Justified by the
+ * swisstony ATP Sinner/Ruud math (2026-05-17): target's final position was
+ * 88,931 sh Sinner / 14,925 sh Ruud. At `1e-4`, desired = 8.89 sh / 1.49 sh —
+ * a $0.85 Sinner fill maps to ~$7.55 of intent (sits cleanly inside the v0
+ * $5–$15 per-trade caps), while a $0.16 Ruud fill maps to ~$0.24 and skips
+ * `below_market_min`. Lower scales (1e-5) collapse both legs below the market
+ * floor; higher scales (1e-3) blow past the per-leg cap on a typical target
+ * position. Per-target override lives on the `position_gap` policy itself.
+ */
+const DEFAULT_POSITION_GAP_TARGET_SCALE = 1e-4;
 
 function minBetPolicy(maxUsdcPerCondition: number): SizingPolicy {
   return {
@@ -129,6 +145,13 @@ function buildSizingPolicy(params: {
   if (resolvedKind === "min_bet") {
     return minBetPolicy(params.mirrorMaxUsdcPerTrade);
   }
+  if (resolvedKind === "position_gap") {
+    return {
+      kind: "position_gap",
+      max_usdc_per_condition: params.mirrorMaxUsdcPerTrade,
+      target_scale: DEFAULT_POSITION_GAP_TARGET_SCALE,
+    };
+  }
   // `target_percentile_scaled` requires a snapshot. If the user explicitly
   // pinned this kind on an uncurated wallet, fall back to `min_bet` — same
   // shape as `'auto'` on uncurated wallets, preserves DEFAULT-no-crash.
@@ -152,7 +175,7 @@ function buildSizingPolicy(params: {
 export function sizingPolicyKindForTargetWallet(
   targetWallet: `0x${string}`,
   configuredKind: SizingPolicyKindInput = "auto"
-): "min_bet" | "target_percentile_scaled" {
+): "min_bet" | "target_percentile_scaled" | "position_gap" {
   const snapshot = snapshotForTargetWallet(targetWallet);
   if (configuredKind === "auto") {
     return snapshot ? "target_percentile_scaled" : "min_bet";

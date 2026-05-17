@@ -13,6 +13,7 @@
  *   - NO_KILL_SWITCH (bug.0438): there is no per-tenant kill-switch gate. The active-target / active-grant chain in the cross-tenant enumerator is the only gate; an explicit POST of a target IS the user's opt-in.
  *   - TARGET_DOMINANCE_DRIVES_BRANCH (bug.5048): when `config.min_target_side_fraction` is set + target_position is available, `decideMirrorBranch` computes target's dominant side first, then routes by our position state per the spec branch table. Below-threshold (minority) fills always skip as `target_dominant_other_side` — master switch covering entry, layer, AND hedge. When disabled (threshold unset / no target data), legacy our-position routing applies for backward-compat.
  *   - SIZING_PROPORTIONAL_TO_TARGET_SHARE (charter D6): for `target_percentile_scaled`, mirror intent is scaled by target's cost-basis fraction on the fill's token. Minority-side fills sized below market min skip rather than place. Prevents the inverted-weighting failure mode (Sinner/Ruud 2026-05-17, target 99.5/0.5 → mirror 28/72 inverted). Tactical fix; true position-proportional alignment is D2.
+ *   - GAP_DRIVES_SIZING (D2 phase 2): for `position_gap`, intent is `(desired_shares − our_shares) × fill.price`, where `desired_shares = target_shares × target_scale`. Each fill is a re-evaluation trigger, not the sizing input. Layer/hedge dispatch short-circuits when this kind is active — gap math produces layering via `desired − ours` directly. `gap ≤ 0` skips `followup_not_needed`; gap below market min skips `below_market_min`. Phase 4's GapExecutor dissolves the remaining fill-driven scaffolding.
  *   - NEVER_PAY_ABOVE_TARGET_VWAP (bug.5048): when `config.vwap_tolerance` is set, `applyVwapGate` skips `vwap_floor_breach` if `fill.price > target_vwap_for_fill_token + tolerance`. Asymmetric upward gate; fails open when target VWAP is unknown.
  *   - HEDGE_PREDICATE_NOOPS_ON_UNKNOWN_OPPOSITE: hedge branch fires only when `state.position.opposite_token_id` is known from prior aggregation. No inference from condition structure alone.
  * Skip-reason precedence (first match wins): already_placed → market_past_end_date → price_outside_clob_bounds → target_dominant_other_side → vwap_floor_breach → sizing-reason skip (below_target_percentile / below_market_min / position_cap_reached / target_position_below_threshold / followup_position_too_small / followup_not_needed) → place.
@@ -33,6 +34,7 @@ import type {
   PlanMirrorInput,
   PositionBranch,
   PositionFollowupPolicy,
+  PositionGapSizingPolicy,
   SizingPolicy,
   SizingResult,
   TargetConditionPositionView,
@@ -105,6 +107,16 @@ function sizeFromPolicy(
         policy.max_usdc_per_condition
       );
     }
+    case "position_gap": {
+      // D2 phase 2: gap math is the new_entry path for this policy and runs
+      // before `sizeFromPolicy` via `applyPositionGapSizing`. Layer/hedge
+      // dispatch is short-circuited in `decideMirrorBranch`, so a fill that
+      // reaches here under `position_gap` would have to come from a future
+      // call site that doesn't route through `decideMirrorBranch`. Defensive
+      // fall-through: treat the same as an unsized fill so the planner stays
+      // a total function. Phase 4 deletes this branch entirely.
+      return { ok: false, reason: "below_market_min" };
+    }
     case "target_percentile_scaled": {
       if (targetSizeUsdc < policy.statistic.min_target_usdc) {
         return { ok: false, reason: "below_target_percentile" };
@@ -152,6 +164,68 @@ function sizeFromPolicy(
       );
     }
   }
+}
+
+/**
+ * D2 phase 2 — gap-driven sizing for `kind: "position_gap"`. The mirror's
+ * desired share count on the fill's token is `target_shares × target_scale`;
+ * the gap is `desired − ours`. Fill price converts gap-shares to USDC; market
+ * floors + the per-token cumulative-intent cap then clamp.
+ *
+ * Inputs are restricted to state the planner already receives — no I/O, no
+ * new ports. Layer accumulation falls out naturally: as our shares grow the
+ * gap shrinks, and once `gap ≤ 0` the planner skips `followup_not_needed`.
+ */
+export function applyPositionGapSizing(
+  policy: PositionGapSizingPolicy,
+  fill: PlanMirrorInput["fill"],
+  state: PlanMirrorInput["state"],
+  minShares: number | undefined,
+  minUsdcNotional: number | undefined,
+  cumulativeIntentForToken: number | undefined
+): SizingResult {
+  const tokenId =
+    typeof fill.attributes?.asset === "string" ? fill.attributes.asset : "";
+  if (tokenId === "") {
+    return { ok: false, reason: "below_market_min" };
+  }
+  const targetShares =
+    state.target_position?.tokens.find((t) => t.token_id === tokenId)
+      ?.size_shares ?? 0;
+  const ourShares =
+    state.position?.our_token_id === tokenId
+      ? state.position.our_qty_shares
+      : 0;
+  const desiredShares = targetShares * policy.target_scale;
+  const gapShares = desiredShares - ourShares;
+  if (gapShares <= 0) {
+    return { ok: false, reason: "followup_not_needed" };
+  }
+  const gapUsdc = gapShares * fill.price;
+  // GAP_DRIVES_SIZING: when the gap itself is below market min, skip rather
+  // than round up to the floor. `applyMarketFloors` clamps up by design (so
+  // legacy "place at market min" policies always land a placeable order),
+  // but for position_gap the gap IS the target — overpaying to clear the
+  // floor would re-introduce the inverted-weighting failure mode this
+  // policy exists to prevent.
+  if (minUsdcNotional !== undefined && gapUsdc < minUsdcNotional) {
+    return { ok: false, reason: "below_market_min" };
+  }
+  const sized = applyMarketFloors(
+    gapUsdc,
+    fill.price,
+    minShares,
+    minUsdcNotional,
+    policy.max_usdc_per_condition
+  );
+  if (!sized.ok) return sized;
+  if (
+    cumulativeIntentForToken !== undefined &&
+    cumulativeIntentForToken + sized.size_usdc > policy.max_usdc_per_condition
+  ) {
+    return { ok: false, reason: "position_cap_reached" };
+  }
+  return sized;
 }
 
 function applyMarketFloors(
@@ -532,8 +606,16 @@ function decideMirrorBranch(
 
   // Layer/Hedge branches require position_followup AND BUY-side. Without
   // either, fall through to new_entry — matches legacy fall-through.
+  //
+  // GAP_DRIVES_SIZING (D2 phase 2): when the policy is `position_gap`, the
+  // gap math computes layering naturally via `desired − ours`, so we
+  // short-circuit the fill-driven layer/hedge dispatch and always route
+  // through new_entry. Phase 4 (`GapExecutor`) dissolves layer/hedge
+  // entirely.
+  const isPositionGap = config.sizing.kind === "position_gap";
   if (
     isLayer &&
+    !isPositionGap &&
     followup?.enabled &&
     fill.side === "BUY" &&
     position !== undefined
@@ -548,6 +630,7 @@ function decideMirrorBranch(
   }
   if (
     isHedge &&
+    !isPositionGap &&
     followup?.enabled &&
     fill.side === "BUY" &&
     position?.our_token_id !== undefined
@@ -561,20 +644,32 @@ function decideMirrorBranch(
     };
   }
 
-  // New entry path.
+  // New entry path. `position_gap` runs its own sizer because the math reads
+  // `state.target_position` / `state.position` directly rather than the
+  // per-fill notional that drives the other policies.
   return {
     kind: "place",
     reason: config.mode === "paper" ? "mode_paper" : "ok",
     position_branch: "new_entry",
-    sizing: applySizingPolicy(
-      config.sizing,
-      fill.price,
-      targetSizingUsdcForFill(fill, state, config.sizing),
-      minShares,
-      minUsdcNotional,
-      state.cumulative_intent_usdc_for_token,
-      dominance.fill_token_fraction ?? undefined
-    ),
+    sizing:
+      config.sizing.kind === "position_gap"
+        ? applyPositionGapSizing(
+            config.sizing,
+            fill,
+            state,
+            minShares,
+            minUsdcNotional,
+            state.cumulative_intent_usdc_for_token
+          )
+        : applySizingPolicy(
+            config.sizing,
+            fill.price,
+            targetSizingUsdcForFill(fill, state, config.sizing),
+            minShares,
+            minUsdcNotional,
+            state.cumulative_intent_usdc_for_token,
+            dominance.fill_token_fraction ?? undefined
+          ),
     wrong_side_holding_detected,
   };
 }
@@ -697,6 +792,9 @@ function targetSizingUsdcForFill(
   if (policy.kind === "min_bet") return fill.size_usdc;
   const tokenId =
     typeof fill.attributes?.asset === "string" ? fill.attributes.asset : "";
+  // `position_gap` defers to its own sizer and shouldn't reach this helper
+  // for branch routing; returning the target's per-token cost keeps any
+  // future caller's follow-up gates well-defined.
   return targetTokenCostUsdc(state.target_position, tokenId);
 }
 
@@ -725,6 +823,7 @@ function targetFollowupThreshold(policy: SizingPolicy): number {
     case "target_percentile_scaled":
       return policy.statistic.min_target_usdc;
     case "min_bet":
+    case "position_gap":
       return 0;
   }
 }
