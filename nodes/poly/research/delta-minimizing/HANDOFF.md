@@ -9,7 +9,7 @@ Two things, kept conceptually separate:
 1. **`/delta-minimizer` skill** (the workflow) — `.claude/skills/delta-minimizer/SKILL.md`. The LLM's investigation discipline: one finding, code-line citations, % confidence, charter mapping, populate `findings.json`.
 2. **`scripts/poly-mirror-report.ts` tool** (the data + report builder) — pulls dashboard-equivalent data for one market, renders HTML + JSON. NO analytical reasoning lives in the script; that's the skill's job.
 
-Output dir: `research/delta-minimizing/<event_slug>-<iso>/` per investigation, tracked in git. Shared `research/delta-minimizing/charter.html` is re-rendered from `work/charters/POLY_COPY_DELTA.md` every run and includes per-D-class investigation tallies from each report's `findings.json`.
+Output dir: `nodes/poly/research/delta-minimizing/<event_slug>-<iso>/` per investigation, tracked in git. Shared `nodes/poly/research/delta-minimizing/charter.html` is re-rendered from `work/charters/POLY_COPY_DELTA.md` every run and includes per-D-class investigation tallies from each report's `findings.json`.
 
 ## State of PR #37
 
@@ -77,14 +77,14 @@ X-axis: first activity → last activity + 5% padding. Charts share a global tim
 
 ## Files touched in PR #37
 
-| File                                      | What it is                                                                                                                               |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/poly-mirror-report.ts`           | The tool. ~1900 LOC. Single-file by design.                                                                                              |
-| `scripts/check-root-layout.ts`            | Added `"research"` to allowlist.                                                                                                         |
-| `.claude/skills/delta-minimizer/SKILL.md` | Rewritten — 4-step workflow, code-mapping cheat-sheet, one-finding-rule.                                                                 |
-| `research/delta-minimizing/`              | Output dir, tracked. Iteration history of this branch's runs lives here.                                                                 |
-| `research/delta-minimizing/charter.html`  | Generated from `work/charters/POLY_COPY_DELTA.md` (source of truth — edit the .md).                                                      |
-| `work/charters/POLY_COPY_DELTA.md`        | Charter rows D3 and D6 picked up new proof-tape evidence from WTA Parry-Paquet (added by the other agent that ran this skill mid-build). |
+| File                                                | What it is                                                                                                                               |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/poly-mirror-report.ts`                     | The tool. ~1900 LOC. Single-file by design.                                                                                              |
+| `scripts/check-root-layout.ts`                      | Added `"research"` to allowlist.                                                                                                         |
+| `.claude/skills/delta-minimizer/SKILL.md`           | Rewritten — 4-step workflow, code-mapping cheat-sheet, one-finding-rule.                                                                 |
+| `nodes/poly/research/delta-minimizing/`             | Output dir, tracked. Iteration history of this branch's runs lives here.                                                                 |
+| `nodes/poly/research/delta-minimizing/charter.html` | Generated from `work/charters/POLY_COPY_DELTA.md` (source of truth — edit the .md).                                                      |
+| `work/charters/POLY_COPY_DELTA.md`                  | Charter rows D3 and D6 picked up new proof-tape evidence from WTA Parry-Paquet (added by the other agent that ran this skill mid-build). |
 
 ## Known issues / explicitly deferred
 
@@ -106,7 +106,7 @@ X-axis: first activity → last activity + 5% padding. Charts share a global tim
 2. **`scripts/poly-mirror-report.ts` top-of-file docstring** — what the tool does and does NOT do.
 3. **`work/charters/POLY_COPY_DELTA.md`** — the D1–D8 class taxonomy with proof tapes.
 4. **`docs/spec/poly-copy-trade-execution.md`** — the mirror algorithm itself (gates, invariants, branch decision).
-5. **`research/delta-minimizing/wta-parry-paquet-2026-05-13-<latest>/report.html`** — newest example report; open in browser.
+5. **`nodes/poly/research/delta-minimizing/wta-parry-paquet-2026-05-13-<latest>/report.html`** — newest example report; open in browser.
 6. **PR #37 diff** — review the chart-rendering and per-leg metric logic.
 
 ## What I'd code-review hard
@@ -135,7 +135,7 @@ Already addressed in the self-review pass (PR #37):
 
 ```bash
 pnpm tsx scripts/poly-mirror-report.ts 'wta-parry-paquet-2026-05-13'
-open research/delta-minimizing/wta-parry-paquet-2026-05-13-<latest>/report.html
+open nodes/poly/research/delta-minimizing/wta-parry-paquet-2026-05-13-<latest>/report.html
 ```
 
 Expected output: 4 chart lines visible (target primary up, target hedge down, our hedge down — primary VWAP at top, hedge VWAP at bottom). Variance KPI shows ~93.7%. Math: target return −39.8% (real loss), our +53.8% (lucky variance), |Δ| = 93.7%.

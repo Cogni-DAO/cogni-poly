@@ -12,7 +12,7 @@
  * Invariants: READ_ONLY_DB — uses scripts/grafana-postgres-query.sh which refuses
  *   non-SELECT/WITH/SHOW/EXPLAIN. OUR_POSITIONS_ANCHOR_GROUPS — only markets
  *   where the cogni_wallet holds a snapshot row are reported.
- * Side-effects: IO (Postgres reads, CLOB HTTP, filesystem writes under research/delta-minimizing).
+ * Side-effects: IO (Postgres reads, CLOB HTTP, filesystem writes under nodes/poly/research/delta-minimizing).
  * Links: .claude/skills/delta-minimizer/SKILL.md · work/charters/POLY_COPY_DELTA.md
  * @public
  */
@@ -1685,7 +1685,11 @@ async function main() {
     filteredMarkets[0]?.condition_id.slice(0, 10) ??
     "bundle";
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const outDir = join(REPO_ROOT, "research/delta-minimizing", `${slug}-${ts}`);
+  const outDir = join(
+    REPO_ROOT,
+    "nodes/poly/research/delta-minimizing",
+    `${slug}-${ts}`
+  );
   mkdirSync(outDir, { recursive: true });
 
   const html = renderHtml({
