@@ -25,7 +25,7 @@ import type {
   PolyResearchCopyTradePnlMode,
   PolyResearchCopyTradePnlResponse,
 } from "@cogni/poly-node-contracts";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gte, lt, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 
@@ -64,10 +64,17 @@ const toIso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 export async function getCopyTradePnlForTenant(
   db: Db,
   billingAccountId: string,
-  mode: PolyResearchCopyTradePnlMode
+  mode: PolyResearchCopyTradePnlMode,
+  window?: { since?: string; until?: string }
 ): Promise<PolyResearchCopyTradePnlResponse> {
   const modeFilter =
     mode === "all" ? sql`TRUE` : eq(polyCopyTradeFills.mode, mode);
+  const sinceFilter = window?.since
+    ? gte(polyCopyTradeFills.observedAt, new Date(window.since))
+    : sql`TRUE`;
+  const untilFilter = window?.until
+    ? lt(polyCopyTradeFills.observedAt, new Date(window.until))
+    : sql`TRUE`;
 
   // Single grouped aggregate. One row per (target, market). Returns at most
   // markets_count rows; for any single tenant this is bounded by their
@@ -113,7 +120,9 @@ export async function getCopyTradePnlForTenant(
     FROM ${polyCopyTradeFills}
     WHERE ${and(
       eq(polyCopyTradeFills.billingAccountId, billingAccountId),
-      modeFilter
+      modeFilter,
+      sinceFilter,
+      untilFilter
     )}
     GROUP BY ${polyCopyTradeFills.marketId},
              ${polyCopyTradeFills.targetId}
@@ -173,6 +182,8 @@ export async function getCopyTradePnlForTenant(
   return {
     billing_account_id: billingAccountId,
     mode,
+    since: window?.since ?? null,
+    until: window?.until ?? null,
     captured_at: new Date().toISOString(),
     summary,
     markets,
