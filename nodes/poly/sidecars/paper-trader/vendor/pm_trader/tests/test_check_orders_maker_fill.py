@@ -356,21 +356,21 @@ class TestPerTokenBatching:
 
 
 class TestScanCursor:
-    def test_last_scan_advances_even_when_no_trades(self, engine: Engine):
-        """Cursor must advance to `now` when zero trades returned, otherwise
-        the window grows unboundedly and data-api gets re-asked for the same
-        range on every tick."""
+    def test_last_scan_populated_and_monotonic_when_no_trades(
+        self, engine: Engine
+    ):
+        """Cursor must be populated after first scan and never move backward
+        across ticks, even on empty responses. The exact advance is bounded
+        by _MAKER_FILL_LAG_BUFFER_SECONDS — see TestLagWindowCursor."""
         _make_buy(engine, amount=1.0, limit=0.014)
         _mock_api(engine, trades=[])
 
         engine.check_orders()
 
-        # Cursor populated for the token
         assert "tok_yes" in engine._maker_fill_last_scan
         first_ts = engine._maker_fill_last_scan["tok_yes"]
         assert first_ts > 0
 
-        # Second tick: cursor advances (now ≥ first_ts)
         engine.check_orders()
         second_ts = engine._maker_fill_last_scan["tok_yes"]
         assert second_ts >= first_ts
@@ -391,3 +391,118 @@ class TestScanCursor:
         engine.check_orders()
 
         assert engine._maker_fill_last_scan["tok_yes"] == 1_000_100.0
+
+
+# ---------------------------------------------------------------------------
+# Lag-window regression (bug.5005 review)
+# ---------------------------------------------------------------------------
+
+
+class TestLagWindowCursor:
+    """The data-api lags trade prints by seconds. The cursor must not jump
+    past trades that print inside that lag window. Regression for the path
+    where empty/error responses on tick N would silently filter out a real
+    trade observed on tick N+1.
+    """
+
+    def test_trade_in_lag_window_filled_on_next_tick(
+        self, engine: Engine, monkeypatch: pytest.MonkeyPatch
+    ):
+        # Scenario: trade printed at t=995 but data-api didn't return it
+        # until t=1030 (35s of staleness). Tick 1 at t=1000 sees empty;
+        # tick 2 at t=1030 sees the t=995 trade. With cursor-jump-to-now,
+        # the t=995 trade would be filtered out on tick 2 (ts < cursor).
+        order_id = _make_buy(engine, amount=2.80, limit=0.014)
+        engine.api.get_market = MagicMock(return_value=_market())
+        engine.api.get_order_book = MagicMock(return_value=_empty_book())
+        engine.api.get_fee_rate = MagicMock(return_value=0)
+        engine.api.get_trades_since = MagicMock(return_value=[])
+        # Pre-seed to simulate prior steady-state operation in this time
+        # domain (real created_at would be ~1.7e9; we want a controlled
+        # cursor for monkeypatched time).
+        engine._maker_fill_last_scan["tok_yes"] = 900.0
+        monkeypatch.setattr("pm_trader.engine.time.time", lambda: 1000.0)
+
+        engine.check_orders()
+
+        # After tick 1 (empty): bounded_advance = max(900, 1000-90) = 910.
+        assert engine._maker_fill_last_scan["tok_yes"] == 910.0
+
+        # Tick 2: data-api now returns the lagged trade. Its ts=995 still
+        # passes the ts > since_ts=910 filter — bug fixed.
+        engine.api.get_trades_since = MagicMock(return_value=[
+            _trade(price=0.014, size=200, side="SELL", timestamp=995.0),
+        ])
+        monkeypatch.setattr("pm_trader.engine.time.time", lambda: 1030.0)
+
+        results = engine.check_orders()
+
+        assert len(results) == 1
+        assert results[0]["action"] == "filled"
+        assert results[0]["order"]["id"] == order_id
+
+    def test_cursor_capped_below_now_on_empty(
+        self, engine: Engine, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Direct invariant: on an empty response, the cursor never
+        advances past now - _MAKER_FILL_LAG_BUFFER_SECONDS."""
+        _make_buy(engine, amount=1.0, limit=0.014)
+        _mock_api(engine, trades=[])
+        engine._maker_fill_last_scan["tok_yes"] = 0.0
+        monkeypatch.setattr("pm_trader.engine.time.time", lambda: 1_000_000.0)
+
+        engine.check_orders()
+
+        from pm_trader.engine import _MAKER_FILL_LAG_BUFFER_SECONDS
+        assert engine._maker_fill_last_scan["tok_yes"] == (
+            1_000_000.0 - _MAKER_FILL_LAG_BUFFER_SECONDS
+        )
+
+    def test_cursor_capped_below_now_on_api_error(
+        self, engine: Engine, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Same invariant on the error path — previously the error branch
+        also jumped the cursor to now, silently dropping the lag-window
+        trades that the recovery tick would otherwise have caught."""
+        _make_buy(engine, amount=1.0, limit=0.014)
+        _mock_api(engine, trades_side_effect=RuntimeError("data-api 503"))
+        engine._maker_fill_last_scan["tok_yes"] = 0.0
+        monkeypatch.setattr("pm_trader.engine.time.time", lambda: 1_000_000.0)
+
+        engine.check_orders()
+
+        from pm_trader.engine import _MAKER_FILL_LAG_BUFFER_SECONDS
+        assert engine._maker_fill_last_scan["tok_yes"] == (
+            1_000_000.0 - _MAKER_FILL_LAG_BUFFER_SECONDS
+        )
+
+
+# ---------------------------------------------------------------------------
+# Observability — scan emits structured Loki-friendly log lines
+# ---------------------------------------------------------------------------
+
+
+class TestObservability:
+    def test_scan_emits_structured_log_on_success(
+        self, engine: Engine, caplog: pytest.LogCaptureFixture
+    ):
+        _make_buy(engine, amount=2.80, limit=0.014)
+        _mock_api(engine, trades=[_trade(price=0.014, size=200, side="SELL")])
+
+        with caplog.at_level("INFO", logger="pm_trader.engine"):
+            engine.check_orders()
+
+        assert any("event=maker_fill_scan" in r.message for r in caplog.records)
+
+    def test_scan_logs_exception_on_api_error(
+        self, engine: Engine, caplog: pytest.LogCaptureFixture
+    ):
+        _make_buy(engine, amount=1.0, limit=0.014)
+        _mock_api(engine, trades_side_effect=RuntimeError("data-api 503"))
+
+        with caplog.at_level("ERROR", logger="pm_trader.engine"):
+            engine.check_orders()
+
+        assert any(
+            "event=maker_fill_scan_failed" in r.message for r in caplog.records
+        )

@@ -6,11 +6,26 @@ the API client, order book simulator, and database layer.
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
 
 from pm_trader.api import PolymarketClient
+
+# Cogni-poly local patch (bug.5005). Module logger for the maker-fill branch
+# — the sidecar's stdout is harvested by Alloy → Loki, so structured single-
+# line `event=<verb>` records are the operational signal we get.
+_log = logging.getLogger(__name__)
+
+# Cogni-poly local patch (bug.5005). When the trade-prints scan returns empty
+# or errors, the per-token cursor advances no farther than ``now - LAG``. This
+# guards the silent-miss path: data-api lags trades by seconds; if we jumped
+# the cursor to ``now`` on every empty response, a trade that printed during
+# the lag window would be filtered out (``ts <= since_ts``) on the very next
+# tick and never matched. 90s ≈ 3 × default 30s fill-loop period — enough
+# headroom for data-api's typical staleness without unbounded window growth.
+_MAKER_FILL_LAG_BUFFER_SECONDS = 90.0
 from pm_trader.db import Database
 from pm_trader.models import (
     Account,
@@ -493,7 +508,10 @@ class Engine:
             filled_via_maker = self._apply_maker_fills(pending, results)
         except Exception:
             # Don't let maker-fill failures abort the loop — snapshot path
-            # still runs for every order this tick.
+            # still runs for every order this tick. Log the exception so a
+            # consistently-throwing maker pass surfaces in Loki rather than
+            # silently degrading paper fill rate.
+            _log.exception("event=maker_fill_pass_failed pending=%d", len(pending))
             filled_via_maker = set()
 
         # Snapshot taker pass (upstream behavior).
@@ -600,6 +618,10 @@ class Engine:
             except Exception:
                 # Snapshot path will retry on this token; we just skip
                 # the maker pre-pass for it this tick.
+                _log.exception(
+                    "event=maker_fill_resolve_failed market_slug=%s outcome=%s",
+                    market_slug, outcome,
+                )
                 continue
 
             # Seed the per-token scan cursor from the oldest pending order
@@ -612,6 +634,13 @@ class Engine:
                 )
             since_ts = self._maker_fill_last_scan[token_id]
 
+            # On empty/error responses, the cursor advances no farther than
+            # ``now - LAG``. Jumping to ``now`` would silently filter out any
+            # trade that printed during the data-api's own staleness window
+            # (``ts <= since_ts`` on the next tick). The floor keeps the
+            # window growth bounded while preserving the lag headroom.
+            bounded_advance = max(since_ts, now_ts - _MAKER_FILL_LAG_BUFFER_SECONDS)
+
             try:
                 trades = self.api.get_trades_since(
                     condition_id=market.condition_id,
@@ -619,21 +648,32 @@ class Engine:
                     since_ts=since_ts,
                 )
             except Exception:
-                # Data-API down or rate-limited — advance the cursor to
-                # ``now`` so we don't keep re-fetching the same window when
-                # it recovers, then fall through to snapshot for this token.
-                self._maker_fill_last_scan[token_id] = now_ts
+                # Data-API down or rate-limited. Advance the cursor by the
+                # bounded amount, then fall through to snapshot for this
+                # token. Log so persistent failures show up in Loki.
+                _log.exception(
+                    "event=maker_fill_scan_failed token_id=%s condition_id=%s since_ts=%.3f",
+                    token_id, market.condition_id, since_ts,
+                )
+                self._maker_fill_last_scan[token_id] = bounded_advance
                 continue
 
-            # Always advance the cursor — even when no trades returned —
-            # so the window doesn't grow unboundedly. With trades, advance
-            # to the newest observed ts; without, advance to ``now``.
+            _log.info(
+                "event=maker_fill_scan token_id=%s condition_id=%s since_ts=%.3f "
+                "trades=%d orders=%d",
+                token_id, market.condition_id, since_ts, len(trades), len(orders),
+            )
+
+            # With trades, advance to the newest observed ts (next tick's
+            # ``ts > since_ts`` filter catches anything newer). Without
+            # trades, use the bounded advance so a lagged trade in the
+            # data-api's staleness window isn't filtered out next tick.
             if trades:
                 self._maker_fill_last_scan[token_id] = max(
                     t["timestamp"] for t in trades
                 )
             else:
-                self._maker_fill_last_scan[token_id] = now_ts
+                self._maker_fill_last_scan[token_id] = bounded_advance
                 continue
 
             # Walk trades oldest-first so newer trades on the same token
@@ -728,7 +768,12 @@ class Engine:
                     except Exception:
                         # Transient — leave the order unfilled, snapshot
                         # path may pick it up this tick or it'll be retried
-                        # next tick.
+                        # next tick. Log so we can tell "every tick throws"
+                        # from "no crossing trades."
+                        _log.exception(
+                            "event=maker_fill_execute_failed order_id=%d token_id=%s",
+                            order.id, token_id,
+                        )
                         continue
 
                     remaining_trade_size -= fill.total_shares
