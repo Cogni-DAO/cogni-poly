@@ -24,6 +24,8 @@ from pm_trader.models import (
 
 GAMMA_BASE = "https://gamma-api.polymarket.com"
 CLOB_BASE = "https://clob.polymarket.com"
+# Data-API serves market-level trade prints. Cogni-poly local patch (bug.5005).
+DATA_API_BASE = "https://data-api.polymarket.com"
 
 CACHE_TTL_SECONDS = 300  # 5 minutes for market metadata
 
@@ -97,6 +99,26 @@ class PolymarketClient:
             ) from e
         except httpx.RequestError as e:
             raise ApiError(f"CLOB API request failed: {e}") from e
+
+    def _data_api_get(self, path: str, params: dict | None = None) -> list | dict:
+        """Make a GET request to the Polymarket Data API.
+
+        Cogni-poly local patch (bug.5005). Used by ``get_trades_since`` to
+        scan recent trade prints between fill-loop polls so resting limit
+        orders can be matched as makers, not only as snapshot takers.
+        """
+        url = f"{DATA_API_BASE}{path}"
+        try:
+            resp = self._http.get(url, params=params)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            raise ApiError(
+                f"Data API error: {e.response.status_code} {e.response.text[:200]}",
+                status_code=e.response.status_code,
+            ) from e
+        except httpx.RequestError as e:
+            raise ApiError(f"Data API request failed: {e}") from e
 
     # ------------------------------------------------------------------
     # Market resolution (slug or condition_id → Market)
@@ -235,6 +257,76 @@ class PolymarketClient:
         book = self.get_order_book(token_id)
         fee_rate = self.get_fee_rate(token_id)
         return market, book, fee_rate
+
+    # ------------------------------------------------------------------
+    # Trade prints — Cogni-poly local patch (bug.5005)
+    # ------------------------------------------------------------------
+
+    def get_trades_since(
+        self,
+        condition_id: str,
+        token_id: str,
+        since_ts: float,
+        limit: int = 20,
+    ) -> list[dict]:
+        """Return market-level trade prints on ``token_id`` newer than ``since_ts``.
+
+        Hits Polymarket Data API ``GET /trades?market=<conditionId>`` and
+        filters in-client to ``asset == token_id`` and ``timestamp > since_ts``.
+        The data-api endpoint returns trades for the whole condition (both
+        YES + NO tokens); we keep only the side the caller asked about.
+
+        Used by ``Engine.check_orders`` to simulate maker-style fills (resting
+        limits matched by ambient taker flow) which the snapshot-book fill
+        model alone cannot capture for limit-maker strategies. See bug.5005.
+
+        Notes
+        -----
+        - ``limit`` is bounded small by default. Polymarket's ``/trades`` cache
+          serves stale pages at higher limits — verified up to 2 min behind at
+          limit=1000 vs limit=20 for an active trader (cogni's TS data-api
+          client carries the same note). Callers needing deeper history should
+          paginate, not raise the limit.
+        - Each trade's ``side`` field is the **taker** side. For a paper BUY
+          limit at price L (sitting as a resting maker bid), only ``SELL``-taker
+          trades at ``price <= L`` would have matched our bid. The engine
+          applies that filter, not this client.
+        - Returns raw dicts (no pydantic schema); the engine consumes only
+          ``price``, ``size``, ``side``, ``asset``, ``timestamp``.
+        - On any HTTP / parse error, raises ``ApiError`` — callers (the engine's
+          maker-fill branch) catch and degrade gracefully per the bug.5005
+          GRACEFUL_DEGRADATION_ON_API_ERROR invariant.
+        """
+        params = {"market": condition_id, "limit": limit}
+        data = self._data_api_get("/trades", params=params)
+        if not isinstance(data, list):
+            return []
+
+        trades: list[dict] = []
+        for raw in data:
+            if not isinstance(raw, dict):
+                continue
+            if raw.get("asset") != token_id:
+                continue
+            try:
+                ts = float(raw.get("timestamp", 0))
+                price = float(raw.get("price", 0))
+                size = float(raw.get("size", 0))
+            except (TypeError, ValueError):
+                continue
+            if ts <= since_ts or price <= 0 or size <= 0:
+                continue
+            side = raw.get("side")
+            if side not in ("BUY", "SELL"):
+                continue
+            trades.append({
+                "price": price,
+                "size": size,
+                "side": side,
+                "asset": token_id,
+                "timestamp": ts,
+            })
+        return trades
 
 
 # ---------------------------------------------------------------------------

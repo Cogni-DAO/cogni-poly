@@ -6,6 +6,8 @@ the API client, order book simulator, and database layer.
 
 from __future__ import annotations
 
+import time
+from datetime import datetime
 from pathlib import Path
 
 from pm_trader.api import PolymarketClient
@@ -19,6 +21,8 @@ from pm_trader.models import (
     MarketClosedError,
     NoPositionError,
     NotInitializedError,
+    OrderBook,
+    OrderBookLevel,
     OrderRejectedError,
     Position,
     ResolveResult,
@@ -26,6 +30,7 @@ from pm_trader.models import (
     TradeResult,
 )
 from pm_trader.orders import (
+    LimitOrder,
     cancel_order,
     create_order,
     expire_orders,
@@ -57,6 +62,11 @@ class Engine:
         self.db.init_schema()
         init_orders_schema(self.db.conn)
         self.api = PolymarketClient(self.db)
+        # Cogni-poly local patch (bug.5005): per-token cursor for the
+        # maker-fill (trade-prints) branch of `check_orders`. Volatile —
+        # rebuilt on pod restart from order.created_at for any pending
+        # order on the token, see `_apply_maker_fills`.
+        self._maker_fill_last_scan: dict[str, float] = {}
 
     def close(self) -> None:
         self.api.close()
@@ -452,9 +462,20 @@ class Engine:
         This is the agent-callable trigger. Call it periodically.
         Returns list of filled/expired orders.
 
-        Limit price enforcement: buy orders only consume ask levels at or
-        below the limit price; sell orders only consume bid levels at or
-        above the limit price.  This guarantees no "price-through" fills.
+        Two-pass fill model:
+
+        1. **Maker-fill pre-pass** (Cogni-poly local patch, bug.5005). For each
+           pending order, scan Polymarket trade prints on its tokenId since
+           the last poll. Any trade that crosses our limit (BUY: SELL-taker
+           trade at price ≤ limit; SELL: BUY-taker trade at price ≥ limit)
+           fills the order at the trade's price for ``min(remaining_intent,
+           trade.size)``. This is what catches resting-maker fills that the
+           snapshot path misses.
+
+        2. **Snapshot taker pass** (upstream behavior). For orders not filled
+           by the pre-pass, check the current orderbook: BUY orders only fill
+           when current best_ask ≤ limit, SELL orders only fill when best_bid
+           ≥ limit. Guarantees no "price-through" fills.
         """
         self._require_account()
         results = []
@@ -464,9 +485,21 @@ class Engine:
         for o in expired:
             results.append({"order": _order_to_dict(o), "action": "expired"})
 
-        # Check pending orders against live order books
+        # Cogni-poly local patch (bug.5005): maker-fill pre-pass — fill orders
+        # matched by ambient taker flow during the polling interval. Orders
+        # filled here are skipped by the snapshot loop below.
         pending = get_pending_orders(self.db.conn)
+        try:
+            filled_via_maker = self._apply_maker_fills(pending, results)
+        except Exception:
+            # Don't let maker-fill failures abort the loop — snapshot path
+            # still runs for every order this tick.
+            filled_via_maker = set()
+
+        # Snapshot taker pass (upstream behavior).
         for order in pending:
+            if order.id in filled_via_maker:
+                continue
             try:
                 market = self.api.get_market(order.market_slug)
                 token_id = market.get_token_id(order.outcome)
@@ -518,6 +551,212 @@ class Engine:
                 continue  # Transient errors (network, API) — retry next check
 
         return results
+
+    # ------------------------------------------------------------------
+    # Maker-fill pre-pass (Cogni-poly local patch, bug.5005)
+    # ------------------------------------------------------------------
+
+    def _apply_maker_fills(
+        self, pending: list[LimitOrder], results: list[dict]
+    ) -> set[int]:
+        """Match pending limits against recent taker trade prints.
+
+        For each tokenId with pending orders, do **one** ``get_trades_since``
+        call (per-token batching). For each crossing trade — BUY-taker at
+        price ≥ a pending SELL's limit, SELL-taker at price ≤ a pending BUY's
+        limit — synthesize a 1-level book at the trade's price+size and
+        feed it through the existing ``simulate_buy_fill`` /
+        ``simulate_sell_fill`` so all fee math, partial-fill semantics, and
+        FillResult shape stay consistent with the snapshot path.
+
+        Returns the set of order ids filled or rejected this pass — the
+        caller skips them in the snapshot loop so no order can be matched
+        by both paths in one tick (NO_DOUBLE_FILL invariant, bug.5005).
+
+        Failures inside this method are bounded — caught at the outer
+        ``check_orders`` try/except so a flaky data-api never aborts the
+        loop. Per-token failures fall through to the snapshot path.
+        """
+        filled_ids: set[int] = set()
+        if not pending:
+            return filled_ids
+
+        now_ts = time.time()
+
+        # Per-token batching — collect orders on the same (market_slug,
+        # outcome). One ``get_trades_since`` call per token regardless of
+        # how many tenants are mirroring the same target into that token.
+        by_market: dict[tuple[str, str], list[LimitOrder]] = {}
+        for order in pending:
+            by_market.setdefault(
+                (order.market_slug, order.outcome), []
+            ).append(order)
+
+        for (market_slug, outcome), orders in by_market.items():
+            try:
+                market = self.api.get_market(market_slug)
+                token_id = market.get_token_id(outcome)
+                fee_rate_bps = self.api.get_fee_rate(token_id)
+            except Exception:
+                # Snapshot path will retry on this token; we just skip
+                # the maker pre-pass for it this tick.
+                continue
+
+            # Seed the per-token scan cursor from the oldest pending order
+            # so a pod restart (which wipes _maker_fill_last_scan) doesn't
+            # silently skip the trade window between order placement and
+            # restart.
+            if token_id not in self._maker_fill_last_scan:
+                self._maker_fill_last_scan[token_id] = (
+                    self._oldest_pending_created_ts(orders)
+                )
+            since_ts = self._maker_fill_last_scan[token_id]
+
+            try:
+                trades = self.api.get_trades_since(
+                    condition_id=market.condition_id,
+                    token_id=token_id,
+                    since_ts=since_ts,
+                )
+            except Exception:
+                # Data-API down or rate-limited — advance the cursor to
+                # ``now`` so we don't keep re-fetching the same window when
+                # it recovers, then fall through to snapshot for this token.
+                self._maker_fill_last_scan[token_id] = now_ts
+                continue
+
+            # Always advance the cursor — even when no trades returned —
+            # so the window doesn't grow unboundedly. With trades, advance
+            # to the newest observed ts; without, advance to ``now``.
+            if trades:
+                self._maker_fill_last_scan[token_id] = max(
+                    t["timestamp"] for t in trades
+                )
+            else:
+                self._maker_fill_last_scan[token_id] = now_ts
+                continue
+
+            # Walk trades oldest-first so newer trades on the same token
+            # can still match an order the older trade only partially
+            # exhausted. Deterministic intra-tick allocation: trade size is
+            # consumed across orders sorted by order.id (no queue position
+            # modeling — same simplification as the snapshot path).
+            trades_sorted = sorted(trades, key=lambda t: t["timestamp"])
+            for trade in trades_sorted:
+                t_price = trade["price"]
+                t_side = trade["side"]
+                remaining_trade_size = trade["size"]
+
+                for order in sorted(orders, key=lambda o: o.id):
+                    if order.id in filled_ids:
+                        continue
+                    if remaining_trade_size <= 0:
+                        break
+
+                    # Side semantics: taker side opposite of resting limit.
+                    # See `api.get_trades_since` docstring.
+                    if order.side == "buy":
+                        if t_side != "SELL" or t_price > order.limit_price:
+                            continue
+                        syn_book = OrderBook(
+                            bids=[],
+                            asks=[
+                                OrderBookLevel(
+                                    price=t_price,
+                                    size=remaining_trade_size,
+                                )
+                            ],
+                        )
+                        fill = simulate_buy_fill(
+                            syn_book,
+                            order.amount,
+                            fee_rate_bps,
+                            "fak",
+                            max_price=order.limit_price,
+                        )
+                    else:
+                        if t_side != "BUY" or t_price < order.limit_price:
+                            continue
+                        syn_book = OrderBook(
+                            bids=[
+                                OrderBookLevel(
+                                    price=t_price,
+                                    size=remaining_trade_size,
+                                )
+                            ],
+                            asks=[],
+                        )
+                        fill = simulate_sell_fill(
+                            syn_book,
+                            order.amount,
+                            fee_rate_bps,
+                            "fak",
+                            min_price=order.limit_price,
+                        )
+
+                    if not fill.filled and not fill.is_partial:
+                        continue
+
+                    # Execute through the same recording path as snapshot
+                    # fills so trade rows, position deltas, and cash
+                    # accounting are identical in shape.
+                    try:
+                        if order.side == "buy":
+                            self._execute_limit_buy(
+                                market, order, fill, fee_rate_bps
+                            )
+                        else:
+                            self._execute_limit_sell(
+                                market, order, fill, fee_rate_bps
+                            )
+                        updated = mark_filled(self.db.conn, order.id)
+                        filled_ids.add(order.id)
+                        results.append({
+                            "order": _order_to_dict(updated),
+                            "action": "filled",
+                        })
+                    except _PERMANENT_ORDER_ERRORS as e:
+                        updated = reject_order(self.db.conn, order.id)
+                        # Mark as handled so the snapshot path doesn't retry
+                        # and double-reject.
+                        filled_ids.add(order.id)
+                        results.append({
+                            "order": _order_to_dict(updated),
+                            "action": "rejected",
+                            "reason": str(e),
+                        })
+                    except Exception:
+                        # Transient — leave the order unfilled, snapshot
+                        # path may pick it up this tick or it'll be retried
+                        # next tick.
+                        continue
+
+                    remaining_trade_size -= fill.total_shares
+
+        return filled_ids
+
+    @staticmethod
+    def _oldest_pending_created_ts(orders: list[LimitOrder]) -> float:
+        """Convert oldest pending order's ``created_at`` to unix seconds.
+
+        Used to seed the per-token maker-fill scan cursor on the first
+        ``check_orders`` call after process start (the cursor is in-memory
+        only). Returns ``0.0`` if every order has an unparseable
+        ``created_at`` — the subsequent ``get_trades_since`` call will
+        bound the window via Polymarket's own limit parameter.
+        """
+        oldest: float | None = None
+        for o in orders:
+            raw = o.created_at
+            if not raw:
+                continue
+            try:
+                ts = datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+            except (ValueError, AttributeError):
+                continue
+            if oldest is None or ts < oldest:
+                oldest = ts
+        return oldest if oldest is not None else 0.0
 
     def _execute_limit_buy(self, market, order, fill, fee_rate_bps: int) -> None:
         """Record a limit buy fill using a pre-computed FillResult."""

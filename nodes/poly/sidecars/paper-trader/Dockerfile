@@ -44,16 +44,28 @@ EXPOSE 9100
 
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "9100"]
 
-# ---- test stage: runs pytest against server.py under a stubbed PolymarketClient.
+# ---- test stage: runs pytest against server.py under a stubbed PolymarketClient
+# (sidecar smoke) AND against the vendored Engine's maker-fill branch (bug.5005).
 # The CI workflow targets this stage with --target=test as a build-blocker.
 FROM base AS test
 
 RUN pip install --no-cache-dir "pytest>=8" "httpx>=0.27"
 
 COPY tests /app/tests
+# Vendor's `__init__.py` + `conftest.py` (tmp_data_dir fixture) + the maker-fill
+# test file. Upstream's other tests (e2e_live, mcp_server, cli, etc.) require
+# network / extras we don't carry — not run in CI.
+COPY vendor/pm_trader/tests/__init__.py /app/vendor/pm_trader/tests/__init__.py
+COPY vendor/pm_trader/tests/conftest.py /app/vendor/pm_trader/tests/conftest.py
+COPY vendor/pm_trader/tests/test_check_orders_maker_fill.py /app/vendor/pm_trader/tests/test_check_orders_maker_fill.py
 
 # Test env mirrors prod env shape; data dir under /tmp/test to avoid clobbering.
 ENV PM_TRADER_DATA_DIR=/tmp/pm_trader-test
 ENV PAPER_CHECK_ORDERS_INTERVAL_SECONDS=0.1
 
-RUN pytest -q /app/tests
+# Two pytest invocations on purpose: the sidecar smoke installs a stub for
+# `pm_trader.engine` via `sys.modules` at import time, which would poison the
+# subsequent real-Engine maker-fill tests if they shared a process. Separate
+# processes = clean import state for each suite.
+RUN pytest -q /app/tests \
+  && pytest -q /app/vendor/pm_trader/tests/test_check_orders_maker_fill.py
