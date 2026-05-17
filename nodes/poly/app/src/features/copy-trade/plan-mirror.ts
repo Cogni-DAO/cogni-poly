@@ -132,15 +132,22 @@ function sizeFromPolicy(
             );
       // SIZING_PROPORTIONAL_TO_TARGET_SHARE (charter D6): scale the
       // percentile-interpolated notional by target's cost-basis fraction on
-      // the fill's token. A minority hedge a 99.5/0.5 target shouldn't have
-      // us chasing — when the scaled intent falls below the market floor we
-      // skip rather than clamp up.
+      // the fill's token. A 0.5% minority hedge against a 99.5/0.5 target
+      // shouldn't have us chasing — when the scaled intent falls below the
+      // platform USDC notional we skip. We compare against `minUsdcNotional`
+      // (the absolute platform floor, e.g. Polymarket's $1), NOT the
+      // share-derived `floor.size_usdc` which can equal the per-condition
+      // cap in tight-cap markets and would otherwise mass-skip dominant-side
+      // fills with fraction slightly below 1 (observed candidate-a
+      // 2026-05-17: max=$5, floor=$5, fraction=0.99 → desired=$4.95 false-
+      // positive). When `minUsdcNotional` is undefined we fail-open with 0
+      // — the `applyMarketFloors` below still fails closed independently.
       const sideFraction = targetSideFraction ?? 1;
       const desiredSizeUsdc =
         (floor.size_usdc +
           (policy.max_usdc_per_condition - floor.size_usdc) * ratio) *
         sideFraction;
-      if (desiredSizeUsdc < floor.size_usdc) {
+      if (desiredSizeUsdc < (minUsdcNotional ?? 0)) {
         return { ok: false, reason: "below_market_min" };
       }
       return applyMarketFloors(
