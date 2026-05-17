@@ -43,6 +43,7 @@ import logging
 import os
 import sqlite3
 import threading
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -90,6 +91,34 @@ UPSTREAM_PAPER_TRADER_SHA = os.environ.get("UPSTREAM_PAPER_TRADER_SHA", "unknown
 # without a wider overlay change.
 NODE_ID = os.environ.get("NODE_ID", "poly")
 SERVICE_NAME = "poly-paper-sidecar"
+
+# Per-process boot prefix for externally-visible order_ids. Upstream
+# `pm_trader.Engine` assigns autoincrement SQLite ids that reset to 1 on every
+# pod restart (data_dir lives under /tmp). Cogni persists the returned
+# `order_id` in `poly_copy_trade_fills.order_id` behind a partial unique index
+# (`poly_copy_trade_fills_order_id_unique`); without a per-boot prefix, the
+# second pod after a restart silently collides with the first pod's rows and
+# every paper fill errors out at the cogni-side UPDATE.
+BOOT_ID = uuid.uuid4().hex[:12]
+
+
+def _externalize(upstream_id: Any) -> str:
+    return f"{BOOT_ID}-{upstream_id}"
+
+
+def _to_upstream_int(external_id: str) -> Optional[int]:
+    """Recover the upstream int id for a cancel/get path. Returns None if the
+    id was issued by a different process (different BOOT_ID) or is malformed —
+    callers translate that to 404, matching the behaviour for an unknown id."""
+    prefix = f"{BOOT_ID}-"
+    if not external_id.startswith(prefix):
+        return None
+    raw = external_id[len(prefix):]
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
 
 # Cogni `market_id` is `"prediction-market:polymarket:<conditionId>"`
 # (nodes/poly/packages/market-provider/src/adapters/polymarket/polymarket.normalize-fill.ts:79).
@@ -141,7 +170,7 @@ ERROR_FILL_LOOP_ITERATION = "fill_loop_iteration_failed"
 # request — including it here as a structured field lets Grafana join sidecar
 # logs to TS Pino logs on the same `client_order_id`.
 
-_BASE_FIELDS = {"nodeId": NODE_ID, "service": SERVICE_NAME}
+_BASE_FIELDS = {"nodeId": NODE_ID, "service": SERVICE_NAME, "bootId": BOOT_ID}
 
 
 class _JsonFormatter(logging.Formatter):
@@ -353,7 +382,7 @@ class Sidecar:
                     filled = self.engine.check_orders()  # type: ignore[union-attr]
                 filled_count = 0
                 for d in filled:
-                    oid = str(d.get("id", ""))
+                    oid = _externalize(d.get("id", ""))
                     st = self.orders.get(oid)
                     if st is None:
                         continue
@@ -437,7 +466,7 @@ class Sidecar:
                 },
             )
             raise HTTPException(status_code=502, detail=ERROR_UPSTREAM_NO_ORDER_ID)
-        oid = str(upstream_id)
+        oid = _externalize(upstream_id)
 
         upstream_status = str(d.get("status", "pending")).lower()
         cogni_status = UPSTREAM_TO_COGNI_STATUS.get(upstream_status, "open")
@@ -471,9 +500,10 @@ class Sidecar:
         return _to_receipt(st)
 
     def cancel(self, order_id: str) -> None:
-        try:
-            int_id = int(order_id)
-        except ValueError:
+        int_id = _to_upstream_int(order_id)
+        if int_id is None:
+            # Different BOOT_ID (issued by a prior process), missing prefix, or
+            # not parseable as int — none of those can exist in this engine.
             raise HTTPException(status_code=404, detail=ERROR_NOT_FOUND)
 
         with self.lock:

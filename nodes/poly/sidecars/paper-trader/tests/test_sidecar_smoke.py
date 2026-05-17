@@ -247,9 +247,12 @@ def test_fill_loop_flips_status_and_populates_filled_size(client):
         },
     )
     oid = r.json()["order_id"]
-    # Tell the fake engine to fill this order on the next check.
+    # Externally-visible oid is `<BOOT_ID>-<upstream_int>`; the fake engine
+    # keys on the raw upstream int.
+    upstream_int = server._to_upstream_int(oid)
+    assert upstream_int is not None
     engine: FakeEngine = server.sidecar.engine  # type: ignore[assignment]
-    engine.fill_on_next_check.add(int(oid))
+    engine.fill_on_next_check.add(upstream_int)
 
     # Background fill loop runs every 0.1s (test env). Poll the receipt up to 2s.
     deadline = time.time() + 2.0
@@ -291,6 +294,44 @@ def test_cancel_existing_order_returns_204_and_flips_status(client):
 
 def test_cancel_invalid_id_format_returns_404(client):
     r = client.post("/orders/not-an-int/cancel")
+    assert r.status_code == 404
+
+
+def test_place_returns_boot_prefixed_order_id(client):
+    """Returned `order_id` must be `<BOOT_ID>-<upstream_int>` so two pods that
+    each restart their ephemeral SQLite (resetting upstream autoincrement to 1)
+    do not produce colliding `order_id`s in cogni Postgres."""
+    r = client.post(
+        "/place-order",
+        json={
+            "client_order_id": "cogni-coid-boot",
+            "market_id": "prediction-market:polymarket:0xBOOT",
+            "outcome": "Yes",
+            "side": "BUY",
+            "size_usdc": 1.0,
+            "limit_price": 0.5,
+        },
+    )
+    oid = r.json()["order_id"]
+    assert oid.startswith(f"{server.BOOT_ID}-"), oid
+    # Plain int parse must fail — that's the whole point of the prefix.
+    with pytest.raises(ValueError):
+        int(oid)
+
+
+def test_to_upstream_int_rejects_foreign_boot_prefix():
+    """A request carrying an order_id minted by a previous pod (different
+    BOOT_ID) must read as 'not found' rather than dispatch to the wrong
+    upstream row."""
+    foreign_oid = f"deadbeefcafe-42"
+    assert server._to_upstream_int(foreign_oid) is None
+    # Sanity-check the positive case too.
+    assert server._to_upstream_int(f"{server.BOOT_ID}-42") == 42
+
+
+def test_cancel_with_foreign_boot_prefix_returns_404(client):
+    """A cancel for an id minted in a previous process must 404 cleanly."""
+    r = client.post("/orders/deadbeefcafe-1/cancel")
     assert r.status_code == 404
 
 
