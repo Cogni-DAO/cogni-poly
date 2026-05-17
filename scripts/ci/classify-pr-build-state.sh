@@ -59,32 +59,56 @@ emit() {
   echo "reason=${reason}"
 }
 
-# Find the merge_group pr-build run for HEAD_SHA. The API lets us filter
-# by event + head_sha directly; take the most recent if multiple (re-runs).
-run_json=$(gh api \
-  "repos/${REPOSITORY}/actions/workflows/pr-build.yml/runs?event=merge_group&head_sha=${HEAD_SHA}&per_page=5" \
-  --jq '.workflow_runs[0] // empty' 2>/dev/null || true)
+# Find the merge_group pr-build run for HEAD_SHA. Retry with backoff to
+# close the race between `push` firing on main and the merge_group run's
+# conclusion flipping to `completed` — same bug class as bug.0320 (no-retry
+# on the GitHub events/runs API race window). flight-preview fires on the
+# push event, but the merge_group workflow run's finalisation can lag by
+# a few seconds; classifying that lag as `no-run` or `missing` produces a
+# misleading-red on a legitimately-good flight.
+#
+# Schedule: 6 attempts × 5s = 30s total, matches the wait-for-argocd cadence
+# and is bounded enough that a real `no-run` (admin-merge bypass) still fails
+# fast (within 30s) rather than silently hanging the flight job.
+ATTEMPTS=${CLASSIFY_RETRY_ATTEMPTS:-6}
+SLEEP_S=${CLASSIFY_RETRY_SLEEP_S:-5}
+
+run_json=""
+run_status=""
+for attempt in $(seq 1 "$ATTEMPTS"); do
+  run_json=$(gh api \
+    "repos/${REPOSITORY}/actions/workflows/pr-build.yml/runs?event=merge_group&head_sha=${HEAD_SHA}&per_page=5" \
+    --jq '.workflow_runs[0] // empty' 2>/dev/null || true)
+  if [ -n "$run_json" ] && [ "$run_json" != "null" ]; then
+    run_status=$(printf '%s' "$run_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')
+    if [ "$run_status" = "completed" ]; then
+      break
+    fi
+    echo "  pr-build run for ${HEAD_SHA:0:8} status=${run_status} (attempt ${attempt}/${ATTEMPTS}); retry in ${SLEEP_S}s..." >&2
+  else
+    echo "  no pr-build merge_group run yet for ${HEAD_SHA:0:8} (attempt ${attempt}/${ATTEMPTS}); retry in ${SLEEP_S}s..." >&2
+  fi
+  [ "$attempt" -lt "$ATTEMPTS" ] && sleep "$SLEEP_S"
+done
 
 if [ -z "$run_json" ] || [ "$run_json" = "null" ]; then
-  emit "no-run" "no merge_group pr-build run found for ${HEAD_SHA:0:8} — possible admin-merge bypass"
+  emit "no-run" "no merge_group pr-build run found for ${HEAD_SHA:0:8} after ${ATTEMPTS} attempts — possible admin-merge bypass"
   exit 0
 fi
 
 run_id=$(printf '%s' "$run_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-run_status=$(printf '%s' "$run_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')
 
 if [ "$run_status" != "completed" ]; then
-  # Still building. Caller should retry; treat as missing for now so
-  # operator sees a meaningful error instead of a silent-skip.
-  emit "missing" "pr-build merge_group run ${run_id} for ${HEAD_SHA:0:8} not completed (status=${run_status})"
+  emit "missing" "pr-build merge_group run ${run_id} for ${HEAD_SHA:0:8} still ${run_status} after ${ATTEMPTS} retries"
   exit 0
 fi
 
-# Inspect the `build` matrix job's conclusion. Multiple jobs may share the
-# "build" base name (matrix: build (poly), build (poly-test-worker), ...).
-# Aggregate: if ANY build job was non-skipped, classify by their union.
+# Inspect the `build` matrix job's conclusion. Match the matrix jobs by name
+# prefix `build (` to avoid silent collision with a future top-level job
+# named e.g. `build-manifest`. pr-build.yml's matrix renders as
+# `build (poly)`, `build (poly-test-worker)`, etc.
 build_concls=$(gh api "repos/${REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" \
-  --jq '[.jobs[] | select(.name | startswith("build")) | .conclusion] | unique' 2>/dev/null || echo "[]")
+  --jq '[.jobs[] | select(.name | test("^build \\(")) | .conclusion] | unique' 2>/dev/null || echo "[]")
 
 # Empty array → no build jobs at all → matrix had zero legs → zero-affected.
 build_count=$(printf '%s' "$build_concls" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')

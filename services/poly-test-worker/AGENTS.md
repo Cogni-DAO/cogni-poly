@@ -42,14 +42,14 @@ If the recipe drifts (e.g. someone has to touch `scripts/ci/*` or `.github/workf
 }
 ```
 
-**External deps:** `pino`, `zod`. Both bundled by tsup into `dist/main.js`. No workspace (`@cogni/*`) deps — the exercise demonstrates that a brand-new standalone service ships without taking on internal couplings.
+**External deps:** `pino`, `zod`. Transpiled (NOT bundled) by tsup into `dist/*.js`; resolved from `node_modules/` at runtime so pino's `require('os')` + worker-thread spawn work natively. ESM bundling crashes on first import (`Error: Dynamic require of "os" is not supported`). No workspace (`@cogni/*`) deps — the exercise demonstrates that a brand-new standalone service ships without taking on internal couplings.
 
 ## Public Surface
 
 - `src/main.ts` — entry: loads config, starts HTTP server, logs heartbeat every `HEARTBEAT_INTERVAL_MS` (default 30s).
 - `src/server.ts` — HTTP server: `GET /livez` (always 200), `GET /readyz` (503 until `state.ready=true`), `GET /version` (returns `{version, buildSha, buildTime, service}`), `GET /healthz` (alias for /livez to satisfy both probe conventions).
 - `src/config.ts` — Zod env parse: `PORT` (default 9000), `BUILD_SHA`, `BUILD_TS`, `HEARTBEAT_INTERVAL_MS`, `LOG_LEVEL`.
-- `Dockerfile` — multi-stage: builder runs `pnpm install + tsup build`; runner has only `node:22-bookworm-slim` + the bundled `dist/main.js`. Standalone — no workspace dependency wiring.
+- `Dockerfile` — multi-stage: builder runs `pnpm install + tsup build + pnpm prune --prod`; runner copies `dist/`, `node_modules/`, `package.json` from builder. Standalone — no workspace dependency wiring; no turbo prune / pnpm deploy needed.
 
 ## Responsibilities
 
