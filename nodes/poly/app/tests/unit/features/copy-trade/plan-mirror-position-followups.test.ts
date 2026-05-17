@@ -79,7 +79,7 @@ function state(overrides?: Partial<RuntimeState>): RuntimeState {
   return {
     already_placed_ids: [],
     placed_fill_ids: [],
-    cumulative_intent_usdc_for_market: 0,
+    cumulative_intent_usdc_for_token: 0,
     position: {
       condition_id: CONDITION_ID,
       our_token_id: PRIMARY_TOKEN,
@@ -366,7 +366,7 @@ describe("planMirrorFromFill() — position-aware followups", () => {
     const d = planMirrorFromFill({
       fill,
       config: CONFIG,
-      state: state({ cumulative_intent_usdc_for_market: 4.5 }),
+      state: state({ cumulative_intent_usdc_for_token: 4.5 }),
       client_order_id: clientOrderIdFor(
         BILLING_ACCOUNT_ID,
         TARGET_ID,

@@ -160,8 +160,8 @@ describe("runMirrorTick — already_resting", () => {
       },
       // bind methods that need `this`
       snapshotState: baseLedger.snapshotState.bind(baseLedger),
-      cumulativeIntentForMarket:
-        baseLedger.cumulativeIntentForMarket.bind(baseLedger),
+      cumulativeIntentForMarketToken:
+        baseLedger.cumulativeIntentForMarketToken.bind(baseLedger),
       findOpenForMarket: baseLedger.findOpenForMarket.bind(baseLedger),
       recordDecision: baseLedger.recordDecision.bind(baseLedger),
     };
@@ -198,14 +198,15 @@ describe("runMirrorTick — already_resting", () => {
         throw new PositionCapReachedError(
           COGNI_SYSTEM_BILLING_ACCOUNT_ID,
           MARKET_ID,
+          "token-x",
           4,
           2,
           5
         );
       },
       snapshotState: baseLedger.snapshotState.bind(baseLedger),
-      cumulativeIntentForMarket:
-        baseLedger.cumulativeIntentForMarket.bind(baseLedger),
+      cumulativeIntentForMarketToken:
+        baseLedger.cumulativeIntentForMarketToken.bind(baseLedger),
       findOpenForMarket: baseLedger.findOpenForMarket.bind(baseLedger),
       recordDecision: baseLedger.recordDecision.bind(baseLedger),
     };

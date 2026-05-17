@@ -11,6 +11,7 @@
  *   - INSERT_IS_IDEMPOTENT — `insertPending` uses `ON CONFLICT (target_id, fill_id) DO NOTHING`, so repeat inserts are silent no-ops. Ordering guarantee lives in the caller, not here.
  *   - STATUS_ENUM_PINNED — the `status` CHECK in migration 0027 rejects any writer that tries to store an unknown value; that + `LedgerStatus` keep the runtime + schema in sync.
  *   - CAPS_COUNT_INTENTS — `today_spent_usdc` + `fills_last_hour` count every row whose `observed_at` falls in the window, regardless of terminal status. Matches `decide.ts::INTENT_BASED_CAPS`.
+ *   - CAP_IS_PER_TOKEN_ID (bug.5004) — `cumulativeIntentForMarketToken` and the atomic SELECT inside `insertPending` both filter by `attributes->>'token_id'`. YES + NO outcome tokens of the same conditionId have independent budgets. The advisory lock key includes token_id so concurrent placements on different tokens do not serialize unnecessarily.
  *   - SYNCED_AT_WRITTEN_ON_EVERY_SYNC — `markSynced` sets `synced_at = now()` for every row for which the reconciler received a typed CLOB response (found OR not_found). Rows never checked show `synced_at IS NULL`. (task.0328 CP3)
  * Side-effects: IO (Postgres reads + writes).
  * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md, docs/spec/poly-copy-trade-execution.md
@@ -270,9 +271,10 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       }
     },
 
-    async cumulativeIntentForMarket(
+    async cumulativeIntentForMarketToken(
       billing_account_id: string,
-      market_id: string
+      market_id: string,
+      token_id: string
     ): Promise<number> {
       try {
         // CAP_COUNTS_REALIZED_ON_CANCEL (bug.5050) — canceled rows that filled
@@ -288,6 +290,13 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         //                                    polled — better to over-count
         //                                    than to under-count and leak)
         //   error AND placement=limit      → 0 (CLOB-rejected at API boundary)
+        //
+        // CAP_IS_PER_TOKEN_ID (bug.5004) — WHERE narrows to a single token of
+        // the conditionId. Opposite-side intent does not count. NULL-token_id
+        // legacy fallback is intentionally NOT included: production audit at
+        // bug.5004-design-time shows 0/29970 rows with NULL attributes.token_id;
+        // the always-stored guarantee in insertPending (`token_id` field) has
+        // held since the table's oldest row.
         //
         // The WHERE filter narrows row-scan to the same statuses that the CASE
         // accepts; the CASE handles per-row weighting. Mirrors
@@ -316,6 +325,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             and(
               eq(polyCopyTradeFills.billingAccountId, billing_account_id),
               eq(polyCopyTradeFills.marketId, market_id),
+              sql`${polyCopyTradeFills.attributes}->>'token_id' = ${token_id}`,
               activeRestingPosition,
               or(
                 inArray(polyCopyTradeFills.status, [
@@ -340,9 +350,10 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             errorCode: "cumulative_intent_fail_closed",
             billing_account_id,
             market_id,
+            token_id,
             err: err instanceof Error ? err.message : String(err),
           },
-          "order-ledger cumulativeIntentForMarket failed; returning Infinity (skip placement)"
+          "order-ledger cumulativeIntentForMarketToken failed; returning Infinity (skip placement)"
         );
         return Number.POSITIVE_INFINITY;
       }
@@ -357,7 +368,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         market_id: input.intent.market_id,
         outcome: input.intent.outcome,
         side: input.intent.side,
-        // task.5001: persist placement on the row so cumulativeIntentForMarket
+        // task.5001: persist placement on the row so cumulativeIntentForMarketToken
         // can distinguish limit-order errors (no CTF risk) from FOK errors
         // (broadcast race — CTF can mint despite CLOB error). Without this
         // field the cap-logic fallback assumes worst-case (FOK) for any error.
@@ -439,14 +450,24 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       };
 
       try {
+        const intentTokenId =
+          typeof input.intent.attributes?.token_id === "string"
+            ? input.intent.attributes.token_id
+            : undefined;
         if (
           input.max_market_intent_usdc !== undefined &&
-          input.intent.side === "BUY"
+          input.intent.side === "BUY" &&
+          intentTokenId !== undefined
         ) {
           const maxMarketIntentUsdc = input.max_market_intent_usdc;
+          const lockToken = intentTokenId;
           await deps.db.transaction(async (tx) => {
+            // CAP_IS_PER_TOKEN_ID (bug.5004): lock key narrows to
+            // (billing, market, token). Concurrent placements on the opposite
+            // token of the same conditionId now run in parallel — they touch
+            // disjoint rows, so serialization buys nothing.
             await tx.execute(
-              sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.billing_account_id}:${input.intent.market_id}`}))`
+              sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.billing_account_id}:${input.intent.market_id}:${lockToken}`}))`
             );
             const rows = await tx
               .select({
@@ -462,6 +483,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
                     input.billing_account_id
                   ),
                   eq(polyCopyTradeFills.marketId, input.intent.market_id),
+                  sql`${polyCopyTradeFills.attributes}->>'token_id' = ${lockToken}`,
                   activeRestingPosition,
                   or(
                     inArray(polyCopyTradeFills.status, [
@@ -482,6 +504,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
               throw new PositionCapReachedError(
                 input.billing_account_id,
                 input.intent.market_id,
+                lockToken,
                 currentIntent,
                 input.intent.size_usdc,
                 maxMarketIntentUsdc
