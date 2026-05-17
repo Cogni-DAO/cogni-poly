@@ -574,7 +574,7 @@ describe("planMirrorFromFill — skip precedence (bug.5048)", () => {
 });
 
 describe("planMirrorFromFill — gate disabled fallback", () => {
-  it("legacy behavior when min_target_side_fraction is undefined (places UNDER on minority side)", () => {
+  it("D6 sizing still skips minority UNDER fill as below_market_min when dominance gate is disabled", () => {
     const cfg: MirrorTargetConfig = { ...BASE_CONFIG };
     delete (cfg as { min_target_side_fraction?: number })
       .min_target_side_fraction;
@@ -592,11 +592,18 @@ describe("planMirrorFromFill — gate disabled fallback", () => {
       min_shares: 5,
       min_usdc_notional: 1,
     });
-    // Pre-bug.5048 behavior: minority UNDER fill with our_token_id=undefined
-    // → new_entry sizing → places (the original Chelsea bug).
-    expect(d.kind).toBe("place");
-    if (d.kind !== "place") throw new Error("expected place");
-    expect(d.position_branch).toBe("new_entry");
+    // Pre-bug.5048 / pre-D6: minority UNDER fill placed (the original Chelsea
+    // bug). After charter D6 SIZING_PROPORTIONAL_TO_TARGET_SHARE: even with
+    // the dominance gate disabled, scaling the target_percentile_scaled intent
+    // by UNDER's 0.044 cost-fraction collapses the desired notional below the
+    // market floor → skip. The two gates are independent: dominance is a
+    // hard threshold; D6 is the graceful proportional-fallback that closes
+    // the same failure mode through sizing.
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "below_market_min",
+      position_branch: "new_entry",
+    });
   });
 });
 
