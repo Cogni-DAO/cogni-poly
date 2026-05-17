@@ -34,6 +34,7 @@ function makeRow(overrides: Partial<LedgerRow> = {}): LedgerRow {
     created_at: now,
     updated_at: now,
     billing_account_id: TENANT_A,
+    mode: "live",
     ...overrides,
   };
 }

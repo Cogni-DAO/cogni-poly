@@ -278,6 +278,14 @@ export class FakeOrderLedger implements OrderLedger {
       attrs.source_fill_id = input.intent.attributes.source_fill_id;
     }
     const now = new Date();
+    // Mirror the Drizzle schema default (`live`) when the intent doesn't carry
+    // an explicit mode override. Paper rows surface as `paper` in the fake too.
+    const modeFromIntent =
+      typeof input.intent.attributes?.mode === "string"
+        ? input.intent.attributes.mode
+        : null;
+    const mode: LedgerRow["mode"] =
+      modeFromIntent === "paper" ? "paper" : "live";
     this.rows.push({
       target_id: input.target_id,
       fill_id: input.fill_id,
@@ -291,6 +299,7 @@ export class FakeOrderLedger implements OrderLedger {
       created_at: now,
       updated_at: now,
       billing_account_id: input.billing_account_id,
+      mode,
     });
   }
 
@@ -525,11 +534,13 @@ export class FakeOrderLedger implements OrderLedger {
     this.decisions.push(input);
   }
 
-  async listRecent(opts?: ListRecentOptions): Promise<LedgerRow[]> {
-    const limit = opts?.limit ?? 50;
-    const filtered = opts?.target_id
-      ? this.rows.filter((r) => r.target_id === opts.target_id)
-      : [...this.rows];
+  async listRecent(opts: ListRecentOptions): Promise<LedgerRow[]> {
+    const limit = opts.limit ?? 50;
+    const filtered = this.rows.filter((r) => {
+      if (r.billing_account_id !== opts.billing_account_id) return false;
+      if (opts.target_id && r.target_id !== opts.target_id) return false;
+      return true;
+    });
     return filtered
       .sort((a, b) => b.observed_at.getTime() - a.observed_at.getTime())
       .slice(0, limit);

@@ -7,7 +7,7 @@
  * Scope: Pure type surface. No drizzle imports, no I/O.
  * Invariants: LEDGER_PORT_SHAPE_IS_STABLE — adding fields is a breaking change. INSERT_BEFORE_PLACE is a caller invariant, not a ledger one.
  * Side-effects: none
- * Public types: `LedgerRow` (includes `synced_at` + `position_lifecycle`), `LedgerStatus`, `LedgerPositionLifecycle`, `StateSnapshot`, `TenantBinding`, `InsertPendingInput` (extends TenantBinding), `RecordDecisionInput` (extends TenantBinding), `ListRecentOptions`, `ListOpenOrPendingOptions`, `UpdateStatusInput` (includes `reason?`), `SyncHealthSummary`, `OrderLedger` (snapshotState takes `(target_id, billing_account_id)`).
+ * Public types: `LedgerRow` (includes `synced_at`, `position_lifecycle`, `mode`), `LedgerStatus`, `LedgerMode`, `LedgerPositionLifecycle`, `StateSnapshot`, `TenantBinding`, `InsertPendingInput` (extends TenantBinding), `RecordDecisionInput` (extends TenantBinding), `ListRecentOptions` (tenant-required), `ListOpenOrPendingOptions`, `UpdateStatusInput` (includes `reason?`), `SyncHealthSummary`, `OrderLedger` (snapshotState takes `(target_id, billing_account_id)`).
  * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md, docs/spec/poly-tenant-and-collateral.md
  * @public
  */
@@ -67,7 +67,17 @@ export interface LedgerRow {
    * tenant has their own CLOB API creds derived from their Privy signer).
    */
   billing_account_id: string;
+  /**
+   * Execution mode stamped on the row at decision-time. `live` rows are real
+   * CLOB orders; `paper` rows are simulated by the paper sidecar but otherwise
+   * participate in cap accounting identically. Schema default is `'live'`
+   * (migration 0049) so legacy rows surface as `live`.
+   */
+  mode: LedgerMode;
 }
+
+/** Execution mode stamped on every fill row. Inherited from the target row. */
+export type LedgerMode = "live" | "paper";
 
 /**
  * Generic per-(market_id, token_id) intent-aggregate row. Trading-vocabulary
@@ -212,8 +222,17 @@ export interface RecordDecisionInput extends TenantBinding {
   decided_at: Date;
 }
 
-/** Options for `listRecent` — used by the read API + dashboard. */
+/**
+ * Options for `listRecent` — used by the read API.
+ *
+ * `billing_account_id` is **required** so the read is tenant-scoped at the
+ * adapter layer. The orders route resolves the caller's billing account from
+ * the session before calling. Cross-tenant reads (the mirror enumerator) have
+ * never used `listRecent` and have no legitimate need to — they read via
+ * dedicated cross-tenant ports.
+ */
 export interface ListRecentOptions {
+  billing_account_id: string;
   limit?: number;
   target_id?: string;
 }
@@ -437,10 +456,12 @@ export interface OrderLedger {
   recordDecision(input: RecordDecisionInput): Promise<void>;
 
   /**
-   * Read the N most recent rows — primary surface for the read API + dashboard.
+   * Read the N most recent rows for the caller's tenant — primary surface for
+   * the orders read API. `billing_account_id` is required; the adapter applies
+   * a WHERE clamp so the response never surfaces another tenant's rows.
    * Default limit 50. Ordered by `observed_at DESC` to match the dashboard card.
    */
-  listRecent(opts?: ListRecentOptions): Promise<LedgerRow[]>;
+  listRecent(opts: ListRecentOptions): Promise<LedgerRow[]>;
 
   /**
    * Tenant-scoped position read model for dashboard page-loads. Reads

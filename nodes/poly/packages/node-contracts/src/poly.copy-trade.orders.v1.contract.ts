@@ -3,12 +3,14 @@
 
 /**
  * Module: `@contracts/poly.copy-trade.orders.v1.contract`
- * Purpose: Contract for the order ledger read — copy-trade placements the operator's autonomous mirror + agent tool have submitted.
+ * Purpose: Contract for the order ledger read — copy-trade placements the caller's autonomous mirror + agent tool have submitted.
  * Scope: GET /api/v1/poly/copy-trade/orders. Supports `limit`, `status`, `target_id` filters. Does not execute trades, does not modify state, does not own DB queries.
- * Invariants: Rows ordered by `observed_at` DESC. `order_id` null for pending/error rows. `polymarket_profile_url` null on non-live rows.
+ * Invariants:
+ *   - TENANT_SCOPED: response is clamped to the caller's billing_account_id at the adapter layer. The route resolves the session user's billing account before reading; the ledger adapter applies a WHERE clamp on top of the BYPASSRLS service connection.
+ *   - Rows ordered by `observed_at` DESC. `order_id` null for pending/error rows. `polymarket_profile_url` null on non-live rows.
  * Side-effects: none
- * Notes: HARDCODED_USER — response is not user-scoped in v0. Agent-tool placements are NOT in the ledger in v0 (follow-up tracked).
- * Links: work/items/task.0315.poly-copy-trade-prototype.md, docs/spec/poly-copy-trade-execution.md
+ * Notes: Agent-tool placements are NOT in the ledger in v0 (follow-up tracked).
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md, docs/spec/poly-copy-trade-execution.md, docs/spec/poly-tenant-and-collateral.md
  * @public
  */
 
@@ -23,6 +25,7 @@ const ledgerStatusSchema = z.enum([
   "error",
 ]);
 const sideSchema = z.enum(["BUY", "SELL"]);
+const modeSchema = z.enum(["live", "paper"]);
 
 const orderRowSchema = z.object({
   target_id: z.string().uuid(),
@@ -62,6 +65,14 @@ const orderRowSchema = z.object({
    * STALENESS_VISIBLE_IN_UI invariant (task.0328 CP3).
    */
   staleness_ms: z.number().int().min(0).nullable(),
+  /**
+   * Execution mode of the row. `live` rows are real CLOB orders; `paper` rows
+   * are simulated by the paper sidecar. Stamped on every fill at decide-time
+   * (migration 0049 column with schema default `'live'`); `null` is reserved
+   * for legacy rows that pre-date the column on environments that haven't
+   * fully run 0049 yet.
+   */
+  mode: modeSchema.nullable(),
 });
 
 export const polyCopyTradeOrdersOperation = {
