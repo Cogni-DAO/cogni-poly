@@ -11,8 +11,8 @@ resources:
 # Sidecar container shape lives next to its source (catalog v2). Digests still
 # resolved from `images:` block below by promote-k8s-image.sh.
 components:
-  - ../../../../../nodes/poly/sidecars/paper-trader/k8s
-  - ../../../../../nodes/poly/sidecars/echo/k8s
+  - ../../../components/sidecars/poly-paper-sidecar
+  - ../../../components/sidecars/poly-echo-sidecar
 
 namePrefix: poly-
 

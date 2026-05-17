@@ -155,7 +155,7 @@ The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile
 
 A new **in-pod image** — sidecar, migrator initContainer, or stdio MCP — that ships **inside an existing deploy unit's pod**. "In-pod image" ≠ "service": a service is a deploy unit (Shape A). Catalog v2 + kustomize Components make Shape B a thin, declarative add — no inline container patches in host overlays.
 
-**Precedent**: `poly-paper-sidecar` ([`nodes/poly/sidecars/paper-trader/`](../../nodes/poly/sidecars/paper-trader/)) and `poly-echo-sidecar` ([`nodes/poly/sidecars/echo/`](../../nodes/poly/sidecars/echo/)). Both live entirely under `nodes/poly/sidecars/<name>/` (source + Dockerfile + `k8s/` Component). Host overlays reference each via one `components:` line per env where the sidecar runs.
+**Precedent**: `poly-paper-sidecar` and `poly-echo-sidecar`. Source + Dockerfile live under `nodes/poly/sidecars/<name>/`; the kustomize Component (container patch) lives under `infra/k8s/components/sidecars/<image-name>/`. Host overlays reference each via one `components:` line per env where the sidecar runs. The split is operational: component files must travel with overlays to the deploy branch (which only syncs `infra/k8s/`), source files don't need to.
 
 ### When
 
@@ -172,10 +172,10 @@ Anything that could run independently → Shape A instead.
 - [ ] Source + `Dockerfile` under the host's tree:
   - Sidecar: `nodes/<host>/sidecars/<name>/Dockerfile`
   - Migrator: `nodes/<host>/db/Dockerfile`
-- [ ] A kustomize Component holding the container patch — co-located with the source so shape lives once:
+- [ ] A kustomize Component holding the container patch — MUST live under `infra/k8s/components/sidecars/<image-name>/` so it gets synced to the deploy branch with the rest of `infra/k8s/`. Co-locating it under `nodes/<host>/sidecars/<name>/k8s/` looks tidier but breaks Argo render (`infra/k8s` is the only synced tree):
 
   ```yaml
-  # nodes/<host>/sidecars/<name>/k8s/kustomization.yaml
+  # infra/k8s/components/sidecars/<image-name>/kustomization.yaml
   apiVersion: kustomize.config.k8s.io/v1alpha1
   kind: Component
 
@@ -221,7 +221,7 @@ Anything that could run independently → Shape A instead.
   ```yaml
   # infra/k8s/overlays/<env>/<host>/kustomization.yaml
   components:
-    - ../../../../../nodes/<host>/sidecars/<name>/k8s   # NEW — Component holds the container patch
+    - ../../../components/sidecars/<image-name>   # NEW — Component holds the container patch
 
   images:
     - name: ghcr.io/cogni-dao/<host>                    # host app (already there)
