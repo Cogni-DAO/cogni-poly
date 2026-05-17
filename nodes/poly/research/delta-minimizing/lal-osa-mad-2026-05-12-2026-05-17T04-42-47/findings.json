@@ -1,0 +1,10 @@
+{
+  "report_path": "/Users/derek/conductor/workspaces/cogni-poly/montevideo/research/delta-minimizing/lal-osa-mad-2026-05-12-2026-05-17T04-42-47/report.html",
+  "primary_class": null,
+  "primary_confidence": 0.85,
+  "primary_one_liner": "74 of 1,277 decisions errored placement_failed; 62 receipts record error_code='unknown' + error_class='i' (minified prod class name escaping via err.constructor.name fallback at mirror-pipeline.ts:1227-1232) — root cause is unattributable. The +47pp 'win' on the more-markets group is a placement-failure dividend on BTTS, not skill.",
+  "secondary_class": "D6",
+  "secondary_confidence": 0.95,
+  "secondary_one_liner": "The 12 errors on Osasuna Win (0x9f8017dfc4) all record below_min_order_size: target_position_usdc=$8970, mirror_max_usdc_per_trade=$15 → triggering fills $0.23-$2.96 scale to sub-min mirror slices.",
+  "authored_at": "2026-05-17T04:55:00Z"
+}

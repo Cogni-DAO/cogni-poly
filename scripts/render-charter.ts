@@ -4,7 +4,7 @@
 /**
  * Module: `@scripts/render-charter`
  * Purpose: Render the LLM-owned charter at `work/charters/POLY_COPY_DELTA.md`
- *   to a viewable `research/delta-minimizing/charter.html`. One-shot,
+ *   to a viewable `nodes/poly/research/delta-minimizing/charter.html`. One-shot,
  *   manual: invoked by hand after editing the .md, NEVER from another
  *   script. Pure markdown → HTML over the .md the LLM just authored.
  * Scope: Reads one .md and writes one .html. Does not scan other files,
@@ -12,7 +12,7 @@
  * Invariants: NO_AUTO_CONTENT — the renderer never invents tallies,
  *   summaries, or aggregates from other files. The .md is the only
  *   source of truth; the .html is a viewable mirror.
- * Side-effects: IO (writes `research/delta-minimizing/charter.html`).
+ * Side-effects: IO (writes `nodes/poly/research/delta-minimizing/charter.html`).
  * Links: .claude/skills/delta-minimizer/SKILL.md
  * @public
  */
@@ -23,7 +23,10 @@ import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(REPO_ROOT, "work/charters/POLY_COPY_DELTA.md");
-const DST = join(REPO_ROOT, "research/delta-minimizing/charter.html");
+const DST = join(
+  REPO_ROOT,
+  "nodes/poly/research/delta-minimizing/charter.html"
+);
 
 function escapeHtml(s: string | null | undefined): string {
   if (s == null) return "";
