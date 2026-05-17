@@ -4,8 +4,10 @@
 # poly-paper-sidecar — Python sidecar wrapping agent-next/polymarket-paper-trader
 # (MIT) behind an HTTP API. The TS PaperAdapter speaks to it over pod-loopback.
 #
-# Pin: agent-next/polymarket-paper-trader v0.1.6 (commit 8a0a3ee2, 2026-03-01).
-# Bump checklist in AGENTS.md — re-bless the smoke fixture on every bump.
+# Source is vendored under vendor/pm_trader/ (see vendor/pm_trader/PROVENANCE.md).
+# UPSTREAM_PAPER_TRADER_SHA below is metadata-only — surfaced on /version as
+# upstreamPaperTraderSha — and must be kept in lockstep with PROVENANCE.md's
+# "Pinned SHA". Bumping the vendored upstream: see vendor/pm_trader/PROVENANCE.md.
 
 FROM python:3.12-slim AS base
 
@@ -16,15 +18,21 @@ ENV UPSTREAM_PAPER_TRADER_SHA=${UPSTREAM_PAPER_TRADER_SHA}
 ARG BUILD_SHA=unknown
 ENV BUILD_SHA=${BUILD_SHA}
 
-# git needed to pip-install upstream from a pinned commit.
-RUN apt-get update && apt-get install -y --no-install-recommends git \
-  && rm -rf /var/lib/apt/lists/*
-
+# Runtime deps that don't change with the vendored upstream — separate layer
+# so an upstream bump doesn't bust this cache.
 RUN pip install --no-cache-dir \
   "fastapi>=0.115,<0.116" \
   "uvicorn[standard]>=0.32,<0.33" \
-  "pydantic>=2.9,<3" \
-  "git+https://github.com/agent-next/polymarket-paper-trader@${UPSTREAM_PAPER_TRADER_SHA}"
+  "pydantic>=2.9,<3"
+
+# Install the vendored pm_trader package. COPY only what setuptools needs to
+# install — pyproject + README (referenced by pyproject) + LICENSE + the
+# package — so PROVENANCE / CHANGELOG / upstream tests don't bust this layer.
+COPY vendor/pm_trader/pyproject.toml /app/vendor/pm_trader/pyproject.toml
+COPY vendor/pm_trader/README.md /app/vendor/pm_trader/README.md
+COPY vendor/pm_trader/LICENSE /app/vendor/pm_trader/LICENSE
+COPY vendor/pm_trader/pm_trader /app/vendor/pm_trader/pm_trader
+RUN pip install --no-cache-dir /app/vendor/pm_trader
 
 COPY server.py /app/server.py
 
