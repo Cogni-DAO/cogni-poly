@@ -130,18 +130,11 @@ function sizeFromPolicy(
                   denominator
               )
             );
-      // SIZING_PROPORTIONAL_TO_TARGET_SHARE (charter D6): scale the
-      // percentile-interpolated notional by target's cost-basis fraction on
-      // the fill's token. A 0.5% minority hedge against a 99.5/0.5 target
-      // shouldn't have us chasing — when the scaled intent falls below the
-      // platform USDC notional we skip. We compare against `minUsdcNotional`
-      // (the absolute platform floor, e.g. Polymarket's $1), NOT the
-      // share-derived `floor.size_usdc` which can equal the per-condition
-      // cap in tight-cap markets and would otherwise mass-skip dominant-side
-      // fills with fraction slightly below 1 (observed candidate-a
-      // 2026-05-17: max=$5, floor=$5, fraction=0.99 → desired=$4.95 false-
-      // positive). When `minUsdcNotional` is undefined we fail-open with 0
-      // — the `applyMarketFloors` below still fails closed independently.
+      // SIZING_PROPORTIONAL_TO_TARGET_SHARE (charter D6): scale by target's
+      // cost-basis fraction on the fill's token. Skip below `minUsdcNotional`
+      // (NOT `floor.size_usdc` — that can equal the per-condition cap in
+      // tight-cap markets and false-positive dominant near-1.0 fractions;
+      // observed candidate-a 2026-05-17: max=$5 floor=$5 fraction=0.99).
       const sideFraction = targetSideFraction ?? 1;
       const desiredSizeUsdc =
         (floor.size_usdc +
@@ -344,36 +337,13 @@ interface TargetDominanceSignal {
   fill_is_minority: boolean;
   /** Token id with highest cost when dominance_known; else undefined. */
   dominant_token_id: string | undefined;
-  /** Fraction of target's total cost on the fill's token, or null when unknown. */
+  /**
+   * Fraction of target's total cost on the fill's token. Computed whenever
+   * target_position data is available — independent of `threshold`, so D6
+   * sizing can scale by it even when the dominance gate is disabled. `null`
+   * only when target data is missing or total cost is zero.
+   */
   fill_token_fraction: number | null;
-}
-
-/**
- * Charter D6 — target's cost-basis fraction on the fill's token, independent
- * of any threshold gate. Used by `target_percentile_scaled` sizing to scale
- * mirror intent proportionally so a 99.5/0.5 target does not produce inverted
- * 28/72 mirror weighting. Returns undefined when target data is missing or
- * total cost is zero; sizing then falls back to the unscaled path (?? 1).
- */
-export function targetSideFractionForFill(
-  targetPosition: TargetConditionPositionView | undefined,
-  fillTokenId: string
-): number | undefined {
-  if (
-    !targetPosition ||
-    targetPosition.tokens.length === 0 ||
-    fillTokenId === ""
-  ) {
-    return undefined;
-  }
-  let total = 0;
-  let fillCost = 0;
-  for (const t of targetPosition.tokens) {
-    total += t.cost_usdc;
-    if (t.token_id === fillTokenId) fillCost += t.cost_usdc;
-  }
-  if (total <= 0) return undefined;
-  return fillCost / total;
 }
 
 export function analyzeTargetDominance(
@@ -387,7 +357,6 @@ export function analyzeTargetDominance(
     dominant_token_id: undefined,
     fill_token_fraction: null,
   };
-  if (threshold === undefined || threshold <= 0) return disabled;
   if (
     !targetPosition ||
     targetPosition.tokens.length === 0 ||
@@ -409,10 +378,11 @@ export function analyzeTargetDominance(
   }
   if (total <= 0) return disabled;
   const fraction = fillCost / total;
+  const gateActive = threshold !== undefined && threshold > 0;
   return {
-    dominance_known: true,
-    fill_is_minority: fraction < threshold,
-    dominant_token_id: dominantTokenId,
+    dominance_known: gateActive,
+    fill_is_minority: gateActive && fraction < threshold,
+    dominant_token_id: gateActive ? dominantTokenId : undefined,
     fill_token_fraction: fraction,
   };
 }
@@ -603,7 +573,7 @@ function decideMirrorBranch(
       minShares,
       minUsdcNotional,
       state.cumulative_intent_usdc_for_token,
-      targetSideFractionForFill(state.target_position, fillTokenId)
+      dominance.fill_token_fraction ?? undefined
     ),
     wrong_side_holding_detected,
   };
