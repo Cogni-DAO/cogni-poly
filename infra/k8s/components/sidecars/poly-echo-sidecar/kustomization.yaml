@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+#
+# Kustomize Component — appends the poly-echo-sidecar container to the
+# node-app Deployment. Container shape lives once, next to source. Digest
+# pin stays in the host overlay's `images:` block (written by
+# promote-k8s-image.sh). Per-env activation = `components:` line per
+# overlay where this sidecar runs.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - target:
+      kind: Deployment
+      name: node-app
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/-
+        value:
+          name: poly-echo-sidecar
+          image: ghcr.io/cogni-dao/poly-echo-sidecar
+          ports:
+            - containerPort: 9101
+              name: echo
+              protocol: TCP
+          livenessProbe:
+            httpGet: { path: /healthz, port: echo }
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /healthz, port: echo }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests: { memory: "64Mi", cpu: "20m" }
+            limits: { memory: "128Mi", cpu: "100m" }
