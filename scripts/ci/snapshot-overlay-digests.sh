@@ -4,7 +4,7 @@
 #
 # scripts/ci/snapshot-overlay-digests.sh — task.0373.
 #
-# Print a TSV of `<target>\t<image-ref>` lines for every ALL_TARGETS app
+# Print a TSV of `<target>\t<image-ref>` lines for every DEPLOY_UNITS app
 # whose `infra/k8s/overlays/<OVERLAY_ENV>/<target>/kustomization.yaml`
 # exists in the current working directory tree. `image-ref` is whatever
 # the overlay currently pins (digest if present, else tag).
@@ -32,7 +32,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib/overlay-digest.sh
 . "$SCRIPT_DIR/lib/overlay-digest.sh"
 
-for target in "${ALL_TARGETS[@]}"; do
+for target in "${DEPLOY_UNITS[@]}"; do
   file="infra/k8s/overlays/${OVERLAY_ENV}/${target}/kustomization.yaml"
   if [ ! -f "$file" ]; then
     continue

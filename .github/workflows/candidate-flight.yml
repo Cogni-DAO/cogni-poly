@@ -286,15 +286,15 @@ jobs:
             [ -n "$app" ] && snap["$app"]="$ref"
           done < "$SNAPSHOT_FILE"
           promoted_padded=" $(echo "$PROMOTED_APPS" | tr ',' ' ' | tr -s ' ') "
-          for target in "${ALL_TARGETS[@]}"; do
-            if [[ "$promoted_padded" == *" $target "* ]]; then
+          for unit in "${DEPLOY_UNITS[@]}"; do
+            if [[ "$promoted_padded" == *" $unit "* ]]; then
               continue
             fi
-            ref="${snap[$target]:-}"
+            ref="${snap[$unit]:-}"
             [ -z "$ref" ] && continue
             [[ "$ref" != *"@sha256:"* ]] && continue
             bash ../ci-src/scripts/ci/promote-k8s-image.sh --no-commit \
-              --env candidate-a --app "$target" --digest "$ref"
+              --env candidate-a --app "$unit" --digest "$ref"
           done
 
       - name: Commit and push to per-node deploy branch

@@ -4,16 +4,21 @@
 #
 # scripts/ci/tests/promote-build-payload.test.sh
 #
-# Regression harness for bug.0328. Three cases:
-#   1. Happy path           → promoted_apps=<all4>, map written.
-#   2. MAP_SCRIPT failing   → promoted_apps=<all4>, map absent (defense:
-#                             source-sha-map failure must NOT shadow
-#                             promoted_apps — that is the silent-green
-#                             leak PR #921 left open).
-#   3. Empty payload        → promoted_apps='' (genuine no-op skip).
+# Catalog v2 regression suite for promote-build-payload.sh. Exercises:
+#   1. Happy path           — NODE=poly + payload with poly + poly-paper-sidecar
+#                             → both overlay entries written, promoted_apps=poly,
+#                             source-sha map updated.
+#   2. Sidecar absent       — NODE=poly + OVERLAY_ENV=production (production
+#                             overlay deliberately omits paper-sidecar) → app
+#                             promoted, sidecar exit-2 skip, promoted_apps=poly.
+#   3. Affected-only miss   — NODE=poly + payload contains only scheduler-worker
+#                             entries → promoted_apps='', no overlay writes,
+#                             no map update.
+#   4. MAP_SCRIPT failing   — NODE=poly + full payload + MAP=/bin/false →
+#                             overlay writes happen, promoted_apps=poly, but
+#                             script exits 1 (total provenance loss is hard fail).
 #
 # Run: bash scripts/ci/tests/promote-build-payload.test.sh
-# Exit 0 on all pass, non-zero with diff on first failure.
 
 set -euo pipefail
 
@@ -21,109 +26,77 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CI_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_ROOT="$(cd "${CI_DIR}/../.." && pwd)"
 PROMOTE_BUILD_PAYLOAD="${CI_DIR}/promote-build-payload.sh"
+PROMOTE_K8S="${CI_DIR}/promote-k8s-image.sh"
 UPDATE_MAP="${CI_DIR}/update-source-sha-map.sh"
-
-if [ ! -f "$PROMOTE_BUILD_PAYLOAD" ]; then
-  echo "[FAIL] promote-build-payload.sh not found at $PROMOTE_BUILD_PAYLOAD" >&2
-  exit 1
-fi
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
 FAILED=0
 
-stub_promote_script() {
-  # Mimics promote-k8s-image.sh's observable surface: log the target, touch
-  # the overlay file so downstream diffs are non-empty.
-  local out="$1"
-  cat >"$out" <<'STUB'
-#!/usr/bin/env bash
-set -euo pipefail
-APP=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --app) APP="$2"; shift 2;;
-    --digest|--migrator-digest|--env) shift 2;;
-    --no-commit) shift;;
-    *) shift;;
-  esac
-done
-echo "[INFO] Promoting $APP image"
-echo "[INFO] Skipping commit (--no-commit)."
-STUB
-  chmod +x "$out"
-}
-
 make_payload() {
   local out="$1" source_sha="$2" targets_json="$3"
   cat >"$out" <<JSON
-{"source_sha":"${source_sha}","targets":${targets_json}}
+{"image_tag":"pr-61-test","source_sha":"${source_sha}","targets":${targets_json}}
 JSON
 }
 
-FULL_TARGETS='[
-  {"target":"operator","digest":"sha256:aa01"},
-  {"target":"operator-migrator","digest":"sha256:aa02"},
-  {"target":"poly","digest":"sha256:bb01"},
-  {"target":"poly-migrator","digest":"sha256:bb02"},
-  {"target":"resy","digest":"sha256:cc01"},
-  {"target":"resy-migrator","digest":"sha256:cc02"},
-  {"target":"scheduler-worker","digest":"sha256:dd01"}
-]'
-EMPTY_TARGETS='[]'
+# Stage a deploy-branch checkout with real overlays from the repo so promote-
+# k8s-image.sh rewrites them image-name-aware against actual YAML.
+stage_deploy_branch() {
+  local case_dir="$1" overlay_env="$2"
+  mkdir -p "$case_dir/deploy-branch/infra/k8s/overlays/${overlay_env}/poly"
+  mkdir -p "$case_dir/deploy-branch/infra/k8s/overlays/${overlay_env}/scheduler-worker"
+  mkdir -p "$case_dir/deploy-branch/.promote-state"
+  cp "${REPO_ROOT}/infra/k8s/overlays/${overlay_env}/poly/kustomization.yaml" \
+     "$case_dir/deploy-branch/infra/k8s/overlays/${overlay_env}/poly/"
+  cp "${REPO_ROOT}/infra/k8s/overlays/${overlay_env}/scheduler-worker/kustomization.yaml" \
+     "$case_dir/deploy-branch/infra/k8s/overlays/${overlay_env}/scheduler-worker/"
+}
 
 run_case() {
-  local name="$1"
-  local map_script="$2"
-  local payload_targets="$3"
-  local expect_promoted="$4"
-  local expect_map_exists="$5"
-  local expect_rc="${6:-0}"
+  local name="$1" node="$2" overlay_env="$3" payload_targets="$4"
+  local map_script="$5" expect_promoted="$6" expect_map_exists="$7" expect_rc="${8:-0}"
 
   local case_dir="$WORKDIR/$name"
   mkdir -p "$case_dir"
-  cd "$case_dir"
-
-  stub_promote_script "$case_dir/stub-promote.sh"
+  stage_deploy_branch "$case_dir" "$overlay_env"
   make_payload "$case_dir/payload.json" "abcdef1234567890abcdef1234567890abcdef12" "$payload_targets"
-  local out_file="$case_dir/github_output.txt"
-  : >"$out_file"
+  : >"$case_dir/github_output.txt"
 
   local rc=0
-  PAYLOAD_FILE="$case_dir/payload.json" \
-    OVERLAY_ENV=candidate-a \
-    PROMOTE_SCRIPT="$case_dir/stub-promote.sh" \
+  ( cd "$case_dir/deploy-branch" && \
+    PAYLOAD_FILE="$case_dir/payload.json" \
+    OVERLAY_ENV="$overlay_env" \
+    NODE="$node" \
+    PROMOTE_SCRIPT="$PROMOTE_K8S" \
     MAP_SCRIPT="$map_script" \
-    MAP_FILE="$case_dir/.promote-state/source-sha-by-app.json" \
-    GITHUB_OUTPUT="$out_file" \
-    bash "$PROMOTE_BUILD_PAYLOAD" >"$case_dir/stdout.log" 2>"$case_dir/stderr.log" \
+    MAP_FILE=".promote-state/source-sha-by-app.json" \
+    GITHUB_OUTPUT="$case_dir/github_output.txt" \
+    bash "$PROMOTE_BUILD_PAYLOAD" >"$case_dir/stdout.log" 2>"$case_dir/stderr.log" ) \
     || rc=$?
 
-  # Read the last promoted_apps=... line from $GITHUB_OUTPUT (last-write-wins).
   local got
-  got="$(grep '^promoted_apps=' "$out_file" | tail -1 | sed 's/^promoted_apps=//' || true)"
+  got="$(grep '^promoted_apps=' "$case_dir/github_output.txt" | tail -1 | sed 's/^promoted_apps=//' || true)"
+
+  local map_exists=no
+  [ -f "$case_dir/deploy-branch/.promote-state/source-sha-by-app.json" ] && map_exists=yes
 
   local ok=1
   if [ "$got" != "$expect_promoted" ]; then
-    echo "[FAIL] case=$name expected promoted_apps='$expect_promoted' got='$got' (script rc=$rc)"
+    echo "[FAIL] case=$name expected promoted_apps='$expect_promoted' got='$got' (rc=$rc)"
     echo "  stdout: $case_dir/stdout.log"
     echo "  stderr: $case_dir/stderr.log"
     ok=0
   fi
-
-  local map_exists=no
-  [ -f "$case_dir/.promote-state/source-sha-by-app.json" ] && map_exists=yes
   if [ "$map_exists" != "$expect_map_exists" ]; then
     echo "[FAIL] case=$name expected map_exists=$expect_map_exists got=$map_exists"
     ok=0
   fi
-
   if [ "$rc" != "$expect_rc" ]; then
     echo "[FAIL] case=$name expected rc=$expect_rc got=$rc"
     ok=0
   fi
-
   if [ "$ok" = "1" ]; then
     echo "[PASS] case=$name promoted_apps='$got' map_exists=$map_exists rc=$rc"
   else
@@ -131,19 +104,27 @@ run_case() {
   fi
 }
 
-# Case 1 — happy path. Real update-source-sha-map.sh, full payload.
-run_case "happy" "$UPDATE_MAP" "$FULL_TARGETS" "operator,poly,resy,scheduler-worker" "yes" 0
+POLY_FULL='[
+  {"target":"poly","deploy_unit":"poly","image_name":"ghcr.io/cogni-dao/cogni-poly","role":"app","tag":"","digest":"ghcr.io/cogni-dao/cogni-poly@sha256:aa01000000000000000000000000000000000000000000000000000000000000"},
+  {"target":"poly-paper-sidecar","deploy_unit":"poly","image_name":"ghcr.io/cogni-dao/poly-paper-sidecar","role":"sidecar","tag":"","digest":"ghcr.io/cogni-dao/poly-paper-sidecar@sha256:bb01000000000000000000000000000000000000000000000000000000000000"},
+  {"target":"scheduler-worker","deploy_unit":"scheduler-worker","image_name":"ghcr.io/cogni-dao/cogni-poly","role":"app","tag":"","digest":"ghcr.io/cogni-dao/cogni-poly@sha256:cc01000000000000000000000000000000000000000000000000000000000000"}
+]'
 
-# Case 2 — MAP_SCRIPT fails for EVERY app (provenance side-car dead).
-# promoted_apps must still reflect every overlay write (verify-candidate
-# must still run), but the script exits non-zero so the flight job turns
-# red — total provenance loss is a hard break, not silent decay.
-run_case "map-script-failing" "/bin/false" "$FULL_TARGETS" "operator,poly,resy,scheduler-worker" "no" 1
+SW_ONLY='[
+  {"target":"scheduler-worker","deploy_unit":"scheduler-worker","image_name":"ghcr.io/cogni-dao/cogni-poly","role":"app","tag":"","digest":"ghcr.io/cogni-dao/cogni-poly@sha256:cc01000000000000000000000000000000000000000000000000000000000000"}
+]'
 
-# Case 3 — genuine no-op (empty payload). promoted_apps must be empty so
-# verify-candidate's job-level gate skips legitimately and release-slot
-# treats it as a green no-op.
-run_case "empty-payload" "$UPDATE_MAP" "$EMPTY_TARGETS" "" "no" 0
+# 1. Happy path — NODE=poly, candidate-a overlay, full payload.
+run_case "poly-candidate-a-happy" "poly" "candidate-a" "$POLY_FULL" "$UPDATE_MAP" "poly" "yes" 0
+
+# 2. Sidecar absent — NODE=poly, production overlay. App promoted, sidecar exit-2.
+run_case "poly-production-sidecar-absent" "poly" "production" "$POLY_FULL" "$UPDATE_MAP" "poly" "yes" 0
+
+# 3. Affected-only miss — NODE=poly, payload only has scheduler-worker image.
+run_case "poly-affected-only-miss" "poly" "candidate-a" "$SW_ONLY" "$UPDATE_MAP" "" "no" 0
+
+# 4. MAP_SCRIPT failing — overlay writes happen, but provenance dead → rc=1.
+run_case "poly-map-failing" "poly" "candidate-a" "$POLY_FULL" "/bin/false" "poly" "no" 1
 
 cd "$REPO_ROOT"
 if [ "$FAILED" -gt 0 ]; then

@@ -55,8 +55,8 @@ poll_ready() {
 # cogni-monorepo has [operator, poly, resy], future cogni-poly niches
 # add catalog entries with their own URLs — no code changes.
 FAILED=0
-for target in "${NODE_TARGETS[@]}"; do
-  url=$(public_url_for_target "$DEPLOY_ENV" "$target")
+for target in "${DEPLOY_UNITS_WITH_NODE_APPS[@]}"; do
+  url=$(public_url_for_deploy_unit "$DEPLOY_ENV" "$target")
   if [ -z "$url" ]; then
     echo "[skip] ${target}: no public_url.${DEPLOY_ENV} in catalog (no public Ingress)"
     continue

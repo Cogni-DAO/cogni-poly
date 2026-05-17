@@ -32,9 +32,6 @@ concurrency:
   group: ${{ github.event_name == 'pull_request' && format('pr-build-pr-{0}', github.event.pull_request.number) || format('pr-build-mq-{0}', github.event.merge_group.head_ref) }}
   cancel-in-progress: true
 
-env:
-  IMAGE_NAME: ghcr.io/cogni-dao/cogni-poly
-
 jobs:
   # task.0391: single source of truth for event-derived metadata.
   # `pull_request` and `merge_group` have different event payloads but downstream

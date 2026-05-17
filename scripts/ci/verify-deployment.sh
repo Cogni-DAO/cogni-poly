@@ -37,7 +37,7 @@ fi
 url_for_node() {
   local node="$1" catalog_url=""
   if [ -n "$DEPLOY_ENV" ]; then
-    catalog_url=$(public_url_for_target "$DEPLOY_ENV" "$node" 2>/dev/null || true)
+    catalog_url=$(public_url_for_deploy_unit "$DEPLOY_ENV" "$node" 2>/dev/null || true)
   fi
   if [ -n "$catalog_url" ]; then
     printf '%s' "$catalog_url"
@@ -70,14 +70,14 @@ poll_health() {
   return 1
 }
 
-if [ "${#NODE_TARGETS[@]}" -eq 0 ]; then
+if [ "${#DEPLOY_UNITS_WITH_NODE_APPS[@]}" -eq 0 ]; then
   echo "ℹ️  No node-apps in catalog — skipping health polls."
   exit 0
 fi
 
 declare -a PIDS=()
 declare -a NAMES=()
-for node in "${NODE_TARGETS[@]}"; do
+for node in "${DEPLOY_UNITS_WITH_NODE_APPS[@]}"; do
   url=$(url_for_node "$node")
   poll_health "$node" "$url" &
   PIDS+=("$!")
@@ -97,7 +97,7 @@ echo "✅ All nodes healthy"
 
 # ── Smoke tests ──────────────────────────────────────────────────────────────
 
-for node in "${NODE_TARGETS[@]}"; do
+for node in "${DEPLOY_UNITS_WITH_NODE_APPS[@]}"; do
   url=$(url_for_node "$node")
   BODY=$(curl -sk "$url/livez" 2>/dev/null)
   echo "$url/livez → $BODY"

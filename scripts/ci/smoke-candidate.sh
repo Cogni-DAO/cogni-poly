@@ -43,14 +43,14 @@ check_livez() {
 
 # bug.5002 — read per-node URL from catalog (per env) instead of
 # computing `${node}-${DOMAIN}` with hardcoded operator-is-special.
-# The iteration set is NODE_TARGETS from catalog: cogni-poly has [poly],
+# The iteration set is DEPLOY_UNITS_WITH_NODE_APPS from catalog: cogni-poly has [poly],
 # cogni-monorepo has [operator, poly, resy]. Same code, different scope.
-for app in "${NODE_TARGETS[@]}"; do
+for app in "${DEPLOY_UNITS_WITH_NODE_APPS[@]}"; do
   if ! should_check "$app"; then
     echo "[skip] ${app} livez — not in PROMOTED_APPS=${PROMOTED_APPS}"
     continue
   fi
-  url=$(public_url_for_target "$DEPLOY_ENV" "$app")
+  url=$(public_url_for_deploy_unit "$DEPLOY_ENV" "$app")
   if [ -z "$url" ]; then
     echo "[skip] ${app} livez — no public_url.${DEPLOY_ENV} in catalog (no public Ingress)"
     continue
@@ -68,8 +68,8 @@ done
 # exercises both nodes; a PR that touches neither has nothing to regress.
 # bug.5002 — also skips when catalog lacks operator (single-node forks).
 # ─────────────────────────────────────────────────────────────────────────────
-POLY_BASE=$(public_url_for_target "$DEPLOY_ENV" poly)
-OP_BASE=$(public_url_for_target "$DEPLOY_ENV" operator 2>/dev/null || echo "")
+POLY_BASE=$(public_url_for_deploy_unit "$DEPLOY_ENV" poly)
+OP_BASE=$(public_url_for_deploy_unit "$DEPLOY_ENV" operator 2>/dev/null || echo "")
 if ! command -v jq >/dev/null 2>&1; then
   echo "[skip] bug.0322 regression check — jq not installed"
 elif [ -z "$POLY_BASE" ] || [ -z "$OP_BASE" ]; then

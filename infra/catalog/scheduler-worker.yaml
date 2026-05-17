@@ -1,17 +1,27 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+#
+# Catalog v2 (docs/spec/catalog-v2.md). Deploy unit "scheduler-worker" owns
+# 1 image. No public Ingress, no per-node migrator. Lives alongside poly in
+# the same GHCR package (ghcr.io/cogni-dao/cogni-poly), discriminated by
+# image_tag_suffix.
+
+schema_version: 2
 name: scheduler-worker
 type: service
-port: 9000
-dockerfile: services/scheduler-worker/Dockerfile
-# bug.0344 — see infra/catalog/operator.yaml for why these fields exist.
-# scheduler-worker has no per-node migrator (NODE_TARGETS excludes it in
-# scripts/ci/lib/image-tags.sh:52), so the migrator alias is a no-op —
-# its allow-tags regex matches zero GHCR tags, argocd-image-updater logs
-# "no newer version" and never touches this overlay's images block
-# (which has no cogni-template-migrate entry anyway).
-image_tag_suffix: "-scheduler-worker"
-migrator_tag_suffix: "-scheduler-worker-migrate"
-# task.0320 — per-env deploy branches (see operator.yaml).
-candidate_a_branch: deploy/candidate-a-scheduler-worker
-preview_branch: deploy/preview-scheduler-worker
-production_branch: deploy/production-scheduler-worker
-path_prefix: services/scheduler-worker/
+
+deploy:
+  candidate_a_branch: deploy/candidate-a-scheduler-worker
+  preview_branch: deploy/preview-scheduler-worker
+  production_branch: deploy/production-scheduler-worker
+  path_prefix: services/scheduler-worker/
+  port: 9000
+
+images:
+  - name: scheduler-worker
+    role: app
+    dockerfile: services/scheduler-worker/Dockerfile
+    image_name: ghcr.io/cogni-dao/cogni-poly
+    image_tag_suffix: "-scheduler-worker"
+    build:
+      cache_scope: build-scheduler-worker

@@ -58,7 +58,7 @@ DEPLOY_BRANCH="${3:-deploy/preview}"
 GH_TOKEN="${4:-${GH_TOKEN:-}}"
 BUILD_SHA="${5:-${BUILD_SHA:-$SHA}}"
 # task.0376: scope promote-and-deploy.yml's matrix to affected nodes.
-# Empty (legacy callers) → promote-and-deploy.yml falls back to ALL_TARGETS.
+# Empty (legacy callers) → promote-and-deploy.yml falls back to DEPLOY_UNITS.
 NODES_CSV="${6:-${NODES_CSV:-}}"
 
 # Emit `status=<value>` to $GITHUB_OUTPUT when running under Actions.

@@ -133,6 +133,11 @@ run_check "workspace" "bash scripts/run-turbo-checks.sh lint typecheck test form
 # and AGENTS.md coverage independently from workspace package checks.
 run_check "check:docs" "pnpm -s check:docs"
 
+# check:catalog validates infra/catalog/*.yaml against catalog v2 schema + cross-
+# file invariants (unique image_name, exactly one role:app per deploy unit,
+# dockerfiles resolve on disk, https-only public_url). See docs/spec/catalog-v2.md.
+run_check "check:catalog" "pnpm -s check:catalog"
+
 # Drift check — flag any content-level mutation caused *by this script* (ignore pre-existing WIP).
 # In strict mode this catches surprise writes from verify-only checks.
 # In --fix mode this catches auto-fix producing changes the developer hasn't staged yet.

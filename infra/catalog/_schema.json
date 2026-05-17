@@ -1,22 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Cogni-DAO/node-template/infra/catalog/_schema.json",
-  "title": "Cogni node/service catalog entry",
-  "description": "task.0374 — single declaration site for nodes and node-shaped services. Consumed by image-tags.sh, detect-affected.sh, ApplicationSet generators, and per-workflow decide jobs. See docs/spec/ci-cd.md axiom 16 (CATALOG_IS_SSOT).",
+  "$id": "https://github.com/Cogni-DAO/cogni-poly/infra/catalog/_schema.json",
+  "title": "Cogni node/service catalog entry (v2)",
+  "description": "One file = one deploy unit (Argo Application + per-env deploy branches + path_prefix) that owns ≥1 build units (images). See docs/spec/catalog-v2.md and docs/spec/ci-cd.md axiom 16 (CATALOG_IS_SSOT).",
   "type": "object",
-  "additionalProperties": true,
-  "required": [
-    "name",
-    "type",
-    "port",
-    "dockerfile",
-    "image_tag_suffix",
-    "migrator_tag_suffix",
-    "path_prefix",
-    "candidate_a_branch",
-    "preview_branch",
-    "production_branch"
-  ],
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "type", "deploy", "images"],
   "allOf": [
     {
       "if": {
@@ -27,79 +16,156 @@
     }
   ],
   "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 2,
+      "description": "Must be 2. v1 entries are rejected by the loader so the migration is forward-only."
+    },
     "name": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*$",
-      "description": "Catalog entry name. Used as image-tag suffix base, Argo Application name suffix, and deploy-branch suffix. Filename must match name.yaml."
+      "description": "Deploy unit name. Filename must match name.yaml. Used as Argo Application name suffix and deploy-branch suffix."
     },
     "type": {
       "type": "string",
       "enum": ["node", "service"],
-      "description": "node = full node app (operator/poly/resy); service = supporting service (scheduler-worker)."
-    },
-    "port": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 65535
+      "description": "node = full node app; service = supporting service (e.g. scheduler-worker)."
     },
     "node_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-      "description": "UUID v4 — bound at provision time, persisted in repo-spec lookups."
+      "description": "UUID v4. Required when type=node. Bound at provision time."
     },
-    "dockerfile": {
-      "type": "string",
-      "pattern": "^[a-z0-9._/-]+/Dockerfile$",
-      "description": "Repo-relative path to the build Dockerfile."
-    },
-    "image_tag_suffix": {
-      "type": "string",
-      "pattern": "^(-[a-z0-9-]+)?$",
-      "description": "Tag suffix appended to base tags in GHCR. Empty for the historically-unsuffixed operator target; '-<name>' otherwise."
-    },
-    "migrator_tag_suffix": {
-      "type": "string",
-      "pattern": "^(-[a-z0-9-]+)?$",
-      "description": "Tag suffix for the per-node migrator image alias. Empty if this entry has no migrator."
-    },
-    "path_prefix": {
-      "type": "string",
-      "pattern": "^[a-z0-9._/-]+/$",
-      "description": "task.0374 — repo path prefix that maps changed files to this target. detect-affected.sh uses this to compute the matrix shape. Must end with /."
-    },
-    "candidate_a_branch": {
-      "type": "string",
-      "pattern": "^deploy/candidate-a-[a-z0-9-]+$"
-    },
-    "preview_branch": {
-      "type": "string",
-      "pattern": "^deploy/preview-[a-z0-9-]+$"
-    },
-    "production_branch": {
-      "type": "string",
-      "pattern": "^deploy/production-[a-z0-9-]+$"
-    },
-    "public_url": {
+    "deploy": {
       "type": "object",
-      "description": "bug.5002 — per-env public URL (Ingress / Caddy) for this node. Verify scripts (wait-for-candidate-ready.sh, smoke-candidate.sh, verify-buildsha.sh, verify-deployment.sh) read these directly. Optional for service-type entries that have no public ingress (scheduler-worker, migrators).",
+      "additionalProperties": false,
+      "required": [
+        "candidate_a_branch",
+        "preview_branch",
+        "production_branch",
+        "path_prefix"
+      ],
       "properties": {
-        "candidate-a": {
+        "candidate_a_branch": {
           "type": "string",
-          "format": "uri",
-          "pattern": "^https://"
+          "pattern": "^deploy/candidate-a-[a-z0-9-]+$"
         },
-        "preview": {
+        "preview_branch": {
           "type": "string",
-          "format": "uri",
-          "pattern": "^https://"
+          "pattern": "^deploy/preview-[a-z0-9-]+$"
         },
-        "production": {
+        "production_branch": {
           "type": "string",
-          "format": "uri",
-          "pattern": "^https://"
+          "pattern": "^deploy/production-[a-z0-9-]+$"
+        },
+        "path_prefix": {
+          "type": "string",
+          "pattern": "^[a-z0-9._/-]+/$",
+          "description": "Default trigger prefix for owned images. detect-affected.sh uses this when an image has no per-image path_prefix override. Must end with /."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "public_url": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per-env public URL (Ingress / Caddy) for this deploy unit. Verify scripts (wait-for-candidate-ready.sh, smoke-candidate.sh, verify-buildsha.sh, verify-deployment.sh) read these directly. Optional when the deploy unit has no public ingress.",
+          "properties": {
+            "candidate-a": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            },
+            "preview": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            },
+            "production": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            }
+          }
         }
-      },
-      "additionalProperties": false
+      }
+    },
+    "images": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Build units owned by this deploy unit. ≥1 entry. Exactly one entry must have role=app (validated by tests/ci-invariants/catalog-v2.spec.ts).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "role",
+          "dockerfile",
+          "image_name",
+          "image_tag_suffix"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "Image name unique within the repo. Used as map key in build/resolve/promote payloads, in pr-build matrix, and in tests/ci-invariants enforcement."
+          },
+          "role": {
+            "type": "string",
+            "enum": ["app", "migrator", "sidecar"],
+            "description": "app = primary runtime container (exactly one per deploy unit); migrator = initContainer; sidecar = sibling container. Drives overlay-block placement in promote-build-payload.sh."
+          },
+          "dockerfile": {
+            "type": "string",
+            "pattern": "^[a-z0-9._/-]+/Dockerfile$",
+            "description": "Repo-relative Dockerfile path. Validated to resolve on disk by tests/ci-invariants."
+          },
+          "image_name": {
+            "type": "string",
+            "pattern": "^ghcr\\.io/cogni-dao/[a-z][a-z0-9-]*$",
+            "description": "Full GHCR registry path (no tag). Different images may share image_name (suffix discriminates tag namespace) OR live in distinct GHCR repos."
+          },
+          "image_tag_suffix": {
+            "type": "string",
+            "pattern": "^(-[a-z0-9-]+)?$",
+            "description": "Tag suffix appended after the base tag. Empty allowed only when this image is alone in its image_name (no suffix needed to discriminate). The (image_name, image_tag_suffix) tuple is repo-wide unique."
+          },
+          "path_prefix": {
+            "type": "string",
+            "pattern": "^[a-z0-9._/-]+/$",
+            "description": "Optional per-image override. Default = parent deploy.path_prefix. Must end with /."
+          },
+          "build": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Optional per-image docker buildx config. Absent = default repo-root context, no --target, no smoke test.",
+            "properties": {
+              "context": {
+                "type": "string",
+                "pattern": "^[a-z0-9._/-]+$",
+                "description": "Build context directory. Default: repo root."
+              },
+              "target": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$",
+                "description": "docker buildx --target for the production push."
+              },
+              "test_target": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$",
+                "description": "Optional pre-push smoke target. pr-build runs `docker buildx build --target <test_target>` (no push); failure aborts the leg."
+              },
+              "cache_scope": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]*$",
+                "description": "GHA cache scope key. Default: build-<image.name>."
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

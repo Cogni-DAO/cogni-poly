@@ -17,10 +17,10 @@ images:
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
     digest: "sha256:e96106e8aae2478a8ee506d3f837024ac2e7a415b0cc6491bee6f4d9f541d014"
-  # poly-paper-sidecar built by build-poly-paper-sidecar.yml. Outside the
-  # catalog SSOT (which assumes 1 image = 1 overlay = 1 Argo app). Bump the
-  # sidecar pin by editing the sha256 above after a new build publishes a
-  # sha-<short> tag. See proj.poly-paper-trading roadmap.
+  # poly-paper-sidecar is a catalog-v2 image: it ships through pr-build's matrix
+  # like any other image (infra/catalog/poly.yaml → images[role: sidecar]).
+  # promote-build-payload + image-name-aware promote-k8s-image keep the host
+  # and sidecar entries here independent — no manual sha bump needed.
 
 patches:
   - target:

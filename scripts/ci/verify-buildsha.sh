@@ -106,7 +106,7 @@ CUTOVER_SLEEP="${CUTOVER_SLEEP:-5}"
 _verify_buildsha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/ci/lib/image-tags.sh
 . "${_verify_buildsha_dir}/lib/image-tags.sh"
-NODE_APPS="${NODE_TARGETS[*]}"
+NODE_APPS="${DEPLOY_UNITS_WITH_NODE_APPS[*]}"
 
 declare -A EXPECTED_BY_NODE=()
 
@@ -259,8 +259,8 @@ for node in "${NODE_ARR[@]}"; do
   # catalogs not yet migrated). Legacy path stays intact so the upstream
   # cogni-monorepo migration can be a single PR without flag flips.
   url=""
-  if [ -n "$DEPLOY_ENV" ] && declare -f public_url_for_target >/dev/null 2>&1; then
-    catalog_url=$(public_url_for_target "$DEPLOY_ENV" "$node" 2>/dev/null || true)
+  if [ -n "$DEPLOY_ENV" ] && declare -f public_url_for_deploy_unit >/dev/null 2>&1; then
+    catalog_url=$(public_url_for_deploy_unit "$DEPLOY_ENV" "$node" 2>/dev/null || true)
     [ -n "$catalog_url" ] && url="${catalog_url}/version"
   fi
   if [ -z "$url" ]; then

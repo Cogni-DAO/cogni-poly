@@ -143,21 +143,43 @@ Create A records for both:
 
 **Gate:** `dig +short <user-fqdn> @1.1.1.1` AND `dig +short <env>.vm.cognidao.org @1.1.1.1` both return the new VM IP.
 
-### Phase 6b: Declare per-env public URLs in the catalog (bug.5002)
+### Phase 6b: Declare the node in the catalog (v2 shape)
 
-**Every new node in this repo MUST add `public_url` to its `infra/catalog/<name>.yaml` entry for each env it serves.** Verify scripts (`wait-for-candidate-ready.sh`, `smoke-candidate.sh`, `verify-buildsha.sh`, `verify-deployment.sh`) read URLs from here — without it they fall back to a legacy `${node}-${DOMAIN}` builder that produces NXDOMAIN URLs on single-node-shaped forks. Schema is enforced by `infra/catalog/_schema.json`.
+**Every new node MUST add a catalog v2 entry at `infra/catalog/<name>.yaml`** declaring its deploy unit + images. Verify scripts read URLs from `deploy.public_url`; pr-build's matrix derives image build legs from `images[]`. Schema + cross-file invariants are enforced by `pnpm check:catalog` (blocking in CI's `static` job). Full spec: [`docs/spec/catalog-v2.md`](../../../docs/spec/catalog-v2.md).
+
+Minimum shape for a new node:
 
 ```yaml
 # infra/catalog/<your-node>.yaml
-public_url:
-  candidate-a: https://<user-fqdn-for-candidate-a>
-  preview: https://<user-fqdn-for-preview>
-  production: https://<user-fqdn-for-production>
+schema_version: 2
+name: <your-node>
+type: node
+node_id: "<uuid-v4-from-provision>"
+
+deploy:
+  candidate_a_branch: deploy/candidate-a-<your-node>
+  preview_branch: deploy/preview-<your-node>
+  production_branch: deploy/production-<your-node>
+  path_prefix: nodes/<your-node>/
+  port: 3000
+  public_url:
+    candidate-a: https://<user-fqdn-for-candidate-a>
+    preview: https://<user-fqdn-for-preview>
+    production: https://<user-fqdn-for-production>
+
+images:
+  - name: <your-node>
+    role: app
+    dockerfile: nodes/<your-node>/app/Dockerfile
+    image_name: ghcr.io/cogni-dao/<your-node>
+    image_tag_suffix: "-<your-node>"
+    build:
+      target: runner
 ```
 
-URLs MUST match the `<user-fqdn>` A records you just created in Phase 6. Service-type entries (e.g. `scheduler-worker`) that have no Ingress omit this block.
+URLs MUST match the `<user-fqdn>` A records from Phase 6. Add a `role: sidecar` or `role: migrator` entry to `images[]` for each additional image the node ships — no new workflow file, no manual digest dance.
 
-**Gate:** `bash -c '. scripts/ci/lib/image-tags.sh && public_url_for_target candidate-a <your-node>'` prints the candidate-a URL non-empty.
+**Gate:** `pnpm check:catalog` passes AND `bash -c '. scripts/ci/lib/image-tags.sh && public_url_for_deploy_unit candidate-a <your-node>'` prints the candidate-a URL non-empty.
 
 ### Phase 7: Deploy & Verify
 
@@ -180,7 +202,7 @@ Wire the new VM's Postgres into Grafana Cloud so agents can query DB state witho
 - [ ] Production deployment green
 - [ ] DNS resolves for both environments
 - [ ] `/readyz` returns 200 on both domains
-- [ ] `infra/catalog/<node>.yaml::public_url` declared for every env the node serves (bug.5002)
+- [ ] `infra/catalog/<node>.yaml` declared in catalog v2 shape (schema_version: 2, deploy + images blocks); `pnpm check:catalog` green
 
 ## Anti-patterns
 
