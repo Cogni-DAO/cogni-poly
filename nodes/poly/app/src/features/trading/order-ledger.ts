@@ -450,9 +450,18 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       };
 
       try {
-        const intentTokenId =
+        // CAP_IS_PER_TOKEN_ID (bug.5004): the atomic check requires a real
+        // token_id. `plan-mirror.ts::buildIntent` falls back to `""` when
+        // `fill.attributes.asset` is non-string (defensive); treat that as
+        // "no per-token cap available" rather than scoping to an empty-string
+        // token (which would silently match no rows and bypass the cap).
+        const rawTokenId =
           typeof input.intent.attributes?.token_id === "string"
             ? input.intent.attributes.token_id
+            : undefined;
+        const intentTokenId =
+          rawTokenId !== undefined && rawTokenId.length > 0
+            ? rawTokenId
             : undefined;
         if (
           input.max_market_intent_usdc !== undefined &&

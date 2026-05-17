@@ -980,4 +980,50 @@ describe("FakeOrderLedger.cumulativeIntentForMarketToken", () => {
       })
     ).resolves.toBeUndefined();
   });
+
+  // bug.5004 — empty-string token_id (buildIntent's defensive fallback when
+  // `fill.attributes.asset` is missing) is treated equivalently to missing
+  // token_id. Both bypass the atomic cap check rather than scope to an
+  // empty-string token (which would silently match no rows). Catches the
+  // silent-bypass hazard called out in self-review.
+  it("CAP_IS_PER_TOKEN_ID — empty-string token_id is treated as missing (no false-pass cap check)", async () => {
+    const ledger = new FakeOrderLedger({
+      initial: [
+        makeRow({
+          fill_id: "fill-x-1",
+          status: "filled",
+          attributes: { market_id: MARKET_X, token_id: TOKEN_X, size_usdc: 20 },
+        }),
+      ],
+    });
+    // Bypass path: intent carries `token_id: ""` (buildIntent's malformed-fill
+    // fallback). The cap check must skip — NOT try to scope to "". If the
+    // bypass were missing, the read would return 0 for token="", see 0+100≤1
+    // as false, and reject — which is wrong because the real risk ($30 burnt
+    // on TOKEN_X) is not in the "" bucket and the leak would be silent.
+    await expect(
+      ledger.insertPending({
+        billing_account_id: TENANT_A,
+        created_by_user_id: "user-1",
+        target_id: "target-empty-tok",
+        fill_id: "fill-empty-token",
+        observed_at: new Date(),
+        max_market_intent_usdc: 1,
+        intent: {
+          provider: "polymarket",
+          market_id: MARKET_X,
+          outcome: "YES",
+          side: "BUY",
+          size_usdc: 100,
+          limit_price: 0.5,
+          client_order_id: "coid-empty-token",
+          attributes: { token_id: "" },
+        },
+      })
+    ).resolves.toBeUndefined();
+    // Sanity: query for TOKEN_X is unaffected by the empty-token-id bypass row.
+    await expect(
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_X)
+    ).resolves.toBe(20);
+  });
 });

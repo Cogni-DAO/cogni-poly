@@ -233,6 +233,15 @@ export interface InsertPendingInput extends TenantBinding {
    * bug.5004 (`CAP_IS_PER_TOKEN_ID`): the atomic check is scoped per
    * token_id; the opposite side of a binary does NOT count against this
    * token's cap.
+   *
+   * **Bypass contract** (intentional, mirrored by `mirror-pipeline.ts`'s
+   * read-side pre-check): when `intent.attributes.token_id` is missing OR
+   * empty-string (`buildIntent`'s defensive fallback when the upstream fill
+   * has no `asset`), the atomic cap-check is SKIPPED entirely. We prefer
+   * "fail open on malformed fill" over "scope cap to empty-string token +
+   * silently match no rows + leak past the cap". The bypass also applies to
+   * SELL intents (NO_SELL_IN_MIRROR — sells never go through this cap) and
+   * any caller that has not yet opted into the per-token contract.
    */
   max_market_intent_usdc?: number;
 }

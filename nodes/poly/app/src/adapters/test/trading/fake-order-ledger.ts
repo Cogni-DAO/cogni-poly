@@ -245,9 +245,15 @@ export class FakeOrderLedger implements OrderLedger {
         input.intent.market_id
       );
     }
-    const intentTokenId =
+    // Mirror the real adapter: empty-string token_id from buildIntent's
+    // defensive fallback is treated as "no per-token cap available".
+    const rawTokenId =
       typeof input.intent.attributes?.token_id === "string"
         ? input.intent.attributes.token_id
+        : undefined;
+    const intentTokenId =
+      rawTokenId !== undefined && rawTokenId.length > 0
+        ? rawTokenId
         : undefined;
     if (
       input.max_market_intent_usdc !== undefined &&

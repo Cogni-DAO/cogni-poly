@@ -406,11 +406,14 @@ export const MirrorReasonSchema = z.enum([
    */
   "below_market_min",
   /**
-   * Tenant's existing committed intent on this `market_id` (=
-   * `prediction-market:polymarket:<conditionId>`) plus the proposed intent's
-   * `size_usdc` would exceed `max_usdc_per_condition`. YES + NO outcome tokens
-   * on the same conditionId share this budget; different conditionIds get
-   * their own. task.0424 / bug.5054 (CAP_IS_PER_CONDITION_ID).
+   * Tenant's existing committed intent on this `(market_id, token_id)` plus
+   * the proposed intent's `size_usdc` would exceed `max_usdc_per_condition`.
+   * Per bug.5004 (`CAP_IS_PER_TOKEN_ID`, supersedes the per-conditionId scope
+   * from bug.5054): YES and NO outcome tokens of the same conditionId each
+   * get an independent per-leg budget. Dashboards interpreting this counter
+   * as "per-market exposure exhausted" now mean "per-leg" — operator-level
+   * dollar bound lives at `authorizeIntent` (`CAPS_LIVE_IN_GRANT`).
+   * task.0424 / bug.5054 / bug.5004.
    */
   "position_cap_reached",
   /**
