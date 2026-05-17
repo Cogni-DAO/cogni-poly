@@ -8,7 +8,7 @@ version = "0.1.6"
 description = "Your AI agent trades Polymarket — $10k paper money, real prices, zero risk. Compete on the leaderboard."
 authors = [{name = "agent-next"}]
 license = "MIT"
-readme = "README.md"
+# readme dropped — upstream README.md not vendored (see PROVENANCE.md).
 requires-python = ">=3.10"
 keywords = ["polymarket", "paper-trading", "prediction-markets", "mcp"]
 classifiers = [

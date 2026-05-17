@@ -18,7 +18,3 @@ docs/research/fixtures/*.json
 # gating format:check on these paths creates churn. Humans may run Prettier by hand.
 infra/k8s/overlays/**/kustomization.yaml
 .pytest_cache/
-
-# Vendored third-party source — do not reformat (keeps upstream diffs clean
-# on bumps). bug.5005 (paper-sidecar vendor).
-**/vendor/**

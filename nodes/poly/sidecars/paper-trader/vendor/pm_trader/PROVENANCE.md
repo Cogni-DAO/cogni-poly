@@ -2,25 +2,28 @@
 
 This directory is a vendored copy of the upstream Python package `polymarket-paper-trader`.
 
-| Field | Value |
-| --- | --- |
-| Upstream | https://github.com/agent-next/polymarket-paper-trader |
-| Pinned SHA | `8a0a3ee265cfd375c172626b0c63be72c07beaee` |
-| Upstream version | `0.1.6` |
-| License | MIT (see `LICENSE`) |
-| Vendored on | 2026-05-17 |
-| Rationale | The upstream `Engine.check_orders()` simulates only **limit-as-taker** fills against a snapshot orderbook (`pm_trader/engine.py:476-493`). Cogni copy-trades **limit-maker** targets (swisstony, RN1) whose entry fills consume the offered liquidity, so paper orders placed at the target's price never fill on the snapshot model. We vendor the source so we can land a parallel `limit-as-maker-matched-by-takers` code path that scans trade prints between polls. See `bug.5005` in this repo's work-items API for the full diagnosis. |
-| Promotion plan | If the local diff grows large, or upstream becomes responsive to PRs, promote this vendor to `Cogni-DAO/polymarket-paper-trader` (a soft fork on GitHub) and pin the Dockerfile to that fork's SHA. Migration is trivial: this directory becomes the root of the fork. |
+| Field            | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Upstream         | https://github.com/agent-next/polymarket-paper-trader                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Pinned SHA       | `8a0a3ee265cfd375c172626b0c63be72c07beaee`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Upstream version | `0.1.6`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| License          | MIT (see `LICENSE`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Vendored on      | 2026-05-17                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Rationale        | The upstream `Engine.check_orders()` simulates only **limit-as-taker** fills against a snapshot orderbook (`pm_trader/engine.py:476-493`). Cogni copy-trades **limit-maker** targets (swisstony, RN1) whose entry fills consume the offered liquidity, so paper orders placed at the target's price never fill on the snapshot model. We vendor the source so we can land a parallel `limit-as-maker-matched-by-takers` code path that scans trade prints between polls. See `bug.5005` in this repo's work-items API for the full diagnosis. |
+| Promotion plan   | If the local diff grows large, or upstream becomes responsive to PRs, promote this vendor to `Cogni-DAO/polymarket-paper-trader` (a soft fork on GitHub) and pin the Dockerfile to that fork's SHA. Migration is trivial: this directory becomes the root of the fork.                                                                                                                                                                                                                                                                        |
 
 ## What's here vs what's not
 
 Included from upstream@8a0a3ee2:
+
 - `pm_trader/` — the Python package
 - `tests/` — upstream's regression tests (kept for port-forward safety; **not wired into CI** — our sidecar test stage exercises `nodes/poly/sidecars/paper-trader/tests/` only)
-- `pyproject.toml` — preserved verbatim so `pip install ./vendor/pm_trader` works
-- `LICENSE`, `README.md`, `CHANGELOG.md`
+- `pyproject.toml` — preserved verbatim except for the `readme = "README.md"` line, which is commented out so README.md doesn't need to live in-tree (see diff log)
+- `LICENSE`
 
 Deliberately excluded:
+
+- `README.md`, `CHANGELOG.md` — root-level prettier `format:check` reformats them; rather than carry an in-repo `.prettierignore` rule for vendor (which trips `single-node-scope` as a root-config edit), we keep upstream URLs in this PROVENANCE.md for anyone who needs the canonical copy.
 - `docs/`, `examples/`, `skill/`, `.github/`, `CLAUDE.md`, `server.json` — upstream-internal artifacts not needed at runtime.
 
 ## Bumping the pinned upstream SHA
@@ -39,6 +42,7 @@ When upstream releases a new version we want to track:
 
 Track every patch applied locally so port-forward is auditable.
 
-| When | What | Why | Commit / bug ref |
-| --- | --- | --- | --- |
-| 2026-05-17 | Vendor relocation (no behavior change) | Substrate for the maker-fill fix | this PR |
+| When       | What                                                 | Why                                             | Commit / bug ref |
+| ---------- | ---------------------------------------------------- | ----------------------------------------------- | ---------------- |
+| 2026-05-17 | Vendor relocation (no behavior change)               | Substrate for the maker-fill fix                | bug.5005 Phase 1 |
+| 2026-05-17 | `pyproject.toml`: comment out `readme = "README.md"` | README.md not vendored; pip install still works | bug.5005 Phase 1 |

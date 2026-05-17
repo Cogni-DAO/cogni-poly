@@ -18,21 +18,18 @@ ENV UPSTREAM_PAPER_TRADER_SHA=${UPSTREAM_PAPER_TRADER_SHA}
 ARG BUILD_SHA=unknown
 ENV BUILD_SHA=${BUILD_SHA}
 
-# Runtime deps that don't change with the vendored upstream — separate layer
-# so an upstream bump doesn't bust this cache.
+# Vendored pm_trader's dependency tree (notably mcp>=1.0 → starlette) overlaps
+# with fastapi's starlette pin. Running pip in TWO resolution passes lets pm_trader
+# bump starlette to a version incompatible with fastapi<0.116. ONE resolution pass
+# lets the solver pick a starlette that satisfies both pins. Do not split.
+COPY vendor/pm_trader/pyproject.toml /app/vendor/pm_trader/pyproject.toml
+COPY vendor/pm_trader/LICENSE /app/vendor/pm_trader/LICENSE
+COPY vendor/pm_trader/pm_trader /app/vendor/pm_trader/pm_trader
 RUN pip install --no-cache-dir \
   "fastapi>=0.115,<0.116" \
   "uvicorn[standard]>=0.32,<0.33" \
-  "pydantic>=2.9,<3"
-
-# Install the vendored pm_trader package. COPY only what setuptools needs to
-# install — pyproject + README (referenced by pyproject) + LICENSE + the
-# package — so PROVENANCE / CHANGELOG / upstream tests don't bust this layer.
-COPY vendor/pm_trader/pyproject.toml /app/vendor/pm_trader/pyproject.toml
-COPY vendor/pm_trader/README.md /app/vendor/pm_trader/README.md
-COPY vendor/pm_trader/LICENSE /app/vendor/pm_trader/LICENSE
-COPY vendor/pm_trader/pm_trader /app/vendor/pm_trader/pm_trader
-RUN pip install --no-cache-dir /app/vendor/pm_trader
+  "pydantic>=2.9,<3" \
+  /app/vendor/pm_trader
 
 COPY server.py /app/server.py
 
