@@ -287,23 +287,23 @@ jobs:
             echo "ℹ️  No snapshot rows (cold-start) — nothing to restore"
             exit 0
           fi
-          # shellcheck source=../ci-src/scripts/ci/lib/image-tags.sh
-          . ../ci-src/scripts/ci/lib/image-tags.sh
-          declare -A snap=()
-          while IFS=$'\t' read -r app ref; do
-            [ -n "$app" ] && snap["$app"]="$ref"
-          done < "$SNAPSHOT_FILE"
+          # Catalog v2: snapshot is 3-column TSV (deploy_unit, image_name, ref).
+          # Restore EVERY image of every non-promoted unit, not just the role:app
+          # one. Otherwise sidecars (Shape B) get clobbered by the rsync-from-main
+          # step back to `<env>-placeholder-*` newTags that don't exist in GHCR.
           promoted_padded=" $(echo "$PROMOTED_APPS" | tr ',' ' ' | tr -s ' ') "
-          for unit in "${DEPLOY_UNITS[@]}"; do
+          while IFS=$'\t' read -r unit image_name ref; do
+            [ -z "$unit" ] && continue
             if [[ "$promoted_padded" == *" $unit "* ]]; then
               continue
             fi
-            ref="${snap[$unit]:-}"
-            [ -z "$ref" ] && continue
+            # Only restore digest pins; tag-pinned entries (e.g. `<env>-placeholder-*`)
+            # are not safe to "restore" — if the snapshot captured a placeholder,
+            # there's no real digest to put back.
             [[ "$ref" != *"@sha256:"* ]] && continue
             bash ../ci-src/scripts/ci/promote-k8s-image.sh --no-commit \
-              --env candidate-a --app "$unit" --digest "$ref"
-          done
+              --env candidate-a --app "$unit" --image-name "$image_name" --digest "$ref"
+          done < "$SNAPSHOT_FILE"
 
       - name: Commit and push to per-node deploy branch
         id: push-deploy

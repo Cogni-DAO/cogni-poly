@@ -21,6 +21,44 @@
 #   - scripts/ci/promote-preview-seed-main.sh   (task.0349 preview seed)
 #   - scripts/ci/snapshot-overlay-digests.sh    (task.0373 candidate-a self-heal)
 
+# Catalog v2 multi-image extractor. Emits one line per entry in the overlay's
+# `images:` block:
+#   <image_name>\t<image_name>@sha256:...   (digest pin)
+#   <image_name>\t<image_name>:<tag>        (tag pin)
+# Used by snapshot-overlay-digests.sh so candidate-flight.yml's restore loop
+# can iterate ALL images per deploy unit, not just the role:app one. With
+# multi-image overlays (Shape B sidecars) the rsync-from-main step clobbers
+# sidecar entries back to `<env>-placeholder-*` newTags; restoring only the
+# app entry leaves sidecars unbuildable → ImagePullBackOff.
+extract_overlay_image_refs_all() {
+  local env="$1" app="$2"
+  local file="infra/k8s/overlays/${env}/${app}/kustomization.yaml"
+  if [ ! -f "$file" ]; then
+    echo "[ERROR] missing $file" >&2
+    return 1
+  fi
+  python3 - "$file" <<'PY'
+import re, sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+m = re.search(r'(?m)^images:\s*\n((?:[ \t]+.*\n)+)', text)
+if not m:
+    sys.exit(0)
+block = m.group(1)
+entry_pat = re.compile(r'(?m)^([ \t]+)-\s+name:\s*(\S+)\s*\n((?:\1[ \t]+.*\n)*)')
+for em in entry_pat.finditer(block):
+    image_name = em.group(2)
+    body = em.group(3)
+    dm = re.search(r'^\s*digest:\s*"?(sha256:[0-9a-f]+)"?', body, re.MULTILINE)
+    if dm:
+        print(f"{image_name}\t{image_name}@{dm.group(1)}")
+        continue
+    tm = re.search(r'^\s*newTag:\s*"?([^"\n]+?)"?\s*$', body, re.MULTILINE)
+    if tm:
+        print(f"{image_name}\t{image_name}:{tm.group(1).strip()}")
+PY
+}
+
 extract_overlay_image_ref() {
   local env="$1" app="$2"
   local file="infra/k8s/overlays/${env}/${app}/kustomization.yaml"
