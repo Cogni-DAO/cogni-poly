@@ -21,7 +21,7 @@ on:
         description: "SHA baked into images at build time (PR branch head). Defaults to source_sha. Ignored in preview-forward mode."
         required: false
       nodes:
-        description: "CSV of nodes to promote (default: all NODE_TARGETS + scheduler-worker). Set by flight-preview.yml from RESOLVED_TARGETS."
+        description: "CSV of deploy units to promote (default: all DEPLOY_UNITS). Set by flight-preview.yml from RESOLVED_TARGETS."
         required: false
         default: ""
       skip_infra:
@@ -96,7 +96,7 @@ jobs:
           if [ -n "$NODES_INPUT" ]; then
             IFS=',' read -r -a list <<<"${NODES_INPUT// /}"
           else
-            list=("${ALL_TARGETS[@]}")
+            list=("${DEPLOY_UNITS[@]}")
           fi
           if [ "${#list[@]}" -eq 0 ]; then
             echo "::error::Empty target list"
@@ -193,60 +193,23 @@ jobs:
           token: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
           path: preview-src
 
-      - name: Resolve digest for this node
-        id: digest
+      # Catalog v2: build a per-image payload for this deploy unit, then hand
+      # off to promote-build-payload.sh. Same code path as candidate-flight.
+      # No more "one digest per node" — each image of the unit gets its own
+      # overlay entry rewritten (host app + sidecars + migrators).
+      - name: Build promote payload for this node
+        id: payload
         env:
           NODE: ${{ matrix.node }}
           HEAD_SHA: ${{ needs.decide.outputs.head_sha }}
           PREVIEW_FORWARD: ${{ needs.decide.outputs.preview_forward }}
-        run: |
-          set -euo pipefail
-          # shellcheck source=scripts/ci/lib/image-tags.sh
-          . app-src/scripts/ci/lib/image-tags.sh
-          if [ "$PREVIEW_FORWARD" = "true" ]; then
-            # Reuse the existing per-overlay digest resolver (battle-tested);
-            # it emits digests_json={...} for ALL_TARGETS, then we index by NODE.
-            PREVIEW_OVERLAY_ROOT="${{ github.workspace }}/preview-src/infra/k8s/overlays/preview"
-            export PREVIEW_OVERLAY_ROOT
-            DIGESTS_JSON=$(bash app-src/scripts/ci/resolve-digests-from-preview.sh \
-              | grep '^digests_json=' | head -1 | sed 's/^digests_json=//')
-            if [ -z "$DIGESTS_JSON" ]; then
-              echo "::error::preview-forward: resolve-digests-from-preview emitted no digests_json"
-              exit 1
-            fi
-            DIGEST=$(printf '%s' "$DIGESTS_JSON" | jq -r --arg k "$NODE" '.[$k] // ""')
-            if [ -z "$DIGEST" ]; then
-              echo "::error::preview-forward: no digest for $NODE in deploy/preview-$NODE"
-              exit 1
-            fi
-            APP_SOURCE_SHA=$(jq -r --arg k "$NODE" '.[$k] // ""' "${{ github.workspace }}/preview-src/.promote-state/source-sha-by-app.json")
-            if [ -z "$APP_SOURCE_SHA" ]; then
-              echo "::error::preview-forward: no source_sha for $NODE in preview map"
-              exit 1
-            fi
-          else
-            full_tag=$(image_tag_for_target "$(image_name_for_target "$NODE")" "preview-${HEAD_SHA}" "$NODE")
-            digest_only=$(docker buildx imagetools inspect "$full_tag" --raw 2>/dev/null \
-              | python3 -c "import json,sys; print(json.load(sys.stdin).get('digest',''))" 2>/dev/null || true)
-            if [ -z "$digest_only" ]; then
-              digest_only=$(docker buildx imagetools inspect "$full_tag" 2>/dev/null \
-                | grep -oP 'Digest:\s+\Ksha256:[a-f0-9]+' | head -1 || true)
-            fi
-            if [ -z "$digest_only" ]; then
-              echo "::warning::Image not found: $full_tag (not built — skipping $NODE)"
-              echo "digest=" >> "$GITHUB_OUTPUT"
-              echo "promoted=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            DIGEST="${full_tag%%:*}@${digest_only}"
-            APP_SOURCE_SHA="${{ needs.decide.outputs.build_sha }}"
-          fi
-          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
-          echo "source_sha=$APP_SOURCE_SHA" >> "$GITHUB_OUTPUT"
-          echo "promoted=true" >> "$GITHUB_OUTPUT"
+          PREVIEW_SRC_DIR: ${{ github.workspace }}/preview-src
+          BUILD_SHA: ${{ needs.decide.outputs.build_sha }}
+          OUTPUT_FILE: ${{ runner.temp }}/promote-payload-${{ matrix.node }}.json
+        run: bash app-src/scripts/ci/build-promote-payload.sh
 
       - name: Checkout per-node deploy branch
-        if: steps.digest.outputs.promoted == 'true'
+        if: steps.payload.outputs.has_payload == 'true'
         uses: actions/checkout@v6
         with:
           ref: deploy/${{ needs.decide.outputs.environment }}-${{ matrix.node }}
@@ -255,7 +218,7 @@ jobs:
           path: deploy-branch
 
       - name: Sync infra/k8s + per-node catalog from app-src
-        if: steps.digest.outputs.promoted == 'true'
+        if: steps.payload.outputs.has_payload == 'true'
         env:
           NODE: ${{ matrix.node }}
           OVERLAY_ENV: ${{ needs.decide.outputs.environment }}
@@ -275,24 +238,31 @@ jobs:
           mkdir -p deploy-branch/infra/catalog
           cp "app-src/infra/catalog/${NODE}.yaml" "deploy-branch/infra/catalog/${NODE}.yaml"
 
-      - name: Promote digest + record source-sha
-        if: steps.digest.outputs.promoted == 'true'
+      - name: Promote payload via promote-build-payload.sh
+        id: promote
+        if: steps.payload.outputs.has_payload == 'true'
         working-directory: deploy-branch
         env:
+          PAYLOAD_FILE: ${{ steps.payload.outputs.payload_file }}
           OVERLAY_ENV: ${{ needs.decide.outputs.environment }}
           NODE: ${{ matrix.node }}
-          DIGEST: ${{ steps.digest.outputs.digest }}
-          SOURCE_SHA: ${{ steps.digest.outputs.source_sha }}
         run: |
           set -euo pipefail
-          ../app-src/scripts/ci/promote-k8s-image.sh --no-commit \
-            --env "$OVERLAY_ENV" --app "$NODE" --digest "$DIGEST"
-          APP="$NODE" SOURCE_SHA="$SOURCE_SHA" \
-            bash ../app-src/scripts/ci/update-source-sha-map.sh
+          PROMOTE_SCRIPT=../app-src/scripts/ci/promote-k8s-image.sh \
+          MAP_SCRIPT=../app-src/scripts/ci/update-source-sha-map.sh \
+            bash ../app-src/scripts/ci/promote-build-payload.sh
+          # Surface a per-leg `promoted=true|false` for downstream steps.
+          # promote-build-payload writes promoted_apps=<NODE> or empty;
+          # treat any non-empty value as a real promotion.
+          if grep -E '^promoted_apps=.+' "$GITHUB_OUTPUT" >/dev/null 2>&1; then
+            echo "promoted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "promoted=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Commit and push
         id: push
-        if: steps.digest.outputs.promoted == 'true'
+        if: steps.promote.outputs.promoted == 'true'
         working-directory: deploy-branch
         env:
           PER_NODE_BRANCH: deploy/${{ needs.decide.outputs.environment }}-${{ matrix.node }}
@@ -321,7 +291,7 @@ jobs:
         env:
           NODE: ${{ matrix.node }}
           DEPLOY_SHA: ${{ steps.push.outputs.deploy_branch_sha }}
-          PROMOTED: ${{ steps.digest.outputs.promoted }}
+          PROMOTED: ${{ steps.promote.outputs.promoted }}
         run: |
           mkdir -p out
           printf '%s' "${DEPLOY_SHA:-}" > "out/deploy-sha-${NODE}.txt"

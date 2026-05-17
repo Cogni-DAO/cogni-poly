@@ -194,28 +194,23 @@ jobs:
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
           RESOLVED_TARGETS: ${{ steps.images.outputs.resolved_targets }}
         run: |
-          # Canonical target catalog + tag-suffix + GHCR-package mapping
-          # (bug.0328 + bug.0344). Iterating ALL_TARGETS means adding a new
-          # node is a one-line edit in scripts/ci/lib/image-tags.sh — no
-          # inline list to drift here (root cause of PR #923). image_name_for_target
-          # picks the APP vs MIGRATOR GHCR package per target (bug.0344
-          # GHCR split — gives the image updater's app/migrator aliases
-          # independent Status.Summary.Images entries).
+          # Catalog v2: iterate every image declared in infra/catalog/*.yaml
+          # (flat across deploy units). Each image has its own image_name +
+          # image_tag_suffix; the retag preserves both. Adding a new image
+          # is a one-line catalog edit — no workflow change.
           # shellcheck source=../../scripts/ci/lib/image-tags.sh
           . scripts/ci/lib/image-tags.sh
 
           PREVIEW_TAG="preview-${HEAD_SHA}"
 
-          for target in "${ALL_TARGETS[@]}"; do
-            if ! echo "$RESOLVED_TARGETS" | grep -qw "$target"; then
-              echo "Skipping ${target} — not in PR build (not affected or not built)"
+          for image in "${ALL_IMAGES[@]}"; do
+            if ! echo "$RESOLVED_TARGETS" | grep -qw "$image"; then
+              echo "Skipping ${image} — not in PR build (not affected or not built)"
               continue
             fi
-            suffix=$(tag_suffix_for_target "$target")
-            image_name=$(image_name_for_target "$target")
-            src="${image_name}:${PR_IMAGE_TAG}${suffix}"
-            dst="${image_name}:${PREVIEW_TAG}${suffix}"
-            echo "Re-tagging ${target}: ${image_name##*/}:${PR_IMAGE_TAG}${suffix} → ${PREVIEW_TAG}${suffix}"
+            src=$(image_tag_for_image "$image" "$PR_IMAGE_TAG")
+            dst=$(image_tag_for_image "$image" "$PREVIEW_TAG")
+            echo "Re-tagging ${image}: ${src##*/} → ${dst##*/}"
             docker buildx imagetools create --tag "$dst" "$src"
           done
 
@@ -237,10 +232,24 @@ jobs:
           BUILD_SHA: ${{ steps.pr.outputs.head_sha }}
           REPOSITORY: ${{ github.repository }}
           # task.0376: scope promote-and-deploy.yml's matrix to affected
-          # targets (RESOLVED_TARGETS is space-delimited; convert to CSV).
+          # deploy units. Catalog v2: RESOLVED_TARGETS contains image names;
+          # promote-and-deploy iterates DEPLOY UNITS (one leg per deploy
+          # branch). Dedupe image names → owning deploy units.
           RESOLVED_TARGETS: ${{ steps.images.outputs.resolved_targets }}
         run: |
-          NODES_CSV=$(echo "${RESOLVED_TARGETS}" | tr ' ' ',' | sed 's/^,//;s/,$//')
+          . scripts/ci/lib/image-tags.sh
+          declare -A seen=()
+          units=()
+          for img in $(echo "${RESOLVED_TARGETS}" | tr ',' ' '); do
+            [ -z "$img" ] && continue
+            unit=$(deploy_unit_for_image "$img") || continue
+            if [ -z "${seen[$unit]+x}" ]; then
+              seen["$unit"]=1
+              units+=("$unit")
+            fi
+          done
+          NODES_CSV=$(IFS=,; echo "${units[*]}")
+          echo "ℹ️  RESOLVED_TARGETS=${RESOLVED_TARGETS} → NODES_CSV=${NODES_CSV}"
           bash scripts/ci/flight-preview.sh \
             "$HEAD_SHA" \
             "$REPOSITORY" \

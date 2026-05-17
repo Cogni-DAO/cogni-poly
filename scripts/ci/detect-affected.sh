@@ -3,15 +3,12 @@
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 # Script: scripts/ci/detect-affected.sh
-# Purpose: Compute deployable image targets affected by the current SCM scope.
-# Scope: PR image builds. Mirrors the same base/head resolution used by
-#        scripts/run-turbo-checks.sh so image selection follows the recovered
-#        trunk-affected model rather than a separate branch heuristic.
+# Purpose: Compute buildable images affected by the current SCM scope.
+# Scope: PR image builds (catalog v2 — one matrix leg per affected image,
+#        not per affected deploy unit).
 
 set -euo pipefail
 
-# Canonical target catalog (bug.0328 architectural follow-up). One edit
-# to add a node, everywhere — see scripts/ci/lib/image-tags.sh.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib/image-tags.sh
 . "$SCRIPT_DIR/lib/image-tags.sh"
@@ -45,13 +42,9 @@ scope_base=""
 selection_reason="default-full-scope"
 changed_paths=""
 
-# CHANGED_PATHS_FILE: callers may pre-compute the authoritative
-# changed-paths list (e.g. from the GitHub PR `files` API) and pass it
-# here. Preferred over `git diff <base>...HEAD` for PR-flight workflows
-# because git's merge-base diff includes orphaned commits when this
-# branch was forked from a sibling branch that was later squash-merged
-# into main — those commits stay reachable from HEAD and pollute the
-# diff with paths the PR never actually changed.
+# CHANGED_PATHS_FILE: callers may pre-compute the authoritative changed-paths
+# list (e.g. from the GitHub PR `files` API) and pass it here. Preferred over
+# `git diff <base>...HEAD` for PR-flight workflows.
 if [ -n "${CHANGED_PATHS_FILE:-}" ] && [ -f "${CHANGED_PATHS_FILE}" ]; then
   scope_mode="affected"
   scope_base="pr-files"
@@ -64,40 +57,33 @@ elif [ "$use_affected" = true ]; then
   changed_paths=$(git diff --name-only "${scope_base}...${HEAD_REF}" | tr -d '\r')
 fi
 
-selected_targets=()
+selected_images=()
 
-has_target() {
+has_image() {
   local needle="$1"
   local existing
-
-  for existing in "${selected_targets[@]}"; do
-    if [ "$existing" = "$needle" ]; then
-      return 0
-    fi
+  for existing in "${selected_images[@]}"; do
+    [ "$existing" = "$needle" ] && return 0
   done
-
   return 1
 }
 
-add_target() {
-  local target="$1"
-
-  if ! has_target "$target"; then
-    selected_targets+=("$target")
+add_image() {
+  local image="$1"
+  if ! has_image "$image"; then
+    selected_images+=("$image")
   fi
 }
 
-add_all_targets() {
-  local target
-
-  for target in "${ALL_TARGETS[@]}"; do
-    add_target "$target"
+add_all_images() {
+  local image
+  for image in "${ALL_IMAGES[@]}"; do
+    add_image "$image"
   done
 }
 
 is_global_build_input() {
   local path="$1"
-
   case "$path" in
     .dockerignore | \
     package.json | \
@@ -117,45 +103,50 @@ is_global_build_input() {
       return 0
       ;;
   esac
-
   return 1
 }
 
 if [ "$scope_mode" = "full" ]; then
-  add_all_targets
+  add_all_images
 else
-  declare -A target_prefix=()
-  for target in "${ALL_TARGETS[@]}"; do
-    target_prefix["$target"]=$(yq '.path_prefix' "${_image_tags_catalog_root}/${target}.yaml")
+  # Precompute per-image path_prefix + parent deploy unit.
+  declare -A image_prefix=()
+  declare -A image_unit=()
+  for image in "${ALL_IMAGES[@]}"; do
+    image_prefix["$image"]=$(path_prefix_for_image "$image")
+    image_unit["$image"]=$(deploy_unit_for_image "$image")
   done
 
   while IFS= read -r path; do
     [ -z "$path" ] && continue
 
     if is_global_build_input "$path"; then
-      add_all_targets
+      add_all_images
       selection_reason="global-build-input:${path}"
       break
     fi
 
     case "$path" in
       .github/workflows/pr-build.yml)
-        add_all_targets
+        add_all_images
         selection_reason="workflow-build-change:${path}"
         break
         ;;
       packages/*)
-        add_all_targets
+        add_all_images
         selection_reason="shared-package-change:${path}"
         break
         ;;
       *)
-        for target in "${ALL_TARGETS[@]}"; do
-          prefix="${target_prefix[$target]}"
+        for image in "${ALL_IMAGES[@]}"; do
+          prefix="${image_prefix[$image]}"
+          unit="${image_unit[$image]}"
           case "$path" in
-            "${prefix}"*) add_target "$target" ;;
-            "infra/k8s/overlays/"*"/${target}/"*) add_target "$target" ;;
-            "infra/k8s/base/${target}/"*) add_target "$target" ;;
+            # Image path_prefix (image override OR parent deploy.path_prefix).
+            "${prefix}"*) add_image "$image" ;;
+            # Per-deploy-unit overlay/base changes light up every image in that unit.
+            "infra/k8s/overlays/"*"/${unit}/"*) add_image "$image" ;;
+            "infra/k8s/base/${unit}/"*) add_image "$image" ;;
           esac
         done
         ;;
@@ -163,19 +154,45 @@ else
   done <<< "$changed_paths"
 fi
 
-ordered_targets=()
-for target in "${ALL_TARGETS[@]}"; do
-  if has_target "$target"; then
-    ordered_targets+=("$target")
+# Preserve canonical ordering — iterate ALL_IMAGES.
+ordered_images=()
+for image in "${ALL_IMAGES[@]}"; do
+  if has_image "$image"; then
+    ordered_images+=("$image")
   fi
 done
 
-targets_csv=""
-targets_json="[]"
-if [ ${#ordered_targets[@]} -gt 0 ]; then
-  targets_csv=$(IFS=,; echo "${ordered_targets[*]}")
-  # Emit a JSON array so pr-build.yml can feed a matrix via fromJson().
-  targets_json=$(printf '%s\n' "${ordered_targets[@]}" \
+images_csv=""
+images_json="[]"
+if [ ${#ordered_images[@]} -gt 0 ]; then
+  images_csv=$(IFS=,; echo "${ordered_images[*]}")
+  images_json=$(printf '%s\n' "${ordered_images[@]}" \
+    | python3 -c 'import json,sys; print(json.dumps([line.strip() for line in sys.stdin if line.strip()]))')
+fi
+
+# Deduped deploy-unit list — consumed by per-deploy-branch matrices
+# (candidate-flight, promote-and-deploy). pr-build keeps using targets_json
+# (image names) because it builds per-image. Deploy-branch flights operate
+# per-unit and call promote-build-payload which iterates the unit's images.
+ordered_units=()
+seen_units=()
+for image in "${ordered_images[@]}"; do
+  unit=$(deploy_unit_for_image "$image")
+  already=0
+  for u in "${seen_units[@]}"; do
+    [ "$u" = "$unit" ] && already=1 && break
+  done
+  if [ "$already" = "0" ]; then
+    ordered_units+=("$unit")
+    seen_units+=("$unit")
+  fi
+done
+
+units_csv=""
+units_json="[]"
+if [ ${#ordered_units[@]} -gt 0 ]; then
+  units_csv=$(IFS=,; echo "${ordered_units[*]}")
+  units_json=$(printf '%s\n' "${ordered_units[@]}" \
     | python3 -c 'import json,sys; print(json.dumps([line.strip() for line in sys.stdin if line.strip()]))')
 fi
 
@@ -185,10 +202,13 @@ if [ -n "$changed_paths" ]; then
 fi
 
 has_targets=false
-if [ ${#ordered_targets[@]} -gt 0 ]; then
+if [ ${#ordered_images[@]} -gt 0 ]; then
   has_targets=true
 fi
 
+# Output names retain the legacy "targets" key for downstream-workflow stability
+# (pr-build's matrix consumes `targets_json`). Under v2 a "target" is an image
+# name, not a deploy-unit name — that's the only semantic shift.
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   {
     echo "scope_mode=$scope_mode"
@@ -197,14 +217,16 @@ if [ -n "${GITHUB_OUTPUT:-}" ]; then
     echo "selection_reason=$selection_reason"
     echo "changed_paths_count=$changed_paths_count"
     echo "has_targets=$has_targets"
-    echo "targets=$targets_csv"
-    echo "targets_json=$targets_json"
+    echo "targets=$images_csv"
+    echo "targets_json=$images_json"
+    echo "deploy_units=$units_csv"
+    echo "deploy_units_json=$units_json"
   } >> "$GITHUB_OUTPUT"
 fi
 
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {
-    echo "## Affected Image Targets"
+    echo "## Affected Images"
     echo ""
     echo "- Scope: \`$scope_mode\`"
     if [ -n "$scope_base" ]; then
@@ -213,9 +235,9 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     echo "- Reason: \`$selection_reason\`"
     echo "- Changed paths: \`$changed_paths_count\`"
     if [ "$has_targets" = true ]; then
-      echo "- Targets: \`$targets_csv\`"
+      echo "- Images: \`$images_csv\`"
     else
-      echo "- Targets: none"
+      echo "- Images: none"
     fi
   } >> "$GITHUB_STEP_SUMMARY"
 fi
@@ -227,7 +249,7 @@ fi
 echo "Selection reason: ${selection_reason}"
 echo "Changed paths: ${changed_paths_count}"
 if [ "$has_targets" = true ]; then
-  echo "Targets: ${targets_csv}"
+  echo "Images: ${images_csv}"
 else
-  echo "Targets: none"
+  echo "Images: none"
 fi

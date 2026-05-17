@@ -1,179 +1,200 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
-
+#
 # Script: scripts/ci/promote-build-payload.sh
-# Purpose: Apply a resolved image payload to a deploy-branch overlay via
+# Purpose: Apply a resolved per-image payload to a deploy-unit's overlay via
 #   promote-k8s-image.sh. Runs from the deploy-branch checkout.
+#
+# Catalog v2: iterates `images_for_deploy_unit($NODE)`. Hardcoded
+# operator|poly|resy|scheduler-worker case-guard is gone — adding an image to
+# a node's images[] array makes promote-build-payload promote it automatically.
 #
 # Side-effects:
 #   - Writes overlay digest fields under infra/k8s/overlays/{OVERLAY_ENV}/.
-#   - Emits $GITHUB_OUTPUT.promoted_apps = CSV of apps that received a new
-#     digest. Empty string when the payload had no new digests — consumed
-#     by verify-candidate / verify-deploy job-level gates (bug.0321 Fix 1).
-#   - Merges per-promoted-app {app → source_sha} entries into
-#     .promote-state/source-sha-by-app.json on the deploy branch. Consumed
-#     by verify-buildsha.sh in SOURCE_SHA_MAP mode for cross-env/cross-PR
-#     contract verification (bug.0321 Fix 4).
+#     One promote-k8s-image call per image of the deploy unit.
+#   - Emits $GITHUB_OUTPUT.promoted_apps = CSV. Contains the DEPLOY-UNIT
+#     name (not per-image names) so downstream verify-buildsha + release-slot
+#     gates keep their existing deploy-unit semantics. Empty when no overlay
+#     write actually happened for any image of this unit (legitimate skip).
+#   - Merges {deploy-unit → source_sha} into .promote-state/source-sha-by-app.json
+#     (one entry per unit; source_sha is the payload's top-level build SHA).
 #
-# bug.0328: promoted_apps is emitted incrementally after each successful
-# promotion AND re-emitted by an EXIT trap, so a silent abort between
-# promotions and the trailing output write cannot produce an empty
-# promoted_apps while the deploy branch already carries real promotions.
-# Source-sha-map writes are a second pass after all promotions are
-# recorded; a map-write failure is logged but never shadows promoted_apps.
+# Per-image exit codes from promote-k8s-image.sh:
+#   0 → digest written → image counted as promoted
+#   2 → no matching images[] entry in overlay (e.g. paper-sidecar not in
+#       production) → legitimate skip, NOT counted
+#   1 → error → script fails
+#
+# An overlay write for any image of the unit means the unit's source_sha map
+# entry advances. Empty promoted-image set → unit is treated as a no-op.
 #
 # Env:
-#   PAYLOAD_FILE    (required) path to resolved-pr-images.json
+#   PAYLOAD_FILE    (required) path to resolved-pr-images.json (v2 shape)
 #   OVERLAY_ENV     (required) candidate-a | preview | production
+#   NODE            (required) deploy unit name (catalog file name) being
+#                              promoted in this matrix leg
 #   MAP_FILE        (optional) .promote-state/source-sha-by-app.json path
 #   PROMOTE_SCRIPT  (optional) path to promote-k8s-image.sh
 #   MAP_SCRIPT      (optional) path to update-source-sha-map.sh
 
 set -euo pipefail
 
+SCRIPT_DIR_BUILTIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 PAYLOAD_FILE=${PAYLOAD_FILE:-}
 OVERLAY_ENV=${OVERLAY_ENV:-}
-PROMOTE_SCRIPT=${PROMOTE_SCRIPT:-../app-src/scripts/ci/promote-k8s-image.sh}
-# Per-app source-SHA map writer (bug.0321 Fix 4). Same relative path
-# convention as PROMOTE_SCRIPT: callers run from the deploy-branch
-# checkout, scripts live under ../app-src/.
-MAP_SCRIPT=${MAP_SCRIPT:-../app-src/scripts/ci/update-source-sha-map.sh}
+NODE=${NODE:-}
+PROMOTE_SCRIPT=${PROMOTE_SCRIPT:-${SCRIPT_DIR_BUILTIN}/promote-k8s-image.sh}
+MAP_SCRIPT=${MAP_SCRIPT:-${SCRIPT_DIR_BUILTIN}/update-source-sha-map.sh}
 MAP_FILE=${MAP_FILE:-.promote-state/source-sha-by-app.json}
+
+# Callers under the deploy-branch checkout (candidate-flight, promote-and-
+# deploy) pass PROMOTE_SCRIPT via env pointing at the app-src copy. Keep
+# back-compat with that path so the existing workflows don't need a
+# simultaneous edit.
+if [ ! -x "$PROMOTE_SCRIPT" ] && [ -f "../app-src/scripts/ci/promote-k8s-image.sh" ]; then
+  PROMOTE_SCRIPT="../app-src/scripts/ci/promote-k8s-image.sh"
+fi
+if [ ! -x "$MAP_SCRIPT" ] && [ -f "../app-src/scripts/ci/update-source-sha-map.sh" ]; then
+  MAP_SCRIPT="../app-src/scripts/ci/update-source-sha-map.sh"
+fi
+
+# Locate image-tags.sh — prefer the one next to promote-k8s-image.sh (its
+# canonical home in the app-src tree under CI workflows).
+IMAGE_TAGS_LIB="$(dirname "$PROMOTE_SCRIPT")/lib/image-tags.sh"
+if [ ! -f "$IMAGE_TAGS_LIB" ] && [ -f "${SCRIPT_DIR_BUILTIN}/lib/image-tags.sh" ]; then
+  IMAGE_TAGS_LIB="${SCRIPT_DIR_BUILTIN}/lib/image-tags.sh"
+fi
+# shellcheck source=./lib/image-tags.sh disable=SC1090
+. "$IMAGE_TAGS_LIB"
 
 if [ -z "$PAYLOAD_FILE" ] || [ ! -f "$PAYLOAD_FILE" ]; then
   echo "[ERROR] PAYLOAD_FILE is required and must exist" >&2
   exit 1
 fi
-
 if [ -z "$OVERLAY_ENV" ]; then
   echo "[ERROR] OVERLAY_ENV is required" >&2
   exit 1
 fi
+if [ -z "$NODE" ]; then
+  echo "[ERROR] NODE is required (deploy unit name)" >&2
+  exit 1
+fi
 
-# Top-level source_sha from the payload envelope (written by
-# resolve-pr-build-images.sh). Used for the source-sha-by-app map
-# (bug.0321 Fix 4). Its absence is a warning, never fatal — overlay
-# promotion is the primary artifact; the map is a provenance side-car.
+# Top-level source_sha from the payload envelope. Same purpose as v1:
+# feeds the source-sha-by-app map for cross-env contract verification.
 source_sha=$(python3 - "$PAYLOAD_FILE" <<'PY'
-import json
-import sys
+import json, sys
 with open(sys.argv[1], "r", encoding="utf-8") as handle:
     payload = json.load(handle)
 print(payload.get("source_sha", ""))
 PY
 )
 
-# Track which apps actually had a non-empty digest and got written to the
-# overlay. Emitted as $GITHUB_OUTPUT.promoted_apps so downstream
-# verification jobs can (a) scope wait-for-argocd to only the apps that
-# changed and (b) gate at the job level — an empty promoted_apps surfaces
-# as a visibly skipped verify job instead of a silent-green skipped step.
-PROMOTED=()
+# Track whether any image of this NODE got a real overlay write — drives
+# both promoted_apps (deploy-unit CSV) and the source-sha-map decision.
+PROMOTED_ANY=0
 
 emit_promoted_apps() {
   local csv=""
-  if [ ${#PROMOTED[@]} -gt 0 ]; then
-    csv=$(IFS=,; echo "${PROMOTED[*]}")
+  if [ "$PROMOTED_ANY" -eq 1 ]; then
+    csv="$NODE"
   fi
   if [ -n "${GITHUB_OUTPUT:-}" ]; then
-    # Last-write-wins in $GITHUB_OUTPUT — incremental overwrites are safe.
     echo "promoted_apps=${csv}" >> "$GITHUB_OUTPUT"
   fi
 }
 
 # bug.0328: EXIT trap guarantees promoted_apps is written even on abort.
-# Without this, a non-zero return from any command after the last
-# promotion would leave promoted_apps empty despite real overlay writes,
-# and release-slot would treat verify-candidate's (correct) job-level
-# skip as a green flight. The trap pins the invariant: if promoted_apps
-# is empty at gate evaluation time, no overlay was written.
 trap emit_promoted_apps EXIT
 
-extract_digest() {
-  local target="$1"
-  python3 - "$PAYLOAD_FILE" "$target" <<'PY'
-import json
-import sys
+extract_image_entry() {
+  local image="$1"
+  python3 - "$PAYLOAD_FILE" "$image" <<'PY'
+import json, sys
 with open(sys.argv[1], "r", encoding="utf-8") as handle:
     payload = json.load(handle)
 for item in payload["targets"]:
     if item["target"] == sys.argv[2]:
-        print(item["digest"])
+        print("{}\t{}".format(item.get("image_name", ""), item.get("digest", "")))
         break
 PY
 }
 
-promote_target() {
-  local target="$1"
-  local digest
+# Get the list of images owned by this deploy unit.
+unit_images=$(images_for_deploy_unit "$NODE") || {
+  echo "[ERROR] unknown deploy unit: $NODE" >&2
+  exit 1
+}
 
-  digest=$(extract_digest "$target")
-  [ -z "$digest" ] && return 0
+# Per-image promotion loop.
+promoted_images=()
+for image in $unit_images; do
+  entry=$(extract_image_entry "$image")
+  image_name=$(printf '%s' "$entry" | cut -f1)
+  digest=$(printf '%s' "$entry" | cut -f2)
 
-  case "$target" in
-    operator | poly | resy | scheduler-worker)
-      bash "$PROMOTE_SCRIPT" --no-commit --env "$OVERLAY_ENV" --app "$target" --digest "$digest"
+  if [ -z "$digest" ]; then
+    echo "::notice::No digest for image '${image}' in payload — image not in this build (affected-only CI skipped it)"
+    continue
+  fi
+  if [ -z "$image_name" ]; then
+    # Fallback: derive image_name from catalog rather than the payload — keeps
+    # us aligned with the overlay's images[] entry name even if the payload
+    # producer is older.
+    image_name=$(image_name_for_image "$image")
+  fi
+
+  echo "Promoting image '${image}' (${image_name}) into ${OVERLAY_ENV}/${NODE} overlay"
+
+  set +e
+  bash "$PROMOTE_SCRIPT" --no-commit \
+    --env "$OVERLAY_ENV" --app "$NODE" \
+    --image-name "$image_name" --digest "$digest"
+  rc=$?
+  set -e
+
+  case "$rc" in
+    0)
+      promoted_images+=("$image")
+      PROMOTED_ANY=1
+      emit_promoted_apps
+      ;;
+    2)
+      echo "::notice::Overlay ${OVERLAY_ENV}/${NODE} has no images[] entry for ${image_name} — intentional skip (e.g. sidecar absent from production)"
       ;;
     *)
-      return 0
+      echo "::error::promote-k8s-image failed for image=${image} rc=${rc}" >&2
+      exit 1
       ;;
   esac
-
-  PROMOTED+=("$target")
-  # Re-emit after every success so a later abort still leaves an accurate
-  # promoted_apps in $GITHUB_OUTPUT (last-write-wins).
-  emit_promoted_apps
-}
-
-# Write a per-app `app → source_sha` entry into .promote-state/source-sha-by-app.json
-# on the deploy branch. Called in a second pass after all promotions are
-# recorded, so a map-write failure can never shadow promoted_apps. Per-app
-# failures are surfaced as GitHub Actions `::warning::` annotations (visible
-# in the run summary, not buried in stderr). If the map write fails for
-# EVERY promoted app, the map stops recording provenance entirely — that
-# is a hard break and the caller exits non-zero after pass 2.
-MAP_FAILURES=0
-update_source_sha_map() {
-  local app="$1"
-  if [ -z "$source_sha" ]; then
-    echo "::warning::source_sha missing from payload — skipping map update for ${app}"
-    MAP_FAILURES=$((MAP_FAILURES + 1))
-    return 0
-  fi
-  if ! APP="$app" SOURCE_SHA="$source_sha" MAP_FILE="$MAP_FILE" \
-       bash "$MAP_SCRIPT"; then
-    echo "::warning::source-sha-map write failed for ${app} — overlay already promoted, provenance side-car not updated"
-    MAP_FAILURES=$((MAP_FAILURES + 1))
-  fi
-}
-
-# Pass 1 — promotions. Each appends to PROMOTED and emits $GITHUB_OUTPUT.
-promote_target operator
-promote_target poly
-promote_target resy
-promote_target scheduler-worker
-
-# Pass 2 — source-sha-map. Non-fatal on per-app failure.
-for app in "${PROMOTED[@]}"; do
-  update_source_sha_map "$app"
 done
 
-# Final emission for the happy-path log line; trap EXIT would also fire
-# this, but an explicit end-of-success message helps humans grep.
-emit_promoted_apps
-if [ ${#PROMOTED[@]} -eq 0 ]; then
-  echo "Promoted apps: none"
-else
-  echo "Promoted apps: $(IFS=,; echo "${PROMOTED[*]}")"
+# Source-sha-map pass: one entry per DEPLOY UNIT (not per image). Map key is
+# the deploy-unit name so verify-buildsha (which probes /version on the
+# unit's public_url) reads back the right SHA.
+MAP_FAILURE=0
+if [ "$PROMOTED_ANY" -eq 1 ]; then
+  if [ -z "$source_sha" ]; then
+    echo "::warning::source_sha missing from payload — skipping map update for ${NODE}"
+    MAP_FAILURE=1
+  elif ! APP="$NODE" SOURCE_SHA="$source_sha" MAP_FILE="$MAP_FILE" bash "$MAP_SCRIPT"; then
+    echo "::warning::source-sha-map write failed for ${NODE} — overlay already promoted, provenance side-car not updated"
+    MAP_FAILURE=1
+  fi
 fi
 
-# Hard break: provenance side-car is dead across every promoted app.
-# Partial failures are ::warning:: annotations above; total failure is an
-# ::error:: that fails the flight job so humans investigate MAP_SCRIPT or
-# the payload's source_sha field rather than letting provenance decay
-# silently across future flights.
-if [ ${#PROMOTED[@]} -gt 0 ] && [ "$MAP_FAILURES" -eq "${#PROMOTED[@]}" ]; then
-  echo "::error::source-sha-map write failed for all ${#PROMOTED[@]} promoted app(s) — provenance side-car is dead (check MAP_SCRIPT=${MAP_SCRIPT} and payload source_sha)"
+emit_promoted_apps
+if [ "$PROMOTED_ANY" -eq 0 ]; then
+  echo "Promoted images: none (deploy unit ${NODE} had nothing to write)"
+else
+  echo "Promoted images for ${NODE}: $(IFS=,; echo "${promoted_images[*]}")"
+fi
+
+# Hard break: source-sha map dead → fail loudly so humans investigate rather
+# than letting provenance decay silently.
+if [ "$PROMOTED_ANY" -eq 1 ] && [ "$MAP_FAILURE" -eq 1 ]; then
+  echo "::error::source-sha-map write failed for ${NODE} — provenance side-car is dead (check MAP_SCRIPT=${MAP_SCRIPT} and payload source_sha)"
   exit 1
 fi

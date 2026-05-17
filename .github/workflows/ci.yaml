@@ -67,6 +67,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # Catalog v2 schema + cross-file invariants. See docs/spec/catalog-v2.md.
+      # Blocks merge on schema_version drift, missing role:app, duplicate
+      # image_name / image_tag_suffix tuple, missing Dockerfile on disk.
+      - name: Catalog v2 invariants
+        run: pnpm check:catalog
+
       - name: CI Telemetry
         if: always()
         uses: ./.github/actions/loki-ci-telemetry

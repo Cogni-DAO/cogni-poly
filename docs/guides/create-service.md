@@ -4,7 +4,7 @@ type: guide
 title: Create a New Service
 status: draft
 trust: draft
-summary: v0 plan + executable playbook for adding a new deployable service (k8s deployment, sibling container, MCP, Compose, cron) and shipping it through candidate-a → preview → production.
+summary: Catalog v2 playbook for adding a new image to the deployed stack (new deploy unit OR new image on an existing unit) and shipping it through candidate-a → preview → production.
 read_when: Adding any new service, sidecar, MCP server, cron job, or Compose process to the deployed stack.
 owner: derekg1729
 created: 2026-02-06
@@ -28,32 +28,35 @@ K8s gets BUILD_ONCE_PROMOTE_DIGEST, Argo reconciliation, the candidate → previ
 
 ## Decision Tree
 
+Catalog v2 (docs/spec/catalog-v2.md) collapsed the shape space:
+
 ```
-Does the workload have meaningfully independent lifecycle from any existing pod?
+Does the new image have its OWN deploy lifecycle (Argo Application + per-env deploy branches)?
 │
-├─ Yes (or unsure)
-│  ├─ Is it an HTTP/SSE MCP server?           → SHAPE 1
-│  └─ Anything else with its own restart      → SHAPE 1  (DEFAULT)
+├─ Yes  →  SHAPE A — New deploy unit
+│          Add a new `infra/catalog/<name>.yaml` with deploy{} + images:[{role: app}]
 │
-├─ Must share network namespace, in-pod volume, or restart in lockstep
-│  ├─ stdio MCP spawned by host pod           → SHAPE 2
-│  └─ Sibling container                        → SHAPE 2
-│
-├─ Upstream third-party with no usable k8s path + already pinned image
-│                                              → SHAPE 4  (LEGACY — sign-off)
-│
-└─ Periodic / one-shot
-   ├─ One-shot at deploy time (migration)     → initContainer in node-app base
-   ├─ Triggered / queued                       → SHAPE 1 worker (scheduler-worker)
-   └─ Periodic (cron)                          → SHAPE 5  (gap; workaround inside)
+└─ No, it ships inside an EXISTING deploy unit's pod
+   │
+   ├─ Sibling container in the same pod         →  SHAPE B (role: sidecar)
+   ├─ initContainer migration                    →  SHAPE B (role: migrator)
+   ├─ stdio MCP spawned by host pod              →  SHAPE B (role: sidecar)
+   │
+   Add an entry to the host's `infra/catalog/<host>.yaml::images[]` — no new catalog file.
 ```
+
+**Specialty cases (unchanged from pre-v2):**
+
+- **Periodic cron** → no first-class CronJob support yet. Register as a periodic handler in [`services/scheduler-worker/`](../../services/scheduler-worker/) (a SHAPE A deploy unit). Filed gap for a future `infra/k8s/base/cronjob/` shape.
+- **Upstream third-party Compose** → legacy `infra/compose/runtime/docker-compose.yml` path. Sign-off required. See § Compose (legacy).
 
 **Hard rules** (reject in code review):
 
-- `:latest` in any new manifest — tag by SHA only (existing `sandbox-openclaw` debt is tracked separately, do not replicate)
-- Manual VM SSH as part of any deploy — every change lands in git
-- Compose service for code we author — Shape 1 instead
-- Sibling container when it could be standalone — Shape 1 instead
+- `:latest` in any new manifest — tag by SHA only.
+- Manual VM SSH as part of any deploy — every change lands in git.
+- Compose service for code we author — SHAPE A instead.
+- Sibling container when it could be standalone — SHAPE A instead.
+- A parallel `.github/workflows/build-<name>.yml` for any new image — catalog v2 absorbs the matrix; standalone build workflows are an anti-pattern.
 
 ---
 
@@ -78,32 +81,44 @@ Same for every shape. Five phases. Each shape's playbook below maps to these.
 
 ---
 
-## Shape 1: Standalone k8s Deployment (DEFAULT)
+## Shape A: New Deploy Unit (own catalog file)
 
-A pod with its own Deployment, Service, optional Ingress, and per-env deploy branch. Fully integrated with the pipeline.
+A pod with its own Deployment, Service, optional Ingress, and per-env deploy branch. Fully integrated with the pipeline. Use this when the new image has independent lifecycle (own restart, own scaling, own /readyz).
 
-**Precedent**: [`services/scheduler-worker/`](../../services/scheduler-worker/) — every reference below is to this implementation.
+**Precedent**: [`services/scheduler-worker/`](../../services/scheduler-worker/) — every reference below is to this implementation. **Sub-case — HTTP/SSE MCP server**: this is Shape A. Own port, own probes, own scaling.
 
 ### Files to create / edit
 
-**One PR. Operator-domain** ([`single-node-scope`](../spec/node-ci-cd-contract.md)).
+**One PR. Node-autonomous if owned by a node** ([`node-ci-cd-contract.md § Node-autonomous service evolution`](../spec/node-ci-cd-contract.md)); operator-domain for shared services.
 
-- [ ] `services/<name>/` (TS) or `infra/images/<name>/` (Python/polyglot) — source + `Dockerfile`
-- [ ] `infra/catalog/<name>.yaml` — validated by [`_schema.json`](../../infra/catalog/_schema.json), model on [`scheduler-worker.yaml`](../../infra/catalog/scheduler-worker.yaml):
+- [ ] `services/<name>/` (TS) or `nodes/<host>/sidecars/<name>/` (Python/polyglot under a node) — source + `Dockerfile`
+- [ ] `infra/catalog/<name>.yaml` — catalog v2 shape, validated by [`pnpm check:catalog`](../../tests/ci-invariants/catalog-v2.spec.ts):
+
   ```yaml
+  schema_version: 2
   name: <name> # must match filename; ^[a-z][a-z0-9-]*$
-  type: service # "node" only for full top-level node app (then node_id required)
-  port: 9000
-  dockerfile: services/<name>/Dockerfile # or infra/images/<name>/Dockerfile
-  image_tag_suffix: "-<name>"
-  migrator_tag_suffix: "-<name>-migrate" # alias; no-op for services without per-node migrator
-  path_prefix: services/<name>/ # MUST end with /
-  candidate_a_branch: deploy/candidate-a-<name>
-  preview_branch: deploy/preview-<name>
-  production_branch: deploy/production-<name>
+  type: service # "node" requires node_id
+
+  deploy:
+    candidate_a_branch: deploy/candidate-a-<name>
+    preview_branch: deploy/preview-<name>
+    production_branch: deploy/production-<name>
+    path_prefix: services/<name>/ # MUST end with /
+    port: 9000
+    # public_url block only if this unit has an Ingress (omit for workers)
+
+  images:
+    - name: <name>
+      role: app # exactly one role:app per unit
+      dockerfile: services/<name>/Dockerfile
+      image_name: ghcr.io/cogni-dao/cogni-poly # shared package, suffix discriminates
+      image_tag_suffix: "-<name>" # repo-wide unique
+      build:
+        target: runner # optional docker buildx --target
   ```
+
 - [ ] `infra/k8s/base/<name>/{deployment,service,kustomization}.yaml` — reference [`infra/k8s/base/scheduler-worker/`](../../infra/k8s/base/scheduler-worker/) (worker) or [`infra/k8s/base/node-app/`](../../infra/k8s/base/node-app/) (HTTP)
-- [ ] `infra/k8s/overlays/{candidate-a,preview,production}/<name>/kustomization.yaml` — overlay's `images:` block uses `newTag: "<env>-placeholder-<name>"` or `digest: "sha256:..."`; [`promote-k8s-image.sh`](../../scripts/ci/promote-k8s-image.sh) handles either
+- [ ] `infra/k8s/overlays/{candidate-a,preview,production}/<name>/kustomization.yaml` — overlay's `images:` block uses `newTag: "<env>-placeholder-<name>"` or `digest: "sha256:..."`; [`promote-k8s-image.sh`](../../scripts/ci/promote-k8s-image.sh) replaces either with the promoted digest.
 - [ ] **`infra/k8s/argocd/{candidate-a,preview,production}-applicationset.yaml`** — add a generator block in each. **This is the silent killer**: skip it and the catalog entry + overlay exist on disk but no Argo Application materializes. Pattern:
   ```yaml
   - git:
@@ -115,19 +130,12 @@ A pod with its own Deployment, Service, optional Ingress, and per-env deploy bra
 
 ### Deploy branch bootstrap (chicken-and-egg)
 
-The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile if the branch doesn't exist. Two viable orderings:
-
-- **Preferred** — split into two PRs:
-  1. PR1 adds catalog + base + overlay; after merge, run `git push origin main:deploy/candidate-a-<name> main:deploy/preview-<name> main:deploy/production-<name>` to seed the deploy branches
-  2. PR2 wires the AppSet generators (Argo's reconcile now finds the branches)
-- **One-shot** — single PR with explicit post-merge admin step in the PR body: "after merge, push the three deploy branches from `main` HEAD."
-
-Pick one and stick to it for the PR.
+The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile if the branch doesn't exist. After merge, run `git push origin main:deploy/candidate-a-<name> main:deploy/preview-<name> main:deploy/production-<name>` to seed the three deploy branches. Document this in the PR body.
 
 ### Flight phase 3 → 5 mechanics
 
-- **Flight to candidate-a**: [`candidate-flight.yml`](../../.github/workflows/candidate-flight.yml) resolves digests via [`resolve-pr-build-images.sh`](../../scripts/ci/resolve-pr-build-images.sh), writes them into `deploy/candidate-a-<name>` via [`promote-build-payload.sh`](../../scripts/ci/promote-build-payload.sh), then [`wait-for-argocd.sh`](../../scripts/ci/wait-for-argocd.sh) + [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) block until Argo + rollout + `/version.buildSha` agree. `PROMOTED_APPS` is dynamic — there is **no** manual `APPS=(...)` list to maintain. If a service shouldn't gate flights, don't put it in the catalog.
-- **Auto-preview on merge**: [`flight-preview.yml`](../../.github/workflows/flight-preview.yml) re-tags `pr-{N}-{sha}` → `preview-{sha}` and dispatches `promote-and-deploy.yml`. [`promote-preview-digest-seed.yml`](../../.github/workflows/promote-preview-digest-seed.yml) handles preview overlay digest seeding on `main`.
+- **Flight to candidate-a**: [`candidate-flight.yml`](../../.github/workflows/candidate-flight.yml) resolves digests via [`resolve-pr-build-images.sh`](../../scripts/ci/resolve-pr-build-images.sh), writes them into `deploy/candidate-a-<name>` via [`promote-build-payload.sh`](../../scripts/ci/promote-build-payload.sh) (per-image, iterating `images_for_deploy_unit`), then [`wait-for-argocd.sh`](../../scripts/ci/wait-for-argocd.sh) + [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) block until Argo + rollout + `/version.buildSha` agree.
+- **Auto-preview on merge**: [`flight-preview.yml`](../../.github/workflows/flight-preview.yml) re-tags `pr-{N}-{sha}` → `preview-{sha}` per image and dispatches `promote-and-deploy.yml`.
 - **Manual prod**: see Phase 5 in the pipeline table above.
 
 ### Validate
@@ -141,113 +149,87 @@ Pick one and stick to it for the PR.
 
 ---
 
-## Shape 2: Sibling Container in Existing Pod
+## Shape B: New Image on an Existing Deploy Unit
 
-A second container in an existing pod's Deployment, patched in via the host's overlay. Shares network namespace and lifecycle with the host.
+A new sidecar, migrator, or stdio MCP that ships **inside an existing deploy unit's pod**. Catalog v2 makes this a one-line edit — no parallel build workflow, no manual digest dance.
 
-**Precedent**: `poly-paper-sidecar`. Canonical pattern is commit `ce9e5fc66` ("canonical Shape 2 sidecar pinning"). The journey there: `377134f42` (`newTag:` in `images:` block — broken by first-newTag-wins) → `a391d026c` (inline-pin in container patch — works but harder to argocd-image-updater) → `ce9e5fc66` (**`digest:` in `images:` block for both host + sidecar; bare `image:` in container patch** — works AND is image-updater-friendly).
+**Precedent**: `poly-paper-sidecar` (catalog file [`infra/catalog/poly.yaml`](../../infra/catalog/poly.yaml)). The first-newTag-wins / `digest:`-only-rule workaround from v1 is retired — `promote-k8s-image.sh` is now image-name-aware ([Layer 4d](../spec/catalog-v2.md)).
 
 ### When
 
-Sibling is justified when the workload **must** share network namespace (localhost IPC), an in-pod volume, or restart in lockstep with the host. Anything else → Shape 1.
+- Sidecar must share network namespace (localhost IPC), an in-pod volume, or restart in lockstep with the host.
+- Migrator runs once at pod startup as an `initContainer`.
+- stdio MCP that the host pod spawns over a pipe.
+
+Anything that could run independently → Shape A instead.
 
 ### Files to create / edit
 
-**One PR. Operator-domain** (overlay paths live under `infra/`).
+**One PR. Node-autonomous** (host node's catalog file + host node's overlay).
 
-- [ ] `infra/images/<sidecar-name>/Dockerfile` + source
-- [ ] `.github/workflows/build-<sidecar-name>.yml` — model on [`build-poly-paper-sidecar.yml`](../../.github/workflows/build-poly-paper-sidecar.yml):
-  - Path-triggered on `infra/images/<sidecar-name>/**` + `workflow_dispatch`
-  - Tag `sha-<short>` always
-  - **Do not** push `:latest` to a tag any deploy manifest references
-- [ ] `infra/k8s/overlays/{candidate-a,preview,production}/<host-node>/kustomization.yaml` — add the sidecar's digest to the `images:` block (alongside the host's), and add a bare-`image:` container patch. Reference: [`infra/k8s/overlays/candidate-a/poly/kustomization.yaml`](../../infra/k8s/overlays/candidate-a/poly/kustomization.yaml).
+- [ ] Source + `Dockerfile` under the host's tree:
+  - Sidecar: `nodes/<host>/sidecars/<name>/Dockerfile`
+  - Migrator: `nodes/<host>/db/Dockerfile`
+- [ ] Add an entry to the host's catalog file's `images:[]`:
 
   ```yaml
+  # infra/catalog/<host>.yaml
   images:
-    - name: ghcr.io/cogni-dao/cogni-poly # host (already there)
-      newName: ghcr.io/cogni-dao/cogni-poly
-      digest: "sha256:<host-digest>"
-    - name: ghcr.io/cogni-dao/<sidecar-name> # add this block
-      newName: ghcr.io/cogni-dao/<sidecar-name>
-      digest: "sha256:<sidecar-digest>" # bump after each new build
-
-  patches:
-    - target: { kind: Deployment, name: <host-deployment> }
-      patch: |
-        - op: add
-          path: /spec/template/spec/containers/-
-          value:
-            name: <sidecar-name>
-            image: ghcr.io/cogni-dao/<sidecar-name>           # bare — kustomize substitutes from images: block
-            ports: [{ containerPort: <port>, name: <port-name>, protocol: TCP }]
-            livenessProbe:  { httpGet: { path: /healthz, port: <port-name> }, initialDelaySeconds: 5, periodSeconds: 30 }
-            readinessProbe: { httpGet: { path: /healthz, port: <port-name> }, initialDelaySeconds: 3, periodSeconds: 10 }
-            resources:
-              requests: { memory: 128Mi, cpu: 50m }
-              limits:   { memory: 384Mi, cpu: 500m }
+    - name: <host>          # existing role:app entry — don't touch
+      role: app
+      ...
+    - name: <host>-<sub>    # new — repo-wide unique
+      role: sidecar          # or "migrator"
+      dockerfile: nodes/<host>/sidecars/<sub>/Dockerfile
+      image_name: ghcr.io/cogni-dao/<host>-<sub>   # own GHCR repo, OR shared with suffix
+      image_tag_suffix: ""                          # empty when image_name is unique
+      path_prefix: nodes/<host>/sidecars/<sub>/
+      build:
+        context: nodes/<host>/sidecars/<sub>
+        target: base                                # optional --target
+        test_target: test                           # optional pre-push smoke (no --push)
   ```
 
-- [ ] If host needs to call the sidecar, add `<NAME>_URL: http://localhost:<port>` (or equivalent) via a separate ConfigMap patch in the same overlay.
+- [ ] Add an entry to the host's overlay's `images:` block (per env where the image should run). Example for poly + a hypothetical sidecar:
 
-### The digest-only rule (sidesteps the first-newTag-wins bug)
+  ```yaml
+  # infra/k8s/overlays/<env>/poly/kustomization.yaml
+  images:
+    - name: ghcr.io/cogni-dao/cogni-poly # host app's image_name (from catalog) — already there
+      newName: ghcr.io/cogni-dao/cogni-poly
+      digest: "sha256:..."
+    - name: ghcr.io/cogni-dao/poly-<sub> # new sidecar — must match catalog images[].image_name
+      newName: ghcr.io/cogni-dao/poly-<sub>
+      newTag: "<env>-placeholder-poly-<sub>" # placeholder; promote-k8s-image overwrites
+  ```
 
-**Both host and sidecar entries in `images:` MUST use `digest:`, never `newTag:`.** Reason: [`promote-k8s-image.sh:77-81`](../../scripts/ci/promote-k8s-image.sh) is image-name-blind. Its branches:
+  `promote-build-payload.sh` rewrites BOTH entries on flight — host and sidecar are independent because `promote-k8s-image.sh` matches by `name:`. **The overlay `images[]` entry MUST exist before the first promote** — otherwise `promote-k8s-image` returns exit-2 (legitimate skip, no overlay write), and the deploy unit's `promoted_apps` excludes that image. Add the entry as a placeholder in the same PR that adds the catalog `images[]` entry.
 
-```bash
-if grep -q 'newTag:'  → rewrites the FIRST newTag: in the file (clobbers wrong slot if a sidecar uses newTag:)
-elif grep -q 'digest:' → rewrites the FIRST digest:  in the file (= host app, correctly)
-```
-
-If both entries use `digest:`, the `newTag:` branch never fires, the elif branch targets the first `digest:` (host), and the sidecar's `digest:` is never touched by host promotion. Sidecar digest bumps are manual edits to that block. Fixing the script to be image-name-aware is a follow-up that would let this become single-form `newTag:` for everyone.
+- [ ] If sidecar: add a container patch to inject the second container in the host's Deployment. Reference: [`infra/k8s/overlays/candidate-a/poly/kustomization.yaml`](../../infra/k8s/overlays/candidate-a/poly/kustomization.yaml).
+- [ ] If host needs to call the sidecar, add `<NAME>_URL: http://localhost:<port>` via a ConfigMap patch in the same overlay.
 
 ### Production overlay decision
 
-Decide explicitly whether the sidecar runs in production. The paper-trading sidecar deliberately does **not** ship to prod (enforces `mode=paper` — wrong in prod). Omit the patch from `infra/k8s/overlays/production/<host-node>/kustomization.yaml` if so.
-
-### Flight phase 3 (pre-merge candidate-a)
-
-Sidecar-only PRs **can** flight pre-merge via standard `candidate-flight.yml`. Mechanism: [`detect-affected.sh:155`](../../scripts/ci/detect-affected.sh) lights up `<host-node>` when its overlay changes; [`candidate-flight.yml`](../../.github/workflows/candidate-flight.yml) rsyncs the PR overlay onto `deploy/candidate-a-<host-node>` before promotion; the snapshot-and-restore step preserves the host digest while the sidecar's `digest:` entry advances.
-
-Procedure:
-
-1. Push the branch — `build-<sidecar-name>.yml` builds + pushes `sha-<short>` to GHCR. Resolve the resulting digest: `docker buildx imagetools inspect ghcr.io/cogni-dao/<sidecar-name>:sha-<short> --format '{{.Manifest.Digest}}'`
-2. Bump the sidecar's `digest: "sha256:..."` in `infra/k8s/overlays/candidate-a/<host-node>/kustomization.yaml`'s `images:` block → commit, push
-3. `gh workflow run candidate-flight.yml -R Cogni-DAO/cogni-poly --ref <branch> -f pr_number=<N>`
-4. `/validate-candidate`
-
-**Wart**: this rebuilds the host image even though only the overlay changed. Wasted compute, correct behavior. Tracked as a CI gap.
-
-### Flight phase 4 → 5 (post-merge promote)
-
-- **Preview**: bump the sidecar's `digest:` in `infra/k8s/overlays/preview/<host-node>/kustomization.yaml`'s `images:` block on `main`. Push triggers `flight-preview.yml`. Since only the sidecar digest changed, no host-image promote step runs — the `digest:` edit IS the advance.
-- **Production**: same on `infra/k8s/overlays/production/<host-node>/kustomization.yaml`. Production overlay edits are human-gated by the standard merge gate.
+Decide explicitly whether the image runs in production. The paper-trading sidecar deliberately does **not** ship to prod — its overlay simply omits the `images:` entry for the sidecar. `promote-build-payload.sh` exits-2 (legitimate skip, not error) when there's no matching `images:` entry; the deploy unit's `promoted_apps` still reflects the apps that actually wrote.
 
 ### Validate
 
-`/validate-candidate` scorecard rows for Shape 2:
+`/validate-candidate` scorecard rows for Shape B:
 
 - Host pod `/livez` + `/readyz` still pass at the deployed SHA
-- Sidecar Ready in `kubectl describe pod`
-- `kubectl exec <host-pod> -c <sidecar-name> -- wget -qO- localhost:<port>/healthz` returns 200
-- One real request to the sidecar observed in Loki at the deployed sidecar SHA
+- Sidecar container Ready in `kubectl describe pod`
+- For sidecars exposed over localhost: `kubectl exec <host-pod> -c <name> -- wget -qO- localhost:<port>/healthz` returns 200
+- One real request to the new image observed in Loki at the deployed SHA
 
 ---
 
-## Shape 3: MCP Server
+## stdio MCP (sub-shape of B)
 
-No separate playbook — slot into Shape 1 or Shape 2 by transport.
-
-| Transport                   | Shape              | Why                               |
-| --------------------------- | ------------------ | --------------------------------- |
-| HTTP / SSE                  | Shape 1            | Own port, own probes, own scaling |
-| stdio (spawned by consumer) | Shape 2            | Must share pod with the consumer  |
-| Compose-only third-party    | Shape 4 (sign-off) | Closed for code we author         |
-
-HTTP/SSE MCP exposes `/livez` + `/readyz` like any Shape 1 service. stdio MCP rides the host pod's readiness.
+stdio MCP servers spawn as child processes from the host pod and share its lifecycle — Shape B with `role: sidecar`. HTTP/SSE MCP is Shape A.
 
 ---
 
-## Shape 4: Compose-Stack Service (LEGACY — closed for new code we author)
+## Compose (legacy — closed for code we author)
 
 Process in `infra/compose/runtime/docker-compose.yml`, deployed via [`candidate-flight-infra.yml`](../../.github/workflows/candidate-flight-infra.yml) → [`deploy-infra.sh`](../../scripts/ci/deploy-infra.sh).
 
@@ -263,15 +245,15 @@ Process in `infra/compose/runtime/docker-compose.yml`, deployed via [`candidate-
 
 ---
 
-## Shape 5: Cron / One-Shot Job
+## Cron / One-Shot Job
 
-| Trigger                 | Shape                          | Today                                                                                                      |
-| ----------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| One-shot at deploy time | initContainer in node-app base | [`infra/k8s/base/node-app/deployment.yaml`](../../infra/k8s/base/node-app/deployment.yaml) (migrator init) |
-| Triggered / queued      | Shape 1 worker                 | [`services/scheduler-worker/`](../../services/scheduler-worker/)                                           |
-| Periodic schedule       | k8s `CronJob`                  | **GAP — no precedent.** Use scheduler-worker handler as workaround.                                        |
+| Trigger                 | Where it lives                                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------------------------- |
+| One-shot at deploy time | Shape B `role: migrator` — initContainer in the host's Deployment                                         |
+| Triggered / queued      | Shape A worker — register the handler in [`services/scheduler-worker/`](../../services/scheduler-worker/) |
+| Periodic schedule       | **GAP — no precedent.** Use scheduler-worker handler as workaround.                                       |
 
-**Workaround for periodic work**: register the task as a periodic handler in [`services/scheduler-worker/`](../../services/scheduler-worker/). Pure Shape 1 code change. If you ever need a true `CronJob` (heavy resource isolation, distinct image), file a follow-up to add `infra/k8s/base/cronjob/`.
+**Workaround for periodic work**: register the task as a periodic handler in scheduler-worker. Pure Shape A code change. If you ever need a true `CronJob` (heavy resource isolation, distinct image), file a follow-up to add `infra/k8s/base/cronjob/`.
 
 ---
 
@@ -285,11 +267,11 @@ These apply across shapes. Failures here cause silent deploy issues that the pip
 | ---------- | ----------------------------- | -------------------------------------------------------------------------------------------- |
 | `/livez`   | Process alive, not deadlocked | `livenessProbe` (cheap, no DB)                                                               |
 | `/readyz`  | Ready to accept work          | `readinessProbe` (set false during drain)                                                    |
-| `/version` | `{ buildSha, builtAt }`       | — required for Shape 1; [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) reads it |
+| `/version` | `{ buildSha, builtAt }`       | — required for Shape A; [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) reads it |
 
 **Health probes belong in k8s manifests, NOT in the Dockerfile.** No `HEALTHCHECK` instruction — it bakes probe logic into the image and prevents orchestrator-specific tuning.
 
-### Worker drain semantics (Shape 1 workers + Shape 5 handlers)
+### Worker drain semantics (Shape A workers + Shape B (cron handler) handlers)
 
 `/readyz=false` must **gate the work-claim loop**, not just HTTP routing:
 
@@ -364,7 +346,7 @@ Image / build:
 
 Deploy state:
 
-- Sibling container with `newTag:` in `images:` block (Shape 2 digest-only rule — clobbers host slot via first-newTag-wins)
+- Adding an `images:` entry to an overlay without a matching `images[]` entry in the host catalog file — `pnpm check:catalog` won't catch this end of the contract, but promote-build-payload won't promote the unknown digest either (silent stale-image).
 - Catalog entry without a matching AppSet generator block (silent: pipeline goes green, service never deploys)
 - Sidecar without its own `livenessProbe`/`readinessProbe` (host pod becomes Ready while sidecar is broken)
 - Hand-editing `deploy/<env>-<name>` directly instead of patching the `main` overlay (bypasses review + single-domain-scope)
@@ -372,7 +354,7 @@ Deploy state:
 
 Compose / legacy:
 
-- Compose service for code we author (Shape 1, no exceptions)
+- Compose service for code we author — use Shape A instead, no exceptions
 - Compose service with bare `image: vendor/foo` (no tag → drift on every VM rebuild)
 - Compose service with `restart: always` masking a crash loop — use `restart: unless-stopped` + alerting
 
@@ -394,14 +376,14 @@ Process:
 
 **If you can't describe rollback in one sentence, the PR is not ready to merge.** Put the rollback recipe in the PR body.
 
-| Shape                | Forward                                                                                              | Rollback                                                                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1. Standalone k8s    | `gh workflow run promote-and-deploy.yml -f environment=<env> -f source_sha=<new> -f build_sha=<new>` | Same workflow with the prior `source_sha` — look up via `git log deploy/<env>-<name> --oneline` or `.promote-state/source-sha-by-app.json` |
-| 2. Sibling container | Edit sidecar `digest:` in `images:` block on `main`'s overlay → reconcile                            | `git revert <overlay-commit>` on `main` (preview auto-reconciles; candidate-a re-flight on a revert branch)                                |
-| 4. Compose           | `candidate-flight-infra` / `promote-and-deploy` with new `infra/compose/**`                          | Same workflow with `--ref <older-sha>`                                                                                                     |
-| 5. Cron handler      | Standard Shape 1 rollback                                                                            | Same. For "stop the cron immediately" without a redeploy, document a runtime feature-flag at handler creation.                             |
+| Shape                     | Forward                                                                                              | Rollback                                                                                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| A. New deploy unit        | `gh workflow run promote-and-deploy.yml -f environment=<env> -f source_sha=<new> -f build_sha=<new>` | Same workflow with the prior `source_sha` — look up via `git log deploy/<env>-<name> --oneline` or `.promote-state/source-sha-by-app.json` |
+| B. Image on existing unit | Standard catalog v2 path — promote-build-payload bumps every image of the host's deploy unit         | `git revert <catalog-or-source-commit>` → re-promote                                                                                       |
+| Compose (legacy)          | `candidate-flight-infra` / `promote-and-deploy` with new `infra/compose/**`                          | Same workflow with `--ref <older-sha>`                                                                                                     |
+| Cron handler              | Standard Shape A rollback                                                                            | Same. For "stop the cron immediately" without a redeploy, document a runtime feature-flag at handler creation.                             |
 
-For new services, "rollback = remove" — see Deprecation in [Services Architecture Spec](../spec/services-architecture.md) or run the Shape 1 steps in reverse (empty deploy state → remove AppSet generator → remove catalog → delete deploy branches → remove source).
+For new services, "rollback = remove" — see Deprecation in [Services Architecture Spec](../spec/services-architecture.md) or run the Shape A steps in reverse (empty deploy state → remove AppSet generator → remove catalog → delete deploy branches → remove source).
 
 ---
 

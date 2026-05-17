@@ -108,6 +108,24 @@ Each entry has an explicit long-term fix that ends the ride-along. The whitelist
 
 **Operator paths NOT in the whitelist (`.github`, `packages`, `infra`, `scripts`, root configs) do not ride along.** They are intent. A `poly` PR that needs an operator-spec change is two PRs, not one — that's the design.
 
+### Node-autonomous service evolution
+
+Nodes self-evolve their deployed surface — add a sidecar, add a migrator, retire a helper — without an operator PR. A node-domain PR may edit the following paths and they classify as that node's domain, not operator's:
+
+| Path                                                       | Why node-owned                                                                            |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `infra/catalog/<X>.yaml` where `X` is a node               | One catalog file = one deploy unit; the file is node-X's manifest of what it deploys.     |
+| `infra/k8s/overlays/{candidate-a,preview,production}/<X>/` | Per-env overlay for node X's deploy unit — container patches, ConfigMaps, sidecar wiring. |
+| `infra/k8s/base/<X>-*/`                                    | Node-X-specific base resources (e.g. `infra/k8s/base/poly-node-app/`).                    |
+
+Service-type catalog files (`infra/catalog/<service>.yaml` where the entry is `type: service`) and their overlays remain operator-owned — services are shared substrate.
+
+**vFuture — node-resource-accounting.** Autonomy here is currently unbounded: a node can add as many images as it wants. When per-node billing + resource quotas land (proj.tbd), this section gains a "must declare resource budget; operator-gate exceeds-budget" clause. Until then, the only gate is operator code review on the PR.
+
+**Why this is not a ride-along weakening.** The ride-along whitelist absorbs mechanical side-effects (`pnpm-lock.yaml`) or transitional storage (`work/**`). This section is different — it's a **redrawing** of the domain boundary so that paths whose intent is bound 1:1 to a node (the node's own catalog file, the node's own overlays) classify as that node's, not as operator's. The substrate-request signal is preserved for paths that genuinely cross into shared territory (scripts, packages, workflows, schema, operator overlays).
+
+**Enforcement status — spec ahead of classifier.** `tests/ci-invariants/classify.ts` and `ci.yaml#single-node-scope` today only recognize `nodes/<X>/**` as node-domain; everything else is `operator`. Extending the classifier to recognize per-node catalog files and per-node overlays requires the classifier to know which catalog entries are `type: node` vs `type: service` — i.e. catalog-topology awareness. That extension lands as a follow-up after catalog v2's `schema_version: 2` shape is in place. Until then, node-autonomous service evolution PRs cross the `single-node-scope` gate and admin-merge with the justification "node-autonomous service evolution per node-ci-cd-contract.md § Node-autonomous service evolution; classifier extension pending."
+
 ### Why Reading A (operator-is-a-domain) over Reading B (operator-is-an-exemption)
 
 The early flood of "node X needs operator change Y" PRs is the **substrate-request signal**, not noise. Each rejection by the gate is a row in operator's prioritization queue ("which seams are load-bearing? which need first-class APIs?"). Weakening the gate to absorb the friction loses that signal — operator never learns which substrates contributors actually push on. Same framing as the noisy-neighbor / attribution thesis: the boundary is where the test happens, not where the test is suppressed.

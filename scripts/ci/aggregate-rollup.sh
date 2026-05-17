@@ -9,7 +9,7 @@
 # Usage: aggregate-rollup.sh <env>   (env ∈ candidate-a, preview, production)
 #
 # Behavior:
-#   1. For each node in ALL_TARGETS, read origin/deploy/<env>-<node> tip.
+#   1. For each node in DEPLOY_UNITS, read origin/deploy/<env>-<node> tip.
 #   2. current-sha = git merge-base $(per-node tips). Honest "what's been
 #      validated by every node" — release.yml read stays correct.
 #   3. Read existing deploy/<env>:.promote-state/source-sha-by-app.json,
@@ -45,7 +45,7 @@ git config user.email "github-actions[bot]@users.noreply.github.com"
 
 per_node_shas=()
 declare -A per_node_maps=()
-for node in "${ALL_TARGETS[@]}"; do
+for node in "${DEPLOY_UNITS[@]}"; do
   per_branch="deploy/${ENV}-${node}"
   sha=$(git ls-remote "$REPO_URL" "refs/heads/${per_branch}" | cut -f1)
   if [ -z "$sha" ]; then
