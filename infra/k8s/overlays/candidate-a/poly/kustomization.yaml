@@ -13,10 +13,10 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    digest: "sha256:96b625a2ef6c397fe2610ae7bee30827aa875a01632916f9d614f422ae1b4ab4"
+    digest: "sha256:1006243bc73c1f75535490c22e9ac33b1dc92686d6782460b75ec7485a132d4f"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    digest: "sha256:18cab718567da6135c45f84f3624a456862d97b59f16114f1a5cc83fa20b2d11"
+    digest: "sha256:dd3af501675be2d5b6729c248186d4678274d3aae85967cf99c7b851e60ac36c"
   # poly-paper-sidecar is a catalog-v2 image: it ships through pr-build's matrix
   # like any other image (infra/catalog/poly.yaml → images[role: sidecar]).
   # promote-build-payload + image-name-aware promote-k8s-image keep the host
