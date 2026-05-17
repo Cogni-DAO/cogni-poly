@@ -269,14 +269,16 @@ Before opening a research-view PR, the author confirms:
 
 Recurring research investigations live as recipe files in `.claude/skills/data-research/recipes/`. Each recipe is a single self-contained markdown file with: a stack-ranked taxonomy of the failure modes it diagnoses, a small set of bounded SQL queries (≤200 rows out, no V8 hydration), and a playbook prescribing the order to run them. Load the recipe, run the queries via `scripts/grafana-postgres-query.sh`, emit a scorecard.
 
-| Recipe                        | When to load                                                                                                                  |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `recipes/alpha-leak-debug.md` | An "alpha leak" market is visible on the dashboard's Markets tab and someone asks "why is target ahead of us on this market?" |
+| Recipe                                   | When to load                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `recipes/alpha-leak-debug.md`            | An "alpha leak" market is visible on the dashboard's Markets tab and someone asks "why is target ahead of us on this market?"                                                                                                                                                                            |
+| `recipes/copy-target-pXX-calibration.md` | The hardcoded `TOP_TARGET_SIZE_SNAPSHOTS` in `copy-trade-mirror.job.ts` looks stale, or you're designing any config change to `sizing_min_target_usdc` / `max_target_usdc`. Encodes the primary-vs-hedge distinction, the algorithm's view of the distribution, and the Grafana 30s-timeout workarounds. |
 
 Add a new recipe when a debugging path has been walked twice. The bar is reuse, not novelty — one-off investigations stay in the conversation. Recipes that don't change the underlying data model belong here, not as new endpoints.
 
 ## Reference incidents and patterns
 
+- **PR #83 + task.5045 — copy-target pXX re-snapshot (2026-05-17)** — canonical example of the full reproducibility protocol: 5.2M-fill backfill into candidate-a, 14 saved SQL queries with `qNN-name.sql` + `qNN-name.results.md` run-by-run tracking, primary-vs-hedge distinction, Grafana 30s timeout workarounds, three corrections-with-traceability (basket-arb misread, bundesliga over-claim, condition-vs-fill-level bucketing error), single-page north-star synthesis. Start at [`docs/research/poly/copy-target-north-star-2026-05-16.md`](../../../docs/research/poly/copy-target-north-star-2026-05-16.md) → drill into [`docs/research/poly/queries/`](../../../docs/research/poly/queries/) for any cited number.
 - **bug.5012** — poly prod OOM crashloop. Reading `wallet-analysis-service.ts:readDbFillsAsOrderFlowTrades` against RN1's 825k-fill backfill (spike.5024) blew the heap. Fix: SQL aggregation per `computeWalletMetrics` field, no raw fills in V8.
 - **PR #1257** (`cc0e70fe8`) — heap-bump + `pLimit(4)` cap on the redeem-catchup boot loop. Stops a _different_ OOM (boot-fan-out), not the read-path one. Sometimes both apply; they're orthogonal.
 - **`docs/research/nextjs-node-memory-sizing.md`** — Tier 0/1 sizing standard. Useful background but **not a substitute for SQL aggregation**. Tier 1 buys ~3× the heap; one big SELECT eats it.
