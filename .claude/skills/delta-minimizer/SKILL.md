@@ -7,6 +7,8 @@ description: "Investigate ONE specific divergence between our wallet and the cop
 
 We copy-trade ONE target wallet at a time (today: `swisstony`). Every divergence is a bug worth understanding. The algorithm has known fundamental issues catalogued in `work/charters/POLY_COPY_DELTA.md`. Your job: investigate one market, produce one high-confidence finding, map it to a charter class (or argue for a new one and update the charter), drop the fluff.
 
+> **Zoomed-out sibling:** [`/paper-trade-diff-analysis`](../paper-trade-diff-analysis/SKILL.md) — when the question is "is paper trading tracking PROD across ALL markets" (the trust-twin loop), start there. This skill (delta-minimizer) is for the per-market root-cause investigation it routes individual material divergences to.
+
 ## Required reading BEFORE you investigate
 
 The skill assumes you already know how the mirror algorithm works. If you don't, read these first — they are short and load-bearing:
