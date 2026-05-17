@@ -22,6 +22,17 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  annotationsForSizingPolicy,
+  type ChartAnnotation,
+} from "../nodes/poly/app/src/features/copy-trade/sizing-annotations";
+import {
+  buildWalletStatistic,
+  snapshotForTargetWallet,
+  type WalletSizeSnapshot,
+} from "../nodes/poly/app/src/features/copy-trade/target-percentile-snapshots";
+import type { SizingPolicy } from "../nodes/poly/app/src/features/copy-trade/types";
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 // ---------- Argv ----------
@@ -157,6 +168,10 @@ type Target = {
   label: string;
   target_id: string;
   n_decisions: number;
+  /** Latest active percentile in `poly_copy_trade_targets`; null when no row found. */
+  mirror_filter_percentile: number | null;
+  /** Per-leg ceiling for the policy; null when not configured. */
+  mirror_max_usdc_per_trade: number | null;
 };
 
 function detectTarget(
@@ -188,12 +203,58 @@ function detectTarget(
     `select label from poly_trader_wallets where wallet_address = '${wallet}' limit 1`,
     env
   );
+  // Pull active percentile + per-leg ceiling for the same target wallet. If
+  // multiple tenants track the same wallet they typically share these values;
+  // pick the most-recently-updated row.
+  const cfg = runSql(
+    `select mirror_filter_percentile, mirror_max_usdc_per_trade
+     from poly_copy_trade_targets
+     where target_wallet = '${wallet}' and disabled_at is null
+     order by created_at desc
+     limit 1`,
+    env
+  );
+  const cfgRow = cfg[0];
   return {
     wallet,
     label: (lbl[0]?.label as string) ?? wallet,
     target_id: String(rows[0].target_id),
     n_decisions: Number(rows[0].n),
+    mirror_filter_percentile:
+      cfgRow?.mirror_filter_percentile != null
+        ? Number(cfgRow.mirror_filter_percentile)
+        : null,
+    mirror_max_usdc_per_trade:
+      cfgRow?.mirror_max_usdc_per_trade != null
+        ? Number(cfgRow.mirror_max_usdc_per_trade)
+        : null,
   };
+}
+
+/**
+ * Resolve the active `SizingPolicy` + source snapshot for the auto-detected
+ * target by combining the hardcoded percentile snapshot (frozen one-time
+ * capture; see `target-percentile-snapshots.ts`) with the per-target config
+ * pulled from `poly_copy_trade_targets`. Returns null when there is no
+ * snapshot for the target wallet — in that case the policy is `min_bet` and
+ * has no thresholds to draw.
+ */
+function resolveTargetSizingContext(target: Target): {
+  policy: SizingPolicy;
+  snapshot: WalletSizeSnapshot | undefined;
+} | null {
+  const snapshot = snapshotForTargetWallet(
+    target.wallet.toLowerCase() as `0x${string}`
+  );
+  if (!snapshot) return null;
+  const percentile = target.mirror_filter_percentile ?? 75;
+  const maxPerCondition = target.mirror_max_usdc_per_trade ?? 5;
+  const policy: SizingPolicy = {
+    kind: "target_percentile_scaled",
+    max_usdc_per_condition: maxPerCondition,
+    statistic: buildWalletStatistic(snapshot, percentile),
+  };
+  return { policy, snapshot };
 }
 
 // ---------- Outcome + labels (CLOB authoritative) ----------
@@ -604,6 +665,8 @@ function svgTimeline(args: {
   globalT: { min: number; max: number };
   targetLabel: string;
   ourLabel: string;
+  /** Threshold lines from the target's sizing policy. Empty array = no overlay. */
+  annotations: ChartAnnotation[];
 }): string {
   const {
     market,
@@ -614,13 +677,14 @@ function svgTimeline(args: {
     globalT,
     targetLabel,
     ourLabel,
+    annotations,
   } = args;
   if (!primary) return "";
   const tMin = globalT.min;
   const tMax = globalT.max;
   const span = Math.max(1, tMax - tMin);
   const W = 1200,
-    H = 340,
+    H = 420,
     padL = 130, // wide enough for "PRIMARY · …" label outside the numbers column
     padR = 30,
     padT = 30,
@@ -751,19 +815,85 @@ function svgTimeline(args: {
     `<text x="${padL - 8}" y="${yMid.toFixed(1)}" fill="#94a3b8" font-size="10" text-anchor="end" dominant-baseline="middle">$0</text>`
   );
 
-  // Side labels — left of axis numbers (not overlapping). Rotated, centered in each half.
+  // Sizing-policy threshold overlay. Drawn after the symlog grid but before the
+  // data series, so position lines render on top. Color matches the target
+  // (#10b981) — these are properties of the *target* wallet's size
+  // distribution, not ours. Off-scale values (above the chart's `maxAbs`) are
+  // skipped to avoid drawing at the plot's edge.
+  //
+  // Label-collision dedupe: when ladder lines stack within ~12px in symlog
+  // space, only a curated subset gets a text label — lines themselves still
+  // render so the spatial pattern is preserved. Priority for label retention:
+  //   1. active (emphasis === "primary") — always
+  //   2. p99 (saturation cap)
+  //   3. p50 (lower anchor)
+  //   4. others — only if room
+  type LadderItem = {
+    ann: ChartAnnotation & { kind: "h_threshold" };
+    y: number;
+    priority: number;
+  };
+  const ladderItems: LadderItem[] = [];
+  for (const ann of annotations) {
+    if (ann.kind !== "h_threshold") continue;
+    const sign: 1 | -1 = ann.side === "primary" ? 1 : -1;
+    if (ann.value_usdc > maxAbs * 1.2) continue;
+    const y = ySide(ann.value_usdc, sign);
+    const isActive = ann.emphasis === "primary";
+    // Lower number = higher priority for label retention.
+    const isP99 = /^p99\b/.test(ann.label);
+    const isP50 = /^p50\b/.test(ann.label);
+    const priority = isActive ? 0 : isP99 ? 1 : isP50 ? 2 : 3;
+    ladderItems.push({ ann, y, priority });
+  }
+  // Draw all LINES first (so they're always visible). Inactive ladder lines
+  // use sparse tick-style dashes (1,6) at low opacity — they read as
+  // background reference grid, not foreground data — so they don't visually
+  // compete with the target's actual hedge-position dashed line. Active line
+  // uses a denser dash + bolder weight + opacity ~0.9 to clearly own attention.
+  for (const item of ladderItems) {
+    const isActive = item.ann.emphasis === "primary";
+    const opacity = isActive ? 0.9 : 0.15;
+    const width = isActive ? 2 : 1;
+    const dash = isActive ? "5,3" : "1,6";
+    lines.push(
+      `<line x1="${padL}" y1="${item.y.toFixed(1)}" x2="${padL + plotW}" y2="${item.y.toFixed(1)}" stroke="#10b981" stroke-width="${width}" stroke-dasharray="${dash}" opacity="${opacity}"/>`
+    );
+  }
+  // Then walk in priority order and emit LABELS only when no higher-priority
+  // label already sits within 12px.
+  const LABEL_MIN_GAP_PX = 12;
+  const labeledYs: number[] = [];
+  const byPriority = [...ladderItems].sort((a, b) => a.priority - b.priority);
+  for (const item of byPriority) {
+    if (labeledYs.some((y) => Math.abs(y - item.y) < LABEL_MIN_GAP_PX))
+      continue;
+    const isActive = item.ann.emphasis === "primary";
+    const opacity = isActive ? 0.9 : 0.55;
+    // Compact format: "p80 $319" — no separator, drops the visual `·`.
+    const compact = item.ann.label.replace(/\s·\s/g, " ");
+    lines.push(
+      `<text x="${padL + plotW - 4}" y="${(item.y - 3).toFixed(1)}" fill="#10b981" font-size="10" opacity="${opacity}" text-anchor="end" font-weight="${isActive ? 600 : 400}">${escapeHtml(compact)}</text>`
+    );
+    labeledYs.push(item.y);
+  }
+
+  // Side labels — rotated, two-line per half. Line 1 = role (PRIMARY ↑ /
+  // HEDGE ↓), Line 2 = the actual token outcome name so the reader doesn't
+  // have to scan back to the title to map "primary" → "Yes". Dim subtitle
+  // because it's a reference, not the primary axis label.
   lines.push(
     `<text x="22" y="${padT + plotH / 4}" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 22 ${padT + plotH / 4})">PRIMARY ↑</text>`
   );
   lines.push(
-    `<text x="22" y="${padT + plotH / 4 + 14}" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 ${padT + plotH / 4 + 14})">${escapeHtml(primary.label ?? "?")}</text>`
+    `<text x="36" y="${padT + plotH / 4}" fill="#64748b" font-size="9" text-anchor="middle" transform="rotate(-90 36 ${padT + plotH / 4})">${escapeHtml(primary.label ?? "?")}</text>`
   );
   if (hedge) {
     lines.push(
       `<text x="22" y="${padT + (plotH * 3) / 4}" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 22 ${padT + (plotH * 3) / 4})">HEDGE ↓</text>`
     );
     lines.push(
-      `<text x="22" y="${padT + (plotH * 3) / 4 + 14}" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 ${padT + (plotH * 3) / 4 + 14})">${escapeHtml(hedge.label ?? "?")}</text>`
+      `<text x="36" y="${padT + (plotH * 3) / 4}" fill="#64748b" font-size="9" text-anchor="middle" transform="rotate(-90 36 ${padT + (plotH * 3) / 4})">${escapeHtml(hedge.label ?? "?")}</text>`
     );
   }
 
@@ -781,15 +911,17 @@ function svgTimeline(args: {
   // line — primary VWAP in upper half, hedge VWAP in lower half. Price=1 lives
   // far from midline, price=0 at the midline (so a $0.5 VWAP sits halfway up
   // its respective half).
+  //
+  // Reduced label density: instead of the 0.25/0.5/0.75/1.0 ladder on both
+  // halves (8 labels), show one $1 marker per half + the axis name. End-of-line
+  // VWAP value tags (drawn below in `drawSeries`) provide per-wallet precision.
   const yPrimaryVwap = (price: number) => yMid - price * (plotH / 2);
   const yHedgeVwap = (price: number) => yMid + price * (plotH / 2);
-  for (const p of [0.25, 0.5, 0.75, 1]) {
-    for (const yFn of [yPrimaryVwap, yHedgeVwap]) {
-      const y = yFn(p);
-      lines.push(
-        `<text x="${padL + plotW + 6}" y="${y.toFixed(1)}" fill="#475569" font-size="9" dominant-baseline="middle">$${p.toFixed(2)}</text>`
-      );
-    }
+  for (const yFn of [yPrimaryVwap, yHedgeVwap]) {
+    const y = yFn(1);
+    lines.push(
+      `<text x="${padL + plotW + 6}" y="${y.toFixed(1)}" fill="#475569" font-size="9" dominant-baseline="middle">$1</text>`
+    );
   }
   lines.push(
     `<text x="${W - 18}" y="${padT + plotH / 2}" fill="#475569" font-size="10" text-anchor="middle" transform="rotate(90 ${W - 18} ${padT + plotH / 2})">VWAP $</text>`
@@ -856,8 +988,16 @@ function svgTimeline(args: {
     );
     if (primaryVwapD) {
       lines.push(
-        `<path d="${primaryVwapD}" fill="none" stroke="${color}" stroke-width="1" opacity="0.55"/>`
+        `<path d="${primaryVwapD}" fill="none" stroke="${color}" stroke-width="1.6" opacity="0.85"/>`
       );
+      // End-of-line VWAP value tag — replaces the deleted right-axis tick ladder.
+      const lastVwap =
+        last.primaryShares > 0 ? last.primaryCost / last.primaryShares : null;
+      if (lastVwap != null) {
+        lines.push(
+          `<text x="${(padL + plotW + 4).toFixed(1)}" y="${yPrimaryVwap(lastVwap).toFixed(1)}" fill="${color}" font-size="9" opacity="0.7" dominant-baseline="middle">${lastVwap.toFixed(2)}</text>`
+        );
+      }
     }
     // Hedge VWAP (thin solid, lower half).
     if (hedge) {
@@ -868,8 +1008,15 @@ function svgTimeline(args: {
       );
       if (hedgeVwapD) {
         lines.push(
-          `<path d="${hedgeVwapD}" fill="none" stroke="${color}" stroke-width="1" opacity="0.55"/>`
+          `<path d="${hedgeVwapD}" fill="none" stroke="${color}" stroke-width="1.6" opacity="0.85"/>`
         );
+        const lastVwap =
+          last.hedgeShares > 0 ? last.hedgeCost / last.hedgeShares : null;
+        if (lastVwap != null) {
+          lines.push(
+            `<text x="${(padL + plotW + 4).toFixed(1)}" y="${yHedgeVwap(lastVwap).toFixed(1)}" fill="${color}" font-size="9" opacity="0.7" dominant-baseline="middle">${lastVwap.toFixed(2)}</text>`
+          );
+        }
       }
     }
   }
@@ -904,17 +1051,19 @@ function svgTimeline(args: {
   const ourEnd = ours[ours.length - 1];
   const tVw = vwap(targetEnd);
   const oVw = vwap(ourEnd);
-  const fmtV = (v: number | null) => (v != null ? `@$${v.toFixed(3)}` : "—");
+  const fmtV = (v: number | null) => (v != null ? `@${v.toFixed(2)}` : "—");
+  const fmtCost = (v: number) =>
+    v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0);
   const annot = [
     targetEnd
-      ? `${targetLabel}: P $${targetEnd.primaryCost.toFixed(0)} ${fmtV(tVw.p)} · H $${targetEnd.hedgeCost.toFixed(0)} ${fmtV(tVw.h)}`
+      ? `${targetLabel}: P $${fmtCost(targetEnd.primaryCost)}${fmtV(tVw.p)} H $${fmtCost(targetEnd.hedgeCost)}${fmtV(tVw.h)}`
       : null,
     ourEnd
-      ? `us: P $${ourEnd.primaryCost.toFixed(2)} ${fmtV(oVw.p)} · H $${ourEnd.hedgeCost.toFixed(2)} ${fmtV(oVw.h)}`
+      ? `us: P $${fmtCost(ourEnd.primaryCost)}${fmtV(oVw.p)} H $${fmtCost(ourEnd.hedgeCost)}${fmtV(oVw.h)}`
       : null,
   ]
     .filter(Boolean)
-    .join("   ·   ");
+    .join("  ·  ");
   lines.push(
     `<text x="${padL + plotW}" y="${padT - 12}" fill="#94a3b8" font-size="11" text-anchor="end">${escapeHtml(annot)}</text>`
   );
@@ -1136,7 +1285,9 @@ function renderGroupSection(
   decisions: DecisionRow[],
   globalT: { min: number; max: number },
   targetLabel: string,
-  ourLabel: string
+  ourLabel: string,
+  annotations: ChartAnnotation[],
+  snapshotCapturedAt: string | null
 ): string {
   const cards = group.markets
     .map((m, i) =>
@@ -1156,14 +1307,18 @@ function renderGroupSection(
           o.condition_id === m.condition_id &&
           o.token_id === metric.hedge_token_id
       );
+      const annotationLegend = annotations.length
+        ? `<span><span class="line" style="background:#10b981;opacity:0.55;height:1px;border-top:1px dashed #10b981"></span>${escapeHtml(targetLabel)} pXX size ladder${snapshotCapturedAt ? ` · snapshot ${escapeHtml(snapshotCapturedAt.slice(0, 10))}` : ""} (active = bold)</span>`
+        : "";
       return `<div class="market-card">
         <div class="market-head"><span class="market-title">${escapeHtml(m.market_title)} → primary ${escapeHtml(primary?.label ?? "?")} / hedge ${escapeHtml(hedge?.label ?? "—")}</span></div>
-        ${svgTimeline({ market: m, primary: primary ?? null, hedge: hedge ?? null, rawFills, decisions, globalT, targetLabel, ourLabel })}
+        ${svgTimeline({ market: m, primary: primary ?? null, hedge: hedge ?? null, rawFills, decisions, globalT, targetLabel, ourLabel, annotations })}
         <div class="legend">
           <span><span class="line" style="background:#10b981"></span>${escapeHtml(targetLabel)} position: primary solid (up) / hedge dashed (down)</span>
           <span><span class="line" style="background:#3b82f6"></span>Our position: primary solid (up) / hedge dashed (down)</span>
-          <span><span class="line" style="background:#10b981;opacity:0.55;height:1px"></span>${escapeHtml(targetLabel)} VWAP (thin, right-axis $)</span>
-          <span><span class="line" style="background:#3b82f6;opacity:0.55;height:1px"></span>Our VWAP (thin, right-axis $)</span>
+          <span><span class="line" style="background:#10b981;opacity:0.85;height:2px"></span>${escapeHtml(targetLabel)} VWAP (right-axis $)</span>
+          <span><span class="line" style="background:#3b82f6;opacity:0.85;height:2px"></span>Our VWAP (right-axis $)</span>
+          ${annotationLegend}
           <span><span class="dot" style="background:#22c55e"></span>placed</span>
           <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
           <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
@@ -1220,6 +1375,8 @@ function renderHtml(args: {
   target: Target;
   ourWallet: string;
   ourLabel: string;
+  annotations: ChartAnnotation[];
+  snapshotCapturedAt: string | null;
 }): string {
   const {
     input,
@@ -1322,7 +1479,9 @@ h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
         decisions,
         globalT,
         target.label,
-        ourLabel
+        ourLabel,
+        args.annotations,
+        args.snapshotCapturedAt
       )
     )
     .join("\n");
@@ -1458,6 +1617,28 @@ async function main() {
     `[mirror-report] target: ${target.label} (${target.wallet}) · ${target.n_decisions} decisions`
   );
 
+  // Reconstruct the active sizing policy for the auto-detected target so the
+  // chart can overlay its threshold lines. When the target has no hardcoded
+  // snapshot (policy = `min_bet`), annotations is empty and the chart renders
+  // unchanged. Source-of-truth note: snapshot is a one-time capture; the
+  // chart legend surfaces `captured_at` so staleness is visible.
+  const sizingCtx = resolveTargetSizingContext(target);
+  const annotations: ChartAnnotation[] = sizingCtx
+    ? annotationsForSizingPolicy(sizingCtx.policy, {
+        snapshot: sizingCtx.snapshot,
+      })
+    : [];
+  const snapshotCapturedAt = sizingCtx?.snapshot?.captured_at ?? null;
+  if (sizingCtx) {
+    console.error(
+      `[mirror-report] sizing policy: ${sizingCtx.policy.kind}, p${
+        sizingCtx.policy.kind !== "min_bet"
+          ? sizingCtx.policy.statistic.percentile
+          : "?"
+      } active · ${annotations.length} threshold annotation(s)`
+    );
+  }
+
   const outcomes = await fetchOutcomesAndLabels(conditionIds);
   const ourLegs = ourLegsAll.filter((l) => heldConditions.has(l.condition_id));
   const targetLegs = fetchSnapshotLegs(
@@ -1516,6 +1697,8 @@ async function main() {
     target,
     ourWallet,
     ourLabel,
+    annotations,
+    snapshotCapturedAt,
   });
   writeFileSync(join(outDir, "report.html"), html);
 
@@ -1530,6 +1713,13 @@ async function main() {
         groups,
         decisions,
         placedOrders,
+        sizing: sizingCtx
+          ? {
+              policy: sizingCtx.policy,
+              snapshot_captured_at: sizingCtx.snapshot?.captured_at ?? null,
+              annotations,
+            }
+          : { policy: null, snapshot_captured_at: null, annotations: [] },
       },
       null,
       2
