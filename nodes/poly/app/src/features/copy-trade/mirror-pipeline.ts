@@ -1207,6 +1207,12 @@ async function executeMirrorOrder(
         fill_id: fill.fill_id,
         client_order_id,
         order_id: receipt.order_id,
+        // Sized notional from the planner. Lets us verify sizing-policy
+        // effects (D6 proportional scaling, percentile interpolation, follow-
+        // up branch sizing) directly from the decision log — without joining
+        // to `poly.copy_trade.execute` by `client_order_id`.
+        size_usdc: intent.size_usdc,
+        limit_price: intent.limit_price,
         ...decisionLogFields,
       },
       "mirror pipeline: placed"
