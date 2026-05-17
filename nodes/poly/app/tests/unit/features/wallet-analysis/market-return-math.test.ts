@@ -332,4 +332,49 @@ describe("positionReturnPct — redemption proceeds threading", () => {
       })
     ).toBe(0.3);
   });
+
+  it("bug.5057: open position with redemptionProceeds=0 falls back to mark", () => {
+    // Production regression check (bug.5057): market-exposure-service
+    // hardcodes `redemptionProceedsUsdc: 0` on our_wallet legs, and the
+    // target-leg aggregate sums to 0 whenever no leg has an outcome-
+    // authoritative redemption (i.e. every open position). The prior
+    // conditional matched on `0 !== undefined` and used 0 as
+    // remainingValue, producing returnPct = -totalBuy/totalBuy = -100% on
+    // both sides → Δ = 0% on every dashboard row. Fallback must engage on
+    // zero, not just on undefined.
+    expect(
+      positionReturnPct({
+        totalBuyNotional: 5798,
+        realizedCash: 0,
+        currentMarkValue: 4694,
+        redemptionProceeds: 0,
+      })
+    ).toBeCloseTo(-0.1904, 4);
+  });
+
+  it("bug.5057: loser (redemption=0, mark=0) → -100%", () => {
+    // Other side of the fallback: a resolved loser whose mark is 0 still
+    // computes -100% (cost lost), not flipped to mark-only treatment.
+    expect(
+      positionReturnPct({
+        totalBuyNotional: 100,
+        realizedCash: 0,
+        currentMarkValue: 0,
+        redemptionProceeds: 0,
+      })
+    ).toBe(-1);
+  });
+
+  it("bug.5057: redemption > 0 still wins over stale mark", () => {
+    // When redemptionProceeds > 0 (outcome-authoritative), it overrides a
+    // stale currentMarkValue Polymarket may echo post-burn.
+    expect(
+      positionReturnPct({
+        totalBuyNotional: 80,
+        realizedCash: 0,
+        currentMarkValue: 95, // stale mid-price post-resolution
+        redemptionProceeds: 500,
+      })
+    ).toBe(5.25);
+  });
 });

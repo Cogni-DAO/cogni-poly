@@ -99,12 +99,18 @@ export function positionReturnPct(input: PositionReturnInput): number | null {
   if (!Number.isFinite(realizedCash) || !Number.isFinite(currentMarkValue)) {
     return null;
   }
-  // Outcome-authoritative remaining-value: redemption (when supplied)
-  // replaces the noisy current mark for resolved markets. Callers compute
-  // this via `computeRealizedPnl` so the two formulas can never drift.
+  // Outcome-authoritative remaining-value: redemption (when supplied AND
+  // actually nonzero) replaces the noisy current mark for resolved markets.
+  // For open positions and losers the aggregate `redemptionProceeds` is 0
+  // — fall back to `currentMarkValue` so we don't compute a fake -100%
+  // return. (bug.5057: prior `0 !== undefined` conditional matched on the
+  // open-position case where every leg has redemptionProceedsUsdc=0,
+  // making both our and target returnPct = -totalBuy/totalBuy = -100% and
+  // collapsing every dashboard Δ to 0.0%.)
   const remainingValue =
     input.redemptionProceeds !== undefined &&
-    Number.isFinite(input.redemptionProceeds)
+    Number.isFinite(input.redemptionProceeds) &&
+    input.redemptionProceeds > 0
       ? input.redemptionProceeds
       : currentMarkValue;
   const totalPnl = realizedCash + remainingValue - totalBuyNotional;
