@@ -266,6 +266,13 @@ jobs:
           mkdir -p deploy-branch/infra/catalog
           cp "app-src/infra/catalog/${NODE}.yaml" "deploy-branch/infra/catalog/${NODE}.yaml"
 
+      - name: Restore overlay digests from pre-rsync snapshot
+        working-directory: deploy-branch
+        env:
+          SNAPSHOT_FILE: ${{ runner.temp }}/candidate-a-overlay-snapshot.tsv
+          OVERLAY_ENV: candidate-a
+        run: bash ../ci-src/scripts/ci/restore-overlay-from-snapshot.sh
+
       - name: Promote this node's digest
         id: promote
         working-directory: deploy-branch
@@ -275,35 +282,6 @@ jobs:
           NODE: ${{ matrix.node }}
           HEAD_SHA: ${{ needs.decide.outputs.head_sha }}
         run: bash ../ci-src/scripts/ci/promote-build-payload.sh
-
-      - name: Restore non-promoted overlay digests (post-rsync self-heal)
-        working-directory: deploy-branch
-        env:
-          PROMOTED_APPS: ${{ steps.promote.outputs.promoted_apps }}
-          SNAPSHOT_FILE: ${{ runner.temp }}/candidate-a-overlay-snapshot.tsv
-        run: |
-          set -euo pipefail
-          if [ ! -s "$SNAPSHOT_FILE" ]; then
-            echo "ℹ️  No snapshot rows (cold-start) — nothing to restore"
-            exit 0
-          fi
-          # Catalog v2: snapshot is 3-column TSV (deploy_unit, image_name, ref).
-          # Restore EVERY image of every non-promoted unit, not just the role:app
-          # one. Otherwise sidecars (Shape B) get clobbered by the rsync-from-main
-          # step back to `<env>-placeholder-*` newTags that don't exist in GHCR.
-          promoted_padded=" $(echo "$PROMOTED_APPS" | tr ',' ' ' | tr -s ' ') "
-          while IFS=$'\t' read -r unit image_name ref; do
-            [ -z "$unit" ] && continue
-            if [[ "$promoted_padded" == *" $unit "* ]]; then
-              continue
-            fi
-            # Only restore digest pins; tag-pinned entries (e.g. `<env>-placeholder-*`)
-            # are not safe to "restore" — if the snapshot captured a placeholder,
-            # there's no real digest to put back.
-            [[ "$ref" != *"@sha256:"* ]] && continue
-            bash ../ci-src/scripts/ci/promote-k8s-image.sh --no-commit \
-              --env candidate-a --app "$unit" --image-name "$image_name" --digest "$ref"
-          done < "$SNAPSHOT_FILE"
 
       - name: Commit and push to per-node deploy branch
         id: push-deploy
