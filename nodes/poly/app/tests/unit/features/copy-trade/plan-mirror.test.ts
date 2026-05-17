@@ -318,6 +318,110 @@ describe("planMirrorFromFill() — market_past_end_date gate (bug.5043)", () => 
   });
 });
 
+describe("planMirrorFromFill() — date-only end_date end-of-day boundary (bug.5007)", () => {
+  // Gamma returns `endDate` as a date-only "YYYY-MM-DD" string for most markets;
+  // `Date.parse` resolves that to 00:00:00Z at the START of the day. The pre-fix
+  // gate treated that midnight as the close moment, killing copy-trades for every
+  // today-ending market the moment UTC crossed 00:00. Fix shifts the boundary by
+  // 24h for date-only inputs only.
+
+  const END_DATE_DAY = "2026-05-17";
+  const DAY_START_MS = Date.parse(`${END_DATE_DAY}T00:00:00.000Z`);
+  const DAY_END_MS = Date.parse(`${END_DATE_DAY}T23:59:59.999Z`);
+  const NEXT_DAY_START_MS = Date.parse("2026-05-18T00:00:00.000Z");
+
+  it("places when now is just past 00:00 of end_date day (the bug.5007 repro)", () => {
+    const d = planMirrorFromFill({
+      fill: {
+        ...FILL,
+        attributes: { ...FILL.attributes, end_date: END_DATE_DAY },
+      },
+      config: CONFIG,
+      state: CLEAN_STATE,
+      client_order_id: COID,
+      min_usdc_notional: 1.0,
+      now_ms: DAY_START_MS + 7 * 60 * 60 * 1000, // 07:00 UTC on end_date day
+    });
+    expect(d.kind).toBe("place");
+  });
+
+  it("places at 23:59:59.999 UTC on the end_date day (still within the day)", () => {
+    const d = planMirrorFromFill({
+      fill: {
+        ...FILL,
+        attributes: { ...FILL.attributes, end_date: END_DATE_DAY },
+      },
+      config: CONFIG,
+      state: CLEAN_STATE,
+      client_order_id: COID,
+      min_usdc_notional: 1.0,
+      now_ms: DAY_END_MS,
+    });
+    expect(d.kind).toBe("place");
+  });
+
+  it("skips at 00:00:00 UTC of the day AFTER end_date (full day has elapsed)", () => {
+    const d = planMirrorFromFill({
+      fill: {
+        ...FILL,
+        attributes: { ...FILL.attributes, end_date: END_DATE_DAY },
+      },
+      config: CONFIG,
+      state: CLEAN_STATE,
+      client_order_id: COID,
+      min_usdc_notional: 1.0,
+      now_ms: NEXT_DAY_START_MS,
+    });
+    expect(d.kind).toBe("skip");
+    expect(d.reason).toBe("market_past_end_date");
+  });
+
+  it("skips long after end_date has passed", () => {
+    const d = planMirrorFromFill({
+      fill: {
+        ...FILL,
+        attributes: { ...FILL.attributes, end_date: "2026-04-01" },
+      },
+      config: CONFIG,
+      state: CLEAN_STATE,
+      client_order_id: COID,
+      min_usdc_notional: 1.0,
+      now_ms: DAY_START_MS, // 6 weeks later
+    });
+    expect(d.kind).toBe("skip");
+    expect(d.reason).toBe("market_past_end_date");
+  });
+
+  it("ISO-8601 timestamp inputs are unaffected by the date-only shift (bug.5043 semantics preserved)", () => {
+    const isoEnd = "2026-05-17T20:00:00.000Z";
+    const d1 = planMirrorFromFill({
+      fill: {
+        ...FILL,
+        attributes: { ...FILL.attributes, end_date: isoEnd },
+      },
+      config: CONFIG,
+      state: CLEAN_STATE,
+      client_order_id: COID,
+      min_usdc_notional: 1.0,
+      now_ms: Date.parse(isoEnd) - 1, // 1 ms before
+    });
+    expect(d1.kind).toBe("place");
+    const d2 = planMirrorFromFill({
+      fill: {
+        ...FILL,
+        attributes: { ...FILL.attributes, end_date: isoEnd },
+      },
+      config: CONFIG,
+      state: CLEAN_STATE,
+      client_order_id: COID,
+      min_usdc_notional: 1.0,
+      now_ms: Date.parse(isoEnd) + 1, // 1 ms after
+    });
+    expect(d2.kind).toBe("skip");
+    expect(d2.reason).toBe("market_past_end_date");
+  });
+});
+
 describe("planMirrorFromFill() — idempotency round-trip", () => {
   it("client_order_id from clientOrderIdFor is what gates already_placed", () => {
     const coid = clientOrderIdFor(
