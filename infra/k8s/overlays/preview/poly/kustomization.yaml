@@ -25,7 +25,7 @@ images:
     digest: "sha256:e96106e8aae2478a8ee506d3f837024ac2e7a415b0cc6491bee6f4d9f541d014"
   - name: ghcr.io/cogni-dao/poly-echo-sidecar
     newName: ghcr.io/cogni-dao/poly-echo-sidecar
-    newTag: "preview-placeholder-poly-echo-sidecar"
+    digest: "sha256:9574344ca76ff5de3f503089ac82d45e8a42d2e3aac84294cb9646c80c7e2d6e"
   # Sidecar digests written automatically by promote-build-payload (catalog v2).
   # poly-echo-sidecar placeholder is overwritten on first promote. Container
   # shape lives in each sidecar's k8s/ Component (referenced under `components:`).
