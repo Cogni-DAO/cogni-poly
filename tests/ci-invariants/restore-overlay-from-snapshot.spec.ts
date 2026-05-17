@@ -395,14 +395,33 @@ images:
     });
     writeFileSync(snapshotFile, snapRes.stdout);
 
-    // Rsync brings a NEWER echo digest from main (simulates task.0349 seed).
+    // Rsync brings NEWER digests from main for ALL three images (simulates
+    // task.0349 seed run that updated everything). Using distinct values
+    // per image so an erroneous "always" restore would visibly regress
+    // poly+paper too (not just echo) — the original test only differentiated
+    // echo and was tautological for the sibling rows.
+    const DIGEST_POLY_NEWER_FROM_MAIN =
+      "sha256:5555555555555555555555555555555555555555555555555555555555555555";
+    const DIGEST_PAPER_NEWER_FROM_MAIN =
+      "sha256:6666666666666666666666666666666666666666666666666666666666666666";
     const DIGEST_ECHO_NEWER_FROM_MAIN =
       "sha256:4444444444444444444444444444444444444444444444444444444444444444";
     writeFileSync(
       fixture.overlayPath,
-      overlayYaml(
-        polyAllDigest({ kind: "digest", value: DIGEST_ECHO_NEWER_FROM_MAIN })
-      )
+      overlayYaml([
+        {
+          name: IMG_POLY,
+          pin: { kind: "digest", value: DIGEST_POLY_NEWER_FROM_MAIN },
+        },
+        {
+          name: IMG_PAPER,
+          pin: { kind: "digest", value: DIGEST_PAPER_NEWER_FROM_MAIN },
+        },
+        {
+          name: IMG_ECHO,
+          pin: { kind: "digest", value: DIGEST_ECHO_NEWER_FROM_MAIN },
+        },
+      ])
     );
 
     const restoreRes = spawnSync("bash", [RESTORE_SCRIPT], {
@@ -417,11 +436,22 @@ images:
       encoding: "utf-8",
     });
     expect(restoreRes.status, restoreRes.stderr).toBe(0);
-    // Echo must STILL be on main's newer digest, not regressed.
+    // ALL three images must still be on main's NEWER digest, none regressed.
+    // If `only-when-placeholder` accidentally restored a row whose current
+    // overlay value is already a digest pin, this would surface as a regress
+    // to {POLY,PAPER,ECHO}_LIVE on that image.
     const finalOverlay = readFileSync(fixture.overlayPath, "utf-8");
-    expect(
-      digestOfImage(finalOverlay, "ghcr.io/cogni-dao/poly-echo-sidecar")
-    ).toBe(DIGEST_ECHO_NEWER_FROM_MAIN);
+    expect(digestOfImage(finalOverlay, IMG_POLY)).toBe(
+      DIGEST_POLY_NEWER_FROM_MAIN
+    );
+    expect(digestOfImage(finalOverlay, IMG_PAPER)).toBe(
+      DIGEST_PAPER_NEWER_FROM_MAIN
+    );
+    expect(digestOfImage(finalOverlay, IMG_ECHO)).toBe(
+      DIGEST_ECHO_NEWER_FROM_MAIN
+    );
+    // Belt-and-suspenders: stdout reports all 3 main-wins skips.
+    expect(restoreRes.stdout).toMatch(/3 main-wins row\(s\)/);
   });
 
   it("ONLY_WHEN_PLACEHOLDER_SNAPSHOT_FILLS_PLACEHOLDER — bug.5012 fix: preview/production mode restores when main has placeholder", () => {
