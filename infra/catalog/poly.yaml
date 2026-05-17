@@ -45,17 +45,3 @@ images:
       target: base
       test_target: test
       cache_scope: poly-paper-sidecar
-
-  # Catalog v2 e2e exercise sidecar — see nodes/poly/sidecars/echo/AGENTS.md.
-  # Candidate-a + preview overlays only. Production overlay deliberately omits
-  # this image to exercise promote-k8s-image.sh's exit-2 skip path.
-  - name: poly-echo-sidecar
-    role: sidecar
-    dockerfile: nodes/poly/sidecars/echo/Dockerfile
-    image_name: ghcr.io/cogni-dao/poly-echo-sidecar
-    image_tag_suffix: ""
-    path_prefix: nodes/poly/sidecars/echo/
-    build:
-      context: nodes/poly/sidecars/echo
-      target: base
-      cache_scope: poly-echo-sidecar
