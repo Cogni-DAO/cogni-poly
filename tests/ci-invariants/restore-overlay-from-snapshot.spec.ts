@@ -3,11 +3,7 @@
 
 /**
  * Module: `@tests/ci-invariants/restore-overlay-from-snapshot`
- * Purpose: End-to-end verification of the candidate-flight restore-then-promote
- *          interaction. Exercises the full sequence (snapshot → simulated rsync
- *          clobber → restore → promote with a partial-affected-only payload) and
- *          asserts the final overlay matches the desired state for catalog v2
- *          multi-image deploy units (Shape B sidecars).
+ * Purpose: End-to-end verification of the candidate-flight restore-then-promote interaction. Exercises the full sequence (snapshot → simulated rsync clobber → restore → promote with a partial-affected-only payload) and asserts the final overlay matches the desired state for catalog v2 multi-image deploy units (Shape B sidecars).
  * Scope: Spawns `bash` against tmpdir fixtures. Does not call git, docker, kubectl,
  *        or network. Tests the actual scripts that ship in candidate-flight.yml.
  * Invariants:
@@ -18,6 +14,10 @@
  *                                          image unit leaves sibling images on
  *                                          their prior digest — the bug class
  *                                          that bug.5004's symptom-cascade hid)
+ *   - REMOVED_IMAGE_IS_NOOP               (snapshot row whose image was removed
+ *                                          from the overlay → promote-k8s rc=2 →
+ *                                          restore script exits 0, no phantom
+ *                                          entry resurrection)
  *   - COLD_START_IS_NOOP                  (empty snapshot file → exit 0, no error)
  * Side-effects: IO (mkdtemp + writes fixture files + spawns bash; cleaned up per-test)
  * Links: scripts/ci/restore-overlay-from-snapshot.sh,
@@ -306,6 +306,75 @@ describe("restore-then-promote end-to-end (catalog v2 multi-image)", () => {
     expect(
       digestOfImage(finalOverlay, "ghcr.io/cogni-dao/poly-echo-sidecar")
     ).toBe(DIGEST_ECHO_LIVE);
+  });
+
+  it("REMOVED_IMAGE_IS_NOOP — snapshot row for an image no longer in the overlay does not fail the restore", () => {
+    // Pre-flight: overlay had all 3 images (snapshot captures all 3).
+    writeFileSync(
+      fixture.overlayPath,
+      overlayYaml({
+        polyRef: { kind: "digest", value: DIGEST_POLY_LIVE },
+        paperRef: { kind: "digest", value: DIGEST_PAPER_LIVE },
+        echoRef: { kind: "digest", value: DIGEST_ECHO_LIVE },
+      })
+    );
+    const snapshotFile = path.join(fixture.root, "snapshot.tsv");
+    const snapRes = spawnSync("bash", [SNAPSHOT_SCRIPT], {
+      cwd: fixture.root,
+      env: { ...process.env, OVERLAY_ENV: "candidate-a" },
+      encoding: "utf-8",
+    });
+    expect(snapRes.status, snapRes.stderr).toBe(0);
+    writeFileSync(snapshotFile, snapRes.stdout);
+
+    // Rsync brings in main's overlay where echo has been removed entirely
+    // (e.g. cleanup PR). Write an overlay that lacks the echo entry.
+    writeFileSync(
+      fixture.overlayPath,
+      `apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cogni-candidate-a
+
+resources:
+  - ../../../base/node-app
+
+namePrefix: poly-
+
+images:
+  - name: ghcr.io/cogni-dao/cogni-poly
+    newName: ghcr.io/cogni-dao/cogni-poly
+    digest: "${DIGEST_POLY_LIVE}"
+  - name: ghcr.io/cogni-dao/poly-paper-sidecar
+    newName: ghcr.io/cogni-dao/poly-paper-sidecar
+    digest: "${DIGEST_PAPER_LIVE}"
+`
+    );
+
+    const restoreRes = spawnSync("bash", [RESTORE_SCRIPT], {
+      cwd: fixture.root,
+      env: {
+        ...process.env,
+        SNAPSHOT_FILE: snapshotFile,
+        OVERLAY_ENV: "candidate-a",
+        PROMOTE_SCRIPT,
+      },
+      encoding: "utf-8",
+    });
+    expect(restoreRes.status, restoreRes.stderr).toBe(0);
+
+    // Final overlay: poly + paper restored, echo absent (not resurrected).
+    const finalOverlay = readFileSync(fixture.overlayPath, "utf-8");
+    expect(digestOfImage(finalOverlay, "ghcr.io/cogni-dao/cogni-poly")).toBe(
+      DIGEST_POLY_LIVE
+    );
+    expect(
+      digestOfImage(finalOverlay, "ghcr.io/cogni-dao/poly-paper-sidecar")
+    ).toBe(DIGEST_PAPER_LIVE);
+    expect(
+      digestOfImage(finalOverlay, "ghcr.io/cogni-dao/poly-echo-sidecar")
+    ).toBeNull();
+    expect(finalOverlay).not.toContain("poly-echo-sidecar");
   });
 
   it("COLD_START_IS_NOOP — empty snapshot file exits 0 without error", () => {

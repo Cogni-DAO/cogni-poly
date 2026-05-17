@@ -53,20 +53,42 @@ if [ ! -s "$SNAPSHOT_FILE" ]; then
 fi
 
 restored=0
-skipped=0
+skipped_non_digest=0
+skipped_removed=0
 while IFS=$'\t' read -r unit image_name ref; do
   [ -z "$unit" ] && continue
   # Tag pins (placeholders) had no real image to begin with; leave the
   # rsync'd value in place so promote can write a real digest (or
   # legitimately skip via rc=2). Only digest pins are safe to replay.
   if [[ "$ref" != *"@sha256:"* ]]; then
-    skipped=$((skipped + 1))
+    skipped_non_digest=$((skipped_non_digest + 1))
     continue
   fi
+  # promote-k8s-image exit codes (contract):
+  #   0 → wrote digest (or no-op because already current)
+  #   2 → no matching images[] entry in overlay → legitimate skip
+  #       (e.g. an image was removed from main's overlay between flights;
+  #       restoring a phantom entry would re-introduce drift)
+  #   1 → real error → propagate
+  set +e
   bash "$PROMOTE_SCRIPT" --no-commit \
     --env "$OVERLAY_ENV" --app "$unit" \
     --image-name "$image_name" --digest "$ref"
-  restored=$((restored + 1))
+  rc=$?
+  set -e
+  case "$rc" in
+    0)
+      restored=$((restored + 1))
+      ;;
+    2)
+      echo "::notice::Snapshot row for ${unit}/${image_name} has no matching overlay entry (image removed from main?) — skipping"
+      skipped_removed=$((skipped_removed + 1))
+      ;;
+    *)
+      echo "::error::promote-k8s-image failed during restore (rc=${rc}) for ${unit}/${image_name}" >&2
+      exit "$rc"
+      ;;
+  esac
 done < "$SNAPSHOT_FILE"
 
-echo "Restored ${restored} digest pin(s), skipped ${skipped} non-digest row(s)"
+echo "Restored ${restored} digest pin(s); skipped ${skipped_non_digest} non-digest row(s), ${skipped_removed} removed-image row(s)"
