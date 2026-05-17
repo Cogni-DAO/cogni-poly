@@ -271,6 +271,11 @@ jobs:
         env:
           SNAPSHOT_FILE: ${{ runner.temp }}/candidate-a-overlay-snapshot.tsv
           OVERLAY_ENV: candidate-a
+          # RESTORE_MODE is required (no default) — candidate-flight's
+          # rsync source is the PR branch (advisory per task.0373), so
+          # snapshot always wins on restore. Preview/production set
+          # `only-when-placeholder` instead (main is canonical per Axiom 17).
+          RESTORE_MODE: always
         run: bash ../ci-src/scripts/ci/restore-overlay-from-snapshot.sh
 
       - name: Promote this node's digest

@@ -90,18 +90,39 @@ images:
     path_prefix: nodes/poly/sidecars/echo/
 `;
 
-function overlayYaml(opts: {
-  polyRef: { kind: "digest"; value: string } | { kind: "tag"; value: string };
-  paperRef: { kind: "digest"; value: string } | { kind: "tag"; value: string };
-  echoRef: { kind: "digest"; value: string } | { kind: "tag"; value: string };
-}): string {
-  const ref = (
-    name: string,
-    r: { kind: "digest"; value: string } | { kind: "tag"; value: string }
-  ): string =>
-    r.kind === "digest"
-      ? `  - name: ${name}\n    newName: ${name}\n    digest: "${r.value}"\n`
-      : `  - name: ${name}\n    newName: ${name}\n    newTag: "${r.value}"\n`;
+// Generic image-pin spec. The helper does NOT hard-code image names —
+// every test passes the array of images it wants in the fixture overlay,
+// matching catalog v2's `images:[]` shape (and the eventual Helm
+// `values.yaml.images` shape). Adding a new sidecar to the repo does not
+// require touching this helper; the test that cares about it just adds
+// another entry to its own image array.
+type Pin = { kind: "digest"; value: string } | { kind: "tag"; value: string };
+type ImageSpec = { name: string; pin: Pin };
+
+const IMG_POLY = "ghcr.io/cogni-dao/cogni-poly";
+const IMG_PAPER = "ghcr.io/cogni-dao/poly-paper-sidecar";
+const IMG_ECHO = "ghcr.io/cogni-dao/poly-echo-sidecar";
+
+// Shorthand for the recurring poly+paper+echo all-digest baseline. Caller
+// supplies the echo pin; poly + paper default to LIVE. Other test fixtures
+// (different deploy units, different image counts) build their own arrays
+// inline.
+function polyAllDigest(echoPin: Pin): ImageSpec[] {
+  return [
+    { name: IMG_POLY, pin: { kind: "digest", value: DIGEST_POLY_LIVE } },
+    { name: IMG_PAPER, pin: { kind: "digest", value: DIGEST_PAPER_LIVE } },
+    { name: IMG_ECHO, pin: echoPin },
+  ];
+}
+
+function overlayYaml(images: ImageSpec[]): string {
+  const entries = images
+    .map((img) =>
+      img.pin.kind === "digest"
+        ? `  - name: ${img.name}\n    newName: ${img.name}\n    digest: "${img.pin.value}"\n`
+        : `  - name: ${img.name}\n    newName: ${img.name}\n    newTag: "${img.pin.value}"\n`
+    )
+    .join("");
   return `apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -113,10 +134,7 @@ resources:
 namePrefix: poly-
 
 images:
-${ref("ghcr.io/cogni-dao/cogni-poly", opts.polyRef)}${ref(
-  "ghcr.io/cogni-dao/poly-paper-sidecar",
-  opts.paperRef
-)}${ref("ghcr.io/cogni-dao/poly-echo-sidecar", opts.echoRef)}`;
+${entries}`;
 }
 
 function setupFixture(): { root: string; overlayPath: string } {
@@ -175,11 +193,7 @@ describe("restore-then-promote end-to-end (catalog v2 multi-image)", () => {
     // Pre-flight overlay state (what deploy-branch had — all 3 real digests).
     writeFileSync(
       fixture.overlayPath,
-      overlayYaml({
-        polyRef: { kind: "digest", value: DIGEST_POLY_LIVE },
-        paperRef: { kind: "digest", value: DIGEST_PAPER_LIVE },
-        echoRef: { kind: "digest", value: DIGEST_ECHO_LIVE },
-      })
+      overlayYaml(polyAllDigest({ kind: "digest", value: DIGEST_ECHO_LIVE }))
     );
 
     // 1. Snapshot pre-rsync.
@@ -197,14 +211,12 @@ describe("restore-then-promote end-to-end (catalog v2 multi-image)", () => {
     //    newTag (the real-world scenario — main never promotes echo).
     writeFileSync(
       fixture.overlayPath,
-      overlayYaml({
-        polyRef: { kind: "digest", value: DIGEST_POLY_LIVE },
-        paperRef: { kind: "digest", value: DIGEST_PAPER_LIVE },
-        echoRef: {
+      overlayYaml(
+        polyAllDigest({
           kind: "tag",
           value: "candidate-a-placeholder-poly-echo-sidecar",
-        },
-      })
+        })
+      )
     );
 
     // 3. Restore from snapshot (the script under test).
@@ -215,6 +227,7 @@ describe("restore-then-promote end-to-end (catalog v2 multi-image)", () => {
         SNAPSHOT_FILE: snapshotFile,
         OVERLAY_ENV: "candidate-a",
         PROMOTE_SCRIPT,
+        RESTORE_MODE: "always",
       },
       encoding: "utf-8",
     });
@@ -261,14 +274,12 @@ describe("restore-then-promote end-to-end (catalog v2 multi-image)", () => {
     // echo was never deployed yet).
     writeFileSync(
       fixture.overlayPath,
-      overlayYaml({
-        polyRef: { kind: "digest", value: DIGEST_POLY_LIVE },
-        paperRef: { kind: "digest", value: DIGEST_PAPER_LIVE },
-        echoRef: {
+      overlayYaml(
+        polyAllDigest({
           kind: "tag",
           value: "candidate-a-placeholder-poly-echo-sidecar",
-        },
-      })
+        })
+      )
     );
     const snapshotFile = path.join(fixture.root, "snapshot.tsv");
     const snapRes = spawnSync("bash", [SNAPSHOT_SCRIPT], {
@@ -281,11 +292,7 @@ describe("restore-then-promote end-to-end (catalog v2 multi-image)", () => {
     // Rsync brings a digest for echo (post-promotion main).
     writeFileSync(
       fixture.overlayPath,
-      overlayYaml({
-        polyRef: { kind: "digest", value: DIGEST_POLY_LIVE },
-        paperRef: { kind: "digest", value: DIGEST_PAPER_LIVE },
-        echoRef: { kind: "digest", value: DIGEST_ECHO_LIVE },
-      })
+      overlayYaml(polyAllDigest({ kind: "digest", value: DIGEST_ECHO_LIVE }))
     );
 
     const restoreRes = spawnSync("bash", [RESTORE_SCRIPT], {
@@ -295,6 +302,7 @@ describe("restore-then-promote end-to-end (catalog v2 multi-image)", () => {
         SNAPSHOT_FILE: snapshotFile,
         OVERLAY_ENV: "candidate-a",
         PROMOTE_SCRIPT,
+        RESTORE_MODE: "always",
       },
       encoding: "utf-8",
     });
@@ -312,11 +320,7 @@ describe("restore-then-promote end-to-end (catalog v2 multi-image)", () => {
     // Pre-flight: overlay had all 3 images (snapshot captures all 3).
     writeFileSync(
       fixture.overlayPath,
-      overlayYaml({
-        polyRef: { kind: "digest", value: DIGEST_POLY_LIVE },
-        paperRef: { kind: "digest", value: DIGEST_PAPER_LIVE },
-        echoRef: { kind: "digest", value: DIGEST_ECHO_LIVE },
-      })
+      overlayYaml(polyAllDigest({ kind: "digest", value: DIGEST_ECHO_LIVE }))
     );
     const snapshotFile = path.join(fixture.root, "snapshot.tsv");
     const snapRes = spawnSync("bash", [SNAPSHOT_SCRIPT], {
@@ -358,6 +362,7 @@ images:
         SNAPSHOT_FILE: snapshotFile,
         OVERLAY_ENV: "candidate-a",
         PROMOTE_SCRIPT,
+        RESTORE_MODE: "always",
       },
       encoding: "utf-8",
     });
@@ -377,6 +382,129 @@ images:
     expect(finalOverlay).not.toContain("poly-echo-sidecar");
   });
 
+  it("ONLY_WHEN_PLACEHOLDER_MAIN_WINS_ON_DIGEST — preview/production mode keeps the rsync'd digest (main is canonical per Axiom 17)", () => {
+    // Scenario: snapshot has an OLDER echo digest; rsync from main brought
+    // a NEWER digest (task.0349 seed updated main). RESTORE_MODE=only-when-
+    // placeholder must NOT regress to the older snapshot digest.
+    writeFileSync(
+      fixture.overlayPath,
+      overlayYaml(polyAllDigest({ kind: "digest", value: DIGEST_ECHO_LIVE })) // snapshot state
+    );
+    const snapshotFile = path.join(fixture.root, "snapshot.tsv");
+    const snapRes = spawnSync("bash", [SNAPSHOT_SCRIPT], {
+      cwd: fixture.root,
+      env: { ...process.env, OVERLAY_ENV: "candidate-a" },
+      encoding: "utf-8",
+    });
+    writeFileSync(snapshotFile, snapRes.stdout);
+
+    // Rsync brings NEWER digests from main for ALL three images (simulates
+    // task.0349 seed run that updated everything). Using distinct values
+    // per image so an erroneous "always" restore would visibly regress
+    // poly+paper too (not just echo) — the original test only differentiated
+    // echo and was tautological for the sibling rows.
+    const DIGEST_POLY_NEWER_FROM_MAIN =
+      "sha256:5555555555555555555555555555555555555555555555555555555555555555";
+    const DIGEST_PAPER_NEWER_FROM_MAIN =
+      "sha256:6666666666666666666666666666666666666666666666666666666666666666";
+    const DIGEST_ECHO_NEWER_FROM_MAIN =
+      "sha256:4444444444444444444444444444444444444444444444444444444444444444";
+    writeFileSync(
+      fixture.overlayPath,
+      overlayYaml([
+        {
+          name: IMG_POLY,
+          pin: { kind: "digest", value: DIGEST_POLY_NEWER_FROM_MAIN },
+        },
+        {
+          name: IMG_PAPER,
+          pin: { kind: "digest", value: DIGEST_PAPER_NEWER_FROM_MAIN },
+        },
+        {
+          name: IMG_ECHO,
+          pin: { kind: "digest", value: DIGEST_ECHO_NEWER_FROM_MAIN },
+        },
+      ])
+    );
+
+    const restoreRes = spawnSync("bash", [RESTORE_SCRIPT], {
+      cwd: fixture.root,
+      env: {
+        ...process.env,
+        SNAPSHOT_FILE: snapshotFile,
+        OVERLAY_ENV: "candidate-a",
+        PROMOTE_SCRIPT,
+        RESTORE_MODE: "only-when-placeholder",
+      },
+      encoding: "utf-8",
+    });
+    expect(restoreRes.status, restoreRes.stderr).toBe(0);
+    // ALL three images must still be on main's NEWER digest, none regressed.
+    // If `only-when-placeholder` accidentally restored a row whose current
+    // overlay value is already a digest pin, this would surface as a regress
+    // to {POLY,PAPER,ECHO}_LIVE on that image.
+    const finalOverlay = readFileSync(fixture.overlayPath, "utf-8");
+    expect(digestOfImage(finalOverlay, IMG_POLY)).toBe(
+      DIGEST_POLY_NEWER_FROM_MAIN
+    );
+    expect(digestOfImage(finalOverlay, IMG_PAPER)).toBe(
+      DIGEST_PAPER_NEWER_FROM_MAIN
+    );
+    expect(digestOfImage(finalOverlay, IMG_ECHO)).toBe(
+      DIGEST_ECHO_NEWER_FROM_MAIN
+    );
+    // Belt-and-suspenders: stdout reports all 3 main-wins skips.
+    expect(restoreRes.stdout).toMatch(/3 main-wins row\(s\)/);
+  });
+
+  it("ONLY_WHEN_PLACEHOLDER_SNAPSHOT_FILLS_PLACEHOLDER — bug.5012 fix: preview/production mode restores when main has placeholder", () => {
+    // Scenario: deploy-branch snapshot has a real echo digest (from a prior
+    // healed promote); main's overlay still has the cold-start placeholder
+    // (task.0349 never updated it because affected-only CI skipped echo).
+    // RESTORE_MODE=only-when-placeholder must restore the snapshot digest,
+    // preventing ImagePullBackOff. This is the live bug.5012 repro.
+    writeFileSync(
+      fixture.overlayPath,
+      overlayYaml(polyAllDigest({ kind: "digest", value: DIGEST_ECHO_LIVE })) // snapshot has real
+    );
+    const snapshotFile = path.join(fixture.root, "snapshot.tsv");
+    const snapRes = spawnSync("bash", [SNAPSHOT_SCRIPT], {
+      cwd: fixture.root,
+      env: { ...process.env, OVERLAY_ENV: "candidate-a" },
+      encoding: "utf-8",
+    });
+    writeFileSync(snapshotFile, snapRes.stdout);
+
+    // Rsync from main brings the cold-start placeholder.
+    writeFileSync(
+      fixture.overlayPath,
+      overlayYaml(
+        polyAllDigest({
+          kind: "tag",
+          value: "preview-placeholder-poly-echo-sidecar",
+        })
+      )
+    );
+
+    const restoreRes = spawnSync("bash", [RESTORE_SCRIPT], {
+      cwd: fixture.root,
+      env: {
+        ...process.env,
+        SNAPSHOT_FILE: snapshotFile,
+        OVERLAY_ENV: "candidate-a",
+        PROMOTE_SCRIPT,
+        RESTORE_MODE: "only-when-placeholder",
+      },
+      encoding: "utf-8",
+    });
+    expect(restoreRes.status, restoreRes.stderr).toBe(0);
+    // Echo must be restored to snapshot digest (placeholder filled).
+    const finalOverlay = readFileSync(fixture.overlayPath, "utf-8");
+    expect(
+      digestOfImage(finalOverlay, "ghcr.io/cogni-dao/poly-echo-sidecar")
+    ).toBe(DIGEST_ECHO_LIVE);
+  });
+
   it("COLD_START_IS_NOOP — empty snapshot file exits 0 without error", () => {
     const snapshotFile = path.join(fixture.root, "empty.tsv");
     writeFileSync(snapshotFile, "");
@@ -387,9 +515,49 @@ images:
         SNAPSHOT_FILE: snapshotFile,
         OVERLAY_ENV: "candidate-a",
         PROMOTE_SCRIPT,
+        RESTORE_MODE: "always",
       },
       encoding: "utf-8",
     });
     expect(restoreRes.status, restoreRes.stderr).toBe(0);
+  });
+
+  it("REQUIRES_EXPLICIT_RESTORE_MODE — script hard-fails when RESTORE_MODE env is unset (bug.5012 design-review B1: no silent-default safety flip)", () => {
+    const snapshotFile = path.join(fixture.root, "empty.tsv");
+    writeFileSync(snapshotFile, "");
+    // Deliberately DO NOT pass RESTORE_MODE. Strip any inherited value.
+    const env = { ...process.env };
+    delete env.RESTORE_MODE;
+    const restoreRes = spawnSync("bash", [RESTORE_SCRIPT], {
+      cwd: fixture.root,
+      env: {
+        ...env,
+        SNAPSHOT_FILE: snapshotFile,
+        OVERLAY_ENV: "candidate-a",
+        PROMOTE_SCRIPT,
+      },
+      encoding: "utf-8",
+    });
+    expect(restoreRes.status).not.toBe(0);
+    // stderr should name the missing var (bash ${VAR:?msg} format).
+    expect(restoreRes.stderr).toMatch(/RESTORE_MODE/);
+  });
+
+  it("REJECTS_INVALID_RESTORE_MODE — script hard-fails on an unknown mode value", () => {
+    const snapshotFile = path.join(fixture.root, "empty.tsv");
+    writeFileSync(snapshotFile, "");
+    const restoreRes = spawnSync("bash", [RESTORE_SCRIPT], {
+      cwd: fixture.root,
+      env: {
+        ...process.env,
+        SNAPSHOT_FILE: snapshotFile,
+        OVERLAY_ENV: "candidate-a",
+        PROMOTE_SCRIPT,
+        RESTORE_MODE: "bogus",
+      },
+      encoding: "utf-8",
+    });
+    expect(restoreRes.status).not.toBe(0);
+    expect(restoreRes.stderr).toMatch(/RESTORE_MODE must be/);
   });
 });
