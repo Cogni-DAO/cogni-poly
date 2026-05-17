@@ -711,18 +711,32 @@ function targetFollowupThreshold(policy: SizingPolicy): number {
 
 /**
  * Gamma's market `endDate` (carried verbatim on `fill.attributes.end_date` per
- * the Data-API normalizer) is the scheduled close time. Mirroring a BUY past
- * that point spends real USDC on a near-dead market. Defensive: an absent or
- * unparseable `end_date` short-circuits to `false` so we never drop a fill due
- * to a missing field.
+ * the Data-API + chain-source normalizers) is the scheduled close time of the
+ * market. Mirroring a BUY past that point spends real USDC on a near-dead
+ * market. Defensive: an absent or unparseable `end_date` short-circuits to
+ * `false` so we never drop a fill due to a missing field.
  *
- * Caveat: catches the case where the chain settles AFTER scheduled close, not
- * the inverse. Markets that resolve early (sports markets settle when the
- * game ends, often days before the Gamma-scheduled midnight-UTC close) are
- * NOT caught here — those need a `poly_market_outcomes.resolved_at` join at
- * snapshot time. Production telemetry (last 14d): ~78% of buys-past-resolution
- * are caught by this gate; the remaining 22% are concentrated on markets that
- * resolved ~6 days before their scheduled end_date.
+ * Boundary semantics (bug.5007). Gamma returns `endDate` as a **date-only**
+ * `"YYYY-MM-DD"` string for the vast majority of markets. `Date.parse` resolves
+ * that to **00:00:00Z at the START** of the day — but Polymarket's markets
+ * remain tradable well into the day printed in `endDate`. Verified live
+ * 2026-05-17T07:20Z against `gamma-api.polymarket.com`: e.g. `lal-sev-rea`
+ * (LaLiga, `endDate=2026-05-17`, `gameStartTime=2026-05-17T17:00Z` ~9.5h in
+ * the future) reports `acceptingOrders=true`, `volume=$131,595` — fully alive
+ * 7h past the literal `Date.parse("2026-05-17")` boundary. The original
+ * commit's "midnight-UTC close" assumption (bug.5043) was incorrect: an
+ * `endDate` of `"YYYY-MM-DD"` should be treated as end-of-day, not start.
+ *
+ * Fix: for date-only inputs, shift the comparison to `endMs + 24h` so the
+ * gate only fires after the day printed in `endDate` has fully elapsed in
+ * UTC. Full ISO-8601 timestamps (rare; some markets do carry these) compare
+ * verbatim — the existing tests asserting `>=` at the exact ISO boundary
+ * still hold for that path.
+ *
+ * Caveat (unchanged from bug.5045): catches the case where the chain settles
+ * AFTER scheduled close, not the inverse. Markets that resolve early (sports
+ * markets settle when the game ends) are still NOT caught here — those need
+ * a `poly_market_outcomes.resolved_at` join at snapshot time.
  */
 function isFillPastMarketEndDate(
   fill: PlanMirrorInput["fill"],
@@ -732,7 +746,9 @@ function isFillPastMarketEndDate(
   if (typeof raw !== "string" || raw.length === 0) return false;
   const endMs = Date.parse(raw);
   if (!Number.isFinite(endMs)) return false;
-  return nowMs >= endMs;
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+  const effectiveEndMs = isDateOnly ? endMs + 24 * 60 * 60 * 1000 : endMs;
+  return nowMs >= effectiveEndMs;
 }
 
 function targetTokenCostUsdc(
