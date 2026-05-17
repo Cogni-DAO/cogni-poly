@@ -12,6 +12,7 @@
  *   - CAPS_LIVE_IN_GRANT — daily / hourly USDC caps are enforced downstream by `PolyTraderWalletPort.authorizeIntent` against the tenant's `poly_wallet_grants` row. `planMirrorFromFill` is intentionally unaware of caps so a single cap decision lives in one place (the authorize boundary).
  *   - NO_KILL_SWITCH (bug.0438): there is no per-tenant kill-switch gate. The active-target / active-grant chain in the cross-tenant enumerator is the only gate; an explicit POST of a target IS the user's opt-in.
  *   - TARGET_DOMINANCE_DRIVES_BRANCH (bug.5048): when `config.min_target_side_fraction` is set + target_position is available, `decideMirrorBranch` computes target's dominant side first, then routes by our position state per the spec branch table. Below-threshold (minority) fills always skip as `target_dominant_other_side` — master switch covering entry, layer, AND hedge. When disabled (threshold unset / no target data), legacy our-position routing applies for backward-compat.
+ *   - SIZING_PROPORTIONAL_TO_TARGET_SHARE (charter D6): for `target_percentile_scaled`, mirror intent is scaled by target's cost-basis fraction on the fill's token. Minority-side fills sized below market min skip rather than place. Prevents the inverted-weighting failure mode (Sinner/Ruud 2026-05-17, target 99.5/0.5 → mirror 28/72 inverted). Tactical fix; true position-proportional alignment is D2.
  *   - NEVER_PAY_ABOVE_TARGET_VWAP (bug.5048): when `config.vwap_tolerance` is set, `applyVwapGate` skips `vwap_floor_breach` if `fill.price > target_vwap_for_fill_token + tolerance`. Asymmetric upward gate; fails open when target VWAP is unknown.
  *   - HEDGE_PREDICATE_NOOPS_ON_UNKNOWN_OPPOSITE: hedge branch fires only when `state.position.opposite_token_id` is known from prior aggregation. No inference from condition structure alone.
  * Skip-reason precedence (first match wins): already_placed → market_past_end_date → price_outside_clob_bounds → target_dominant_other_side → vwap_floor_breach → sizing-reason skip (below_target_percentile / below_market_min / position_cap_reached / target_position_below_threshold / followup_position_too_small / followup_not_needed) → place.
@@ -53,14 +54,16 @@ export function applySizingPolicy(
   targetSizeUsdc: number,
   minShares: number | undefined,
   minUsdcNotional: number | undefined,
-  cumulativeIntentForToken?: number
+  cumulativeIntentForToken?: number,
+  targetSideFraction?: number
 ): SizingResult {
   const sized = sizeFromPolicy(
     policy,
     price,
     targetSizeUsdc,
     minShares,
-    minUsdcNotional
+    minUsdcNotional,
+    targetSideFraction
   );
   if (!sized.ok) return sized;
   if (
@@ -77,7 +80,8 @@ function sizeFromPolicy(
   price: number,
   targetSizeUsdc: number,
   minShares: number | undefined,
-  minUsdcNotional: number | undefined
+  minUsdcNotional: number | undefined,
+  targetSideFraction: number | undefined
 ): SizingResult {
   switch (policy.kind) {
     case "min_bet": {
@@ -126,9 +130,19 @@ function sizeFromPolicy(
                   denominator
               )
             );
+      // SIZING_PROPORTIONAL_TO_TARGET_SHARE (charter D6): scale the
+      // percentile-interpolated notional by target's cost-basis fraction on
+      // the fill's token. A minority hedge a 99.5/0.5 target shouldn't have
+      // us chasing — when the scaled intent falls below the market floor we
+      // skip rather than clamp up.
+      const sideFraction = targetSideFraction ?? 1;
       const desiredSizeUsdc =
-        floor.size_usdc +
-        (policy.max_usdc_per_condition - floor.size_usdc) * ratio;
+        (floor.size_usdc +
+          (policy.max_usdc_per_condition - floor.size_usdc) * ratio) *
+        sideFraction;
+      if (desiredSizeUsdc < floor.size_usdc) {
+        return { ok: false, reason: "below_market_min" };
+      }
       return applyMarketFloors(
         desiredSizeUsdc,
         price,
@@ -325,6 +339,34 @@ interface TargetDominanceSignal {
   dominant_token_id: string | undefined;
   /** Fraction of target's total cost on the fill's token, or null when unknown. */
   fill_token_fraction: number | null;
+}
+
+/**
+ * Charter D6 — target's cost-basis fraction on the fill's token, independent
+ * of any threshold gate. Used by `target_percentile_scaled` sizing to scale
+ * mirror intent proportionally so a 99.5/0.5 target does not produce inverted
+ * 28/72 mirror weighting. Returns undefined when target data is missing or
+ * total cost is zero; sizing then falls back to the unscaled path (?? 1).
+ */
+export function targetSideFractionForFill(
+  targetPosition: TargetConditionPositionView | undefined,
+  fillTokenId: string
+): number | undefined {
+  if (
+    !targetPosition ||
+    targetPosition.tokens.length === 0 ||
+    fillTokenId === ""
+  ) {
+    return undefined;
+  }
+  let total = 0;
+  let fillCost = 0;
+  for (const t of targetPosition.tokens) {
+    total += t.cost_usdc;
+    if (t.token_id === fillTokenId) fillCost += t.cost_usdc;
+  }
+  if (total <= 0) return undefined;
+  return fillCost / total;
 }
 
 export function analyzeTargetDominance(
@@ -553,7 +595,8 @@ function decideMirrorBranch(
       targetSizingUsdcForFill(fill, state, config.sizing),
       minShares,
       minUsdcNotional,
-      state.cumulative_intent_usdc_for_token
+      state.cumulative_intent_usdc_for_token,
+      targetSideFractionForFill(state.target_position, fillTokenId)
     ),
     wrong_side_holding_detected,
   };
