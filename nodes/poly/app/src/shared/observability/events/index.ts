@@ -35,6 +35,8 @@ export const EVENT_NAMES = {
   POLY_REDEEM_LIFECYCLE_MIRROR_FAILED:
     "feature.poly_redeem.lifecycle_mirror_failed",
 
+  POLY_RESEARCH_COPY_TRADE_PNL_COMPLETE:
+    "feature.poly_research.copy_trade_pnl.complete",
   POLY_RESEARCH_TRADER_COMPARISON_COMPLETE:
     "feature.poly_research.trader_comparison.complete",
   POLY_WALLET_REFRESH_COMPLETE: "feature.poly_wallet_refresh.complete",
