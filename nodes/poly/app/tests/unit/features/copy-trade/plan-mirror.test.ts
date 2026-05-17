@@ -21,6 +21,7 @@ import type {
 } from "@/features/copy-trade/types";
 
 const TARGET_ID = "11111111-1111-1111-1111-111111111111";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea";
 
 const FILL: Fill = {
@@ -53,7 +54,7 @@ const CLEAN_STATE: RuntimeState = {
   already_placed_ids: [],
 };
 
-const COID = clientOrderIdFor(TARGET_ID, FILL.fill_id);
+const COID = clientOrderIdFor(BILLING_ACCOUNT_ID, TARGET_ID, FILL.fill_id);
 
 describe("planMirrorFromFill() — skip branches", () => {
   it("already_placed when client_order_id is in already_placed_ids", () => {
@@ -289,7 +290,11 @@ describe("planMirrorFromFill() — market_past_end_date gate (bug.5043)", () => 
 
 describe("planMirrorFromFill() — idempotency round-trip", () => {
   it("client_order_id from clientOrderIdFor is what gates already_placed", () => {
-    const coid = clientOrderIdFor(CONFIG.target_id, FILL.fill_id);
+    const coid = clientOrderIdFor(
+      CONFIG.billing_account_id,
+      CONFIG.target_id,
+      FILL.fill_id
+    );
     const first = planMirrorFromFill({
       fill: FILL,
       config: CONFIG,

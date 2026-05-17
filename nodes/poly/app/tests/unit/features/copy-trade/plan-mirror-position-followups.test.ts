@@ -23,6 +23,7 @@ import type {
 } from "@/features/copy-trade/types";
 
 const TARGET_ID = "11111111-1111-4111-8111-111111111111";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea" as const;
 const CONDITION_ID = "prediction-market:polymarket:0xcondition";
 const PRIMARY_TOKEN = "0xprimary";
@@ -114,7 +115,11 @@ describe("planMirrorFromFill() — position-aware followups", () => {
       fill,
       config: CONFIG,
       state: { already_placed_ids: [] },
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -131,7 +136,11 @@ describe("planMirrorFromFill() — position-aware followups", () => {
       fill,
       config: CONFIG,
       state: state(),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -157,7 +166,11 @@ describe("planMirrorFromFill() — position-aware followups", () => {
           opposite_qty_shares: 0,
         },
       }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -192,7 +205,11 @@ describe("planMirrorFromFill() — position-aware followups", () => {
           ],
         },
       }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -221,7 +238,11 @@ describe("planMirrorFromFill() — position-aware followups", () => {
           ],
         },
       }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -256,7 +277,11 @@ describe("planMirrorFromFill() — position-aware followups", () => {
           ],
         },
       }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -291,7 +316,11 @@ describe("planMirrorFromFill() — position-aware followups", () => {
           ],
         },
       }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -316,7 +345,11 @@ describe("planMirrorFromFill() — position-aware followups", () => {
           opposite_qty_shares: 0,
         },
       }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });
@@ -333,7 +366,11 @@ describe("planMirrorFromFill() — position-aware followups", () => {
       fill,
       config: CONFIG,
       state: state({ cumulative_intent_usdc_for_market: 4.5 }),
-      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
       min_shares: 1,
       min_usdc_notional: 1,
     });

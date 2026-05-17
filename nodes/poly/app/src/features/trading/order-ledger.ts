@@ -424,7 +424,11 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           .insert(polyCopyTradeFills)
           .values(values)
           .onConflictDoNothing({
-            target: [polyCopyTradeFills.targetId, polyCopyTradeFills.fillId],
+            target: [
+              polyCopyTradeFills.billingAccountId,
+              polyCopyTradeFills.targetId,
+              polyCopyTradeFills.fillId,
+            ],
           });
       };
 

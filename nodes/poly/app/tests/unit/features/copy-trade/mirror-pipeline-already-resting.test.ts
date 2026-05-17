@@ -36,6 +36,7 @@ import {
 import type { WalletActivitySource } from "@/features/wallet-watch";
 
 const TARGET_ID = "11111111-1111-1111-1111-111111111111";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0xAAaaaaaAAaAaAaAAaAaaaAaaAaaAAaAaAaaAAaaa" as const;
 const MARKET_ID =
   "prediction-market:polymarket:0x302f5a4e8b475db09ef63f2df542ce3330599c3c4b4aa58173208a60229e1374";
@@ -93,7 +94,7 @@ function makeOpenRow(
     target_id: TARGET_ID,
     fill_id: fillId,
     observed_at: now,
-    client_order_id: clientOrderIdFor(TARGET_ID, fillId),
+    client_order_id: clientOrderIdFor(BILLING_ACCOUNT_ID, TARGET_ID, fillId),
     order_id: overrides?.order_id ?? "0xprior-order",
     status: "open",
     position_lifecycle: null,

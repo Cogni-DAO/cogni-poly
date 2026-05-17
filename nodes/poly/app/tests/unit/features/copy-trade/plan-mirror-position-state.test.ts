@@ -22,6 +22,7 @@ import type {
 } from "@/features/copy-trade/types";
 
 const TARGET_ID = "11111111-1111-1111-1111-111111111111";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea";
 const CONDITION = "prediction-market:polymarket:0xcondition";
 const TOKEN_YES = "1111111111";
@@ -53,7 +54,7 @@ const CONFIG: MirrorTargetConfig = {
   placement: { kind: "mirror_limit" },
 };
 
-const COID = clientOrderIdFor(TARGET_ID, FILL.fill_id);
+const COID = clientOrderIdFor(BILLING_ACCOUNT_ID, TARGET_ID, FILL.fill_id);
 
 const POSITION_VIEW: MirrorPositionView = {
   condition_id: CONDITION,

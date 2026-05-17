@@ -31,6 +31,7 @@ import type { MirrorTargetConfig } from "@/features/copy-trade/types";
 import type { WalletActivitySource } from "@/features/wallet-watch";
 
 const TARGET_ID = "22222222-2222-2222-2222-222222222222";
+const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const TARGET_WALLET = "0xBBbbbbbBBbBbBbBBbBbbbBbbBbbBBbBbBbbBBbbb" as const;
 
 const BASE_TARGET: MirrorTargetConfig = {
@@ -150,7 +151,7 @@ describe("runMirrorTick — task.5042 lag observation + log field", () => {
     const metrics = createRecordingMetrics();
     const { log, logs } = createCapturingLogger();
 
-    const cid = clientOrderIdFor(TARGET_ID, fill.fill_id);
+    const cid = clientOrderIdFor(BILLING_ACCOUNT_ID, TARGET_ID, fill.fill_id);
     const placeIntent = vi.fn(
       async (_intent: OrderIntent): Promise<OrderReceipt> =>
         makeReceipt("0xnewlyplaced", cid)
@@ -208,7 +209,7 @@ describe("runMirrorTick — task.5042 lag observation + log field", () => {
     const ledger = new FakeOrderLedger({ initial: [] });
     const metrics = createRecordingMetrics();
     const { log } = createCapturingLogger();
-    const cid = clientOrderIdFor(TARGET_ID, fill.fill_id);
+    const cid = clientOrderIdFor(BILLING_ACCOUNT_ID, TARGET_ID, fill.fill_id);
     const placeIntent = vi.fn(
       async (_intent: OrderIntent): Promise<OrderReceipt> =>
         makeReceipt("0xnewlyplaced", cid)

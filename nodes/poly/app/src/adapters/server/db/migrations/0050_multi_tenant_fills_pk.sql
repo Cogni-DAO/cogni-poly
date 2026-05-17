@@ -1,0 +1,2 @@
+ALTER TABLE "poly_copy_trade_fills" DROP CONSTRAINT "poly_copy_trade_fills_target_id_fill_id_pk";--> statement-breakpoint
+ALTER TABLE "poly_copy_trade_fills" ADD CONSTRAINT "poly_copy_trade_fills_billing_account_id_target_id_fill_id_pk" PRIMARY KEY("billing_account_id","target_id","fill_id");
