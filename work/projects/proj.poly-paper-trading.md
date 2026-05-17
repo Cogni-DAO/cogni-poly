@@ -658,3 +658,5 @@ The user's goal — "all of our existing trade + db logic pathways are used, but
 - Polymarket killing public-API book reads. Sidecar becomes useless; falls back to live mode for all targets. Out-of-scope risk (Polymarket-level decision).
 - Constraint change to allow SELL or market orders. The fidelity story breaks per the project's strict constraints; revisit the OSS-engine choice before continuing PR 3 work.
 - A migration in `pm_trader.db` between pinned SHAs that's not idempotent. Mitigation: read CHANGELOG before each bump; if a migration is required, wipe the SQLite file at startup (ephemeral v0 makes this free).
+
+<!-- candidate-a validation snapshot 2026-05-17 -->
