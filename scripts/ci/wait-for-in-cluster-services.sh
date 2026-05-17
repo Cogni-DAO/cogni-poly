@@ -63,7 +63,7 @@ SERVICES=()
 for node in "${_NODES[@]}"; do
   case "$node" in
     operator | poly | resy) SERVICES+=("${node}-node-app") ;;
-    scheduler-worker) SERVICES+=("scheduler-worker") ;;
+    scheduler-worker | poly-test-worker) SERVICES+=("${node}") ;;
     *)
       echo "::error::wait-for-in-cluster-services: unknown node '$node' in PROMOTED_APPS"
       exit 1
