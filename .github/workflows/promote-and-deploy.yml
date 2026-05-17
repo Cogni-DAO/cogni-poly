@@ -231,6 +231,14 @@ jobs:
             app-src/infra/k8s/ deploy-branch/infra/k8s/
           rsync -a --delete --exclude='env-state.yaml' \
             app-src/infra/k8s/base/ deploy-branch/infra/k8s/base/
+          # Kustomize Components (catalog v2 — Shape B in-pod images). Overlays
+          # reference via `components: [../../../components/...]`; MUST be on
+          # the deploy branch for `kustomize build` to resolve.
+          if [ -d app-src/infra/k8s/components ]; then
+            mkdir -p deploy-branch/infra/k8s/components
+            rsync -a --delete --exclude='env-state.yaml' \
+              app-src/infra/k8s/components/ deploy-branch/infra/k8s/components/
+          fi
           mkdir -p "deploy-branch/infra/k8s/overlays/${OVERLAY_ENV}/${NODE}"
           rsync -a --delete --exclude='env-state.yaml' \
             "app-src/infra/k8s/overlays/${OVERLAY_ENV}/${NODE}/" \

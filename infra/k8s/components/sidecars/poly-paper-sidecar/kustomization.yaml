@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+#
+# Kustomize Component — appends the poly-paper-sidecar container to the
+# node-app Deployment. Catalog v2: container *shape* lives once, next to
+# the source. Digest pins stay in the host overlay's `images:` block
+# (written by promote-k8s-image.sh). Per-env activation = `components:`
+# line in each overlay where this sidecar runs.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - target:
+      kind: Deployment
+      name: node-app
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/-
+        value:
+          name: poly-paper-sidecar
+          image: ghcr.io/cogni-dao/poly-paper-sidecar
+          ports:
+            - containerPort: 9100
+              name: paper
+              protocol: TCP
+          livenessProbe:
+            httpGet: { path: /healthz, port: paper }
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /healthz, port: paper }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { memory: "128Mi", cpu: "50m" }
+            limits: { memory: "384Mi", cpu: "500m" }
