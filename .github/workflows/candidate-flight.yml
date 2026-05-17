@@ -245,12 +245,20 @@ jobs:
           echo "ℹ️  Pre-rsync overlay snapshot ($(wc -l < "$SNAPSHOT_FILE" | tr -d ' ') rows):"
           sed 's/^/  /' "$SNAPSHOT_FILE"
 
-      - name: Sync base + per-node overlay + per-node catalog to deploy branch
+      - name: Sync base + components + per-node overlay + per-node catalog to deploy branch
         env:
           NODE: ${{ matrix.node }}
         run: |
           set -euo pipefail
           rsync -a --delete app-src/infra/k8s/base/ deploy-branch/infra/k8s/base/
+          # Kustomize Components (catalog v2 — Shape B in-pod images). Overlays
+          # reference them via `components: [../../../components/...]`; they MUST
+          # be on the deploy branch for `kustomize build` to resolve. See
+          # docs/guides/create-service.md Shape B.
+          if [ -d app-src/infra/k8s/components ]; then
+            mkdir -p deploy-branch/infra/k8s/components
+            rsync -a --delete app-src/infra/k8s/components/ deploy-branch/infra/k8s/components/
+          fi
           mkdir -p "deploy-branch/infra/k8s/overlays/candidate-a/${NODE}"
           rsync -a --delete \
             "app-src/infra/k8s/overlays/candidate-a/${NODE}/" \
