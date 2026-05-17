@@ -19,10 +19,10 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    digest: "sha256:3671921681a41fd83914f52c5ea735d0a7dd77cd7784b6b433a94588c1b998c5"
+    digest: "sha256:d873eb96d1eba12aae77918c07342c75248ce783202224d5bc762022f34c0f3a"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    digest: "sha256:66f4c619d26a183779a57c9d24a945e9768b8c59ed47aa76239801f7d34ab914"
+    digest: "sha256:e96106e8aae2478a8ee506d3f837024ac2e7a415b0cc6491bee6f4d9f541d014"
   - name: ghcr.io/cogni-dao/poly-echo-sidecar
     newName: ghcr.io/cogni-dao/poly-echo-sidecar
     newTag: "preview-placeholder-poly-echo-sidecar"
