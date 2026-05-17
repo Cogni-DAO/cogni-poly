@@ -150,6 +150,7 @@ EVENT_CANCEL_ERROR = "adapter.paper_sidecar.cancel_order.error"
 EVENT_FILL_LOOP_TICK = "adapter.paper_sidecar.fill_loop.tick_complete"
 EVENT_FILL_LOOP_ERROR = "adapter.paper_sidecar.fill_loop.error"
 EVENT_ORDER_FILLED = "adapter.paper_sidecar.order_filled"
+EVENT_FILL_LOOP_DROPPED = "adapter.paper_sidecar.fill_loop.result_dropped"
 
 # Error code enum — every error log includes one of these so Loki/dashboards
 # can distinguish timeout vs upstream-bug vs our-bug vs market-not-found.
@@ -158,6 +159,7 @@ ERROR_UPSTREAM_NO_ORDER_ID = "upstream_no_order_id"
 ERROR_NOT_FOUND = "not_found"
 ERROR_INVALID_ORDER_ID = "invalid_order_id"
 ERROR_FILL_LOOP_ITERATION = "fill_loop_iteration_failed"
+ERROR_FILL_LOOP_UNMAPPED_ID = "fill_loop_result_unmapped_id"
 
 
 # ─── Structured JSON logging — one JSON object per line for Alloy → Loki ────
@@ -381,10 +383,38 @@ class Sidecar:
                 with self.lock:
                     filled = self.engine.check_orders()  # type: ignore[union-attr]
                 filled_count = 0
+                dropped_count = 0
+                # `engine.check_orders()` returns wrapped entries:
+                # ``[{"order": {"id": <int>, ...}, "action": "filled" | ...}]``
+                # — see ``_order_to_dict`` in ``vendor/pm_trader/engine.py``.
+                # Reading ``d["id"]`` directly returns "" and every fill is
+                # silently dropped (server kept OrderState="open" forever,
+                # cogni reconciler never observed paper fills). The action
+                # filter limits us to genuine fills — expired/rejected entries
+                # don't get the same OrderState transition.
                 for d in filled:
-                    oid = _externalize(d.get("id", ""))
+                    if d.get("action") != "filled":
+                        continue
+                    upstream_id = d.get("order", {}).get("id", "")
+                    oid = _externalize(upstream_id)
                     st = self.orders.get(oid)
                     if st is None:
+                        # Engine reported a fill we never placed (different
+                        # BOOT_ID after pod restart, or a manual upstream
+                        # write). Surface it instead of dropping silently —
+                        # the prior silent-drop on every fill is exactly how
+                        # paper trade reported 0 fills for weeks. See
+                        # ERROR_FILL_LOOP_UNMAPPED_ID.
+                        dropped_count += 1
+                        log.warning(
+                            "fill loop result unmapped to local OrderState",
+                            extra={
+                                "event": EVENT_FILL_LOOP_DROPPED,
+                                "errorCode": ERROR_FILL_LOOP_UNMAPPED_ID,
+                                "upstream_id": str(upstream_id),
+                                "oid": oid,
+                            },
+                        )
                         continue
                     st.status = "filled"
                     # v0 full-fill assumption: realized notional = intended.
@@ -404,6 +434,9 @@ class Sidecar:
                     )
                 # Heartbeat — emit every tick so an absence alert in Loki can
                 # detect a stuck/crashed fill loop. Low volume (2/min at 30s).
+                # `dropped_count` distinguishes "engine produced no fills"
+                # (the normal quiet case) from "engine produced fills but
+                # OrderState mapping silently dropped them" (the prior bug).
                 log.info(
                     "fill loop tick",
                     extra={
@@ -412,6 +445,7 @@ class Sidecar:
                             [s for s in self.orders.values() if s.status == "open"]
                         ),
                         "filled_count": filled_count,
+                        "dropped_count": dropped_count,
                     },
                 )
             except Exception as e:
