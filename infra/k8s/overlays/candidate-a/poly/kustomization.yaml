@@ -8,19 +8,28 @@ namespace: cogni-candidate-a
 resources:
   - ../../../base/node-app
 
+# Sidecar container shape lives next to its source (catalog v2). Digests still
+# resolved from `images:` block below by promote-k8s-image.sh.
+components:
+  - ../../../../../nodes/poly/sidecars/paper-trader/k8s
+  - ../../../../../nodes/poly/sidecars/echo/k8s
+
 namePrefix: poly-
 
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    digest: "sha256:089445844b15cec0f140008f44cf68f6162b55bbcf12874f900588d844109399"
+    digest: "sha256:45242c75507ab13c4773b85c0633b445dea3a10a7230b61c95a8812fb7b8b0c5"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    digest: "sha256:e96106e8aae2478a8ee506d3f837024ac2e7a415b0cc6491bee6f4d9f541d014"
-  # poly-paper-sidecar is a catalog-v2 image: it ships through pr-build's matrix
-  # like any other image (infra/catalog/poly.yaml → images[role: sidecar]).
-  # promote-build-payload + image-name-aware promote-k8s-image keep the host
-  # and sidecar entries here independent — no manual sha bump needed.
+    digest: "sha256:639974bfbfd6429d2b39cf7e60ccd35dc10d019ebeb83c112bde8070b7980b14"
+  - name: ghcr.io/cogni-dao/poly-echo-sidecar
+    newName: ghcr.io/cogni-dao/poly-echo-sidecar
+    digest: "sha256:9e3b048bfa03c7ee386d8708fa69d181c64776def34ef854bccb87057a21d4f9"
+  # Sidecar digests are written by promote-build-payload + image-name-aware
+  # promote-k8s-image (catalog v2). The poly-echo-sidecar placeholder newTag is
+  # overwritten on first promote. Container shape lives in each sidecar's
+  # k8s/ Component (referenced under `components:` above).
 
 patches:
   - target:
@@ -87,43 +96,6 @@ patches:
       - op: add
         path: /spec/template/metadata/labels/app.kubernetes.io~1instance
         value: "poly"
-
-  # proj.poly-paper-trading PR 2: poly-paper-sidecar — Python sidecar wrapping
-  # agent-next/polymarket-paper-trader (MIT) behind an HTTP API. The TS
-  # PaperAdapter speaks to it over pod-loopback at http://localhost:9100.
-  # v0 image is a placeholder (501 on Run-phase endpoints); the actual
-  # upstream-engine wiring lands in a follow-up commit (PR3 design pass
-  # forthcoming).
-  - target:
-      kind: Deployment
-      name: node-app
-    patch: |
-      - op: add
-        path: /spec/template/spec/containers/-
-        value:
-          name: poly-paper-sidecar
-          # No tag — kustomize substitutes the digest pinned in the `images:`
-          # block above.
-          image: ghcr.io/cogni-dao/poly-paper-sidecar
-          ports:
-            - containerPort: 9100
-              name: paper
-              protocol: TCP
-          livenessProbe:
-            httpGet: { path: /healthz, port: paper }
-            initialDelaySeconds: 5
-            periodSeconds: 30
-            timeoutSeconds: 3
-            failureThreshold: 3
-          readinessProbe:
-            httpGet: { path: /healthz, port: paper }
-            initialDelaySeconds: 3
-            periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
-          resources:
-            requests: { memory: "128Mi", cpu: "50m" }
-            limits: { memory: "384Mi", cpu: "500m" }
 
   # task.0370 step 1: Doltgres knowledge-plane migrator runs as a second initContainer
   # on the poly Deployment. DATABASE_URL maps to DOLTGRES_URL_POLY (separate from
