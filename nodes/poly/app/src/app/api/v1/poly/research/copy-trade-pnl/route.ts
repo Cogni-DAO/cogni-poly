@@ -46,6 +46,8 @@ export const GET = wrapRouteHandlerWithLogging(
     const queryParse = PolyResearchCopyTradePnlQuerySchema.safeParse({
       billing_account_id: url.searchParams.get("billing_account_id") ?? "",
       mode: url.searchParams.get("mode") ?? undefined,
+      since: url.searchParams.get("since") ?? undefined,
+      until: url.searchParams.get("until") ?? undefined,
     });
     if (!queryParse.success) {
       logComplete(ctx, {
@@ -72,7 +74,15 @@ export const GET = wrapRouteHandlerWithLogging(
       response = await getCopyTradePnlForTenant(
         db,
         queryParse.data.billing_account_id,
-        queryParse.data.mode
+        queryParse.data.mode,
+        {
+          ...(queryParse.data.since !== undefined
+            ? { since: queryParse.data.since }
+            : {}),
+          ...(queryParse.data.until !== undefined
+            ? { until: queryParse.data.until }
+            : {}),
+        }
       );
     } catch {
       logComplete(ctx, {

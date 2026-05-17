@@ -15,6 +15,10 @@
  *   - PAGE_LOAD_DB_ONLY: no upstream calls during render; reads `poly_copy_trade_fills`.
  *   - TENANT_PARAM_EXPLICIT: billing_account_id is a required query arg, not session-derived,
  *     so a diff script can compare two tenants in one process. Auth is "any session user".
+ *   - WINDOW_ON_OBSERVED_AT: `since` / `until` filter `poly_copy_trade_fills.observed_at`
+ *     (when the fill was seen on the target chain log), not `created_at` (when our
+ *     mirror row was inserted). Trust-twin comparison wants the time of the real-world
+ *     event, not our reaction time.
  * Side-effects: none
  * Links: docs/spec/poly-copy-trade-execution.md, work/projects/proj.poly-paper-trading.md
  * @public
@@ -29,10 +33,26 @@ export type PolyResearchCopyTradePnlMode = z.infer<
   typeof PolyResearchCopyTradePnlModeSchema
 >;
 
-export const PolyResearchCopyTradePnlQuerySchema = z.object({
-  billing_account_id: z.string().uuid(),
-  mode: PolyResearchCopyTradePnlModeSchema,
-});
+// ISO-8601 timestamp; empty / missing treated as no bound.
+const IsoTimestampSchema = z
+  .string()
+  .datetime({ offset: true })
+  .optional();
+
+export const PolyResearchCopyTradePnlQuerySchema = z
+  .object({
+    billing_account_id: z.string().uuid(),
+    mode: PolyResearchCopyTradePnlModeSchema,
+    since: IsoTimestampSchema,
+    until: IsoTimestampSchema,
+  })
+  .refine(
+    (q) => !(q.since && q.until) || q.since <= q.until,
+    {
+      message: "`since` must be ≤ `until`",
+      path: ["since"],
+    }
+  );
 export type PolyResearchCopyTradePnlQuery = z.infer<
   typeof PolyResearchCopyTradePnlQuerySchema
 >;
@@ -81,6 +101,8 @@ export type PolyResearchCopyTradePnlSummary = z.infer<
 export const PolyResearchCopyTradePnlResponseSchema = z.object({
   billing_account_id: z.string().uuid(),
   mode: PolyResearchCopyTradePnlModeSchema,
+  since: z.string().nullable(),
+  until: z.string().nullable(),
   captured_at: z.string(),
   summary: PolyResearchCopyTradePnlSummarySchema,
   markets: z.array(PolyResearchCopyTradePnlMarketRowSchema),

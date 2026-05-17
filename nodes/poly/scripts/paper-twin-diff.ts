@@ -26,10 +26,17 @@
 //   POLY_PROD_TENANT_API_KEY                — bearer for Derek's PROD tenant
 //   POLY_PROD_TENANT_BILLING_ACCOUNT_ID
 // Optional:
-//   POLY_PREVIEW_BASE_URL  (default https://poly-preview.cognidao.org)
-//   POLY_PROD_BASE_URL     (default https://poly.cognidao.org)
-//   PAPER_TWIN_DIFF_TOP_N  (default 10) — markets to print in detail
-//   PAPER_TWIN_DIFF_JSON   ("1" to emit JSON to stdout instead of table)
+//   POLY_PREVIEW_BASE_URL      (default https://poly-preview.cognidao.org)
+//   POLY_PROD_BASE_URL         (default https://poly.cognidao.org)
+//   PAPER_TWIN_DIFF_TOP_N      (default 10) — markets to print in detail
+//   PAPER_TWIN_DIFF_JSON       ("1" to emit JSON to stdout instead of table)
+//   PAPER_TWIN_DIFF_SINCE      ISO-8601 — only count fills observed at/after this
+//                              instant on both sides. Strongly recommended:
+//                              set to the trust-twin registration time so the
+//                              comparison excludes PROD history the twin
+//                              never had a chance to mirror.
+//   PAPER_TWIN_DIFF_UNTIL      ISO-8601 — only count fills observed before this
+//                              instant (exclusive). Optional.
 //
 // Usage:
 //   pnpm tsx scripts/paper-twin-diff.ts
@@ -58,6 +65,8 @@ type MarketRow = {
 type CopyTradePnlResponse = {
   billing_account_id: string;
   mode: "live" | "paper" | "all";
+  since: string | null;
+  until: string | null;
   captured_at: string;
   summary: {
     fills_count: number;
@@ -89,11 +98,14 @@ async function fetchPnl(
   baseUrl: string,
   bearer: string,
   billingAccountId: string,
-  mode: "paper" | "live"
+  mode: "paper" | "live",
+  window: { since?: string; until?: string }
 ): Promise<CopyTradePnlResponse> {
   const url = new URL("/api/v1/poly/research/copy-trade-pnl", baseUrl);
   url.searchParams.set("billing_account_id", billingAccountId);
   url.searchParams.set("mode", mode);
+  if (window.since) url.searchParams.set("since", window.since);
+  if (window.until) url.searchParams.set("until", window.until);
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${bearer}` },
   });
@@ -215,6 +227,11 @@ function printSummary(
     totalFills === 0 ? null : (2 * matchedFills) / totalFills;
 
   console.log("\n=== Summary ===");
+  const winLabel =
+    twin.since || twin.until
+      ? `window: since=${twin.since ?? "−∞"}  until=${twin.until ?? "now"}`
+      : "window: ALL-TIME (no since/until filter)";
+  console.log(`  ${winLabel}`);
   console.log(`  Twin (paper, preview)`);
   console.log(`    billing_account_id: ${twin.billing_account_id}`);
   console.log(
@@ -257,10 +274,30 @@ async function main(): Promise<void> {
   const liveBearer = envRequired("POLY_PROD_TENANT_API_KEY");
   const liveAccount = envRequired("POLY_PROD_TENANT_BILLING_ACCOUNT_ID");
   const topN = Number(process.env.PAPER_TWIN_DIFF_TOP_N ?? 10);
+  const sinceRaw = process.env.PAPER_TWIN_DIFF_SINCE;
+  const untilRaw = process.env.PAPER_TWIN_DIFF_UNTIL;
+  // Quick validation; the server also validates but a CLI typo fails noisily here.
+  if (sinceRaw && Number.isNaN(Date.parse(sinceRaw))) {
+    console.error(`PAPER_TWIN_DIFF_SINCE is not a valid ISO timestamp: ${sinceRaw}`);
+    process.exit(2);
+  }
+  if (untilRaw && Number.isNaN(Date.parse(untilRaw))) {
+    console.error(`PAPER_TWIN_DIFF_UNTIL is not a valid ISO timestamp: ${untilRaw}`);
+    process.exit(2);
+  }
+  const window: { since?: string; until?: string } = {
+    ...(sinceRaw ? { since: sinceRaw } : {}),
+    ...(untilRaw ? { until: untilRaw } : {}),
+  };
+  if (!sinceRaw) {
+    console.warn(
+      "WARNING: PAPER_TWIN_DIFF_SINCE not set — comparing ALL-TIME fills. PROD pre-twin history will dominate the diff. Set PAPER_TWIN_DIFF_SINCE=<twin-registration-time-ISO> for a meaningful comparison."
+    );
+  }
 
   const [twin, live] = await Promise.all([
-    fetchPnl(previewBase, twinBearer, twinAccount, "paper"),
-    fetchPnl(prodBase, liveBearer, liveAccount, "live"),
+    fetchPnl(previewBase, twinBearer, twinAccount, "paper", window),
+    fetchPnl(prodBase, liveBearer, liveAccount, "live", window),
   ]);
   const diffs = buildDiff(twin, live);
 
