@@ -66,8 +66,12 @@ function nominalSizeUsdc(sizing: SizingPolicy): number {
  * Before this, `receipt` was `null` for every error, so SQL could not group
  * the 19k+ placement failures by cause. Per docs/spec/observability.md only
  * stable structured fields are persisted — no raw SDK message text.
- * Adapter throws now attach `.details: ClobFailureDetails`; raw Errors fall
- * through to `error_code: "unknown"` + constructor name.
+ * Adapter throws attach `.details: ClobFailureDetails`; raw Errors fall
+ * through to `error_code: "unknown"` + `err.name`. We read `err.name`
+ * (the string assigned in the constructor body, e.g. `this.name = "ClobRejectionError"`)
+ * rather than `err.constructor.name`, because terser minifies class
+ * identifiers in production bundles to single letters ("i", "n", …) —
+ * persisting those into the durable receipt makes forensics impossible.
  */
 function extractAdapterErrorReceipt(err: unknown): Record<string, unknown> {
   const details =
@@ -83,7 +87,7 @@ function extractAdapterErrorReceipt(err: unknown): Record<string, unknown> {
     typeof d.error_class === "string"
       ? d.error_class
       : err instanceof Error
-        ? err.constructor.name
+        ? err.name
         : null;
   return {
     error_code: errorCode,
@@ -1228,7 +1232,7 @@ async function executeMirrorOrder(
       typeof detailsObj.error_class === "string"
         ? (detailsObj.error_class as string)
         : err instanceof Error
-          ? err.constructor.name
+          ? err.name
           : null;
     deps.metrics.incr(MIRROR_PIPELINE_METRICS.placementErrorsTotal, {});
     await deps.ledger.markError({ client_order_id, error: msg });
