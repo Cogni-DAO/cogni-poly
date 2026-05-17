@@ -117,6 +117,45 @@ class FakeEngine:
     def get_pending_orders(self) -> list[dict[str, Any]]:
         return [d for d in self._orders.values() if d["status"] == "pending"]
 
+    def get_balance(self) -> dict[str, Any]:
+        # Mirrors pm_trader.Engine.get_balance shape.
+        return {
+            "cash": 999_950.0,
+            "starting_balance": 1_000_000.0,
+            "positions_value": 12.5,
+            "total_value": 999_962.5,
+            "pnl": -37.5,
+        }
+
+    def get_portfolio(self) -> list[dict[str, Any]]:
+        # Mirrors pm_trader.Engine.get_portfolio shape.
+        return [
+            {
+                "market_slug": "test-market",
+                "market_question": "Will X happen?",
+                "outcome": "yes",
+                "shares": 100.0,
+                "avg_entry_price": 0.50,
+                "total_cost": 50.0,
+                "live_price": 0.55,
+                "current_value": 55.0,
+                "unrealized_pnl": 5.0,
+                "percent_pnl": 10.0,
+            }
+        ]
+
+    def get_history(self, limit: int = 50) -> list[Any]:
+        # Real Engine returns dataclass Trade instances; FakeEngine returns
+        # objects with attrs so the server-side `vars()` conversion exercises.
+        class _T:
+            def __init__(self, **kw):
+                for k, v in kw.items():
+                    setattr(self, k, v)
+        return [
+            _T(id=1, side="buy", outcome="yes", avg_price=0.5, shares=10.0,
+               amount_usd=5.0, fee=0.0)
+        ][:limit]
+
     def close(self) -> None:
         pass
 
@@ -341,6 +380,53 @@ def test_fill_loop_reads_wrapped_engine_result_not_flat(client):
     body = client.get(f"/orders/{oid}").json()
     assert body["status"] == "filled", f"wrapped-shape mapping broken; body={body}"
     assert body["filled_size_usdc"] == 6.0
+
+
+# ─── pm_trader pass-through PnL/portfolio/history endpoints ────────────────
+
+
+def test_balance_returns_pm_trader_shape(client):
+    r = client.get("/balance")
+    assert r.status_code == 200
+    body = r.json()
+    # Mirrors pm_trader.Engine.get_balance contract — fail loud if upstream drifts.
+    assert set(body.keys()) == {
+        "cash", "starting_balance", "positions_value", "total_value", "pnl"
+    }
+    assert isinstance(body["pnl"], (int, float))
+
+
+def test_portfolio_returns_list_of_positions_with_unrealized_pnl(client):
+    r = client.get("/portfolio")
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body, list)
+    assert len(body) >= 1
+    pos = body[0]
+    assert "shares" in pos
+    assert "unrealized_pnl" in pos
+    assert "current_value" in pos
+    assert "live_price" in pos
+
+
+def test_history_returns_serialized_trades(client):
+    r = client.get("/history")
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body, list)
+    assert len(body) >= 1
+    # Trade dataclasses get converted to plain dicts via vars()
+    assert body[0]["side"] == "buy"
+    assert "avg_price" in body[0]
+
+
+def test_history_limit_param_validates(client):
+    r = client.get("/history?limit=0")
+    assert r.status_code == 400
+    r = client.get("/history?limit=501")
+    assert r.status_code == 400
+    r = client.get("/history?limit=10")
+    assert r.status_code == 200
 
 
 def test_fill_loop_ignores_non_filled_actions(client):

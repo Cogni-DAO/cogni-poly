@@ -577,6 +577,36 @@ class Sidecar:
             raise HTTPException(status_code=404, detail="not_found")
         return _to_receipt(st)
 
+    # ── pm_trader pass-throughs (sidecar-global PnL surface) ──────────────
+    # These expose pm_trader.Engine's existing PnL/portfolio/history methods
+    # so we can observe what the paper engine actually thinks is happening.
+    # All values are SIDECAR-GLOBAL (one account shared across tenants per the
+    # current v0 architecture); per-tenant PnL still has to be aggregated
+    # cogni-side from `poly_copy_trade_fills`.
+    def balance(self) -> dict[str, Any]:
+        with self.lock:
+            return self.engine.get_balance()  # type: ignore[union-attr]
+
+    def portfolio(self) -> list[dict[str, Any]]:
+        with self.lock:
+            return self.engine.get_portfolio()  # type: ignore[union-attr]
+
+    def history(self, limit: int) -> list[dict[str, Any]]:
+        with self.lock:
+            trades = self.engine.get_history(limit=limit)  # type: ignore[union-attr]
+        # pm_trader returns dataclass Trade instances; coerce to plain dicts
+        # so FastAPI's serializer doesn't need a model. Trade is a frozen
+        # dataclass — `vars()` is the canonical conversion.
+        out: list[dict[str, Any]] = []
+        for t in trades:
+            if hasattr(t, "__dict__"):
+                out.append(dict(vars(t)))
+            elif isinstance(t, dict):
+                out.append(t)
+            else:
+                out.append({"raw": str(t)})
+        return out
+
 
 sidecar = Sidecar()
 
@@ -629,3 +659,25 @@ def cancel_order(order_id: str) -> Response:
 @app.get("/orders/{order_id}")
 def get_order(order_id: str) -> OrderReceipt:
     return sidecar.get(order_id)
+
+
+# ─── pm_trader pass-through: PnL, portfolio, history ────────────────────────
+# Sidecar-global view (single pm_trader account across all tenants). Cogni-side
+# per-tenant aggregation lives separately over `poly_copy_trade_fills`.
+
+
+@app.get("/balance")
+def balance() -> dict[str, Any]:
+    return sidecar.balance()
+
+
+@app.get("/portfolio")
+def portfolio() -> list[dict[str, Any]]:
+    return sidecar.portfolio()
+
+
+@app.get("/history")
+def history(limit: int = 50) -> list[dict[str, Any]]:
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=400, detail="limit_out_of_range")
+    return sidecar.history(limit)
