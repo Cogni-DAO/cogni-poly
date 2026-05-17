@@ -36,13 +36,42 @@
  *     (target observed but no longer held). Once `poly_market_outcomes` is
  *     populated, resolved legs get joined in to promote `active`/`inactive`
  *     → `winner`/`loser`/`resolved`.
- *   - RETURN_FROM_FILLS: per-position return is computed Modified-Dietz-style
- *     from `poly_trader_fills` (BUY notional + SELL realized cash). The
- *     committed-capital denominator is `max(fill rollup, Σ leg.costBasisUsdc)`
- *     for both wallet classes: the rollup preserves original BUY notional
- *     through partial closes (correct return anchor), while the snapshot
- *     cost basis recovers the truth for wallets whose fill history predates
- *     our backfill horizon (target wallets, fresh own-wallet provisioning).
+ *   - SINGLE_BASIS_SNAPSHOT_COST: per-position cost basis, P/L, and return %
+ *     all derive from `Σ snapshot.cost_basis_usdc` (Polymarket vendor's
+ *     FIFO-allocated cost of *currently held* shares). The snapshot is
+ *     canonically durable in two ways: (a) Polymarket's vendor accounting
+ *     deducts cost as shares leave the position via SELL, negRisk merge
+ *     (YES + NO pair → 1 USDC), or redemption, so the held-cost number on
+ *     a still-active position is correct; (b) the snapshot table itself is
+ *     append-only and the writer at trader-observation-service.ts inserts
+ *     only positive-share rows from Polymarket's `/positions` page — once
+ *     Polymarket drops the position post-redemption, the writer stops
+ *     inserting and the last pre-redemption row persists, preserving the
+ *     final cost + last-marked value for historical attribution (held P/L
+ *     remains the resolved-but-not-redeemed mark, which equals the
+ *     redemption value). The earlier `max(rollup, snapshot)` policy was
+ *     abandoned because for market-maker targets (swisstony being canonical)
+ *     it inflated entry by 10× — every BUY fill counted, even on shares
+ *     merged back to USDC seconds later. P/L on this basis is "held P/L"
+ *     (`value − cost`); realized cash from SELL fills is intentionally NOT
+ *     folded into the numerator because we don't track the analogous merge
+ *     / redeem cash flows yet — partial inclusion would mis-rank market-
+ *     makers vs directional traders. `grossBuyNotionalUsdc` (rollup BUY
+ *     total) is exposed as a SEPARATE field for callers who want lifetime-
+ *     volume visibility; it must never be conflated with cost basis.
+ *   - KNOWN_GAP_FULLY_EXITED_TARGETS: a wallet that BOTH (a) fully exited
+ *     a condition via SELL fills before we ever started observing it (so
+ *     no snapshot row ever existed) AND (b) had its BUY fills predate our
+ *     `poly_trader_fills` backfill horizon (so the rollup is also empty)
+ *     will render with `totalBuyNotional = 0 → returnPct = null → no Δ`.
+ *     This does NOT hit currently-tracked targets (RN1, swisstony) because
+ *     our observer captured at-least-one snapshot per condition they
+ *     touched while alive, and that latest row preserves cost+value.
+ *     The gap fires only for prospective targets added to comparisons
+ *     AFTER they've already cleared markets. Future remedy: index
+ *     NegRiskAdapter MERGE + ConditionalTokens PayoutRedemption events
+ *     as realized cash flows; Modified-Dietz on rollup BUY + all cash
+ *     recoveries gives a clean answer even without a held position.
  *   - EDGE_GAP_NULL_WITHOUT_TARGETS: `edgeGapUsdc` and `edgeGapPct` are null
  *     on lines/groups with zero target legs that have positive buy notional.
  *     "Edge gap vs. nobody" is undefined, not `-ourPnl`.
@@ -453,6 +482,7 @@ function groupParticipants(
       totalBuyNotional: number;
       returnPct: number | null;
     }[] = [];
+    let targetGrossBuyNotional = 0;
     for (const tlegs of byTargetWallet.values()) {
       const agg = aggregateWalletReturn(tlegs, rollups);
       targetEntries.push({
@@ -464,6 +494,7 @@ function groupParticipants(
           redemptionProceeds: agg.redemptionProceeds,
         }),
       });
+      targetGrossBuyNotional += agg.grossBuyNotional;
     }
     const targetReturnPct = blendTargetReturns(targetEntries);
     const targetTotalBuyNotional = targetEntries.reduce(
@@ -498,6 +529,8 @@ function groupParticipants(
       targetValueUsdc,
       ourEntryValueUsdc: roundMoney(ourAgg.totalBuyNotional),
       targetEntryValueUsdc: roundMoney(targetTotalBuyNotional),
+      ourGrossBuyNotionalUsdc: roundMoney(ourAgg.grossBuyNotional),
+      targetGrossBuyNotionalUsdc: roundMoney(targetGrossBuyNotional),
       ourVwap: weightedVwap(ourLegs),
       targetVwap: weightedVwap(targetLegs),
       edgeGapUsdc: sizeScaledGapUsdc,
@@ -579,6 +612,12 @@ function groupParticipants(
         targetEntryValueUsdc: roundMoney(
           lines.reduce((sum, line) => sum + line.targetEntryValueUsdc, 0)
         ),
+        ourGrossBuyNotionalUsdc: roundMoney(
+          lines.reduce((sum, line) => sum + line.ourGrossBuyNotionalUsdc, 0)
+        ),
+        targetGrossBuyNotionalUsdc: roundMoney(
+          lines.reduce((sum, line) => sum + line.targetGrossBuyNotionalUsdc, 0)
+        ),
         pnlUsd: roundMoney(
           lines.reduce(
             (sum, line) =>
@@ -611,14 +650,24 @@ function groupParticipants(
 }
 
 /**
- * Sum (totalBuyNotional, realizedCash, currentMarkValue) across a wallet's
- * legs in one condition. `totalBuyNotional` is the larger of the observed
- * fill-rollup BUY sum and the snapshot-derived cost basis: the fill rollup
- * is authoritative when complete (preserves original BUY notional through
- * partial-closes), but for target wallets whose fill history predates our
- * backfill horizon the rollup undercounts and the snapshot (Polymarket
- * vendor-published) is the truth. Picking the max recovers both shapes
- * without a wallet-class-specific branch.
+ * Sum (totalBuyNotional, currentMarkValue, grossBuyNotional) across a
+ * wallet's legs in one condition. See SINGLE_BASIS_SNAPSHOT_COST in the
+ * module header for the rationale.
+ *
+ * - `totalBuyNotional` = Σ snapshot.cost_basis_usdc. Canonical "cost" for
+ *   P/L, return %, and the Markets-table "Entry" column. Vendor-FIFO
+ *   allocated to currently held shares; correctly handles negRisk merges
+ *   and partial redemptions.
+ * - `currentMarkValue` = Σ snapshot.current_value_usdc. Mark-to-market of
+ *   currently held shares.
+ * - `grossBuyNotional` = Σ poly_trader_fills BUY size_usdc. Lifetime BUY
+ *   activity — exposed for callers that want to surface it in a separate
+ *   labeled column. NEVER use this as a P/L denominator; it includes
+ *   capital recovered via merges/SELLs that aren't tracked as cash flows
+ *   yet.
+ *
+ * `realizedCash` (SELL proceeds from fills) is no longer returned: see
+ * module header — partial inclusion of cash flows misranks wallet classes.
  */
 function aggregateWalletReturn(
   legs: readonly RawLeg[],
@@ -628,6 +677,7 @@ function aggregateWalletReturn(
   realizedCash: number;
   currentMarkValue: number;
   redemptionProceeds: number;
+  grossBuyNotional: number;
 } {
   if (legs.length === 0) {
     return {
@@ -635,6 +685,7 @@ function aggregateWalletReturn(
       realizedCash: 0,
       currentMarkValue: 0,
       redemptionProceeds: 0,
+      grossBuyNotional: 0,
     };
   }
   let rollupNotional = 0;
@@ -659,11 +710,21 @@ function aggregateWalletReturn(
     (sum, leg) => sum + leg.redemptionProceedsUsdc,
     0
   );
+  // SINGLE_BASIS_SNAPSHOT_COST: totalBuyNotional is Σ snapshot.cost_basis
+  // on currently held shares only (Polymarket vendor-FIFO; post-merge,
+  // post-redemption). Earlier `max(rollupNotional, snapshotCostBasis)`
+  // policy inflated market-maker entries 10× — every BUY fill counted,
+  // even on shares merged back to USDC via NegRiskAdapter seconds later
+  // (swisstony's canonical $36k rollup vs $3,200 snapshot on a single
+  // market). Rollup BUY remains exposed as `grossBuyNotional` for any
+  // caller that wants lifetime-volume visibility, but never as the
+  // P/L denominator.
   return {
-    totalBuyNotional: Math.max(rollupNotional, snapshotCostBasis),
+    totalBuyNotional: snapshotCostBasis,
     realizedCash,
     currentMarkValue,
     redemptionProceeds,
+    grossBuyNotional: rollupNotional,
   };
 }
 

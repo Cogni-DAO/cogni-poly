@@ -225,15 +225,32 @@ export const WalletExecutionMarketLineSchema = z.object({
   ourValueUsdc: z.number().nonnegative(),
   targetValueUsdc: z.number().nonnegative(),
   /**
-   * Σ BUY notional from `poly_trader_fills` for our wallet × condition. The
-   * dollars actually put on the line — preserved after exit, where
-   * `ourValueUsdc` collapses to 0. Dashboard uses this on closed rows so
-   * "Our value" reflects entry size, not the trivially-zero current mark.
+   * Σ snapshot.cost_basis_usdc on currently held shares — Polymarket
+   * vendor-FIFO cost of the position as it exists right now. Used as the
+   * P/L denominator (returns, Δ). Post-merge / post-partial-close aware:
+   * shares disposed via SELL, negRisk merge, or redemption have already
+   * been deducted from this number by Polymarket's accounting. After full
+   * exit collapses to 0; for closed-line display reach for
+   * `ourGrossBuyNotionalUsdc` to show lifetime entry instead.
    */
   ourEntryValueUsdc: z.number().nonnegative(),
-  /** Σ BUY notional across all targets × condition. Same role as
-   * `ourEntryValueUsdc`, target side. */
+  /** Same as `ourEntryValueUsdc` — Σ snapshot.cost_basis_usdc — but for
+   * the target side. P/L denominator for target return %. */
   targetEntryValueUsdc: z.number().nonnegative(),
+  /**
+   * Σ poly_trader_fills BUY size_usdc for our wallet × condition.
+   * "Lifetime BUY activity" — every dollar that left our wallet to buy
+   * shares on this market, ever, including shares since disposed
+   * (sold / merged / redeemed). Distinct from `ourEntryValueUsdc` for
+   * partial-close traders and market-maker targets: for a target who
+   * BOUGHT $36k and merged most of it back, gross = $36k while cost
+   * basis on held shares ≈ $3k. NEVER use this as a P/L denominator;
+   * surface in a separate, labeled column for activity awareness.
+   */
+  ourGrossBuyNotionalUsdc: z.number().nonnegative(),
+  /** Same as `ourGrossBuyNotionalUsdc` — lifetime BUY activity — but
+   * Σ'd across all target wallets on this condition. */
+  targetGrossBuyNotionalUsdc: z.number().nonnegative(),
   ourVwap: z.number().min(0).nullable(),
   targetVwap: z.number().min(0).nullable(),
   hedgeCount: z.number().int().nonnegative(),
@@ -269,6 +286,10 @@ export const WalletExecutionMarketGroupSchema = z.object({
   ourEntryValueUsdc: z.number().nonnegative(),
   /** Group-level Σ of per-line `targetEntryValueUsdc`. */
   targetEntryValueUsdc: z.number().nonnegative(),
+  /** Group-level Σ of per-line `ourGrossBuyNotionalUsdc`. */
+  ourGrossBuyNotionalUsdc: z.number().nonnegative(),
+  /** Group-level Σ of per-line `targetGrossBuyNotionalUsdc`. */
+  targetGrossBuyNotionalUsdc: z.number().nonnegative(),
   pnlUsd: z.number(),
   /**
    * Group-level `edgeGapPct × groupOurTotalBuyNotional`, where the

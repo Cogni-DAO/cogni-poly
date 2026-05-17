@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Δ-Report · Valencia: Dusan Lajovic vs Daniel Altmaier</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0; padding: 24px; max-width: 1320px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+.sub { color: #94a3b8; font-size: 13px; margin-bottom: 24px; }
+.sub a { color: #60a5fa; text-decoration: none; } .sub a:hover { text-decoration: underline; }
+.kpis { display: grid; gap: 12px; margin: 12px 0 18px; }
+.kpis-3 { grid-template-columns: 1fr 1fr 1fr; }
+.kpi { background: #131826; border: 1px solid #1f2937; border-radius: 8px; padding: 14px 16px; }
+.kpi h3 { margin: 0 0 6px; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.kpi .big { font-size: 26px; font-weight: 600; line-height: 1.1; }
+.kpi .sub { margin: 6px 0 0; color: #94a3b8; font-size: 12px; }
+.kpi.us { border-left: 3px solid #3b82f6; }
+.kpi.target { border-left: 3px solid #10b981; }
+.kpi.delta { border-left: 3px solid #f59e0b; }
+.pos { color: #22c55e; } .neg { color: #ef4444; }
+.event-group { margin: 36px 0; padding-top: 16px; border-top: 1px solid #1f2937; }
+.event-group > h2 { font-size: 18px; color: #f3f4f6; margin: 0 0 12px; font-weight: 600; }
+.event-group .evslug { font-size: 11px; color: #6b7280; margin-left: 8px; font-weight: 400; }
+.event-group .subhead { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin: 20px 0 10px; }
+.market-card { background: #131826; border: 1px solid #1f2937; border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+.market-head { padding: 10px 14px; background: #0f1525; border-bottom: 1px solid #1f2937; display: flex; align-items: center; gap: 10px; }
+.market-title { font-weight: 600; font-size: 13px; }
+.badge { font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 500; }
+.badge.win { background: #052e1a; color: #34d399; border: 1px solid #10b98166; }
+.badge.lose { background: #2a0a0a; color: #f87171; border: 1px solid #ef444466; }
+.positions { width: 100%; border-collapse: collapse; font-size: 12px; }
+.positions th, .positions td { padding: 7px 9px; text-align: left; border-bottom: 1px solid #1f2937; }
+.positions th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; background: #0e1422; }
+.positions td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.wallet { font-weight: 600; }
+.wallet.us { color: #60a5fa; } .wallet.target { color: #34d399; }
+.chart { width: 100%; height: auto; display: block; margin: 4px 0 12px; border-radius: 8px; }
+.empty { background: #131826; border: 1px dashed #334155; border-radius: 8px; padding: 18px; text-align: center; color: #64748b; }
+.legend { font-size: 11px; color: #94a3b8; padding: 4px 14px 14px; display: flex; gap: 14px; flex-wrap: wrap; }
+.legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.legend .line { display: inline-block; width: 16px; height: 2px; margin-right: 5px; vertical-align: middle; }
+.legend .line.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px); height: 2px; }
+.positions td.vwap-bad { color: #f87171; font-weight: 600; }
+.positions td.vwap-good { color: #34d399; font-weight: 600; }
+.positions tr.annotation td { font-size: 10.5px; color: #94a3b8; font-style: italic; padding: 3px 9px 8px; border-bottom: none; }
+.positions tr.annotation td.vwap-bad { color: #f87171; font-style: normal; }
+.positions tr.annotation td.vwap-good { color: #34d399; font-style: normal; }
+.footer-note { font-size: 11px; color: #6b7280; margin-top: 28px; padding-top: 12px; border-top: 1px solid #1f2937; }
+.footer-note a { color: #60a5fa; }
+
+.takeaway { background: linear-gradient(180deg, #1f1410 0%, #131826 100%); border: 1px solid #f59e0b; border-radius: 8px; padding: 18px 22px; margin: 12px 0 26px; }
+.takeaway h2 { margin: 0 0 12px; font-size: 13px; color: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.takeaway table.findings { width: 100%; border-collapse: collapse; font-size: 13px; }
+.takeaway table.findings th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: 0 10px 6px 0; border-bottom: 1px solid #f59e0b33; }
+.takeaway table.findings td { padding: 8px 10px 8px 0; vertical-align: top; border-bottom: 1px solid #f59e0b18; color: #e5e7eb; }
+.takeaway table.findings td.conf { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; white-space: nowrap; }
+.takeaway table.findings td.charter { font-size: 11px; color: #6b7280; white-space: nowrap; }
+.takeaway .placeholder { color: #64748b; font-style: italic; font-size: 13px; }
+.takeaway .fix { margin-top: 14px; padding-top: 12px; border-top: 1px solid #f59e0b33; font-size: 13px; color: #e5e7eb; line-height: 1.5; }
+.takeaway .fix strong { color: #34d399; }
+</style>
+</head>
+<body>
+<h1>Δ-Report · Valencia: Dusan Lajovic vs Daniel Altmaier</h1>
+<div class="sub">
+  Input: <code>atp-lajovic-altmaie-2026-05-14</code> · Copy-target: <strong style="color:#34d399">swisstony</strong> <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code> · Our wallet: <code>0x95e407fe03996602ed1bf4289ecb3b5af88b5134</code><br/>
+  Charter: <a href="../charter.html">POLY_COPY_DELTA</a> · 1 event group · 66 mirror decisions · Global time scale: 2026-05-14 11:43:43 → 2026-05-14 14:18:31
+</div>
+
+<!-- TAKEAWAY:START -->
+<div class="takeaway">
+  <h2>↗ Top finding</h2>
+  <table class="findings">
+    <thead>
+      <tr><th style="width:42px">#</th><th>Finding</th><th style="width:170px">Charter</th><th style="width:90px">Confidence</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><strong>D6 per-fill sizing locks us at 2 micro-entries</strong>: $1.32 hedge (Lajovic) + $3.25 primary (Altmaier) = <strong>$4.57</strong>, 0.06% of target's $8,243. Both entries fell below <code>min_mirror_position_usdc</code> → <strong>34 of 66</strong> subsequent target fills skipped as <code>followup_position_too_small</code> (verified <code>plan-mirror.ts:563</code>). Position never grew past first-fill size.</td>
+        <td class="charter">D6 · per-fill sizing</td>
+        <td class="conf pos">95%</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><strong>VWAP delta is downstream of D6, not a separate gate failure.</strong> Hedge $0.240 vs target $0.451; primary $0.560 vs target $0.459. The mechanism (verified <code>plan-mirror.ts:92–115, 657–666</code>): <code>below_target_percentile</code> blocks until target's cumulative cost on a token crosses <code>min_target_usdc</code> ($319 in config). At THAT moment we place once. Whatever price target paid at threshold-crossing becomes our locked VWAP. For Lajovic that was $0.24 (early build); for Altmaier $0.56 (later). Target's VWAP averages an entire ladder, drifting upward; ours stays frozen.</td>
+        <td class="charter">D6 (consequence)</td>
+        <td class="conf neg">85%</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="fix">
+    <strong>Fix</strong>: scale FIRST mirror entry to target's <em>projected</em> position size — e.g. <code>min(target_token_cost_usdc × capital_ratio, max_usdc_per_trade)</code> — so it clears <code>min_mirror_position_usdc</code> in one shot AND unlocks subsequent followups. Long-term: D2 position-mirror refactor dissolves both findings.<br/>
+    <strong>The +20.7% headline is variance, not edge.</strong> Our threshold-crossing on the Lajovic side happened to coincide with a low price ($0.24). If the threshold had been crossed on Altmaier first at a low price, we'd be −20.7% instead. Removing single-fill dependency removes this variance.
+  </div>
+</div>
+<!-- TAKEAWAY:END -->
+
+<section class="event-group">
+    <h2>Valencia: Dusan Lajovic vs Daniel Altmaier <span class="evslug">event_slug: <code>atp-lajovic-altmaie-2026-05-14</code> · 1 markets</span></h2>
+    <div class="kpis kpis-3">
+      <div class="kpi us">
+        <h3>Our wallet</h3>
+        <div class="big pos">+20.7% <span style="color:#94a3b8;font-size:14px">(+$0.95)</span></div>
+        <div class="sub">Entry $4.57 · Value $5.52</div>
+      </div>
+      <div class="kpi target">
+        <h3>swisstony (target)</h3>
+        <div class="big neg">-44.1% <span style="color:#94a3b8;font-size:14px">(-$587.59)</span></div>
+        <div class="sub">Entry $8243 · Value $4605</div>
+      </div>
+      <div class="kpi delta">
+        <h3>Δ vs target</h3>
+        <div class="big pos">-64.9% <span style="color:#94a3b8;font-size:14px">(-$2.97)</span></div>
+        <div class="sub">positive = target ahead = alpha leak</div>
+      </div>
+    </div>
+    <h3 class="subhead">Final positions (per market)</h3>
+    <div class="market-card">
+    <div class="market-head">
+      <span class="market-title">Valencia: Dusan Lajovic vs Daniel Altmaier</span>
+      
+      <span class="badge lose">Daniel Altmaier lost</span>
+    </div>
+    <table class="positions">
+      <thead>
+        <tr>
+          <th rowspan="2">Trader</th>
+          <th colspan="3">Primary · Daniel Altmaier</th>
+          <th colspan="3">Hedge · Dusan Lajovic</th>
+          <th rowspan="2">Net value</th>
+          <th rowspan="2">Net %</th>
+          <th rowspan="2">Net P/L</th>
+        </tr>
+        <tr><th>Value</th><th>VWAP</th><th>P/L</th><th>Value</th><th>VWAP</th><th>P/L</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+      <td><span class="wallet us">Our wallet</span></td>
+      <td class="num">$0.00</td><td class="num vwap-bad">0.560</td><td class="num neg">-$3.25</td>
+      <td class="num">$5.52</td><td class="num vwap-good">0.240</td><td class="num pos">+$4.20</td>
+      <td class="num">$5.52</td>
+      <td class="num pos">+20.7%</td>
+      <td class="num pos">+$0.95</td>
+    </tr>
+        <tr>
+      <td><span class="wallet target">swisstony</span></td>
+      <td class="num">$3.38</td><td class="num ">0.459</td><td class="num neg">-$3103</td>
+      <td class="num">$4602</td><td class="num ">0.451</td><td class="num pos">+$2515</td>
+      <td class="num">$4605</td>
+      <td class="num neg">-11.3%</td>
+      <td class="num neg">-$587.59</td>
+    </tr>
+        <tr class="annotation"><td></td><td class="num"></td><td class="num vwap-bad" colspan="2">Δ VWAP 10.1¢ — we paid more</td><td class="num"></td><td class="num vwap-good" colspan="2">Δ VWAP -21.1¢ — we paid less</td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+    <h3 class="subhead">Position divergence over time</h3>
+    <div class="market-card">
+        <div class="market-head"><span class="market-title">Valencia: Dusan Lajovic vs Daniel Altmaier → Daniel Altmaier</span></div>
+        <svg viewBox="0 0 1200 280" xmlns="http://www.w3.org/2000/svg" class="chart">
+<rect x="0" y="0" width="1200" height="280" fill="#0b1220"/>
+<line x1="70" y1="194.3" x2="1140" y2="194.3" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="194.3" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1</text>
+<line x1="70" y1="155.7" x2="1140" y2="155.7" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="155.7" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10</text>
+<line x1="70" y1="105.5" x2="1140" y2="105.5" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="105.5" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$100</text>
+<line x1="70" y1="53.6" x2="1140" y2="53.6" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="53.6" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1k</text>
+<text x="20" y="119" fill="#94a3b8" font-size="11" text-anchor="middle" transform="rotate(-90 20 119)">cumulative $ cost (log)</text>
+<text x="1148" y="210.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.00</text>
+<text x="1148" y="164.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.25</text>
+<text x="1148" y="119.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.50</text>
+<text x="1148" y="73.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.75</text>
+<text x="1148" y="28.0" fill="#475569" font-size="10" dominant-baseline="middle">$1.00</text>
+<text x="1186" y="119" fill="#475569" font-size="11" text-anchor="middle" transform="rotate(90 1186 119)">VWAP $</text>
+<line x1="70.0" y1="210.0" x2="70.0" y2="214.0" stroke="#4b5563"/>
+<text x="70.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 11:35</text>
+<line x1="248.3" y1="210.0" x2="248.3" y2="214.0" stroke="#4b5563"/>
+<text x="248.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 12:04</text>
+<line x1="426.7" y1="210.0" x2="426.7" y2="214.0" stroke="#4b5563"/>
+<text x="426.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 12:32</text>
+<line x1="605.0" y1="210.0" x2="605.0" y2="214.0" stroke="#4b5563"/>
+<text x="605.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 13:01</text>
+<line x1="783.3" y1="210.0" x2="783.3" y2="214.0" stroke="#4b5563"/>
+<text x="783.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 13:29</text>
+<line x1="961.7" y1="210.0" x2="961.7" y2="214.0" stroke="#4b5563"/>
+<text x="961.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 13:57</text>
+<line x1="1140.0" y1="210.0" x2="1140.0" y2="214.0" stroke="#4b5563"/>
+<text x="1140.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 14:26</text>
+<path d="M 70.0 210.0 L 211.2 210.0 L 211.2 118.4 L 240.5 118.4 L 240.5 83.1 L 363.2 83.1 L 363.2 82.7 L 372.9 82.7 L 372.9 78.5 L 389.4 78.5 L 389.4 76.6 L 437.2 76.6 L 437.2 73.5 L 440.4 73.5 L 440.4 73.2 L 457.3 73.2 L 457.3 72.0 L 490.2 72.0 L 490.2 69.6 L 508.1 69.6 L 508.1 67.5 L 511.3 67.5 L 511.3 65.5 L 638.1 65.5 L 638.1 65.2 L 696.7 65.2 L 696.7 65.2 L 717.1 65.2 L 717.1 57.6 L 718.3 57.6 L 718.3 57.2 L 731.0 57.2 L 731.0 57.2 L 746.6 57.2 L 746.6 57.0 L 777.2 57.0 L 777.2 51.2 L 782.8 51.2 L 782.8 50.2 L 787.6 50.2 L 787.6 49.8 L 901.3 49.8 L 901.3 49.8 L 906.6 49.8 L 906.6 48.8 L 912.5 48.8 L 912.5 43.5 L 935.9 43.5 L 935.9 37.7 L 970.0 37.7 L 970.0 37.4 L 979.5 37.4 L 979.5 37.3 L 979.7 37.3 L 979.7 36.7 L 979.7 36.7 L 979.7 36.6 L 983.7 36.6 L 983.7 36.5 L 983.9 36.5 L 983.9 36.4 L 983.9 36.4 L 983.9 36.1 L 993.7 36.1 L 993.7 35.5 L 1013.0 35.5 L 1013.0 35.4 L 1013.4 35.4 L 1013.4 35.3 L 1013.8 35.3 L 1013.8 32.3 L 1013.8 32.3 L 1013.8 32.3 L 1013.8 32.3 L 1013.8 32.1 L 1017.4 32.1 L 1017.4 31.1 L 1017.8 31.1 L 1017.8 31.0 L 1022.5 31.0 L 1022.5 30.8 L 1031.0 30.8 L 1031.0 30.7 L 1031.6 30.7 L 1031.6 30.7 L 1033.6 30.7 L 1033.6 30.5 L 1036.9 30.5 L 1036.9 28.0 L 1047.0 28.0 L 1047.0 28.0 L 1140.0 28.0 L 1140.0 210.0 L 70.0 210.0 Z" fill="#10b981" opacity="0.18"/>
+<path d="M 70.0 210.0 L 211.2 210.0 L 211.2 118.4 L 240.5 118.4 L 240.5 83.1 L 363.2 83.1 L 363.2 82.7 L 372.9 82.7 L 372.9 78.5 L 389.4 78.5 L 389.4 76.6 L 437.2 76.6 L 437.2 73.5 L 440.4 73.5 L 440.4 73.2 L 457.3 73.2 L 457.3 72.0 L 490.2 72.0 L 490.2 69.6 L 508.1 69.6 L 508.1 67.5 L 511.3 67.5 L 511.3 65.5 L 638.1 65.5 L 638.1 65.2 L 696.7 65.2 L 696.7 65.2 L 717.1 65.2 L 717.1 57.6 L 718.3 57.6 L 718.3 57.2 L 731.0 57.2 L 731.0 57.2 L 746.6 57.2 L 746.6 57.0 L 777.2 57.0 L 777.2 51.2 L 782.8 51.2 L 782.8 50.2 L 787.6 50.2 L 787.6 49.8 L 901.3 49.8 L 901.3 49.8 L 906.6 49.8 L 906.6 48.8 L 912.5 48.8 L 912.5 43.5 L 935.9 43.5 L 935.9 37.7 L 970.0 37.7 L 970.0 37.4 L 979.5 37.4 L 979.5 37.3 L 979.7 37.3 L 979.7 36.7 L 979.7 36.7 L 979.7 36.6 L 983.7 36.6 L 983.7 36.5 L 983.9 36.5 L 983.9 36.4 L 983.9 36.4 L 983.9 36.1 L 993.7 36.1 L 993.7 35.5 L 1013.0 35.5 L 1013.0 35.4 L 1013.4 35.4 L 1013.4 35.3 L 1013.8 35.3 L 1013.8 32.3 L 1013.8 32.3 L 1013.8 32.3 L 1013.8 32.3 L 1013.8 32.1 L 1017.4 32.1 L 1017.4 31.1 L 1017.8 31.1 L 1017.8 31.0 L 1022.5 31.0 L 1022.5 30.8 L 1031.0 30.8 L 1031.0 30.7 L 1031.6 30.7 L 1031.6 30.7 L 1033.6 30.7 L 1033.6 30.5 L 1036.9 30.5 L 1036.9 28.0 L 1047.0 28.0 L 1047.0 28.0 L 1140.0 28.0" fill="none" stroke="#10b981" stroke-width="2"/>
+<circle cx="1047.0" cy="28.0" r="3.5" fill="#10b981"/>
+<path d="M 70.0 210.0 L 697.5 210.0 L 697.5 179.8 L 698.0 179.8 L 698.0 177.3 L 1140.0 177.3" fill="none" stroke="#3b82f6" stroke-width="2"/>
+<circle cx="698.0" cy="177.3" r="3.5" fill="#3b82f6"/>
+<path d="M 211.2 55.3 L 211.2 55.3 L 211.2 55.3 L 240.5 55.3 L 240.5 52.4 L 363.2 52.4 L 363.2 53.8 L 372.9 53.8 L 372.9 65.1 L 389.4 65.1 L 389.4 69.3 L 437.2 69.3 L 437.2 75.4 L 440.4 75.4 L 440.4 75.9 L 457.3 75.9 L 457.3 78.1 L 490.2 78.1 L 490.2 81.7 L 508.1 81.7 L 508.1 85.1 L 511.3 85.1 L 511.3 87.9 L 638.1 87.9 L 638.1 88.4 L 696.7 88.4 L 696.7 88.4 L 717.1 88.4 L 717.1 109.0 L 718.3 109.0 L 718.3 109.6 L 731.0 109.6 L 731.0 109.6 L 746.6 109.6 L 746.6 109.8 L 777.2 109.8 L 777.2 115.8 L 782.8 115.8 L 782.8 116.3 L 787.6 116.3 L 787.6 116.4 L 901.3 116.4 L 901.3 116.4 L 906.6 116.4 L 906.6 116.8 L 912.5 116.8 L 912.5 116.9 L 935.9 116.9 L 935.9 116.5 L 970.0 116.5 L 970.0 117.7 L 979.5 117.7 L 979.5 118.1 L 979.7 118.1 L 979.7 120.4 L 979.7 120.4 L 979.7 120.7 L 983.7 120.7 L 983.7 120.9 L 983.9 120.9 L 983.9 121.1 L 983.9 121.1 L 983.9 121.5 L 993.7 121.5 L 993.7 121.7 L 1013.0 121.7 L 1013.0 121.7 L 1013.4 121.7 L 1013.4 121.8 L 1013.8 121.8 L 1013.8 123.2 L 1013.8 123.2 L 1013.8 123.2 L 1013.8 123.2 L 1013.8 123.2 L 1017.4 123.2 L 1017.4 123.8 L 1017.8 123.8 L 1017.8 123.9 L 1022.5 123.9 L 1022.5 124.1 L 1031.0 124.1 L 1031.0 124.2 L 1031.6 124.2 L 1031.6 124.2 L 1033.6 124.2 L 1033.6 124.7 L 1036.9 124.7 L 1036.9 126.5 L 1047.0 126.5 L 1047.0 126.4 L 1140.0 126.4" fill="none" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<path d="M 697.5 108.1 L 697.5 108.1 L 697.5 108.1 L 698.0 108.1 L 698.0 108.1 L 1140.0 108.1" fill="none" stroke="#3b82f6" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<text x="70" y="234" fill="#9ca3af" font-size="11">our decisions →</text>
+<line x1="70" y1="246" x2="1140" y2="246" stroke="#1f2937"/>
+<circle cx="271.5" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-14 12:08:02 · Dusan Lajovic · below_target_percentile (hedge side)</title></circle>
+<circle cx="277.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-14 12:08:56 · Dusan Lajovic · below_target_percentile (hedge side)</title></circle>
+<circle cx="335.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:18:09 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="375.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:24:30 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="376.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:24:44 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="410.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:30:13 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="434.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:33:58 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="450.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:36:30 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="545.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:51:34 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="568.9" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-14 12:55:22 · Dusan Lajovic · ok (hedge side)</title></circle>
+<circle cx="569.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:55:24 · Dusan Lajovic · followup_position_too_small (hedge side)</title></circle>
+<circle cx="575.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:56:20 · Dusan Lajovic · followup_position_too_small (hedge side)</title></circle>
+<circle cx="584.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:57:49 · Dusan Lajovic · followup_position_too_small (hedge side)</title></circle>
+<circle cx="590.6" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:58:49 · Dusan Lajovic · followup_position_too_small (hedge side)</title></circle>
+<circle cx="595.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 12:59:34 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="600.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 13:00:20 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 13:02:15 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="613.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 13:02:31 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="615.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 13:02:50 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="622.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 13:03:50 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="675.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-14 13:12:17 · Dusan Lajovic · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="696.7" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-14 13:15:42 · Daniel Altmaier · ok (hedge side)</title></circle>
+<circle cx="717.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:18:56 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="718.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:19:08 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="723.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:20:01 · Dusan Lajovic · vwap_floor_breach (primary side)</title></circle>
+<circle cx="730.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:21:09 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="746.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:23:38 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="769.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:27:15 · Dusan Lajovic · vwap_floor_breach (primary side)</title></circle>
+<circle cx="777.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:28:30 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="782.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:29:25 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="787.6" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:30:10 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="897.6" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:47:40 · Dusan Lajovic · vwap_floor_breach (primary side)</title></circle>
+<circle cx="901.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:48:15 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="906.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:49:06 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="912.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:50:01 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="924.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:52:00 · Dusan Lajovic · vwap_floor_breach (primary side)</title></circle>
+<circle cx="935.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:53:46 · Daniel Altmaier · vwap_floor_breach (primary side)</title></circle>
+<circle cx="954.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:56:41 · Dusan Lajovic · vwap_floor_breach (primary side)</title></circle>
+<circle cx="955.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:56:49 · Dusan Lajovic · vwap_floor_breach (primary side)</title></circle>
+<circle cx="956.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:56:58 · Dusan Lajovic · vwap_floor_breach (primary side)</title></circle>
+<circle cx="956.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:57:05 · Dusan Lajovic · vwap_floor_breach (primary side)</title></circle>
+<circle cx="970.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 13:59:11 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="979.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:00:42 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="979.7" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:00:44 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="979.7" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:00:44 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="983.7" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:01:22 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="983.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:01:24 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="983.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:01:24 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="993.6" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:02:57 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1010.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:05:36 · Dusan Lajovic · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1013.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:06:02 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1013.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:06:06 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1013.7" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:06:09 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1013.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:06:10 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1013.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:06:10 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1017.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:06:45 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1017.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:06:48 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1022.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:07:32 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1030.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:08:54 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1031.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:08:59 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1033.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:09:18 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1036.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:09:50 · Daniel Altmaier · followup_position_too_small (primary side)</title></circle>
+<circle cx="1046.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:11:26 · Daniel Altmaier · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1068.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:14:47 · Dusan Lajovic · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1069.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:14:59 · Dusan Lajovic · position_cap_reached (primary side)</title></circle>
+<circle cx="1091.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-14 14:18:30 · Dusan Lajovic · position_cap_reached (primary side)</title></circle>
+<text x="70" y="18" fill="#f3f4f6" font-size="14" font-weight="600">Valencia: Dusan Lajovic vs Daniel Altmaier <tspan fill="#94a3b8" font-weight="400">→ Daniel Altmaier (loser)</tspan></text>
+<text x="1140" y="18" fill="#94a3b8" font-size="11" text-anchor="end">swisstony: $3106 @ VWAP $0.459  ·  us: $3.25 @ VWAP $0.560</text>
+</svg>
+        <div class="legend">
+          <span><span class="line" style="background:#10b981"></span>swisstony $cost</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our $cost</span>
+          <span><span class="line dash" style="color:#10b981"></span>swisstony VWAP</span>
+          <span><span class="line dash" style="color:#3b82f6"></span>Our VWAP</span>
+          <span><span class="dot" style="background:#22c55e"></span>placed</span>
+          <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
+          <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
+          <span><span class="dot" style="background:#ef4444"></span>error</span>
+        </div>
+      </div>
+  </section>
+
+<div class="footer-note">
+  <strong>2 orders filled</strong> · 0 canceled · 0 errored · $4.57 filled / $4.57 attempted
+  · <a href="ai-walkthrough.md">AI walkthrough</a> · <a href="bundle.json">bundle.json</a>
+</div>
+
+</body>
+</html>

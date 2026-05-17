@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Δ-Report · Parma: Camila Osorio vs Barbora Krejcikova</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0; padding: 24px; max-width: 1320px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+.sub { color: #94a3b8; font-size: 13px; margin-bottom: 24px; }
+.sub a { color: #60a5fa; text-decoration: none; } .sub a:hover { text-decoration: underline; }
+.kpis { display: grid; gap: 12px; margin: 12px 0 18px; }
+.kpis-3 { grid-template-columns: 1fr 1fr 1fr; }
+.kpi { background: #131826; border: 1px solid #1f2937; border-radius: 8px; padding: 14px 16px; }
+.kpi h3 { margin: 0 0 6px; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.kpi .big { font-size: 26px; font-weight: 600; line-height: 1.1; }
+.kpi .sub { margin: 6px 0 0; color: #94a3b8; font-size: 12px; }
+.kpi.us { border-left: 3px solid #3b82f6; }
+.kpi.target { border-left: 3px solid #10b981; }
+.kpi.delta { border-left: 3px solid #f59e0b; }
+.pos { color: #22c55e; } .neg { color: #ef4444; }
+.event-group { margin: 36px 0; padding-top: 16px; border-top: 1px solid #1f2937; }
+.event-group > h2 { font-size: 18px; color: #f3f4f6; margin: 0 0 12px; font-weight: 600; }
+.event-group .evslug { font-size: 11px; color: #6b7280; margin-left: 8px; font-weight: 400; }
+.event-group .subhead { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin: 20px 0 10px; }
+.market-card { background: #131826; border: 1px solid #1f2937; border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+.market-head { padding: 10px 14px; background: #0f1525; border-bottom: 1px solid #1f2937; display: flex; align-items: center; gap: 10px; }
+.market-title { font-weight: 600; font-size: 13px; }
+.badge { font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 500; }
+.badge.win { background: #052e1a; color: #34d399; border: 1px solid #10b98166; }
+.badge.lose { background: #2a0a0a; color: #f87171; border: 1px solid #ef444466; }
+.positions { width: 100%; border-collapse: collapse; font-size: 12px; }
+.positions th, .positions td { padding: 7px 9px; text-align: left; border-bottom: 1px solid #1f2937; }
+.positions th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; background: #0e1422; }
+.positions td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.wallet { font-weight: 600; }
+.wallet.us { color: #60a5fa; } .wallet.target { color: #34d399; }
+.chart { width: 100%; height: auto; display: block; margin: 4px 0 12px; border-radius: 8px; }
+.empty { background: #131826; border: 1px dashed #334155; border-radius: 8px; padding: 18px; text-align: center; color: #64748b; }
+.legend { font-size: 11px; color: #94a3b8; padding: 4px 14px 14px; display: flex; gap: 14px; flex-wrap: wrap; }
+.legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.legend .line { display: inline-block; width: 16px; height: 2px; margin-right: 5px; vertical-align: middle; }
+.legend .line.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px); height: 2px; }
+.positions td.vwap-bad { color: #f87171; font-weight: 600; }
+.positions td.vwap-good { color: #34d399; font-weight: 600; }
+.positions tr.annotation td { font-size: 10.5px; color: #94a3b8; font-style: italic; padding: 3px 9px 8px; border-bottom: none; }
+.positions tr.annotation td.vwap-bad { color: #f87171; font-style: normal; }
+.positions tr.annotation td.vwap-good { color: #34d399; font-style: normal; }
+.footer-note { font-size: 11px; color: #6b7280; margin-top: 28px; padding-top: 12px; border-top: 1px solid #1f2937; }
+.footer-note a { color: #60a5fa; }
+
+.takeaway { background: linear-gradient(180deg, #1f1410 0%, #131826 100%); border: 1px solid #f59e0b; border-radius: 8px; padding: 18px 22px; margin: 12px 0 26px; }
+.takeaway h2 { margin: 0 0 12px; font-size: 13px; color: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.takeaway table.findings { width: 100%; border-collapse: collapse; font-size: 13px; }
+.takeaway table.findings th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: 0 10px 6px 0; border-bottom: 1px solid #f59e0b33; }
+.takeaway table.findings td { padding: 8px 10px 8px 0; vertical-align: top; border-bottom: 1px solid #f59e0b18; color: #e5e7eb; }
+.takeaway table.findings td.conf { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; white-space: nowrap; }
+.takeaway table.findings td.charter { font-size: 11px; color: #6b7280; white-space: nowrap; }
+.takeaway .placeholder { color: #64748b; font-style: italic; font-size: 13px; }
+.takeaway .fix { margin-top: 14px; padding-top: 12px; border-top: 1px solid #f59e0b33; font-size: 13px; color: #e5e7eb; line-height: 1.5; }
+.takeaway .fix strong { color: #34d399; }
+</style>
+</head>
+<body>
+<h1>Δ-Report · Parma: Camila Osorio vs Barbora Krejcikova</h1>
+<div class="sub">
+  Input: <code>wta-osorio-krejcik-2026-05-15</code> · Copy-target: <strong style="color:#34d399">swisstony</strong> <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code> · Our wallet: <code>0x95e407fe03996602ed1bf4289ecb3b5af88b5134</code><br/>
+  Charter: <a href="../charter.html">POLY_COPY_DELTA</a> (rendered) / <a href="../../work/charters/POLY_COPY_DELTA.md">.md source</a> · 1 event group · 186 mirror decisions · Global time scale: 2026-05-15 11:30:12 → 2026-05-15 15:11:38
+</div>
+
+<!-- TAKEAWAY:START -->
+<div class="takeaway">
+  <h2>↗ Top finding</h2>
+  <table class="findings">
+    <thead><tr><th>#</th><th>Finding</th><th class="charter">Charter</th><th class="conf">Confidence</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><strong>Dashboard row mixed two cost-basis denominators in adjacent cells</strong>. The outer "Target entry $36,215.52" column was <code>aggregateWalletReturn.totalBuyNotional = Math.max(rollupNotional, snapshotCostBasis)</code> at <code>market-exposure-service.ts:581</code> (now refactored). For swisstony, gross BUY rollup on this market was $36,215.52 across 181 fills (all BUYs; <strong>zero SELLs across all 195,723 lifetime fills</strong>). The reason rollup ≫ snapshot cost is <strong>negRisk pair-merges</strong>, not round-trips: swisstony bought BOTH outcomes (Krejcikova primary + Osorio hedge), repeatedly submitted matched pairs to the NegRiskAdapter for $1 USDC each (~34k pairs recovered ~$34k of cash), and held the residual ~4,834 K + ~1,167 O at a snapshot cost basis of $3,200.75. The per-trader expansion table read snapshot fields directly → P/L = $4,832.44 − $3,200.75 = +$1,631.69. Same row, two bases. The headline Δ −166.5% inherited the inflated $36k denominator.</td>
+        <td class="charter">N/A — dashboard reporting bug, not a mirror-algorithm Δ cause; <code>primary_class: null</code></td>
+        <td class="conf">95%</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="fix">
+    <strong>Fix landed in this PR:</strong> <code>aggregateWalletReturn</code> now returns snapshot-only <code>totalBuyNotional</code> (<code>market-exposure-service.ts:585+</code>) and exposes <code>grossBuyNotional</code> as a separate field for any future "Lifetime BUY activity" column. <code>positionReturnPct</code> is now pure held-P/L: <code>(value − cost) / cost</code>, no <code>realizedCash</code> input (see module header SINGLE_BASIS_SNAPSHOT_COST + market-return-math.ts HELD_PNL_BASIS). The "Target entry" cell on this row will now display <strong>$3,200.75</strong>, internally consistent with the +$1,631.69 P/L below it. Δ is now target +51.0% vs us +79.9% = −28.9pp (we beat target on rate; matched 0.31% of their notional).
+    <br/><br/>
+    <strong>Known gap, deferred:</strong> full-trade P/L for market-maker targets needs merge + redemption event tracking (NegRiskAdapter logs + redemption events). Without them, "held P/L" under-reports total profit on swisstony-shaped activity by the merge spread (~$500–$1k on this market). Snapshot-only is still the most honest single number available today; the alternative (max-rollup) was over-reporting by $33k.
+    <br/><br/>
+    <strong>Sidebar — underlying mirror behavior:</strong> 2 placed / 186 decisions. Block histogram 64 D4 / 61 D3 / 55 D6 — three different per-fill gates each blocking a different path. Variance check on our +79.9% / +$7.85: single 17.69-sh entry on Krejcikova, who won; if Osorio had won we'd be at $0. Coin flip, not edge.
+  </div>
+</div>
+<!-- TAKEAWAY:END -->
+
+<section class="event-group">
+    <h2>Parma: Camila Osorio vs Barbora Krejcikova <span class="evslug">event_slug: <code>wta-osorio-krejcik-2026-05-15</code> · 1 markets</span></h2>
+    <div class="kpis kpis-3">
+      <div class="kpi us">
+        <h3>Our wallet</h3>
+        <div class="big pos">+79.9% <span style="color:#94a3b8;font-size:14px">(+$7.85)</span></div>
+        <div class="sub">Entry $9.83 · Value $17.68</div>
+      </div>
+      <div class="kpi target">
+        <h3>swisstony (target)</h3>
+        <div class="big pos">+51.0% <span style="color:#94a3b8;font-size:14px">(+$1632)</span></div>
+        <div class="sub">Entry $3201 · Value $4832</div>
+      </div>
+      <div class="kpi delta">
+        <h3>Variance from target</h3>
+        <div class="big neg">28.9%</div>
+        <div class="sub">|target − us| · goal: minimize (any divergence = miss)</div>
+      </div>
+    </div>
+    <h3 class="subhead">Final positions (per market)</h3>
+    <div class="market-card">
+    <div class="market-head">
+      <span class="market-title">Parma: Camila Osorio vs Barbora Krejcikova</span>
+      
+      <span class="badge lose">Barbora Krejcikova lost</span>
+    </div>
+    <table class="positions">
+      <thead>
+        <tr>
+          <th rowspan="2">Trader</th>
+          <th colspan="3">Primary · Barbora Krejcikova</th>
+          <th colspan="3">Hedge · Camila Osorio</th>
+          <th rowspan="2">Net value</th>
+          <th rowspan="2">Net %</th>
+          <th rowspan="2">Net P/L</th>
+        </tr>
+        <tr><th>Value</th><th>VWAP</th><th>P/L</th><th>Value</th><th>VWAP</th><th>P/L</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+      <td><span class="wallet us">Our wallet</span></td>
+      <td class="num">$17.68</td><td class="num vwap-good">0.556</td><td class="num pos">+$7.85</td>
+      <td class="num">$0.00</td><td class="num">—</td><td class="num">—</td>
+      <td class="num">$17.68</td>
+      <td class="num pos">+79.9%</td>
+      <td class="num pos">+$7.85</td>
+    </tr>
+        <tr>
+      <td><span class="wallet target">swisstony</span></td>
+      <td class="num">$4832</td><td class="num ">0.597</td><td class="num pos">+$1943</td>
+      <td class="num">$0.58</td><td class="num ">0.267</td><td class="num neg">-$311.71</td>
+      <td class="num">$4832</td>
+      <td class="num pos">+51.0%</td>
+      <td class="num pos">+$1632</td>
+    </tr>
+        <tr class="annotation"><td></td><td class="num"></td><td class="num vwap-good" colspan="2">Δ VWAP -4.2¢ — we paid less</td><td class="num"></td><td class="num"></td><td class="num"></td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+    <h3 class="subhead">Position divergence over time</h3>
+    <div class="market-card">
+        <div class="market-head"><span class="market-title">Parma: Camila Osorio vs Barbora Krejcikova → primary Barbora Krejcikova / hedge Camila Osorio</span></div>
+        <svg viewBox="0 0 1200 340" xmlns="http://www.w3.org/2000/svg" class="chart">
+<rect x="0" y="0" width="1200" height="340" fill="#0b1220"/>
+<line x1="130" y1="132.4" x2="1170" y2="132.4" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="132.4" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1</text>
+<line x1="130" y1="147.6" x2="1170" y2="147.6" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="147.6" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1</text>
+<line x1="130" y1="113.7" x2="1170" y2="113.7" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="113.7" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10</text>
+<line x1="130" y1="166.3" x2="1170" y2="166.3" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="166.3" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10</text>
+<line x1="130" y1="89.4" x2="1170" y2="89.4" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="89.4" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$100</text>
+<line x1="130" y1="190.6" x2="1170" y2="190.6" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="190.6" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$100</text>
+<line x1="130" y1="64.2" x2="1170" y2="64.2" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="64.2" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1k</text>
+<line x1="130" y1="215.8" x2="1170" y2="215.8" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="215.8" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1k</text>
+<line x1="130" y1="38.9" x2="1170" y2="38.9" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="38.9" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10k</text>
+<line x1="130" y1="241.1" x2="1170" y2="241.1" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="122" y="241.1" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10k</text>
+<line x1="130" y1="140.0" x2="1170" y2="140.0" stroke="#475569" stroke-width="1"/>
+<text x="122" y="140.0" fill="#94a3b8" font-size="10" text-anchor="end" dominant-baseline="middle">$0</text>
+<text x="22" y="85" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 22 85)">PRIMARY ↑</text>
+<text x="22" y="99" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 99)">Barbora Krejcikova</text>
+<text x="22" y="195" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 22 195)">HEDGE ↓</text>
+<text x="22" y="209" fill="#94a3b8" font-size="10" text-anchor="middle" transform="rotate(-90 22 209)">Camila Osorio</text>
+<line x1="130.0" y1="250.0" x2="130.0" y2="254.0" stroke="#4b5563"/>
+<text x="130.0" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-15 11:19</text>
+<line x1="303.3" y1="250.0" x2="303.3" y2="254.0" stroke="#4b5563"/>
+<text x="303.3" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-15 11:59</text>
+<line x1="476.7" y1="250.0" x2="476.7" y2="254.0" stroke="#4b5563"/>
+<text x="476.7" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-15 12:40</text>
+<line x1="650.0" y1="250.0" x2="650.0" y2="254.0" stroke="#4b5563"/>
+<text x="650.0" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-15 13:20</text>
+<line x1="823.3" y1="250.0" x2="823.3" y2="254.0" stroke="#4b5563"/>
+<text x="823.3" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-15 14:01</text>
+<line x1="996.7" y1="250.0" x2="996.7" y2="254.0" stroke="#4b5563"/>
+<text x="996.7" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-15 14:42</text>
+<line x1="1170.0" y1="250.0" x2="1170.0" y2="254.0" stroke="#4b5563"/>
+<text x="1170.0" y="266.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-15 15:22</text>
+<text x="1176" y="112.5" fill="#475569" font-size="9" dominant-baseline="middle">$0.25</text>
+<text x="1176" y="167.5" fill="#475569" font-size="9" dominant-baseline="middle">$0.25</text>
+<text x="1176" y="85.0" fill="#475569" font-size="9" dominant-baseline="middle">$0.50</text>
+<text x="1176" y="195.0" fill="#475569" font-size="9" dominant-baseline="middle">$0.50</text>
+<text x="1176" y="57.5" fill="#475569" font-size="9" dominant-baseline="middle">$0.75</text>
+<text x="1176" y="222.5" fill="#475569" font-size="9" dominant-baseline="middle">$0.75</text>
+<text x="1176" y="30.0" fill="#475569" font-size="9" dominant-baseline="middle">$1.00</text>
+<text x="1176" y="250.0" fill="#475569" font-size="9" dominant-baseline="middle">$1.00</text>
+<text x="1182" y="140" fill="#475569" font-size="10" text-anchor="middle" transform="rotate(90 1182 140)">VWAP $</text>
+<path d="M 130.0 140.0 L 177.3 140.0 L 177.3 140.0 L 241.8 140.0 L 241.8 98.0 L 241.8 98.0 L 241.8 97.9 L 256.9 97.9 L 256.9 97.9 L 488.5 97.9 L 488.5 82.9 L 494.9 82.9 L 494.9 82.7 L 506.0 82.7 L 506.0 82.7 L 535.2 82.7 L 535.2 69.7 L 535.2 69.7 L 535.2 69.1 L 540.6 69.1 L 540.6 68.6 L 541.8 68.6 L 541.8 68.6 L 541.8 68.6 L 541.8 68.6 L 541.8 68.6 L 541.8 68.5 L 541.9 68.5 L 541.9 68.5 L 543.0 68.5 L 543.0 68.5 L 544.3 68.5 L 544.3 62.0 L 544.8 62.0 L 544.8 58.0 L 548.7 58.0 L 548.7 58.0 L 558.8 58.0 L 558.8 57.9 L 573.9 57.9 L 573.9 55.2 L 580.2 55.2 L 580.2 55.2 L 584.2 55.2 L 584.2 55.2 L 587.7 55.2 L 587.7 52.7 L 596.0 52.7 L 596.0 52.7 L 610.9 52.7 L 610.9 50.1 L 618.4 50.1 L 618.4 49.8 L 619.1 49.8 L 619.1 47.6 L 619.8 47.6 L 619.8 46.0 L 621.4 46.0 L 621.4 46.0 L 623.9 46.0 L 623.9 46.0 L 624.5 46.0 L 624.5 46.0 L 645.8 46.0 L 645.8 45.9 L 652.3 45.9 L 652.3 45.6 L 653.1 45.6 L 653.1 45.6 L 657.6 45.6 L 657.6 45.6 L 663.4 45.6 L 663.4 43.5 L 666.1 43.5 L 666.1 41.4 L 666.4 41.4 L 666.4 41.4 L 677.7 41.4 L 677.7 41.4 L 683.7 41.4 L 683.7 41.4 L 695.1 41.4 L 695.1 41.4 L 697.6 41.4 L 697.6 41.4 L 714.9 41.4 L 714.9 41.3 L 716.7 41.3 L 716.7 41.3 L 726.9 41.3 L 726.9 41.3 L 731.8 41.3 L 731.8 41.3 L 736.1 41.3 L 736.1 41.2 L 739.6 41.2 L 739.6 41.2 L 739.7 41.2 L 739.7 41.2 L 740.3 41.2 L 740.3 41.2 L 741.7 41.2 L 741.7 41.2 L 741.8 41.2 L 741.8 41.2 L 743.2 41.2 L 743.2 41.2 L 743.8 41.2 L 743.8 41.2 L 750.1 41.2 L 750.1 40.7 L 750.9 40.7 L 750.9 40.7 L 750.9 40.7 L 750.9 40.7 L 750.9 40.7 L 750.9 40.7 L 750.9 40.7 L 750.9 40.7 L 751.0 40.7 L 751.0 40.7 L 751.0 40.7 L 751.0 40.7 L 757.5 40.7 L 757.5 40.7 L 758.5 40.7 L 758.5 40.7 L 759.1 40.7 L 759.1 40.7 L 759.6 40.7 L 759.6 40.7 L 773.8 40.7 L 773.8 40.7 L 773.8 40.7 L 773.8 40.7 L 773.8 40.7 L 773.8 40.7 L 774.0 40.7 L 774.0 40.7 L 774.2 40.7 L 774.2 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 774.5 40.7 L 776.5 40.7 L 776.5 40.7 L 776.7 40.7 L 776.7 40.7 L 778.9 40.7 L 778.9 40.7 L 781.0 40.7 L 781.0 40.7 L 795.6 40.7 L 795.6 40.7 L 808.2 40.7 L 808.2 40.7 L 808.2 40.7 L 808.2 40.7 L 808.3 40.7 L 808.3 40.7 L 809.2 40.7 L 809.2 40.7 L 809.2 40.7 L 809.2 40.7 L 809.2 40.7 L 809.2 40.7 L 809.2 40.7 L 809.2 40.6 L 814.8 40.6 L 814.8 40.6 L 817.9 40.6 L 817.9 40.6 L 821.5 40.6 L 821.5 40.6 L 823.3 40.6 L 823.3 40.6 L 827.5 40.6 L 827.5 40.6 L 828.1 40.6 L 828.1 40.6 L 829.0 40.6 L 829.0 40.5 L 829.3 40.5 L 829.3 40.4 L 829.3 40.4 L 829.3 40.2 L 829.8 40.2 L 829.8 40.2 L 830.0 40.2 L 830.0 40.1 L 830.1 40.1 L 830.1 39.9 L 835.1 39.9 L 835.1 39.9 L 835.2 39.9 L 835.2 39.9 L 852.7 39.9 L 852.7 39.9 L 859.9 39.9 L 859.9 39.9 L 869.3 39.9 L 869.3 39.9 L 869.3 39.9 L 869.3 39.7 L 886.4 39.7 L 886.4 39.2 L 886.5 39.2 L 886.5 39.2 L 886.5 39.2 L 886.5 38.8 L 887.0 38.8 L 887.0 38.4 L 897.5 38.4 L 897.5 38.4 L 899.8 38.4 L 899.8 38.3 L 904.5 38.3 L 904.5 38.3 L 917.8 38.3 L 917.8 38.2 L 918.5 38.2 L 918.5 37.8 L 919.6 37.8 L 919.6 37.3 L 921.1 37.3 L 921.1 36.9 L 923.0 36.9 L 923.0 36.9 L 940.7 36.9 L 940.7 36.9 L 941.5 36.9 L 941.5 36.9 L 941.5 36.9 L 941.5 36.9 L 942.2 36.9 L 942.2 36.9 L 942.2 36.9 L 942.2 36.6 L 951.8 36.6 L 951.8 36.6 L 951.9 36.6 L 951.9 36.5 L 962.0 36.5 L 962.0 36.5 L 962.0 36.5 L 962.0 36.5 L 962.1 36.5 L 962.1 36.5 L 966.0 36.5 L 966.0 36.1 L 985.7 36.1 L 985.7 36.1 L 985.9 36.1 L 985.9 36.1 L 991.9 36.1 L 991.9 36.1 L 991.9 36.1 L 991.9 36.1 L 997.8 36.1 L 997.8 36.1 L 1009.7 36.1 L 1009.7 36.1 L 1013.3 36.1 L 1013.3 35.7 L 1019.4 35.7 L 1019.4 35.7 L 1025.5 35.7 L 1025.5 35.3 L 1039.3 35.3 L 1039.3 35.3 L 1041.5 35.3 L 1041.5 35.3 L 1043.8 35.3 L 1043.8 35.3 L 1045.2 35.3 L 1045.2 35.1 L 1046.3 35.1 L 1046.3 35.1 L 1046.3 35.1 L 1046.3 35.1 L 1046.4 35.1 L 1046.4 35.0 L 1046.9 35.0 L 1046.9 35.0 L 1046.9 35.0 L 1046.9 35.0 L 1046.9 35.0 L 1046.9 35.0 L 1047.9 35.0 L 1047.9 35.0 L 1048.5 35.0 L 1048.5 34.8 L 1048.6 34.8 L 1048.6 34.4 L 1048.6 34.4 L 1048.6 33.2 L 1048.8 33.2 L 1048.8 33.2 L 1048.8 33.2 L 1048.8 33.0 L 1049.3 33.0 L 1049.3 33.0 L 1049.3 33.0 L 1049.3 32.9 L 1049.5 32.9 L 1049.5 32.9 L 1049.5 32.9 L 1049.5 30.7 L 1049.8 30.7 L 1049.8 30.4 L 1052.9 30.4 L 1052.9 30.4 L 1053.5 30.4 L 1053.5 30.4 L 1054.0 30.4 L 1054.0 30.4 L 1054.6 30.4 L 1054.6 30.4 L 1055.9 30.4 L 1055.9 30.4 L 1055.9 30.4 L 1055.9 30.2 L 1056.9 30.2 L 1056.9 30.2 L 1063.4 30.2 L 1063.4 30.2 L 1068.6 30.2 L 1068.6 30.2 L 1069.9 30.2 L 1069.9 30.2 L 1073.2 30.2 L 1073.2 30.2 L 1075.7 30.2 L 1075.7 30.2 L 1080.2 30.2 L 1080.2 30.2 L 1093.5 30.2 L 1093.5 30.0 L 1101.3 30.0 L 1101.3 30.0 L 1104.2 30.0 L 1104.2 30.0 L 1114.5 30.0 L 1114.5 30.0 L 1116.7 30.0 L 1116.7 30.0 L 1117.2 30.0 L 1117.2 30.0 L 1118.7 30.0 L 1118.7 30.0 L 1122.7 30.0 L 1122.7 30.0 L 1170.0 30.0" fill="none" stroke="#10b981" stroke-width="2"/>
+<circle cx="1122.7" cy="30.0" r="3.5" fill="#10b981"><title>swisstony primary $22539.46</title></circle>
+<path d="M 130.0 140.0 L 177.3 140.0 L 177.3 176.3 L 241.8 176.3 L 241.8 176.3 L 241.8 176.3 L 241.8 176.3 L 256.9 176.3 L 256.9 181.1 L 488.5 181.1 L 488.5 181.1 L 494.9 181.1 L 494.9 181.1 L 506.0 181.1 L 506.0 182.8 L 535.2 182.8 L 535.2 182.8 L 535.2 182.8 L 535.2 182.8 L 540.6 182.8 L 540.6 182.8 L 541.8 182.8 L 541.8 182.8 L 541.8 182.8 L 541.8 182.8 L 541.8 182.8 L 541.8 182.8 L 541.9 182.8 L 541.9 182.8 L 543.0 182.8 L 543.0 182.8 L 544.3 182.8 L 544.3 182.8 L 544.8 182.8 L 544.8 182.8 L 548.7 182.8 L 548.7 191.7 L 558.8 191.7 L 558.8 191.7 L 573.9 191.7 L 573.9 191.7 L 580.2 191.7 L 580.2 192.2 L 584.2 192.2 L 584.2 203.8 L 587.7 203.8 L 587.7 203.8 L 596.0 203.8 L 596.0 203.8 L 610.9 203.8 L 610.9 203.8 L 618.4 203.8 L 618.4 203.8 L 619.1 203.8 L 619.1 203.8 L 619.8 203.8 L 619.8 203.8 L 621.4 203.8 L 621.4 203.9 L 623.9 203.9 L 623.9 204.9 L 624.5 204.9 L 624.5 205.7 L 645.8 205.7 L 645.8 205.7 L 652.3 205.7 L 652.3 205.7 L 653.1 205.7 L 653.1 205.7 L 657.6 205.7 L 657.6 205.7 L 663.4 205.7 L 663.4 205.7 L 666.1 205.7 L 666.1 205.7 L 666.4 205.7 L 666.4 208.7 L 677.7 208.7 L 677.7 210.2 L 683.7 210.2 L 683.7 210.4 L 695.1 210.4 L 695.1 211.9 L 697.6 211.9 L 697.6 212.0 L 714.9 212.0 L 714.9 212.0 L 716.7 212.0 L 716.7 212.1 L 726.9 212.1 L 726.9 212.9 L 731.8 212.9 L 731.8 212.9 L 736.1 212.9 L 736.1 212.9 L 739.6 212.9 L 739.6 212.9 L 739.7 212.9 L 739.7 213.6 L 740.3 213.6 L 740.3 213.6 L 741.7 213.6 L 741.7 213.6 L 741.8 213.6 L 741.8 213.7 L 743.2 213.7 L 743.2 217.1 L 743.8 217.1 L 743.8 219.7 L 750.1 219.7 L 750.1 219.7 L 750.9 219.7 L 750.9 219.7 L 750.9 219.7 L 750.9 219.8 L 750.9 219.8 L 750.9 219.8 L 750.9 219.8 L 750.9 219.8 L 751.0 219.8 L 751.0 219.8 L 751.0 219.8 L 751.0 219.8 L 757.5 219.8 L 757.5 222.0 L 758.5 222.0 L 758.5 222.0 L 759.1 222.0 L 759.1 222.0 L 759.6 222.0 L 759.6 222.0 L 773.8 222.0 L 773.8 222.0 L 773.8 222.0 L 773.8 222.0 L 773.8 222.0 L 773.8 222.0 L 774.0 222.0 L 774.0 222.0 L 774.2 222.0 L 774.2 222.0 L 774.5 222.0 L 774.5 222.0 L 774.5 222.0 L 774.5 222.0 L 774.5 222.0 L 774.5 222.1 L 774.5 222.1 L 774.5 222.1 L 774.5 222.1 L 774.5 222.1 L 774.5 222.1 L 774.5 222.1 L 774.5 222.1 L 774.5 222.1 L 776.5 222.1 L 776.5 224.7 L 776.7 224.7 L 776.7 224.9 L 778.9 224.9 L 778.9 225.0 L 781.0 225.0 L 781.0 225.0 L 795.6 225.0 L 795.6 226.4 L 808.2 226.4 L 808.2 226.4 L 808.2 226.4 L 808.2 226.4 L 808.3 226.4 L 808.3 226.4 L 809.2 226.4 L 809.2 226.4 L 809.2 226.4 L 809.2 226.4 L 809.2 226.4 L 809.2 226.4 L 809.2 226.4 L 809.2 226.4 L 814.8 226.4 L 814.8 226.7 L 817.9 226.7 L 817.9 227.1 L 821.5 227.1 L 821.5 228.6 L 823.3 228.6 L 823.3 228.7 L 827.5 228.7 L 827.5 228.7 L 828.1 228.7 L 828.1 228.7 L 829.0 228.7 L 829.0 228.7 L 829.3 228.7 L 829.3 228.7 L 829.3 228.7 L 829.3 228.7 L 829.8 228.7 L 829.8 228.7 L 830.0 228.7 L 830.0 228.7 L 830.1 228.7 L 830.1 228.7 L 835.1 228.7 L 835.1 229.0 L 835.2 229.0 L 835.2 230.3 L 852.7 230.3 L 852.7 231.3 L 859.9 231.3 L 859.9 232.4 L 869.3 232.4 L 869.3 232.4 L 869.3 232.4 L 869.3 232.4 L 886.4 232.4 L 886.4 232.4 L 886.5 232.4 L 886.5 232.4 L 886.5 232.4 L 886.5 232.4 L 887.0 232.4 L 887.0 232.4 L 897.5 232.4 L 897.5 232.5 L 899.8 232.5 L 899.8 232.5 L 904.5 232.5 L 904.5 232.5 L 917.8 232.5 L 917.8 232.5 L 918.5 232.5 L 918.5 232.5 L 919.6 232.5 L 919.6 232.5 L 921.1 232.5 L 921.1 232.5 L 923.0 232.5 L 923.0 232.5 L 940.7 232.5 L 940.7 233.5 L 941.5 233.5 L 941.5 233.5 L 941.5 233.5 L 941.5 233.5 L 942.2 233.5 L 942.2 233.5 L 942.2 233.5 L 942.2 233.5 L 951.8 233.5 L 951.8 233.5 L 951.9 233.5 L 951.9 233.5 L 962.0 233.5 L 962.0 233.5 L 962.0 233.5 L 962.0 233.7 L 962.1 233.7 L 962.1 233.7 L 966.0 233.7 L 966.0 233.7 L 985.7 233.7 L 985.7 233.7 L 985.9 233.7 L 985.9 233.9 L 991.9 233.9 L 991.9 233.9 L 991.9 233.9 L 991.9 233.9 L 997.8 233.9 L 997.8 234.7 L 1009.7 234.7 L 1009.7 234.7 L 1013.3 234.7 L 1013.3 234.7 L 1019.4 234.7 L 1019.4 235.3 L 1025.5 235.3 L 1025.5 235.3 L 1039.3 235.3 L 1039.3 235.3 L 1041.5 235.3 L 1041.5 235.3 L 1043.8 235.3 L 1043.8 235.8 L 1045.2 235.8 L 1045.2 235.8 L 1046.3 235.8 L 1046.3 235.8 L 1046.3 235.8 L 1046.3 236.2 L 1046.4 236.2 L 1046.4 236.2 L 1046.9 236.2 L 1046.9 236.5 L 1046.9 236.5 L 1046.9 241.5 L 1046.9 241.5 L 1046.9 242.5 L 1047.9 242.5 L 1047.9 242.5 L 1048.5 242.5 L 1048.5 242.5 L 1048.6 242.5 L 1048.6 242.5 L 1048.6 242.5 L 1048.6 242.5 L 1048.8 242.5 L 1048.8 242.5 L 1048.8 242.5 L 1048.8 242.5 L 1049.3 242.5 L 1049.3 242.5 L 1049.3 242.5 L 1049.3 242.5 L 1049.5 242.5 L 1049.5 242.5 L 1049.5 242.5 L 1049.5 242.5 L 1049.8 242.5 L 1049.8 242.5 L 1052.9 242.5 L 1052.9 242.8 L 1053.5 242.8 L 1053.5 243.1 L 1054.0 243.1 L 1054.0 243.4 L 1054.6 243.4 L 1054.6 243.7 L 1055.9 243.7 L 1055.9 243.8 L 1055.9 243.8 L 1055.9 243.8 L 1056.9 243.8 L 1056.9 243.8 L 1063.4 243.8 L 1063.4 244.1 L 1068.6 244.1 L 1068.6 244.1 L 1069.9 244.1 L 1069.9 244.1 L 1073.2 244.1 L 1073.2 244.3 L 1075.7 244.3 L 1075.7 244.3 L 1080.2 244.3 L 1080.2 244.3 L 1093.5 244.3 L 1093.5 244.3 L 1101.3 244.3 L 1101.3 244.3 L 1104.2 244.3 L 1104.2 244.3 L 1114.5 244.3 L 1114.5 244.4 L 1116.7 244.4 L 1116.7 244.4 L 1117.2 244.4 L 1117.2 244.4 L 1118.7 244.4 L 1118.7 244.5 L 1122.7 244.5 L 1122.7 244.5 L 1170.0 244.5" fill="none" stroke="#10b981" stroke-width="1.6" stroke-dasharray="5,3" opacity="0.95"/>
+<circle cx="1122.7" cy="244.5" r="3.5" fill="#10b981"><title>swisstony hedge $13676.06</title></circle>
+<path d="M 241.8 85.0 L 241.8 85.0 L 241.8 85.0 L 256.9 85.0 L 256.9 85.0 L 488.5 85.0 L 488.5 84.2 L 494.9 84.2 L 494.9 84.2 L 506.0 84.2 L 506.0 84.2 L 535.2 84.2 L 535.2 81.0 L 535.2 81.0 L 535.2 80.9 L 540.6 80.9 L 540.6 80.9 L 541.8 80.9 L 541.8 80.9 L 541.8 80.9 L 541.8 80.9 L 541.8 80.9 L 541.8 80.9 L 541.9 80.9 L 541.9 80.9 L 543.0 80.9 L 543.0 80.9 L 544.3 80.9 L 544.3 77.6 L 544.8 77.6 L 544.8 76.2 L 548.7 76.2 L 548.7 76.2 L 558.8 76.2 L 558.8 76.2 L 573.9 76.2 L 573.9 74.0 L 580.2 74.0 L 580.2 74.0 L 584.2 74.0 L 584.2 74.0 L 587.7 74.0 L 587.7 73.2 L 596.0 73.2 L 596.0 73.2 L 610.9 73.2 L 610.9 71.3 L 618.4 71.3 L 618.4 71.1 L 619.1 71.1 L 619.1 69.2 L 619.8 69.2 L 619.8 68.0 L 621.4 68.0 L 621.4 68.0 L 623.9 68.0 L 623.9 68.0 L 624.5 68.0 L 624.5 68.0 L 645.8 68.0 L 645.8 68.0 L 652.3 68.0 L 652.3 67.8 L 653.1 67.8 L 653.1 67.8 L 657.6 67.8 L 657.6 67.8 L 663.4 67.8 L 663.4 65.4 L 666.1 65.4 L 666.1 63.4 L 666.4 63.4 L 666.4 63.4 L 677.7 63.4 L 677.7 63.4 L 683.7 63.4 L 683.7 63.4 L 695.1 63.4 L 695.1 63.4 L 697.6 63.4 L 697.6 63.4 L 714.9 63.4 L 714.9 63.4 L 716.7 63.4 L 716.7 63.4 L 726.9 63.4 L 726.9 63.4 L 731.8 63.4 L 731.8 63.4 L 736.1 63.4 L 736.1 63.3 L 739.6 63.3 L 739.6 63.3 L 739.7 63.3 L 739.7 63.3 L 740.3 63.3 L 740.3 63.3 L 741.7 63.3 L 741.7 63.3 L 741.8 63.3 L 741.8 63.3 L 743.2 63.3 L 743.2 63.3 L 743.8 63.3 L 743.8 63.3 L 750.1 63.3 L 750.1 63.3 L 750.9 63.3 L 750.9 63.3 L 750.9 63.3 L 750.9 63.3 L 750.9 63.3 L 750.9 63.3 L 750.9 63.3 L 750.9 63.3 L 751.0 63.3 L 751.0 63.3 L 751.0 63.3 L 751.0 63.3 L 757.5 63.3 L 757.5 63.3 L 758.5 63.3 L 758.5 63.4 L 759.1 63.4 L 759.1 63.4 L 759.6 63.4 L 759.6 63.4 L 773.8 63.4 L 773.8 63.4 L 773.8 63.4 L 773.8 63.4 L 773.8 63.4 L 773.8 63.4 L 774.0 63.4 L 774.0 63.4 L 774.2 63.4 L 774.2 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 774.5 63.4 L 776.5 63.4 L 776.5 63.4 L 776.7 63.4 L 776.7 63.4 L 778.9 63.4 L 778.9 63.4 L 781.0 63.4 L 781.0 63.4 L 795.6 63.4 L 795.6 63.4 L 808.2 63.4 L 808.2 63.4 L 808.2 63.4 L 808.2 63.4 L 808.3 63.4 L 808.3 63.4 L 809.2 63.4 L 809.2 63.4 L 809.2 63.4 L 809.2 63.4 L 809.2 63.4 L 809.2 63.4 L 809.2 63.4 L 809.2 63.4 L 814.8 63.4 L 814.8 63.4 L 817.9 63.4 L 817.9 63.4 L 821.5 63.4 L 821.5 63.4 L 823.3 63.4 L 823.3 63.4 L 827.5 63.4 L 827.5 63.5 L 828.1 63.5 L 828.1 63.6 L 829.0 63.6 L 829.0 63.9 L 829.3 63.9 L 829.3 64.3 L 829.3 64.3 L 829.3 64.7 L 829.8 64.7 L 829.8 64.7 L 830.0 64.7 L 830.0 65.0 L 830.1 65.0 L 830.1 65.7 L 835.1 65.7 L 835.1 65.7 L 835.2 65.7 L 835.2 65.7 L 852.7 65.7 L 852.7 65.7 L 859.9 65.7 L 859.9 65.7 L 869.3 65.7 L 869.3 65.7 L 869.3 65.7 L 869.3 66.0 L 886.4 66.0 L 886.4 67.1 L 886.5 67.1 L 886.5 67.1 L 886.5 67.1 L 886.5 67.8 L 887.0 67.8 L 887.0 68.6 L 897.5 68.6 L 897.5 68.6 L 899.8 68.6 L 899.8 68.6 L 904.5 68.6 L 904.5 68.6 L 917.8 68.6 L 917.8 68.9 L 918.5 68.9 L 918.5 69.7 L 919.6 69.7 L 919.6 70.4 L 921.1 70.4 L 921.1 70.8 L 923.0 70.8 L 923.0 70.8 L 940.7 70.8 L 940.7 70.8 L 941.5 70.8 L 941.5 70.8 L 941.5 70.8 L 941.5 70.8 L 942.2 70.8 L 942.2 70.8 L 942.2 70.8 L 942.2 71.2 L 951.8 71.2 L 951.8 71.2 L 951.9 71.2 L 951.9 71.2 L 962.0 71.2 L 962.0 71.2 L 962.0 71.2 L 962.0 71.2 L 962.1 71.2 L 962.1 71.2 L 966.0 71.2 L 966.0 71.8 L 985.7 71.8 L 985.7 71.7 L 985.9 71.7 L 985.9 71.7 L 991.9 71.7 L 991.9 71.7 L 991.9 71.7 L 991.9 71.7 L 997.8 71.7 L 997.8 71.7 L 1009.7 71.7 L 1009.7 71.7 L 1013.3 71.7 L 1013.3 72.2 L 1019.4 72.2 L 1019.4 72.2 L 1025.5 72.2 L 1025.5 72.6 L 1039.3 72.6 L 1039.3 72.6 L 1041.5 72.6 L 1041.5 72.6 L 1043.8 72.6 L 1043.8 72.6 L 1045.2 72.6 L 1045.2 72.9 L 1046.3 72.9 L 1046.3 72.9 L 1046.3 72.9 L 1046.3 72.9 L 1046.4 72.9 L 1046.4 73.0 L 1046.9 73.0 L 1046.9 73.0 L 1046.9 73.0 L 1046.9 73.0 L 1046.9 73.0 L 1046.9 73.0 L 1047.9 73.0 L 1047.9 73.0 L 1048.5 73.0 L 1048.5 73.0 L 1048.6 73.0 L 1048.6 72.9 L 1048.6 72.9 L 1048.6 72.8 L 1048.8 72.8 L 1048.8 72.8 L 1048.8 72.8 L 1048.8 72.8 L 1049.3 72.8 L 1049.3 72.8 L 1049.3 72.8 L 1049.3 72.8 L 1049.5 72.8 L 1049.5 72.8 L 1049.5 72.8 L 1049.5 72.2 L 1049.8 72.2 L 1049.8 72.1 L 1052.9 72.1 L 1052.9 72.1 L 1053.5 72.1 L 1053.5 72.1 L 1054.0 72.1 L 1054.0 72.1 L 1054.6 72.1 L 1054.6 72.1 L 1055.9 72.1 L 1055.9 72.1 L 1055.9 72.1 L 1055.9 72.1 L 1056.9 72.1 L 1056.9 72.1 L 1063.4 72.1 L 1063.4 72.1 L 1068.6 72.1 L 1068.6 72.1 L 1069.9 72.1 L 1069.9 72.2 L 1073.2 72.2 L 1073.2 72.2 L 1075.7 72.2 L 1075.7 72.2 L 1080.2 72.2 L 1080.2 72.2 L 1093.5 72.2 L 1093.5 72.2 L 1101.3 72.2 L 1101.3 72.2 L 1104.2 72.2 L 1104.2 72.2 L 1114.5 72.2 L 1114.5 72.2 L 1116.7 72.2 L 1116.7 72.2 L 1117.2 72.2 L 1117.2 72.2 L 1118.7 72.2 L 1118.7 72.2 L 1122.7 72.2 L 1122.7 72.2 L 1170.0 72.2" fill="none" stroke="#10b981" stroke-width="1" opacity="0.55"/>
+<path d="M 177.3 192.8 L 241.8 192.8 L 241.8 192.8 L 241.8 192.8 L 241.8 192.8 L 256.9 192.8 L 256.9 192.4 L 488.5 192.4 L 488.5 192.4 L 494.9 192.4 L 494.9 192.4 L 506.0 192.4 L 506.0 192.5 L 535.2 192.5 L 535.2 192.5 L 535.2 192.5 L 535.2 192.5 L 540.6 192.5 L 540.6 192.5 L 541.8 192.5 L 541.8 192.5 L 541.8 192.5 L 541.8 192.5 L 541.8 192.5 L 541.8 192.5 L 541.9 192.5 L 541.9 192.5 L 543.0 192.5 L 543.0 192.5 L 544.3 192.5 L 544.3 192.5 L 544.8 192.5 L 544.8 192.5 L 548.7 192.5 L 548.7 187.3 L 558.8 187.3 L 558.8 187.3 L 573.9 187.3 L 573.9 187.3 L 580.2 187.3 L 580.2 186.7 L 584.2 186.7 L 584.2 181.8 L 587.7 181.8 L 587.7 181.8 L 596.0 181.8 L 596.0 181.7 L 610.9 181.7 L 610.9 181.7 L 618.4 181.7 L 618.4 181.7 L 619.1 181.7 L 619.1 181.7 L 619.8 181.7 L 619.8 181.7 L 621.4 181.7 L 621.4 181.6 L 623.9 181.6 L 623.9 180.6 L 624.5 180.6 L 624.5 180.0 L 645.8 180.0 L 645.8 180.0 L 652.3 180.0 L 652.3 180.0 L 653.1 180.0 L 653.1 180.0 L 657.6 180.0 L 657.6 180.0 L 663.4 180.0 L 663.4 180.0 L 666.1 180.0 L 666.1 180.0 L 666.4 180.0 L 666.4 173.5 L 677.7 173.5 L 677.7 170.8 L 683.7 170.8 L 683.7 170.4 L 695.1 170.4 L 695.1 168.5 L 697.6 168.5 L 697.6 168.3 L 714.9 168.3 L 714.9 168.3 L 716.7 168.3 L 716.7 168.2 L 726.9 168.2 L 726.9 167.7 L 731.8 167.7 L 731.8 167.7 L 736.1 167.7 L 736.1 167.7 L 739.6 167.7 L 739.6 167.7 L 739.7 167.7 L 739.7 167.8 L 740.3 167.8 L 740.3 167.8 L 741.7 167.8 L 741.7 167.8 L 741.8 167.8 L 741.8 167.8 L 743.2 167.8 L 743.2 168.3 L 743.8 168.3 L 743.8 168.6 L 750.1 168.6 L 750.1 168.6 L 750.9 168.6 L 750.9 168.6 L 750.9 168.6 L 750.9 168.6 L 750.9 168.6 L 750.9 168.6 L 750.9 168.6 L 750.9 168.6 L 751.0 168.6 L 751.0 168.6 L 751.0 168.6 L 751.0 168.6 L 757.5 168.6 L 757.5 169.8 L 758.5 169.8 L 758.5 169.8 L 759.1 169.8 L 759.1 169.8 L 759.6 169.8 L 759.6 169.8 L 773.8 169.8 L 773.8 169.8 L 773.8 169.8 L 773.8 169.8 L 773.8 169.8 L 773.8 169.8 L 774.0 169.8 L 774.0 169.8 L 774.2 169.8 L 774.2 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 774.5 169.8 L 776.5 169.8 L 776.5 171.7 L 776.7 171.7 L 776.7 171.9 L 778.9 171.9 L 778.9 171.9 L 781.0 171.9 L 781.0 171.9 L 795.6 171.9 L 795.6 172.7 L 808.2 172.7 L 808.2 172.7 L 808.2 172.7 L 808.2 172.7 L 808.3 172.7 L 808.3 172.7 L 809.2 172.7 L 809.2 172.7 L 809.2 172.7 L 809.2 172.7 L 809.2 172.7 L 809.2 172.7 L 809.2 172.7 L 809.2 172.7 L 814.8 172.7 L 814.8 173.0 L 817.9 173.0 L 817.9 173.3 L 821.5 173.3 L 821.5 175.1 L 823.3 175.1 L 823.3 175.2 L 827.5 175.2 L 827.5 175.2 L 828.1 175.2 L 828.1 175.2 L 829.0 175.2 L 829.0 175.2 L 829.3 175.2 L 829.3 175.2 L 829.3 175.2 L 829.3 175.2 L 829.8 175.2 L 829.8 175.2 L 830.0 175.2 L 830.0 175.2 L 830.1 175.2 L 830.1 175.2 L 835.1 175.2 L 835.1 175.6 L 835.2 175.6 L 835.2 177.0 L 852.7 177.0 L 852.7 178.1 L 859.9 178.1 L 859.9 179.4 L 869.3 179.4 L 869.3 179.4 L 869.3 179.4 L 869.3 179.4 L 886.4 179.4 L 886.4 179.4 L 886.5 179.4 L 886.5 179.4 L 886.5 179.4 L 886.5 179.4 L 887.0 179.4 L 887.0 179.4 L 897.5 179.4 L 897.5 179.5 L 899.8 179.5 L 899.8 179.5 L 904.5 179.5 L 904.5 179.5 L 917.8 179.5 L 917.8 179.5 L 918.5 179.5 L 918.5 179.5 L 919.6 179.5 L 919.6 179.5 L 921.1 179.5 L 921.1 179.5 L 923.0 179.5 L 923.0 179.5 L 940.7 179.5 L 940.7 180.4 L 941.5 180.4 L 941.5 180.4 L 941.5 180.4 L 941.5 180.4 L 942.2 180.4 L 942.2 180.4 L 942.2 180.4 L 942.2 180.4 L 951.8 180.4 L 951.8 180.4 L 951.9 180.4 L 951.9 180.4 L 962.0 180.4 L 962.0 180.4 L 962.0 180.4 L 962.0 180.6 L 962.1 180.6 L 962.1 180.6 L 966.0 180.6 L 966.0 180.6 L 985.7 180.6 L 985.7 180.6 L 985.9 180.6 L 985.9 180.4 L 991.9 180.4 L 991.9 180.4 L 991.9 180.4 L 991.9 180.4 L 997.8 180.4 L 997.8 180.7 L 1009.7 180.7 L 1009.7 180.7 L 1013.3 180.7 L 1013.3 180.7 L 1019.4 180.7 L 1019.4 181.3 L 1025.5 181.3 L 1025.5 181.3 L 1039.3 181.3 L 1039.3 181.3 L 1041.5 181.3 L 1041.5 181.3 L 1043.8 181.3 L 1043.8 181.8 L 1045.2 181.8 L 1045.2 181.8 L 1046.3 181.8 L 1046.3 181.8 L 1046.3 181.8 L 1046.3 182.1 L 1046.4 182.1 L 1046.4 182.1 L 1046.9 182.1 L 1046.9 182.1 L 1046.9 182.1 L 1046.9 183.2 L 1046.9 183.2 L 1046.9 183.4 L 1047.9 183.4 L 1047.9 183.4 L 1048.5 183.4 L 1048.5 183.4 L 1048.6 183.4 L 1048.6 183.4 L 1048.6 183.4 L 1048.6 183.4 L 1048.8 183.4 L 1048.8 183.4 L 1048.8 183.4 L 1048.8 183.4 L 1049.3 183.4 L 1049.3 183.4 L 1049.3 183.4 L 1049.3 183.4 L 1049.5 183.4 L 1049.5 183.4 L 1049.5 183.4 L 1049.5 183.4 L 1049.8 183.4 L 1049.8 183.4 L 1052.9 183.4 L 1052.9 183.2 L 1053.5 183.2 L 1053.5 183.0 L 1054.0 183.0 L 1054.0 182.8 L 1054.6 182.8 L 1054.6 182.7 L 1055.9 182.7 L 1055.9 182.7 L 1055.9 182.7 L 1055.9 182.7 L 1056.9 182.7 L 1056.9 182.7 L 1063.4 182.7 L 1063.4 182.8 L 1068.6 182.8 L 1068.6 182.9 L 1069.9 182.9 L 1069.9 182.9 L 1073.2 182.9 L 1073.2 183.0 L 1075.7 183.0 L 1075.7 183.0 L 1080.2 183.0 L 1080.2 183.0 L 1093.5 183.0 L 1093.5 183.0 L 1101.3 183.0 L 1101.3 183.0 L 1104.2 183.0 L 1104.2 183.0 L 1114.5 183.0 L 1114.5 182.9 L 1116.7 182.9 L 1116.7 182.9 L 1117.2 182.9 L 1117.2 182.8 L 1118.7 182.8 L 1118.7 182.6 L 1122.7 182.6 L 1122.7 182.6 L 1170.0 182.6" fill="none" stroke="#10b981" stroke-width="1" opacity="0.55"/>
+<path d="M 130.0 140.0 L 560.8 140.0 L 560.8 117.2 L 782.5 117.2 L 782.5 113.9 L 1170.0 113.9" fill="none" stroke="#3b82f6" stroke-width="2"/>
+<circle cx="782.5" cy="113.9" r="3.5" fill="#3b82f6"><title>Tenant trading wallet primary $9.83</title></circle>
+<path d="M 130.0 140.0 L 560.8 140.0 L 560.8 140.0 L 782.5 140.0 L 782.5 140.0 L 1170.0 140.0" fill="none" stroke="#3b82f6" stroke-width="1.6" stroke-dasharray="5,3" opacity="0.95"/>
+<path d="M 560.8 79.5 L 782.5 79.5 L 782.5 78.9 L 1170.0 78.9" fill="none" stroke="#3b82f6" stroke-width="1" opacity="0.55"/>
+<text x="130" y="278" fill="#9ca3af" font-size="11">our decisions →</text>
+<line x1="130" y1="290" x2="1170" y2="290" stroke="#1f2937"/>
+<circle cx="256.8" cy="290.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-15 11:48:49 · Camila Osorio · below_target_percentile (hedge side)</title></circle>
+<circle cx="356.7" cy="290.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-15 12:12:13 · Camila Osorio · below_target_percentile (hedge side)</title></circle>
+<circle cx="488.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-15 12:43:05 · Barbora Krejcikova · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="494.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-15 12:44:34 · Barbora Krejcikova · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="505.9" cy="290.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-15 12:47:09 · Camila Osorio · below_target_percentile (hedge side)</title></circle>
+<circle cx="533.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-15 12:53:34 · Barbora Krejcikova · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="535.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-15 12:54:01 · Barbora Krejcikova · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="535.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-15 12:54:02 · Barbora Krejcikova · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="540.5" cy="290.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-15 12:55:16 · Barbora Krejcikova · ok (hedge side)</title></circle>
+<circle cx="541.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:55:34 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="541.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:55:35 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="541.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:55:35 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="542.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:55:38 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="543.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:55:51 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="544.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:56:09 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="544.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:56:18 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="545.4" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:56:25 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="546.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:56:33 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="546.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:56:42 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="547.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:56:49 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="548.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 12:57:10 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="558.8" cy="290.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-15 12:59:33 · Barbora Krejcikova · ok (hedge side)</title></circle>
+<circle cx="573.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:03:05 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="580.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:04:32 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="584.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:05:31 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="587.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:06:20 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="593.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:07:46 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="594.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:07:48 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="595.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:08:15 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="611.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:11:46 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="618.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:13:29 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="619.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:13:40 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="619.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:13:49 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="621.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:14:12 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="623.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:14:47 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="624.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:14:56 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="645.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:19:55 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="652.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:21:26 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="653.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:21:38 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="657.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:22:41 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="663.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:24:01 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="666.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:24:40 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="666.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:24:43 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="677.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:27:23 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="683.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:28:47 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="695.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:31:29 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="697.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:32:03 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="714.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:36:06 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="716.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:36:32 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="726.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:38:54 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="731.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:40:04 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="736.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:41:03 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="739.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:41:53 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="739.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:41:54 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="740.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:42:03 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="741.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:42:23 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="741.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:42:25 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="743.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:42:45 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="743.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:42:52 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="750.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:44:21 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="750.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:44:32 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="750.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:44:33 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="751.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:44:33 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="751.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:44:34 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="751.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:44:34 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="751.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:44:34 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="757.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:46:05 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="758.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:46:19 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="759.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:46:28 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="759.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:46:34 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="773.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:49:54 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="773.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:49:55 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="773.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:49:55 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="773.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:49:56 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="774.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:50:00 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="774.4" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:50:03 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="774.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:50:04 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="774.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:50:05 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="774.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:50:05 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="774.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:50:05 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="774.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:50:06 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="774.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:50:06 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="776.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:50:33 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="776.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:50:35 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="778.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:51:06 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="781.0" cy="290.0" r="4" fill="#22c55e" opacity="0.95"><title>2026-05-15 13:51:35 · Barbora Krejcikova · layer_scale_in (primary side)</title></circle>
+<circle cx="795.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:55:00 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="808.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:57:57 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="808.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:57:57 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="808.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:57:58 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="809.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:58:11 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="809.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:58:11 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="809.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:58:11 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="809.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:58:11 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="814.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 13:59:30 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="817.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:00:14 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="821.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:01:04 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="823.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:01:29 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="827.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:02:28 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="828.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:02:37 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="829.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:02:49 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="829.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:02:52 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="829.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:02:53 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="829.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:03:01 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="829.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:03:03 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="830.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:03:05 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="835.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:04:15 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="835.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:04:17 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="852.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:08:22 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="859.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:10:03 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="869.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:12:16 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="869.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:12:17 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="886.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:16:16 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="886.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:16:17 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="886.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:16:18 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="887.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:16:25 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="897.4" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:18:52 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="899.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:19:25 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="904.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:20:30 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="917.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:23:37 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="918.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:23:47 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="919.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:24:03 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="921.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:24:24 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="923.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:24:51 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="940.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:28:59 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="941.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:29:11 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="941.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:29:12 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="942.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:29:20 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="942.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:29:21 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="951.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:31:35 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="951.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:31:36 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="962.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:33:58 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="962.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:33:59 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="962.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:34:00 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="965.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:34:54 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="985.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:39:32 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="985.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:39:34 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="991.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:40:59 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="991.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:41:00 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="997.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:42:22 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="1009.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:45:08 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1013.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:45:59 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="1019.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:47:25 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="1025.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:48:51 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="1039.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:52:05 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="1041.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:52:36 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1043.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:53:08 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1045.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:53:27 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="1046.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:53:43 · Camila Osorio · position_cap_reached (primary side)</title></circle>
+<circle cx="1046.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:53:43 · Camila Osorio · position_cap_reached (primary side)</title></circle>
+<circle cx="1046.4" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:53:44 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="1046.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:53:52 · Camila Osorio · position_cap_reached (primary side)</title></circle>
+<circle cx="1047.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:53:53 · Camila Osorio · position_cap_reached (primary side)</title></circle>
+<circle cx="1047.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:53:53 · Camila Osorio · position_cap_reached (primary side)</title></circle>
+<circle cx="1047.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:54:05 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1048.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:54:16 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1048.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:54:16 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1048.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:54:16 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1048.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:54:18 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1048.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:54:18 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1049.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:54:25 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1049.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:54:25 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1049.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:54:28 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1049.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:54:28 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1049.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:54:32 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1052.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:55:15 · Camila Osorio · position_cap_reached (primary side)</title></circle>
+<circle cx="1053.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:55:24 · Camila Osorio · position_cap_reached (primary side)</title></circle>
+<circle cx="1054.0" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:55:32 · Camila Osorio · position_cap_reached (primary side)</title></circle>
+<circle cx="1054.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:55:40 · Camila Osorio · position_cap_reached (primary side)</title></circle>
+<circle cx="1055.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:55:58 · Camila Osorio · position_cap_reached (primary side)</title></circle>
+<circle cx="1055.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:55:58 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1056.8" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:56:12 · Camila Osorio · position_cap_reached (primary side)</title></circle>
+<circle cx="1063.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:57:45 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1068.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:58:56 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1069.9" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 14:59:15 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="1073.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 15:00:01 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1075.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 15:00:36 · Camila Osorio · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1080.1" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 15:01:39 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1093.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 15:04:46 · Barbora Krejcikova · position_cap_reached (primary side)</title></circle>
+<circle cx="1101.3" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 15:06:36 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1104.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 15:07:17 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<circle cx="1114.5" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 15:09:42 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="1116.6" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 15:10:12 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="1117.2" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 15:10:19 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="1118.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 15:10:41 · Camila Osorio · target_dominant_other_side (primary side)</title></circle>
+<circle cx="1122.7" cy="290.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-15 15:11:37 · Barbora Krejcikova · vwap_floor_breach (primary side)</title></circle>
+<text x="130" y="18" fill="#f3f4f6" font-size="14" font-weight="600">Parma: Camila Osorio vs Barbora Krejcikova <tspan fill="#94a3b8" font-weight="400">→ primary Barbora Krejcikova (loser)</tspan></text>
+<text x="1170" y="18" fill="#94a3b8" font-size="11" text-anchor="end">swisstony: P $22539 @$0.616 · H $13676 @$0.387   ·   us: P $9.83 @$0.556 · H $0.00 —</text>
+</svg>
+        <div class="legend">
+          <span><span class="line" style="background:#10b981"></span>swisstony position: primary solid (up) / hedge dashed (down)</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our position: primary solid (up) / hedge dashed (down)</span>
+          <span><span class="line" style="background:#10b981;opacity:0.55;height:1px"></span>swisstony VWAP (thin, right-axis $)</span>
+          <span><span class="line" style="background:#3b82f6;opacity:0.55;height:1px"></span>Our VWAP (thin, right-axis $)</span>
+          <span><span class="dot" style="background:#22c55e"></span>placed</span>
+          <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
+          <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
+          <span><span class="dot" style="background:#ef4444"></span>error</span>
+        </div>
+      </div>
+  </section>
+
+<div class="footer-note">
+  <strong>2 orders filled</strong> · 1 canceled · 0 errored · $9.83 filled / $13.10 attempted
+  · <a href="bundle.json">bundle.json</a> (AI read surface)
+</div>
+
+</body>
+</html>

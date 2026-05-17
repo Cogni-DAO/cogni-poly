@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Δ-Report · 2 event groups</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0; padding: 24px; max-width: 1320px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+.sub { color: #94a3b8; font-size: 13px; margin-bottom: 24px; }
+.sub a { color: #60a5fa; text-decoration: none; } .sub a:hover { text-decoration: underline; }
+.kpis { display: grid; gap: 12px; margin: 12px 0 18px; }
+.kpis-3 { grid-template-columns: 1fr 1fr 1fr; }
+.kpi { background: #131826; border: 1px solid #1f2937; border-radius: 8px; padding: 14px 16px; }
+.kpi h3 { margin: 0 0 6px; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.kpi .big { font-size: 26px; font-weight: 600; line-height: 1.1; }
+.kpi .sub { margin: 6px 0 0; color: #94a3b8; font-size: 12px; }
+.kpi.us { border-left: 3px solid #3b82f6; }
+.kpi.target { border-left: 3px solid #10b981; }
+.kpi.delta { border-left: 3px solid #f59e0b; }
+.pos { color: #22c55e; } .neg { color: #ef4444; }
+.event-group { margin: 36px 0; padding-top: 16px; border-top: 1px solid #1f2937; }
+.event-group > h2 { font-size: 18px; color: #f3f4f6; margin: 0 0 12px; font-weight: 600; }
+.event-group .evslug { font-size: 11px; color: #6b7280; margin-left: 8px; font-weight: 400; }
+.event-group .subhead { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin: 20px 0 10px; }
+.market-card { background: #131826; border: 1px solid #1f2937; border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+.market-head { padding: 10px 14px; background: #0f1525; border-bottom: 1px solid #1f2937; display: flex; align-items: center; gap: 10px; }
+.market-title { font-weight: 600; font-size: 13px; }
+.badge { font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 500; }
+.badge.win { background: #052e1a; color: #34d399; border: 1px solid #10b98166; }
+.badge.lose { background: #2a0a0a; color: #f87171; border: 1px solid #ef444466; }
+.positions { width: 100%; border-collapse: collapse; font-size: 12px; }
+.positions th, .positions td { padding: 7px 9px; text-align: left; border-bottom: 1px solid #1f2937; }
+.positions th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; background: #0e1422; }
+.positions td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.wallet { font-weight: 600; }
+.wallet.us { color: #60a5fa; } .wallet.target { color: #34d399; }
+.chart { width: 100%; height: auto; display: block; margin: 4px 0 12px; border-radius: 8px; }
+.empty { background: #131826; border: 1px dashed #334155; border-radius: 8px; padding: 18px; text-align: center; color: #64748b; }
+.legend { font-size: 11px; color: #94a3b8; padding: 4px 14px 14px; display: flex; gap: 14px; flex-wrap: wrap; }
+.legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.legend .line { display: inline-block; width: 16px; height: 2px; margin-right: 5px; vertical-align: middle; }
+.legend .line.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px); height: 2px; }
+.cause { background: linear-gradient(180deg, #1a1f2e 0%, #131826 100%); border: 1px solid #f59e0b66; border-radius: 8px; padding: 14px 16px; margin: 10px 0; }
+.cause h2 { margin: 0 0 6px; font-size: 14px; color: #fbbf24; font-weight: 600; }
+.cause .ev { background: #0b1220; border-radius: 4px; padding: 7px 9px; margin: 4px 0; font-size: 12px; color: #d1d5db; }
+.pareto { background: linear-gradient(180deg, #052e1a 0%, #0a1a14 100%); border: 1px solid #10b981; border-radius: 8px; padding: 16px 18px; margin: 14px 0; }
+.pareto h2 { margin: 0 0 8px; font-size: 15px; color: #34d399; }
+.pareto .act { font-size: 14px; color: #e5e7eb; line-height: 1.5; }
+.pareto .act code { background: #0b1220; padding: 1px 6px; border-radius: 3px; font-size: 12.5px; }
+.pareto .charter { font-size: 11px; color: #6b7280; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>Δ-Report · 2 event groups</h1>
+<div class="sub">
+  Input: <code>lal-bet-elc-2026-05-12</code> · Copy-target: <strong style="color:#34d399">swisstony</strong> <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code> · Our wallet: <code>0x95e407fe03996602ed1bf4289ecb3b5af88b5134</code><br/>
+  Charter: <a href="charter.html">POLY_COPY_DELTA</a> · 2 event groups · 477 mirror decisions · Global time scale: 2026-05-10 20:59:20 → 2026-05-14 17:04:18
+</div>
+
+<section class="event-group">
+    <h2>Real Betis Balompié vs. Elche CF <span class="evslug">event_slug: <code>lal-bet-elc-2026-05-12</code> · 3 markets</span></h2>
+    <div class="kpis kpis-3">
+      <div class="kpi us">
+        <h3>Our wallet</h3>
+        <div class="big neg">-100.0% <span style="color:#94a3b8;font-size:14px">(-$65.35)</span></div>
+        <div class="sub">Entry $65.35 · Value $0.00</div>
+      </div>
+      <div class="kpi target">
+        <h3>swisstony (target)</h3>
+        <div class="big neg">-42.8% <span style="color:#94a3b8;font-size:14px">(-$6212)</span></div>
+        <div class="sub">Entry $87712 · Value $50131</div>
+      </div>
+      <div class="kpi delta">
+        <h3>Δ vs target</h3>
+        <div class="big neg">+57.2% <span style="color:#94a3b8;font-size:14px">(+$37.35)</span></div>
+        <div class="sub">positive = target ahead = alpha leak</div>
+      </div>
+    </div>
+    <h3 class="subhead">Final positions (per market)</h3>
+    <div class="market-card">
+    <div class="market-head">
+      <span class="market-title">Will Real Betis Balompié vs. Elche CF end in a draw?</span>
+      <span class="badge win">No won</span>
+      
+    </div>
+    <table class="positions">
+      <thead>
+        <tr>
+          <th rowspan="2">Trader</th>
+          <th colspan="3">Primary · No</th>
+          <th colspan="3">Hedge · Yes</th>
+          <th rowspan="2">Net value</th>
+          <th rowspan="2">Net %</th>
+          <th rowspan="2">Net P/L</th>
+        </tr>
+        <tr><th>Value</th><th>VWAP</th><th>P/L</th><th>Value</th><th>VWAP</th><th>P/L</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+      <td><span class="wallet us">Our wallet</span></td>
+      <td class="num">$0.00</td><td class="num">0.665</td><td class="num neg">-$13.41</td>
+      <td class="num">$0.00</td><td class="num">—</td><td class="num">—</td>
+      <td class="num">$0.00</td>
+      <td class="num neg">-100.0%</td>
+      <td class="num neg">-$13.41</td>
+    </tr>
+        <tr>
+      <td><span class="wallet target">swisstony</span></td>
+      <td class="num">$11185</td><td class="num">0.736</td><td class="num pos">+$2951</td>
+      <td class="num">$54.67</td><td class="num">0.337</td><td class="num neg">-$3626</td>
+      <td class="num">$11240</td>
+      <td class="num neg">-5.7%</td>
+      <td class="num neg">-$675.21</td>
+    </tr>
+      </tbody>
+    </table>
+  </div>
+<div class="market-card">
+    <div class="market-head">
+      <span class="market-title">Will Real Betis Balompié win on 2026-05-12?</span>
+      <span class="badge win">Yes won</span>
+      
+    </div>
+    <table class="positions">
+      <thead>
+        <tr>
+          <th rowspan="2">Trader</th>
+          <th colspan="3">Primary · Yes</th>
+          <th colspan="3">Hedge · No</th>
+          <th rowspan="2">Net value</th>
+          <th rowspan="2">Net %</th>
+          <th rowspan="2">Net P/L</th>
+        </tr>
+        <tr><th>Value</th><th>VWAP</th><th>P/L</th><th>Value</th><th>VWAP</th><th>P/L</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+      <td><span class="wallet us">Our wallet</span></td>
+      <td class="num">$0.00</td><td class="num">—</td><td class="num">—</td>
+      <td class="num">$0.00</td><td class="num">0.207</td><td class="num neg">-$24.47</td>
+      <td class="num">$0.00</td>
+      <td class="num neg">-100.0%</td>
+      <td class="num neg">-$24.47</td>
+    </tr>
+        <tr>
+      <td><span class="wallet target">swisstony</span></td>
+      <td class="num">$36319</td><td class="num">0.894</td><td class="num pos">+$1768</td>
+      <td class="num">$0.00</td><td class="num">0.373</td><td class="num neg">-$4913</td>
+      <td class="num">$36319</td>
+      <td class="num neg">-8.0%</td>
+      <td class="num neg">-$3146</td>
+    </tr>
+      </tbody>
+    </table>
+  </div>
+<div class="market-card">
+    <div class="market-head">
+      <span class="market-title">Will Elche CF win on 2026-05-12?</span>
+      <span class="badge win">No won</span>
+      
+    </div>
+    <table class="positions">
+      <thead>
+        <tr>
+          <th rowspan="2">Trader</th>
+          <th colspan="3">Primary · No</th>
+          <th colspan="3">Hedge · Yes</th>
+          <th rowspan="2">Net value</th>
+          <th rowspan="2">Net %</th>
+          <th rowspan="2">Net P/L</th>
+        </tr>
+        <tr><th>Value</th><th>VWAP</th><th>P/L</th><th>Value</th><th>VWAP</th><th>P/L</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+      <td><span class="wallet us">Our wallet</span></td>
+      <td class="num">$0.00</td><td class="num">0.800</td><td class="num neg">-$27.46</td>
+      <td class="num">$0.00</td><td class="num">—</td><td class="num">—</td>
+      <td class="num">$0.00</td>
+      <td class="num neg">-100.0%</td>
+      <td class="num neg">-$27.46</td>
+    </tr>
+        <tr>
+      <td><span class="wallet target">swisstony</span></td>
+      <td class="num">$2559</td><td class="num">0.992</td><td class="num pos">+$18.66</td>
+      <td class="num">$13.31</td><td class="num">0.091</td><td class="num neg">-$2409</td>
+      <td class="num">$2572</td>
+      <td class="num neg">-48.2%</td>
+      <td class="num neg">-$2391</td>
+    </tr>
+      </tbody>
+    </table>
+  </div>
+    <h3 class="subhead">Position divergence over time</h3>
+    <div class="market-card">
+        <div class="market-head"><span class="market-title">Will Real Betis Balompié vs. Elche CF end in a draw? → No</span></div>
+        <svg viewBox="0 0 1200 280" xmlns="http://www.w3.org/2000/svg" class="chart">
+<rect x="0" y="0" width="1200" height="280" fill="#0b1220"/>
+<line x1="70" y1="196.7" x2="1140" y2="196.7" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="196.7" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1</text>
+<line x1="70" y1="164.1" x2="1140" y2="164.1" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="164.1" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10</text>
+<line x1="70" y1="121.6" x2="1140" y2="121.6" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="121.6" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$100</text>
+<line x1="70" y1="77.7" x2="1140" y2="77.7" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="77.7" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1k</text>
+<line x1="70" y1="33.6" x2="1140" y2="33.6" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="33.6" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10k</text>
+<text x="20" y="119" fill="#94a3b8" font-size="11" text-anchor="middle" transform="rotate(-90 20 119)">cumulative $ cost (log)</text>
+<text x="1148" y="210.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.00</text>
+<text x="1148" y="164.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.25</text>
+<text x="1148" y="119.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.50</text>
+<text x="1148" y="73.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.75</text>
+<text x="1148" y="28.0" fill="#475569" font-size="10" dominant-baseline="middle">$1.00</text>
+<text x="1186" y="119" fill="#475569" font-size="11" text-anchor="middle" transform="rotate(90 1186 119)">VWAP $</text>
+<line x1="70.0" y1="210.0" x2="70.0" y2="214.0" stroke="#4b5563"/>
+<text x="70.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-10 20:59</text>
+<line x1="248.3" y1="210.0" x2="248.3" y2="214.0" stroke="#4b5563"/>
+<text x="248.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-11 12:20</text>
+<line x1="426.7" y1="210.0" x2="426.7" y2="214.0" stroke="#4b5563"/>
+<text x="426.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 03:40</text>
+<line x1="605.0" y1="210.0" x2="605.0" y2="214.0" stroke="#4b5563"/>
+<text x="605.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 19:01</text>
+<line x1="783.3" y1="210.0" x2="783.3" y2="214.0" stroke="#4b5563"/>
+<text x="783.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 10:22</text>
+<line x1="961.7" y1="210.0" x2="961.7" y2="214.0" stroke="#4b5563"/>
+<text x="961.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 01:43</text>
+<line x1="1140.0" y1="210.0" x2="1140.0" y2="214.0" stroke="#4b5563"/>
+<text x="1140.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 17:04</text>
+<path d="M 70.0 210.0 L 594.5 210.0 L 594.5 143.5 L 594.6 143.5 L 594.6 130.5 L 594.7 130.5 L 594.7 122.9 L 594.8 122.9 L 594.8 117.4 L 594.8 117.4 L 594.8 113.2 L 594.8 113.2 L 594.8 109.7 L 594.9 109.7 L 594.9 108.1 L 594.9 108.1 L 594.9 105.4 L 595.0 105.4 L 595.0 104.9 L 595.1 104.9 L 595.1 102.6 L 597.1 102.6 L 597.1 86.7 L 597.1 86.7 L 597.1 86.5 L 598.1 86.5 L 598.1 85.0 L 598.2 85.0 L 598.2 83.0 L 598.3 83.0 L 598.3 82.9 L 598.9 82.9 L 598.9 82.8 L 601.9 82.8 L 601.9 82.3 L 601.9 82.3 L 601.9 82.0 L 601.9 82.0 L 601.9 81.1 L 602.1 81.1 L 602.1 80.5 L 602.2 80.5 L 602.2 80.0 L 602.2 80.0 L 602.2 79.8 L 606.4 79.8 L 606.4 62.9 L 606.4 62.9 L 606.4 62.9 L 607.7 62.9 L 607.7 62.7 L 607.7 62.7 L 607.7 62.7 L 607.8 62.7 L 607.8 62.4 L 607.8 62.4 L 607.8 61.8 L 608.2 61.8 L 608.2 61.8 L 608.3 61.8 L 608.3 61.6 L 608.4 61.6 L 608.4 61.4 L 608.4 61.4 L 608.4 61.4 L 609.4 61.4 L 609.4 41.5 L 609.4 41.5 L 609.4 33.3 L 609.4 33.3 L 609.4 33.2 L 609.4 33.2 L 609.4 32.0 L 609.4 32.0 L 609.4 31.9 L 609.4 31.9 L 609.4 31.7 L 609.6 31.7 L 609.6 31.7 L 609.6 31.7 L 609.6 31.7 L 609.6 31.7 L 609.6 31.7 L 610.6 31.7 L 610.6 31.6 L 610.6 31.6 L 610.6 31.6 L 610.6 31.6 L 610.6 31.6 L 610.6 31.6 L 610.6 31.5 L 610.7 31.5 L 610.7 31.5 L 610.7 31.5 L 610.7 31.5 L 610.7 31.5 L 610.7 31.4 L 610.7 31.4 L 610.7 31.4 L 610.7 31.4 L 610.7 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.3 L 610.8 31.3 L 610.8 31.3 L 610.8 31.3 L 610.8 31.3 L 610.8 31.3 L 610.8 31.2 L 610.8 31.2 L 610.8 31.2 L 610.8 31.2 L 610.8 31.2 L 610.8 31.2 L 610.8 31.2 L 611.5 31.2 L 611.5 31.0 L 612.3 31.0 L 612.3 30.9 L 612.3 30.9 L 612.3 30.9 L 612.6 30.9 L 612.6 28.7 L 613.3 28.7 L 613.3 28.5 L 613.3 28.5 L 613.3 28.2 L 615.2 28.2 L 615.2 28.0 L 1140.0 28.0 L 1140.0 210.0 L 70.0 210.0 Z" fill="#10b981" opacity="0.18"/>
+<path d="M 70.0 210.0 L 594.5 210.0 L 594.5 143.5 L 594.6 143.5 L 594.6 130.5 L 594.7 130.5 L 594.7 122.9 L 594.8 122.9 L 594.8 117.4 L 594.8 117.4 L 594.8 113.2 L 594.8 113.2 L 594.8 109.7 L 594.9 109.7 L 594.9 108.1 L 594.9 108.1 L 594.9 105.4 L 595.0 105.4 L 595.0 104.9 L 595.1 104.9 L 595.1 102.6 L 597.1 102.6 L 597.1 86.7 L 597.1 86.7 L 597.1 86.5 L 598.1 86.5 L 598.1 85.0 L 598.2 85.0 L 598.2 83.0 L 598.3 83.0 L 598.3 82.9 L 598.9 82.9 L 598.9 82.8 L 601.9 82.8 L 601.9 82.3 L 601.9 82.3 L 601.9 82.0 L 601.9 82.0 L 601.9 81.1 L 602.1 81.1 L 602.1 80.5 L 602.2 80.5 L 602.2 80.0 L 602.2 80.0 L 602.2 79.8 L 606.4 79.8 L 606.4 62.9 L 606.4 62.9 L 606.4 62.9 L 607.7 62.9 L 607.7 62.7 L 607.7 62.7 L 607.7 62.7 L 607.8 62.7 L 607.8 62.4 L 607.8 62.4 L 607.8 61.8 L 608.2 61.8 L 608.2 61.8 L 608.3 61.8 L 608.3 61.6 L 608.4 61.6 L 608.4 61.4 L 608.4 61.4 L 608.4 61.4 L 609.4 61.4 L 609.4 41.5 L 609.4 41.5 L 609.4 33.3 L 609.4 33.3 L 609.4 33.2 L 609.4 33.2 L 609.4 32.0 L 609.4 32.0 L 609.4 31.9 L 609.4 31.9 L 609.4 31.7 L 609.6 31.7 L 609.6 31.7 L 609.6 31.7 L 609.6 31.7 L 609.6 31.7 L 609.6 31.7 L 610.6 31.7 L 610.6 31.6 L 610.6 31.6 L 610.6 31.6 L 610.6 31.6 L 610.6 31.6 L 610.6 31.6 L 610.6 31.5 L 610.7 31.5 L 610.7 31.5 L 610.7 31.5 L 610.7 31.5 L 610.7 31.5 L 610.7 31.4 L 610.7 31.4 L 610.7 31.4 L 610.7 31.4 L 610.7 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.4 L 610.8 31.3 L 610.8 31.3 L 610.8 31.3 L 610.8 31.3 L 610.8 31.3 L 610.8 31.3 L 610.8 31.2 L 610.8 31.2 L 610.8 31.2 L 610.8 31.2 L 610.8 31.2 L 610.8 31.2 L 610.8 31.2 L 611.5 31.2 L 611.5 31.0 L 612.3 31.0 L 612.3 30.9 L 612.3 30.9 L 612.3 30.9 L 612.6 30.9 L 612.6 28.7 L 613.3 28.7 L 613.3 28.5 L 613.3 28.5 L 613.3 28.2 L 615.2 28.2 L 615.2 28.0 L 1140.0 28.0" fill="none" stroke="#10b981" stroke-width="2"/>
+<circle cx="615.2" cy="28.0" r="3.5" fill="#10b981"/>
+<path d="M 70.0 210.0 L 602.3 210.0 L 602.3 183.9 L 602.4 183.9 L 602.4 170.9 L 610.0 170.9 L 610.0 164.0 L 610.1 164.0 L 610.1 158.9 L 1140.0 158.9" fill="none" stroke="#3b82f6" stroke-width="2"/>
+<circle cx="610.1" cy="158.9" r="3.5" fill="#3b82f6"/>
+<path d="M 594.5 71.7 L 594.5 71.7 L 594.5 71.7 L 594.6 71.7 L 594.6 71.7 L 594.7 71.7 L 594.7 71.7 L 594.8 71.7 L 594.8 71.7 L 594.8 71.7 L 594.8 71.7 L 594.8 71.7 L 594.8 71.7 L 594.9 71.7 L 594.9 71.7 L 594.9 71.7 L 594.9 71.7 L 595.0 71.7 L 595.0 71.7 L 595.1 71.7 L 595.1 71.7 L 597.1 71.7 L 597.1 64.8 L 597.1 64.8 L 597.1 64.7 L 598.1 64.7 L 598.1 64.4 L 598.2 64.4 L 598.2 64.1 L 598.3 64.1 L 598.3 64.1 L 598.9 64.1 L 598.9 64.0 L 601.9 64.0 L 601.9 64.8 L 601.9 64.8 L 601.9 65.4 L 601.9 65.4 L 601.9 66.6 L 602.1 66.6 L 602.1 67.6 L 602.2 67.6 L 602.2 68.2 L 602.2 68.2 L 602.2 68.4 L 606.4 68.4 L 606.4 84.3 L 606.4 84.3 L 606.4 84.3 L 607.7 84.3 L 607.7 84.3 L 607.7 84.3 L 607.7 84.3 L 607.8 84.3 L 607.8 84.3 L 607.8 84.3 L 607.8 84.1 L 608.2 84.1 L 608.2 84.1 L 608.3 84.1 L 608.3 84.1 L 608.4 84.1 L 608.4 84.1 L 608.4 84.1 L 608.4 84.1 L 609.4 84.1 L 609.4 84.3 L 609.4 84.3 L 609.4 84.3 L 609.4 84.3 L 609.4 84.3 L 609.4 84.3 L 609.4 84.4 L 609.4 84.4 L 609.4 84.4 L 609.4 84.4 L 609.4 84.4 L 609.6 84.4 L 609.6 84.4 L 609.6 84.4 L 609.6 84.4 L 609.6 84.4 L 609.6 84.4 L 610.6 84.4 L 610.6 84.4 L 610.6 84.4 L 610.6 84.4 L 610.6 84.4 L 610.6 84.4 L 610.6 84.4 L 610.6 84.4 L 610.7 84.4 L 610.7 84.4 L 610.7 84.4 L 610.7 84.4 L 610.7 84.4 L 610.7 84.4 L 610.7 84.4 L 610.7 84.5 L 610.7 84.5 L 610.7 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 610.8 84.5 L 611.5 84.5 L 611.5 84.1 L 612.3 84.1 L 612.3 84.0 L 612.3 84.0 L 612.3 84.0 L 612.6 84.0 L 612.6 80.7 L 613.3 80.7 L 613.3 80.3 L 613.3 80.3 L 613.3 79.9 L 615.2 79.9 L 615.2 79.7 L 1140.0 79.7" fill="none" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<path d="M 602.3 89.9 L 602.3 89.9 L 602.3 89.9 L 602.4 89.9 L 602.4 89.9 L 610.0 89.9 L 610.0 89.3 L 610.1 89.3 L 610.1 89.0 L 1140.0 89.0" fill="none" stroke="#3b82f6" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<text x="70" y="234" fill="#9ca3af" font-size="11">our decisions →</text>
+<line x1="70" y1="246" x2="1140" y2="246" stroke="#1f2937"/>
+<circle cx="593.6" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 18:02:47 · Yes · below_target_percentile (hedge side)</title></circle>
+<circle cx="593.6" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 18:02:55 · Yes · below_target_percentile (hedge side)</title></circle>
+<circle cx="597.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:22:10 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:22:15 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:23:11 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="598.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:27:08 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="598.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:27:16 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:45 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:45 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:33:39 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:33:39 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="601.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:22 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:22 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:16 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:23 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:25 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:25 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:25 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:26 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:31 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:47:32 · No · ok (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:47:33 · No · already_resting (primary side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:47:33 · No · already_resting (primary side)</title></circle>
+<circle cx="604.2" cy="246.0" r="3" fill="#ef4444" opacity="0.95"><title>2026-05-12 18:57:46 · Yes · placement_failed (primary side)</title></circle>
+<circle cx="604.2" cy="246.0" r="3" fill="#ef4444" opacity="0.95"><title>2026-05-12 18:57:52 · Yes · placement_failed (primary side)</title></circle>
+<circle cx="604.2" cy="246.0" r="3" fill="#ef4444" opacity="0.95"><title>2026-05-12 18:57:55 · Yes · placement_failed (primary side)</title></circle>
+<circle cx="608.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:17:29 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="608.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:17:34 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="609.0" cy="246.0" r="3" fill="#ef4444" opacity="0.95"><title>2026-05-12 19:22:39 · Yes · placement_failed (primary side)</title></circle>
+<circle cx="609.0" cy="246.0" r="3" fill="#ef4444" opacity="0.95"><title>2026-05-12 19:22:41 · Yes · placement_failed (primary side)</title></circle>
+<circle cx="609.9" cy="246.0" r="4" fill="#22c55e" opacity="0.95"><title>2026-05-12 19:27:15 · No · layer_scale_in (primary side)</title></circle>
+<circle cx="609.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:27:16 · No · already_resting (primary side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:27:32 · Yes · position_cap_reached (primary side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:27:35 · No · already_resting (primary side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:27:36 · No · already_resting (primary side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:27:40 · No · already_resting (primary side)</title></circle>
+<circle cx="610.1" cy="246.0" r="4" fill="#22c55e" opacity="0.95"><title>2026-05-12 19:27:58 · No · layer_scale_in (primary side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:27:59 · No · already_resting (primary side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:27:59 · No · already_resting (primary side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:28:00 · No · already_resting (primary side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:28:00 · No · already_resting (primary side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:28:00 · No · already_resting (primary side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:28:22 · Yes · position_cap_reached (primary side)</title></circle>
+<circle cx="610.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:28:34 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="610.9" cy="246.0" r="4" fill="#22c55e" opacity="0.95"><title>2026-05-12 19:32:23 · No · layer_scale_in (primary side)</title></circle>
+<circle cx="610.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:26 · No · already_resting (primary side)</title></circle>
+<circle cx="610.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:26 · No · already_resting (primary side)</title></circle>
+<circle cx="610.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:31 · No · already_resting (primary side)</title></circle>
+<circle cx="610.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:32 · No · already_resting (primary side)</title></circle>
+<circle cx="610.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:32 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:32 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:32 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:33 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:33 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:35 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:39 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:39 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:42 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:49 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:49 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:56 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:57 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:58 · No · already_resting (primary side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:32:59 · No · already_resting (primary side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:33:15 · No · already_resting (primary side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:33:24 · No · already_resting (primary side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:33:24 · No · already_resting (primary side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:33:26 · No · already_resting (primary side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:33:28 · No · already_resting (primary side)</title></circle>
+<circle cx="612.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:38:07 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="612.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:39:07 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="612.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:39:09 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="612.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:39:16 · Yes · position_cap_reached (primary side)</title></circle>
+<circle cx="612.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:39:22 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="612.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:42:50 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="613.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:43:21 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="613.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:43:21 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="613.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:43:55 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="614.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:48:02 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="614.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:48:05 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="615.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:53:52 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="615.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:53:58 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="615.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:54:00 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="615.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:54:02 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="615.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:57:57 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="615.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:58:03 · Yes · target_dominant_other_side (primary side)</title></circle>
+<circle cx="616.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 20:02:50 · Yes · target_dominant_other_side (primary side)</title></circle>
+<circle cx="616.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 20:02:54 · Yes · target_dominant_other_side (primary side)</title></circle>
+<text x="70" y="18" fill="#f3f4f6" font-size="14" font-weight="600">Will Real Betis Balompié vs. Elche CF end in a draw? <tspan fill="#94a3b8" font-weight="400">→ No (winner)</tspan></text>
+<text x="1140" y="18" fill="#94a3b8" font-size="11" text-anchor="end">swisstony: $13374 @ VWAP $0.716  ·  us: $13.41 @ VWAP $0.665</text>
+</svg>
+        <div class="legend">
+          <span><span class="line" style="background:#10b981"></span>swisstony $cost</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our $cost</span>
+          <span><span class="line dash" style="color:#10b981"></span>swisstony VWAP</span>
+          <span><span class="line dash" style="color:#3b82f6"></span>Our VWAP</span>
+          <span><span class="dot" style="background:#22c55e"></span>placed</span>
+          <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
+          <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
+          <span><span class="dot" style="background:#ef4444"></span>error</span>
+        </div>
+      </div>
+<div class="market-card">
+        <div class="market-head"><span class="market-title">Will Real Betis Balompié win on 2026-05-12? → Yes</span></div>
+        <svg viewBox="0 0 1200 280" xmlns="http://www.w3.org/2000/svg" class="chart">
+<rect x="0" y="0" width="1200" height="280" fill="#0b1220"/>
+<line x1="70" y1="197.8" x2="1140" y2="197.8" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="197.8" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1</text>
+<line x1="70" y1="167.8" x2="1140" y2="167.8" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="167.8" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10</text>
+<line x1="70" y1="128.9" x2="1140" y2="128.9" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="128.9" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$100</text>
+<line x1="70" y1="88.5" x2="1140" y2="88.5" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="88.5" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1k</text>
+<line x1="70" y1="48.1" x2="1140" y2="48.1" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="48.1" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10k</text>
+<text x="20" y="119" fill="#94a3b8" font-size="11" text-anchor="middle" transform="rotate(-90 20 119)">cumulative $ cost (log)</text>
+<text x="1148" y="210.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.00</text>
+<text x="1148" y="164.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.25</text>
+<text x="1148" y="119.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.50</text>
+<text x="1148" y="73.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.75</text>
+<text x="1148" y="28.0" fill="#475569" font-size="10" dominant-baseline="middle">$1.00</text>
+<text x="1186" y="119" fill="#475569" font-size="11" text-anchor="middle" transform="rotate(90 1186 119)">VWAP $</text>
+<line x1="70.0" y1="210.0" x2="70.0" y2="214.0" stroke="#4b5563"/>
+<text x="70.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-10 20:59</text>
+<line x1="248.3" y1="210.0" x2="248.3" y2="214.0" stroke="#4b5563"/>
+<text x="248.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-11 12:20</text>
+<line x1="426.7" y1="210.0" x2="426.7" y2="214.0" stroke="#4b5563"/>
+<text x="426.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 03:40</text>
+<line x1="605.0" y1="210.0" x2="605.0" y2="214.0" stroke="#4b5563"/>
+<text x="605.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 19:01</text>
+<line x1="783.3" y1="210.0" x2="783.3" y2="214.0" stroke="#4b5563"/>
+<text x="783.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 10:22</text>
+<line x1="961.7" y1="210.0" x2="961.7" y2="214.0" stroke="#4b5563"/>
+<text x="961.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 01:43</text>
+<line x1="1140.0" y1="210.0" x2="1140.0" y2="214.0" stroke="#4b5563"/>
+<text x="1140.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 17:04</text>
+<path d="M 70.0 210.0 L 571.1 210.0 L 571.1 75.2 L 573.3 75.2 L 573.3 75.2 L 573.6 75.2 L 573.6 75.2 L 575.0 75.2 L 575.0 73.8 L 578.1 73.8 L 578.1 73.2 L 578.4 73.2 L 578.4 73.2 L 593.6 73.2 L 593.6 73.2 L 593.6 73.2 L 593.6 72.4 L 593.7 72.4 L 593.7 60.6 L 593.8 60.6 L 593.8 55.2 L 594.8 55.2 L 594.8 55.2 L 594.8 55.2 L 594.8 55.2 L 594.9 55.2 L 594.9 53.8 L 594.9 53.8 L 594.9 53.7 L 596.0 53.7 L 596.0 53.7 L 596.2 53.7 L 596.2 53.3 L 596.2 53.3 L 596.2 53.3 L 596.5 53.3 L 596.5 53.1 L 596.5 53.1 L 596.5 53.1 L 596.5 53.1 L 596.5 52.9 L 596.5 52.9 L 596.5 52.9 L 596.8 52.9 L 596.8 52.8 L 597.0 52.8 L 597.0 50.2 L 597.4 50.2 L 597.4 50.2 L 599.0 50.2 L 599.0 50.2 L 602.1 50.2 L 602.1 49.9 L 602.1 49.9 L 602.1 49.9 L 602.1 49.9 L 602.1 49.9 L 602.2 49.9 L 602.2 49.4 L 602.2 49.4 L 602.2 49.4 L 602.2 49.4 L 602.2 49.4 L 602.2 49.4 L 602.2 49.4 L 602.9 49.4 L 602.9 49.4 L 604.1 49.4 L 604.1 49.4 L 604.2 49.4 L 604.2 48.7 L 606.8 48.7 L 606.8 48.7 L 606.8 48.7 L 606.8 48.7 L 606.8 48.7 L 606.8 48.7 L 606.9 48.7 L 606.9 48.7 L 606.9 48.7 L 606.9 48.7 L 607.5 48.7 L 607.5 48.6 L 607.7 48.6 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.8 48.5 L 607.8 48.5 L 607.8 48.5 L 607.8 48.5 L 607.8 48.5 L 607.8 48.5 L 609.6 48.5 L 609.6 48.4 L 609.7 48.4 L 609.7 48.4 L 609.7 48.4 L 609.7 48.3 L 609.7 48.3 L 609.7 48.3 L 609.7 48.3 L 609.7 48.3 L 609.8 48.3 L 609.8 48.3 L 609.8 48.3 L 609.8 48.2 L 610.4 48.2 L 610.4 48.2 L 610.4 48.2 L 610.4 48.2 L 610.5 48.2 L 610.5 47.7 L 610.5 47.7 L 610.5 47.5 L 610.5 47.5 L 610.5 47.5 L 610.7 47.5 L 610.7 47.5 L 610.7 47.5 L 610.7 47.4 L 610.8 47.4 L 610.8 47.4 L 610.8 47.4 L 610.8 47.4 L 611.5 47.4 L 611.5 47.4 L 611.5 47.4 L 611.5 47.3 L 611.5 47.3 L 611.5 47.3 L 611.5 47.3 L 611.5 35.5 L 611.6 35.5 L 611.6 35.5 L 612.4 35.5 L 612.4 34.9 L 612.5 34.9 L 612.5 34.9 L 612.5 34.9 L 612.5 34.4 L 612.6 34.4 L 612.6 34.4 L 612.6 34.4 L 612.6 34.0 L 612.7 34.0 L 612.7 33.9 L 612.7 33.9 L 612.7 33.7 L 612.7 33.7 L 612.7 33.7 L 614.3 33.7 L 614.3 32.1 L 614.3 32.1 L 614.3 32.0 L 614.3 32.0 L 614.3 32.0 L 614.7 32.0 L 614.7 28.0 L 1140.0 28.0 L 1140.0 210.0 L 70.0 210.0 Z" fill="#10b981" opacity="0.18"/>
+<path d="M 70.0 210.0 L 571.1 210.0 L 571.1 75.2 L 573.3 75.2 L 573.3 75.2 L 573.6 75.2 L 573.6 75.2 L 575.0 75.2 L 575.0 73.8 L 578.1 73.8 L 578.1 73.2 L 578.4 73.2 L 578.4 73.2 L 593.6 73.2 L 593.6 73.2 L 593.6 73.2 L 593.6 72.4 L 593.7 72.4 L 593.7 60.6 L 593.8 60.6 L 593.8 55.2 L 594.8 55.2 L 594.8 55.2 L 594.8 55.2 L 594.8 55.2 L 594.9 55.2 L 594.9 53.8 L 594.9 53.8 L 594.9 53.7 L 596.0 53.7 L 596.0 53.7 L 596.2 53.7 L 596.2 53.3 L 596.2 53.3 L 596.2 53.3 L 596.5 53.3 L 596.5 53.1 L 596.5 53.1 L 596.5 53.1 L 596.5 53.1 L 596.5 52.9 L 596.5 52.9 L 596.5 52.9 L 596.8 52.9 L 596.8 52.8 L 597.0 52.8 L 597.0 50.2 L 597.4 50.2 L 597.4 50.2 L 599.0 50.2 L 599.0 50.2 L 602.1 50.2 L 602.1 49.9 L 602.1 49.9 L 602.1 49.9 L 602.1 49.9 L 602.1 49.9 L 602.2 49.9 L 602.2 49.4 L 602.2 49.4 L 602.2 49.4 L 602.2 49.4 L 602.2 49.4 L 602.2 49.4 L 602.2 49.4 L 602.9 49.4 L 602.9 49.4 L 604.1 49.4 L 604.1 49.4 L 604.2 49.4 L 604.2 48.7 L 606.8 48.7 L 606.8 48.7 L 606.8 48.7 L 606.8 48.7 L 606.8 48.7 L 606.8 48.7 L 606.9 48.7 L 606.9 48.7 L 606.9 48.7 L 606.9 48.7 L 607.5 48.7 L 607.5 48.6 L 607.7 48.6 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.7 48.5 L 607.8 48.5 L 607.8 48.5 L 607.8 48.5 L 607.8 48.5 L 607.8 48.5 L 607.8 48.5 L 609.6 48.5 L 609.6 48.4 L 609.7 48.4 L 609.7 48.4 L 609.7 48.4 L 609.7 48.3 L 609.7 48.3 L 609.7 48.3 L 609.7 48.3 L 609.7 48.3 L 609.8 48.3 L 609.8 48.3 L 609.8 48.3 L 609.8 48.2 L 610.4 48.2 L 610.4 48.2 L 610.4 48.2 L 610.4 48.2 L 610.5 48.2 L 610.5 47.7 L 610.5 47.7 L 610.5 47.5 L 610.5 47.5 L 610.5 47.5 L 610.7 47.5 L 610.7 47.5 L 610.7 47.5 L 610.7 47.4 L 610.8 47.4 L 610.8 47.4 L 610.8 47.4 L 610.8 47.4 L 611.5 47.4 L 611.5 47.4 L 611.5 47.4 L 611.5 47.3 L 611.5 47.3 L 611.5 47.3 L 611.5 47.3 L 611.5 35.5 L 611.6 35.5 L 611.6 35.5 L 612.4 35.5 L 612.4 34.9 L 612.5 34.9 L 612.5 34.9 L 612.5 34.9 L 612.5 34.4 L 612.6 34.4 L 612.6 34.4 L 612.6 34.4 L 612.6 34.0 L 612.7 34.0 L 612.7 33.9 L 612.7 33.9 L 612.7 33.7 L 612.7 33.7 L 612.7 33.7 L 614.3 33.7 L 614.3 32.1 L 614.3 32.1 L 614.3 32.0 L 614.3 32.0 L 614.3 32.0 L 614.7 32.0 L 614.7 28.0 L 1140.0 28.0" fill="none" stroke="#10b981" stroke-width="2"/>
+<circle cx="614.7" cy="28.0" r="3.5" fill="#10b981"/>
+<path d="M 571.1 102.6 L 571.1 102.6 L 571.1 102.6 L 573.3 102.6 L 573.3 102.6 L 573.6 102.6 L 573.6 102.6 L 575.0 102.6 L 575.0 102.6 L 578.1 102.6 L 578.1 102.6 L 578.4 102.6 L 578.4 102.6 L 593.6 102.6 L 593.6 102.6 L 593.6 102.6 L 593.6 102.8 L 593.7 102.8 L 593.7 104.5 L 593.8 104.5 L 593.8 104.5 L 594.8 104.5 L 594.8 104.5 L 594.8 104.5 L 594.8 104.5 L 594.9 104.5 L 594.9 104.5 L 594.9 104.5 L 594.9 104.5 L 596.0 104.5 L 596.0 104.4 L 596.2 104.4 L 596.2 103.9 L 596.2 103.9 L 596.2 103.9 L 596.5 103.9 L 596.5 103.6 L 596.5 103.6 L 596.5 103.6 L 596.5 103.6 L 596.5 103.4 L 596.5 103.4 L 596.5 103.3 L 596.8 103.3 L 596.8 103.3 L 597.0 103.3 L 597.0 99.7 L 597.4 99.7 L 597.4 99.7 L 599.0 99.7 L 599.0 99.7 L 602.1 99.7 L 602.1 100.2 L 602.1 100.2 L 602.1 100.2 L 602.1 100.2 L 602.1 100.2 L 602.2 100.2 L 602.2 100.7 L 602.2 100.7 L 602.2 100.7 L 602.2 100.7 L 602.2 100.7 L 602.2 100.7 L 602.2 100.7 L 602.9 100.7 L 602.9 100.8 L 604.1 100.8 L 604.1 100.8 L 604.2 100.8 L 604.2 102.2 L 606.8 102.2 L 606.8 102.3 L 606.8 102.3 L 606.8 102.4 L 606.8 102.4 L 606.8 102.4 L 606.9 102.4 L 606.9 102.4 L 606.9 102.4 L 606.9 102.4 L 607.5 102.4 L 607.5 102.4 L 607.7 102.4 L 607.7 102.4 L 607.7 102.4 L 607.7 102.4 L 607.7 102.4 L 607.7 102.4 L 607.7 102.4 L 607.7 102.4 L 607.7 102.4 L 607.7 102.4 L 607.8 102.4 L 607.8 102.4 L 607.8 102.4 L 607.8 102.3 L 607.8 102.3 L 607.8 102.3 L 609.6 102.3 L 609.6 102.3 L 609.7 102.3 L 609.7 102.3 L 609.7 102.3 L 609.7 102.3 L 609.7 102.3 L 609.7 102.3 L 609.7 102.3 L 609.7 102.3 L 609.8 102.3 L 609.8 102.3 L 609.8 102.3 L 609.8 102.3 L 610.4 102.3 L 610.4 102.3 L 610.4 102.3 L 610.4 102.3 L 610.5 102.3 L 610.5 102.2 L 610.5 102.2 L 610.5 102.1 L 610.5 102.1 L 610.5 102.1 L 610.7 102.1 L 610.7 102.1 L 610.7 102.1 L 610.7 102.1 L 610.8 102.1 L 610.8 102.1 L 610.8 102.1 L 610.8 102.1 L 611.5 102.1 L 611.5 102.1 L 611.5 102.1 L 611.5 102.0 L 611.5 102.0 L 611.5 102.0 L 611.5 102.0 L 611.5 79.2 L 611.6 79.2 L 611.6 79.2 L 612.4 79.2 L 612.4 78.3 L 612.5 78.3 L 612.5 78.3 L 612.5 78.3 L 612.5 77.6 L 612.6 77.6 L 612.6 77.6 L 612.6 77.6 L 612.6 77.0 L 612.7 77.0 L 612.7 76.9 L 612.7 76.9 L 612.7 76.6 L 612.7 76.6 L 612.7 76.6 L 614.3 76.6 L 614.3 74.3 L 614.3 74.3 L 614.3 74.3 L 614.3 74.3 L 614.3 74.3 L 614.7 74.3 L 614.7 68.6 L 1140.0 68.6" fill="none" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<text x="70" y="234" fill="#9ca3af" font-size="11">our decisions →</text>
+<line x1="70" y1="246" x2="1140" y2="246" stroke="#1f2937"/>
+<circle cx="101.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-10 23:43:57 · No · below_target_percentile (hedge side)</title></circle>
+<circle cx="106.8" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-11 00:09:05 · No · below_target_percentile (hedge side)</title></circle>
+<circle cx="354.1" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-11 21:26:30 · No · ok (hedge side)</title></circle>
+<circle cx="572.4" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 16:13:17 · Yes · ok (hedge side)</title></circle>
+<circle cx="574.1" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 16:22:02 · Yes · ok (hedge side)</title></circle>
+<circle cx="574.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 16:22:09 · Yes · already_resting (primary side)</title></circle>
+<circle cx="574.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 16:22:19 · Yes · already_resting (primary side)</title></circle>
+<circle cx="576.1" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 16:32:33 · Yes · ok (hedge side)</title></circle>
+<circle cx="579.0" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 16:47:20 · Yes · ok (hedge side)</title></circle>
+<circle cx="579.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 16:47:47 · Yes · already_resting (primary side)</title></circle>
+<circle cx="595.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:12:17 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="596.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:17:07 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="596.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:17:10 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:22:29 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:22:45 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:23:02 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:23:03 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:23:04 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:23:07 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.5" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:23:11 · No · ok (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:28:05 · No · layer_scale_in (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 18:28:07 · No · already_resting (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:28:27 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:28 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:28 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.4" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:33:04 · No · layer_scale_in (hedge side)</title></circle>
+<circle cx="599.4" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:33:05 · No · layer_scale_in (hedge side)</title></circle>
+<circle cx="600.3" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:37:18 · No · layer_scale_in (hedge side)</title></circle>
+<circle cx="600.3" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:37:18 · No · layer_scale_in (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:30 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:30 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:37 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:37 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:41 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:41 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:43:10 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:43:10 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:10 · Yes · position_cap_reached (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:12 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:12 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:15 · Yes · position_cap_reached (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:16 · Yes · position_cap_reached (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:22 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:23 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:24 · No · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="603.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:10 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="603.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:15 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:23 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:25 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:25 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:26 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:26 · Yes · position_cap_reached (hedge side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:29 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:29 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="603.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:47 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="603.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:49 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="604.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:57:52 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="604.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:58:52 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="604.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:58:55 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="605.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:02:13 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="605.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:02:15 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="605.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:02:20 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="605.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:02:25 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="605.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:02:28 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="605.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:02:32 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="606.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:07:18 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="606.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:07:24 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="606.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:07:26 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="607.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:12:12 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="607.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:12:14 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="607.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:12:19 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="607.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:12:22 · Yes · position_cap_reached (hedge side)</title></circle>
+<circle cx="607.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:12:23 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="607.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:12:28 · Yes · position_cap_reached (hedge side)</title></circle>
+<circle cx="607.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:12:30 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="607.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:12:30 · Yes · position_cap_reached (hedge side)</title></circle>
+<circle cx="607.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:12:32 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="607.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:12:34 · Yes · position_cap_reached (hedge side)</title></circle>
+<circle cx="608.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:17:19 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="608.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:17:33 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="608.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:17:35 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="608.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:17:37 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="608.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:17:37 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="608.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:17:38 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="608.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:17:39 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="609.0" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 19:22:13 · No · layer_scale_in (hedge side)</title></circle>
+<circle cx="609.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:22:42 · No · already_resting (hedge side)</title></circle>
+<circle cx="609.9" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 19:27:18 · No · layer_scale_in (hedge side)</title></circle>
+<circle cx="609.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:27:20 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="609.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:27:21 · No · already_resting (hedge side)</title></circle>
+<circle cx="609.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:27:21 · No · already_resting (hedge side)</title></circle>
+<circle cx="609.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:27:21 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:27:23 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:27:24 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:27:34 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:27:35 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:27:35 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:27:35 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:27:42 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:27:51 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:27:52 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:27:53 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:27:56 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:27:59 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:28:00 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:28:05 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:28:06 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:28:11 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:28:17 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:28:25 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:28:25 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:28:26 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:28:29 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:28:31 · No · already_resting (hedge side)</title></circle>
+<circle cx="610.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:28:33 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.9" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 19:32:19 · No · layer_scale_in (hedge side)</title></circle>
+<circle cx="610.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:32:20 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:32:30 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:32:32 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:32:41 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:32:42 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:33:04 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:33:06 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:33:07 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:33:07 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:33:08 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:33:10 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:33:11 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:33:21 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:33:22 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="612.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:37:53 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:37:59 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:37:59 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:37:59 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:38:02 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:38:27 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:38:29 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:38:29 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:38:49 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.8" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 19:42:17 · No · layer_scale_in (hedge side)</title></circle>
+<circle cx="612.8" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:42:18 · No · already_resting (hedge side)</title></circle>
+<circle cx="612.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:42:23 · No · already_resting (hedge side)</title></circle>
+<circle cx="612.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:42:24 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:42:24 · No · already_resting (hedge side)</title></circle>
+<circle cx="612.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:42:29 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:42:31 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:42:35 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:42:47 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="612.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:42:47 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="613.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:43:03 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="613.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:43:05 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="613.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:43:15 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="613.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:43:36 · No · already_resting (hedge side)</title></circle>
+<circle cx="613.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:43:37 · No · already_resting (hedge side)</title></circle>
+<circle cx="613.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:43:49 · No · already_resting (hedge side)</title></circle>
+<circle cx="614.0" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 19:48:20 · No · layer_scale_in (hedge side)</title></circle>
+<circle cx="614.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:48:22 · No · already_resting (hedge side)</title></circle>
+<circle cx="614.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:48:22 · No · already_resting (hedge side)</title></circle>
+<circle cx="614.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 19:48:23 · No · already_resting (hedge side)</title></circle>
+<circle cx="614.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:48:24 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="614.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:48:29 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="614.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:52:30 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="614.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:53:05 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="614.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:53:08 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="614.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:53:08 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="615.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:53:36 · Yes · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="616.8" cy="246.0" r="3" fill="#ef4444" opacity="0.45"><title>2026-05-12 20:02:53 · No · placement_failed (hedge side)</title></circle>
+<text x="70" y="18" fill="#f3f4f6" font-size="14" font-weight="600">Will Real Betis Balompié win on 2026-05-12? <tspan fill="#94a3b8" font-weight="400">→ Yes (winner)</tspan></text>
+<text x="1140" y="18" fill="#94a3b8" font-size="11" text-anchor="end">swisstony: $31343 @ VWAP $0.777</text>
+</svg>
+        <div class="legend">
+          <span><span class="line" style="background:#10b981"></span>swisstony $cost</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our $cost</span>
+          <span><span class="line dash" style="color:#10b981"></span>swisstony VWAP</span>
+          <span><span class="line dash" style="color:#3b82f6"></span>Our VWAP</span>
+          <span><span class="dot" style="background:#22c55e"></span>placed</span>
+          <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
+          <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
+          <span><span class="dot" style="background:#ef4444"></span>error</span>
+        </div>
+      </div>
+<div class="market-card">
+        <div class="market-head"><span class="market-title">Will Elche CF win on 2026-05-12? → No</span></div>
+        <svg viewBox="0 0 1200 280" xmlns="http://www.w3.org/2000/svg" class="chart">
+<rect x="0" y="0" width="1200" height="280" fill="#0b1220"/>
+<line x1="70" y1="196.6" x2="1140" y2="196.6" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="196.6" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1</text>
+<line x1="70" y1="163.6" x2="1140" y2="163.6" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="163.6" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10</text>
+<line x1="70" y1="120.6" x2="1140" y2="120.6" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="120.6" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$100</text>
+<line x1="70" y1="76.2" x2="1140" y2="76.2" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="76.2" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1k</text>
+<line x1="70" y1="31.6" x2="1140" y2="31.6" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="31.6" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10k</text>
+<text x="20" y="119" fill="#94a3b8" font-size="11" text-anchor="middle" transform="rotate(-90 20 119)">cumulative $ cost (log)</text>
+<text x="1148" y="210.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.00</text>
+<text x="1148" y="164.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.25</text>
+<text x="1148" y="119.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.50</text>
+<text x="1148" y="73.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.75</text>
+<text x="1148" y="28.0" fill="#475569" font-size="10" dominant-baseline="middle">$1.00</text>
+<text x="1186" y="119" fill="#475569" font-size="11" text-anchor="middle" transform="rotate(90 1186 119)">VWAP $</text>
+<line x1="70.0" y1="210.0" x2="70.0" y2="214.0" stroke="#4b5563"/>
+<text x="70.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-10 20:59</text>
+<line x1="248.3" y1="210.0" x2="248.3" y2="214.0" stroke="#4b5563"/>
+<text x="248.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-11 12:20</text>
+<line x1="426.7" y1="210.0" x2="426.7" y2="214.0" stroke="#4b5563"/>
+<text x="426.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 03:40</text>
+<line x1="605.0" y1="210.0" x2="605.0" y2="214.0" stroke="#4b5563"/>
+<text x="605.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 19:01</text>
+<line x1="783.3" y1="210.0" x2="783.3" y2="214.0" stroke="#4b5563"/>
+<text x="783.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 10:22</text>
+<line x1="961.7" y1="210.0" x2="961.7" y2="214.0" stroke="#4b5563"/>
+<text x="961.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 01:43</text>
+<line x1="1140.0" y1="210.0" x2="1140.0" y2="214.0" stroke="#4b5563"/>
+<text x="1140.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 17:04</text>
+<path d="M 70.0 210.0 L 594.4 210.0 L 594.4 61.7 L 594.6 61.7 L 594.6 61.7 L 596.0 61.7 L 596.0 61.7 L 596.0 61.7 L 596.0 59.8 L 596.1 59.8 L 596.1 59.1 L 596.1 59.1 L 596.1 58.8 L 596.2 58.8 L 596.2 58.4 L 596.7 58.4 L 596.7 58.2 L 597.4 58.2 L 597.4 43.2 L 597.4 43.2 L 597.4 42.7 L 597.4 42.7 L 597.4 42.3 L 597.8 42.3 L 597.8 38.9 L 597.9 38.9 L 597.9 38.9 L 597.9 38.9 L 597.9 38.8 L 598.0 38.8 L 598.0 38.7 L 598.2 38.7 L 598.2 38.7 L 598.2 38.7 L 598.2 38.5 L 599.0 38.5 L 599.0 38.4 L 599.1 38.4 L 599.1 38.2 L 599.1 38.2 L 599.1 38.1 L 599.1 38.1 L 599.1 38.0 L 599.2 38.0 L 599.2 37.9 L 600.8 37.9 L 600.8 37.8 L 601.0 37.8 L 601.0 37.7 L 601.0 37.7 L 601.0 36.5 L 602.1 36.5 L 602.1 36.5 L 602.1 36.5 L 602.1 35.7 L 602.6 35.7 L 602.6 35.7 L 602.8 35.7 L 602.8 35.6 L 602.8 35.6 L 602.8 35.2 L 602.8 35.2 L 602.8 35.1 L 602.8 35.1 L 602.8 35.1 L 602.8 35.1 L 602.8 35.1 L 603.4 35.1 L 603.4 35.0 L 603.4 35.0 L 603.4 35.0 L 603.4 35.0 L 603.4 34.9 L 603.5 34.9 L 603.5 34.9 L 603.5 34.9 L 603.5 34.9 L 603.5 34.9 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.5 L 603.5 34.5 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 604.7 34.4 L 604.7 34.4 L 604.8 34.4 L 604.8 34.3 L 604.8 34.3 L 604.8 33.8 L 604.8 33.8 L 604.8 33.8 L 606.8 33.8 L 606.8 33.7 L 606.8 33.7 L 606.8 33.6 L 606.8 33.6 L 606.8 33.5 L 606.9 33.5 L 606.9 33.5 L 607.7 33.5 L 607.7 30.3 L 607.7 30.3 L 607.7 30.3 L 607.8 30.3 L 607.8 28.7 L 607.9 28.7 L 607.9 28.7 L 608.3 28.7 L 608.3 28.5 L 608.3 28.5 L 608.3 28.4 L 608.3 28.4 L 608.3 28.4 L 611.5 28.4 L 611.5 28.2 L 612.5 28.2 L 612.5 28.0 L 1140.0 28.0 L 1140.0 210.0 L 70.0 210.0 Z" fill="#10b981" opacity="0.18"/>
+<path d="M 70.0 210.0 L 594.4 210.0 L 594.4 61.7 L 594.6 61.7 L 594.6 61.7 L 596.0 61.7 L 596.0 61.7 L 596.0 61.7 L 596.0 59.8 L 596.1 59.8 L 596.1 59.1 L 596.1 59.1 L 596.1 58.8 L 596.2 58.8 L 596.2 58.4 L 596.7 58.4 L 596.7 58.2 L 597.4 58.2 L 597.4 43.2 L 597.4 43.2 L 597.4 42.7 L 597.4 42.7 L 597.4 42.3 L 597.8 42.3 L 597.8 38.9 L 597.9 38.9 L 597.9 38.9 L 597.9 38.9 L 597.9 38.8 L 598.0 38.8 L 598.0 38.7 L 598.2 38.7 L 598.2 38.7 L 598.2 38.7 L 598.2 38.5 L 599.0 38.5 L 599.0 38.4 L 599.1 38.4 L 599.1 38.2 L 599.1 38.2 L 599.1 38.1 L 599.1 38.1 L 599.1 38.0 L 599.2 38.0 L 599.2 37.9 L 600.8 37.9 L 600.8 37.8 L 601.0 37.8 L 601.0 37.7 L 601.0 37.7 L 601.0 36.5 L 602.1 36.5 L 602.1 36.5 L 602.1 36.5 L 602.1 35.7 L 602.6 35.7 L 602.6 35.7 L 602.8 35.7 L 602.8 35.6 L 602.8 35.6 L 602.8 35.2 L 602.8 35.2 L 602.8 35.1 L 602.8 35.1 L 602.8 35.1 L 602.8 35.1 L 602.8 35.1 L 603.4 35.1 L 603.4 35.0 L 603.4 35.0 L 603.4 35.0 L 603.4 35.0 L 603.4 34.9 L 603.5 34.9 L 603.5 34.9 L 603.5 34.9 L 603.5 34.9 L 603.5 34.9 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.6 L 603.5 34.5 L 603.5 34.5 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 603.5 34.4 L 604.7 34.4 L 604.7 34.4 L 604.8 34.4 L 604.8 34.3 L 604.8 34.3 L 604.8 33.8 L 604.8 33.8 L 604.8 33.8 L 606.8 33.8 L 606.8 33.7 L 606.8 33.7 L 606.8 33.6 L 606.8 33.6 L 606.8 33.5 L 606.9 33.5 L 606.9 33.5 L 607.7 33.5 L 607.7 30.3 L 607.7 30.3 L 607.7 30.3 L 607.8 30.3 L 607.8 28.7 L 607.9 28.7 L 607.9 28.7 L 608.3 28.7 L 608.3 28.5 L 608.3 28.5 L 608.3 28.4 L 608.3 28.4 L 608.3 28.4 L 611.5 28.4 L 611.5 28.2 L 612.5 28.2 L 612.5 28.0 L 1140.0 28.0" fill="none" stroke="#10b981" stroke-width="2"/>
+<circle cx="612.5" cy="28.0" r="3.5" fill="#10b981"/>
+<path d="M 70.0 210.0 L 602.5 210.0 L 602.5 163.8 L 602.5 163.8 L 602.5 155.3 L 603.3 155.3 L 603.3 151.4 L 605.3 151.4 L 605.3 148.0 L 607.2 148.0 L 607.2 145.1 L 1140.0 145.1" fill="none" stroke="#3b82f6" stroke-width="2"/>
+<circle cx="607.2" cy="145.1" r="3.5" fill="#3b82f6"/>
+<path d="M 594.4 62.6 L 594.4 62.6 L 594.4 62.6 L 594.6 62.6 L 594.6 62.6 L 596.0 62.6 L 596.0 62.6 L 596.0 62.6 L 596.0 60.9 L 596.1 60.9 L 596.1 60.4 L 596.1 60.4 L 596.1 60.1 L 596.2 60.1 L 596.2 59.8 L 596.7 59.8 L 596.7 59.6 L 597.4 59.6 L 597.4 50.9 L 597.4 50.9 L 597.4 50.7 L 597.4 50.7 L 597.4 50.5 L 597.8 50.5 L 597.8 49.3 L 597.9 49.3 L 597.9 49.3 L 597.9 49.3 L 597.9 49.3 L 598.0 49.3 L 598.0 49.2 L 598.2 49.2 L 598.2 49.2 L 598.2 49.2 L 598.2 49.1 L 599.0 49.1 L 599.0 49.1 L 599.1 49.1 L 599.1 49.1 L 599.1 49.1 L 599.1 49.0 L 599.1 49.0 L 599.1 49.0 L 599.2 49.0 L 599.2 49.0 L 600.8 49.0 L 600.8 48.9 L 601.0 48.9 L 601.0 48.9 L 601.0 48.9 L 601.0 48.5 L 602.1 48.5 L 602.1 48.6 L 602.1 48.6 L 602.1 49.1 L 602.6 49.1 L 602.6 49.1 L 602.8 49.1 L 602.8 49.1 L 602.8 49.1 L 602.8 49.5 L 602.8 49.5 L 602.8 49.5 L 602.8 49.5 L 602.8 49.6 L 602.8 49.6 L 602.8 49.6 L 603.4 49.6 L 603.4 49.7 L 603.4 49.7 L 603.4 49.7 L 603.4 49.7 L 603.4 49.7 L 603.5 49.7 L 603.5 49.7 L 603.5 49.7 L 603.5 49.7 L 603.5 49.7 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.0 L 603.5 50.1 L 603.5 50.1 L 603.5 50.1 L 603.5 50.1 L 603.5 50.2 L 603.5 50.2 L 603.5 50.2 L 603.5 50.2 L 603.5 50.2 L 603.5 50.2 L 603.5 50.2 L 603.5 50.2 L 603.5 50.2 L 603.5 50.2 L 603.5 50.2 L 604.7 50.2 L 604.7 50.2 L 604.8 50.2 L 604.8 50.3 L 604.8 50.3 L 604.8 50.8 L 604.8 50.8 L 604.8 50.8 L 606.8 50.8 L 606.8 50.9 L 606.8 50.9 L 606.8 50.9 L 606.8 50.9 L 606.8 51.0 L 606.9 51.0 L 606.9 51.0 L 607.7 51.0 L 607.7 49.8 L 607.7 49.8 L 607.7 49.7 L 607.8 49.7 L 607.8 49.3 L 607.9 49.3 L 607.9 49.3 L 608.3 49.3 L 608.3 49.3 L 608.3 49.3 L 608.3 49.2 L 608.3 49.2 L 608.3 49.2 L 611.5 49.2 L 611.5 49.1 L 612.5 49.1 L 612.5 48.9 L 1140.0 48.9" fill="none" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<path d="M 602.5 60.8 L 602.5 60.8 L 602.5 60.8 L 602.5 60.8 L 602.5 60.8 L 603.3 60.8 L 603.3 63.4 L 605.3 63.4 L 605.3 63.9 L 607.2 63.9 L 607.2 64.5 L 1140.0 64.5" fill="none" stroke="#3b82f6" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<text x="70" y="234" fill="#9ca3af" font-size="11">our decisions →</text>
+<line x1="70" y1="246" x2="1140" y2="246" stroke="#1f2937"/>
+<circle cx="593.5" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:02:40 · Yes · ok (hedge side)</title></circle>
+<circle cx="596.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:17:11 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:22:51 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="598.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:27:11 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="598.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:27:15 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="598.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:27:21 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="598.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:27:28 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="598.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:27:35 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="598.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:27:39 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:28:20 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:28:21 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:28:24 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:07 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:07 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:15 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:16 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:17 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:17 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:21 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:21 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:33 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:33 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="599.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:33:03 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="599.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:33:03 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:21 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="601.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:21 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="601.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:21 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="601.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:21 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:29 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:29 · No · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:31 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:31 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:35 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:35 · Yes · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:47:11 · No · ok (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:47:12 · No · already_resting (primary side)</title></circle>
+<circle cx="602.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 18:47:53 · Yes · target_dominant_other_side (primary side)</title></circle>
+<circle cx="603.2" cy="246.0" r="4" fill="#22c55e" opacity="0.95"><title>2026-05-12 18:52:40 · No · layer_scale_in (primary side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:52:41 · No · already_resting (primary side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:52:42 · No · already_resting (primary side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:52:42 · No · already_resting (primary side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:52:43 · No · already_resting (primary side)</title></circle>
+<circle cx="603.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:52:51 · No · already_resting (primary side)</title></circle>
+<circle cx="604.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 18:57:39 · Yes · vwap_floor_breach (primary side)</title></circle>
+<circle cx="604.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 18:57:41 · Yes · vwap_floor_breach (primary side)</title></circle>
+<circle cx="604.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 18:57:41 · Yes · vwap_floor_breach (primary side)</title></circle>
+<circle cx="604.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 18:57:41 · Yes · vwap_floor_breach (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="4" fill="#22c55e" opacity="0.95"><title>2026-05-12 18:58:00 · No · layer_scale_in (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:01 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:01 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:01 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:03 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:03 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:03 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:03 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:05 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:06 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:08 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:14 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:15 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:15 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:22 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:22 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:22 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:24 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:25 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:26 · No · already_resting (primary side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 18:58:26 · No · already_resting (primary side)</title></circle>
+<circle cx="604.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 18:58:50 · Yes · vwap_floor_breach (primary side)</title></circle>
+<circle cx="604.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 18:58:51 · Yes · vwap_floor_breach (primary side)</title></circle>
+<circle cx="605.2" cy="246.0" r="4" fill="#22c55e" opacity="0.95"><title>2026-05-12 19:02:46 · No · layer_scale_in (primary side)</title></circle>
+<circle cx="605.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:02:50 · No · already_resting (primary side)</title></circle>
+<circle cx="605.2" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:02:50 · No · already_resting (primary side)</title></circle>
+<circle cx="605.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:03:23 · No · already_resting (primary side)</title></circle>
+<circle cx="607.1" cy="246.0" r="4" fill="#22c55e" opacity="0.95"><title>2026-05-12 19:12:26 · No · layer_scale_in (primary side)</title></circle>
+<circle cx="607.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:12:33 · No · position_cap_reached (primary side)</title></circle>
+<circle cx="608.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:17:23 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="608.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:17:32 · No · vwap_floor_breach (primary side)</title></circle>
+<circle cx="609.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:22:34 · Yes · position_cap_reached (primary side)</title></circle>
+<circle cx="609.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:22:39 · Yes · position_cap_reached (primary side)</title></circle>
+<circle cx="609.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:22:41 · Yes · position_cap_reached (primary side)</title></circle>
+<circle cx="610.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:28:34 · No · target_dominant_other_side (primary side)</title></circle>
+<circle cx="610.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:28:34 · No · target_dominant_other_side (primary side)</title></circle>
+<circle cx="612.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:38:08 · No · position_cap_reached (primary side)</title></circle>
+<circle cx="612.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:38:29 · No · position_cap_reached (primary side)</title></circle>
+<circle cx="612.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:39:10 · No · position_cap_reached (primary side)</title></circle>
+<circle cx="612.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:39:18 · No · position_cap_reached (primary side)</title></circle>
+<circle cx="613.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:43:01 · No · position_cap_reached (primary side)</title></circle>
+<circle cx="613.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:43:05 · Yes · price_outside_clob_bounds (primary side)</title></circle>
+<circle cx="613.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:43:36 · No · position_cap_reached (primary side)</title></circle>
+<text x="70" y="18" fill="#f3f4f6" font-size="14" font-weight="600">Will Elche CF win on 2026-05-12? <tspan fill="#94a3b8" font-weight="400">→ No (winner)</tspan></text>
+<text x="1140" y="18" fill="#94a3b8" font-size="11" text-anchor="end">swisstony: $12054 @ VWAP $0.885  ·  us: $27.46 @ VWAP $0.800</text>
+</svg>
+        <div class="legend">
+          <span><span class="line" style="background:#10b981"></span>swisstony $cost</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our $cost</span>
+          <span><span class="line dash" style="color:#10b981"></span>swisstony VWAP</span>
+          <span><span class="line dash" style="color:#3b82f6"></span>Our VWAP</span>
+          <span><span class="dot" style="background:#22c55e"></span>placed</span>
+          <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
+          <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
+          <span><span class="dot" style="background:#ef4444"></span>error</span>
+        </div>
+      </div>
+  </section>
+<section class="event-group">
+    <h2>Real Betis Balompié vs. Elche CF - More Markets <span class="evslug">event_slug: <code>lal-bet-elc-2026-05-12-more-markets</code> · 3 markets</span></h2>
+    <div class="kpis kpis-3">
+      <div class="kpi us">
+        <h3>Our wallet</h3>
+        <div class="big neg">-97.6% <span style="color:#94a3b8;font-size:14px">(-$20.49)</span></div>
+        <div class="sub">Entry $20.99 · Value $0.50</div>
+      </div>
+      <div class="kpi target">
+        <h3>swisstony (target)</h3>
+        <div class="big pos">-28.7% <span style="color:#94a3b8;font-size:14px">(+$2901)</span></div>
+        <div class="sub">Entry $24543 · Value $17504</div>
+      </div>
+      <div class="kpi delta">
+        <h3>Δ vs target</h3>
+        <div class="big neg">+68.9% <span style="color:#94a3b8;font-size:14px">(+$14.47)</span></div>
+        <div class="sub">positive = target ahead = alpha leak</div>
+      </div>
+    </div>
+    <h3 class="subhead">Final positions (per market)</h3>
+    <div class="market-card">
+    <div class="market-head">
+      <span class="market-title">Real Betis Balompié vs. Elche CF: O/U 4.5</span>
+      <span class="badge win">Under won</span>
+      
+    </div>
+    <table class="positions">
+      <thead>
+        <tr>
+          <th rowspan="2">Trader</th>
+          <th colspan="3">Primary · Under</th>
+          <th colspan="3">Hedge · Over</th>
+          <th rowspan="2">Net value</th>
+          <th rowspan="2">Net %</th>
+          <th rowspan="2">Net P/L</th>
+        </tr>
+        <tr><th>Value</th><th>VWAP</th><th>P/L</th><th>Value</th><th>VWAP</th><th>P/L</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+      <td><span class="wallet us">Our wallet</span></td>
+      <td class="num">$0.50</td><td class="num">0.800</td><td class="num pos">+$0.10</td>
+      <td class="num">$0.00</td><td class="num">—</td><td class="num">—</td>
+      <td class="num">$0.50</td>
+      <td class="num pos">+25.0%</td>
+      <td class="num pos">+$0.10</td>
+    </tr>
+        <tr>
+      <td><span class="wallet target">swisstony</span></td>
+      <td class="num">$5287</td><td class="num">0.825</td><td class="num pos">+$921.36</td>
+      <td class="num">$1.53</td><td class="num">0.170</td><td class="num neg">-$516.92</td>
+      <td class="num">$5289</td>
+      <td class="num pos">+8.3%</td>
+      <td class="num pos">+$404.44</td>
+    </tr>
+      </tbody>
+    </table>
+  </div>
+<div class="market-card">
+    <div class="market-head">
+      <span class="market-title">Real Betis Balompié vs. Elche CF: O/U 1.5</span>
+      <span class="badge win">Over won</span>
+      
+    </div>
+    <table class="positions">
+      <thead>
+        <tr>
+          <th rowspan="2">Trader</th>
+          <th colspan="3">Primary · Over</th>
+          <th colspan="3">Hedge · Under</th>
+          <th rowspan="2">Net value</th>
+          <th rowspan="2">Net %</th>
+          <th rowspan="2">Net P/L</th>
+        </tr>
+        <tr><th>Value</th><th>VWAP</th><th>P/L</th><th>Value</th><th>VWAP</th><th>P/L</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+      <td><span class="wallet us">Our wallet</span></td>
+      <td class="num">$0.00</td><td class="num">0.890</td><td class="num neg">-$11.95</td>
+      <td class="num">$0.00</td><td class="num">0.120</td><td class="num neg">-$2.84</td>
+      <td class="num">$0.00</td>
+      <td class="num neg">-100.0%</td>
+      <td class="num neg">-$14.80</td>
+    </tr>
+        <tr>
+      <td><span class="wallet target">swisstony</span></td>
+      <td class="num">$1796</td><td class="num">0.921</td><td class="num pos">+$140.37</td>
+      <td class="num">$1.67</td><td class="num">0.181</td><td class="num neg">-$603.04</td>
+      <td class="num">$1797</td>
+      <td class="num neg">-20.5%</td>
+      <td class="num neg">-$462.67</td>
+    </tr>
+      </tbody>
+    </table>
+  </div>
+<div class="market-card">
+    <div class="market-head">
+      <span class="market-title">Real Betis Balompié vs. Elche CF: O/U 2.5</span>
+      <span class="badge win">Over won</span>
+      
+    </div>
+    <table class="positions">
+      <thead>
+        <tr>
+          <th rowspan="2">Trader</th>
+          <th colspan="3">Primary · Over</th>
+          <th colspan="3">Hedge · Under</th>
+          <th rowspan="2">Net value</th>
+          <th rowspan="2">Net %</th>
+          <th rowspan="2">Net P/L</th>
+        </tr>
+        <tr><th>Value</th><th>VWAP</th><th>P/L</th><th>Value</th><th>VWAP</th><th>P/L</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+      <td><span class="wallet us">Our wallet</span></td>
+      <td class="num">$0.00</td><td class="num">—</td><td class="num">—</td>
+      <td class="num">$0.00</td><td class="num">0.400</td><td class="num neg">-$5.79</td>
+      <td class="num">$0.00</td>
+      <td class="num neg">-100.0%</td>
+      <td class="num neg">-$5.79</td>
+    </tr>
+        <tr>
+      <td><span class="wallet target">swisstony</span></td>
+      <td class="num">$10415</td><td class="num">0.610</td><td class="num pos">+$4059</td>
+      <td class="num">$2.74</td><td class="num">0.201</td><td class="num neg">-$1100</td>
+      <td class="num">$10418</td>
+      <td class="num pos">+39.7%</td>
+      <td class="num pos">+$2959</td>
+    </tr>
+      </tbody>
+    </table>
+  </div>
+    <h3 class="subhead">Position divergence over time</h3>
+    <div class="market-card">
+        <div class="market-head"><span class="market-title">Real Betis Balompié vs. Elche CF: O/U 4.5 → Under</span></div>
+        <svg viewBox="0 0 1200 280" xmlns="http://www.w3.org/2000/svg" class="chart">
+<rect x="0" y="0" width="1200" height="280" fill="#0b1220"/>
+<line x1="70" y1="193.5" x2="1140" y2="193.5" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="193.5" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1</text>
+<line x1="70" y1="152.8" x2="1140" y2="152.8" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="152.8" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10</text>
+<line x1="70" y1="99.9" x2="1140" y2="99.9" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="99.9" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$100</text>
+<line x1="70" y1="45.2" x2="1140" y2="45.2" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="45.2" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1k</text>
+<text x="20" y="119" fill="#94a3b8" font-size="11" text-anchor="middle" transform="rotate(-90 20 119)">cumulative $ cost (log)</text>
+<text x="1148" y="210.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.00</text>
+<text x="1148" y="164.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.25</text>
+<text x="1148" y="119.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.50</text>
+<text x="1148" y="73.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.75</text>
+<text x="1148" y="28.0" fill="#475569" font-size="10" dominant-baseline="middle">$1.00</text>
+<text x="1186" y="119" fill="#475569" font-size="11" text-anchor="middle" transform="rotate(90 1186 119)">VWAP $</text>
+<line x1="70.0" y1="210.0" x2="70.0" y2="214.0" stroke="#4b5563"/>
+<text x="70.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-10 20:59</text>
+<line x1="248.3" y1="210.0" x2="248.3" y2="214.0" stroke="#4b5563"/>
+<text x="248.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-11 12:20</text>
+<line x1="426.7" y1="210.0" x2="426.7" y2="214.0" stroke="#4b5563"/>
+<text x="426.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 03:40</text>
+<line x1="605.0" y1="210.0" x2="605.0" y2="214.0" stroke="#4b5563"/>
+<text x="605.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 19:01</text>
+<line x1="783.3" y1="210.0" x2="783.3" y2="214.0" stroke="#4b5563"/>
+<text x="783.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 10:22</text>
+<line x1="961.7" y1="210.0" x2="961.7" y2="214.0" stroke="#4b5563"/>
+<text x="961.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 01:43</text>
+<line x1="1140.0" y1="210.0" x2="1140.0" y2="214.0" stroke="#4b5563"/>
+<text x="1140.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 17:04</text>
+<path d="M 70.0 210.0 L 71.9 210.0 L 71.9 171.1 L 72.2 171.1 L 72.2 155.9 L 76.0 155.9 L 76.0 147.0 L 593.0 147.0 L 593.0 128.0 L 594.2 128.0 L 594.2 94.3 L 595.8 94.3 L 595.8 93.1 L 596.1 93.1 L 596.1 90.9 L 596.2 90.9 L 596.2 86.9 L 597.4 86.9 L 597.4 76.3 L 602.2 76.3 L 602.2 76.2 L 604.6 76.2 L 604.6 72.7 L 606.7 72.7 L 606.7 63.8 L 611.7 63.8 L 611.7 63.4 L 612.3 63.4 L 612.3 62.7 L 613.2 62.7 L 613.2 39.9 L 613.4 39.9 L 613.4 39.8 L 613.5 39.8 L 613.5 28.1 L 614.9 28.1 L 614.9 28.0 L 1140.0 28.0 L 1140.0 210.0 L 70.0 210.0 Z" fill="#10b981" opacity="0.18"/>
+<path d="M 70.0 210.0 L 71.9 210.0 L 71.9 171.1 L 72.2 171.1 L 72.2 155.9 L 76.0 155.9 L 76.0 147.0 L 593.0 147.0 L 593.0 128.0 L 594.2 128.0 L 594.2 94.3 L 595.8 94.3 L 595.8 93.1 L 596.1 93.1 L 596.1 90.9 L 596.2 90.9 L 596.2 86.9 L 597.4 86.9 L 597.4 76.3 L 602.2 76.3 L 602.2 76.2 L 604.6 76.2 L 604.6 72.7 L 606.7 72.7 L 606.7 63.8 L 611.7 63.8 L 611.7 63.4 L 612.3 63.4 L 612.3 62.7 L 613.2 62.7 L 613.2 39.9 L 613.4 39.9 L 613.4 39.8 L 613.5 39.8 L 613.5 28.1 L 614.9 28.1 L 614.9 28.0 L 1140.0 28.0" fill="none" stroke="#10b981" stroke-width="2"/>
+<circle cx="614.9" cy="28.0" r="3.5" fill="#10b981"/>
+<path d="M 70.0 210.0 L 608.1 210.0 L 608.1 202.0 L 1140.0 202.0" fill="none" stroke="#3b82f6" stroke-width="2"/>
+<circle cx="608.1" cy="202.0" r="3.5" fill="#3b82f6"/>
+<path d="M 71.9 60.8 L 71.9 60.8 L 71.9 60.8 L 72.2 60.8 L 72.2 60.8 L 76.0 60.8 L 76.0 60.8 L 593.0 60.8 L 593.0 61.8 L 594.2 61.8 L 594.2 61.0 L 595.8 61.0 L 595.8 62.2 L 596.1 62.2 L 596.1 63.9 L 596.2 63.9 L 596.2 66.1 L 597.4 66.1 L 597.4 66.8 L 602.2 66.8 L 602.2 66.8 L 604.6 66.8 L 604.6 67.0 L 606.7 67.0 L 606.7 66.7 L 611.7 66.7 L 611.7 66.8 L 612.3 66.8 L 612.3 66.8 L 613.2 66.8 L 613.2 58.9 L 613.4 58.9 L 613.4 58.8 L 613.5 58.8 L 613.5 55.5 L 614.9 55.5 L 614.9 55.4 L 1140.0 55.4" fill="none" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<path d="M 608.1 64.4 L 608.1 64.4 L 608.1 64.4 L 1140.0 64.4" fill="none" stroke="#3b82f6" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<text x="70" y="234" fill="#9ca3af" font-size="11">our decisions →</text>
+<line x1="70" y1="246" x2="1140" y2="246" stroke="#1f2937"/>
+<circle cx="72.5" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-10 21:12:07 · Under · below_target_percentile (hedge side)</title></circle>
+<circle cx="72.5" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-10 21:12:29 · Under · below_target_percentile (hedge side)</title></circle>
+<circle cx="72.6" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-10 21:12:59 · Over · below_target_percentile (hedge side)</title></circle>
+<circle cx="76.4" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-10 21:32:23 · Under · below_target_percentile (hedge side)</title></circle>
+<circle cx="76.4" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-10 21:32:24 · Under · below_target_percentile (hedge side)</title></circle>
+<circle cx="76.4" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-10 21:32:24 · Under · below_target_percentile (hedge side)</title></circle>
+<circle cx="193.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-11 07:34:12 · Over · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="286.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-11 15:34:54 · Over · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="436.7" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 04:33:02 · Over · below_target_percentile (hedge side)</title></circle>
+<circle cx="584.7" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 17:17:14 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="585.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 17:22:53 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="585.8" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 17:22:54 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="593.6" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 18:02:42 · Under · below_target_percentile (hedge side)</title></circle>
+<circle cx="596.3" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 18:17:09 · Under · below_target_percentile (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:28:12 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:28:23 · Under · ok (hedge side)</title></circle>
+<circle cx="604.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:57:31 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="604.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:57:44 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="604.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:57:53 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="605.3" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 19:03:32 · Under · ok (hedge side)</title></circle>
+<circle cx="608.0" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 19:17:14 · Under · ok (hedge side)</title></circle>
+<circle cx="608.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:17:17 · Under · already_resting (primary side)</title></circle>
+<circle cx="608.0" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:17:18 · Under · already_resting (primary side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:28:04 · Over · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:28:18 · Over · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:32:33 · Over · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.9" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 19:37:29 · Under · ok (hedge side)</title></circle>
+<circle cx="612.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:37:56 · Over · target_dominant_other_side (primary side)</title></circle>
+<circle cx="612.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:37:59 · Over · target_dominant_other_side (primary side)</title></circle>
+<circle cx="612.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:39:06 · Over · target_dominant_other_side (primary side)</title></circle>
+<circle cx="613.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:42:54 · Over · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="613.1" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 19:43:24 · Under · ok (hedge side)</title></circle>
+<circle cx="613.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:43:40 · Under · already_resting (primary side)</title></circle>
+<circle cx="613.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:43:42 · Under · already_resting (primary side)</title></circle>
+<circle cx="613.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:43:42 · Under · already_resting (primary side)</title></circle>
+<circle cx="613.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:43:43 · Under · already_resting (primary side)</title></circle>
+<circle cx="613.1" cy="246.0" r="3" fill="#94a3b8" opacity="0.95"><title>2026-05-12 19:43:43 · Under · already_resting (primary side)</title></circle>
+<circle cx="613.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:43:50 · Over · target_dominant_other_side (primary side)</title></circle>
+<circle cx="613.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.95"><title>2026-05-12 19:44:03 · Over · target_dominant_other_side (primary side)</title></circle>
+<circle cx="613.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:47:56 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="613.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:48:00 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="614.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:48:06 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="615.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:53:21 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="615.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:58:07 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="616.9" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 20:03:22 · Over · target_dominant_other_side (hedge side)</title></circle>
+<text x="70" y="18" fill="#f3f4f6" font-size="14" font-weight="600">Real Betis Balompié vs. Elche CF: O/U 4.5 <tspan fill="#94a3b8" font-weight="400">→ Under (winner)</tspan></text>
+<text x="1140" y="18" fill="#94a3b8" font-size="11" text-anchor="end">swisstony: $2062 @ VWAP $0.849  ·  us: $0.40 @ VWAP $0.800</text>
+</svg>
+        <div class="legend">
+          <span><span class="line" style="background:#10b981"></span>swisstony $cost</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our $cost</span>
+          <span><span class="line dash" style="color:#10b981"></span>swisstony VWAP</span>
+          <span><span class="line dash" style="color:#3b82f6"></span>Our VWAP</span>
+          <span><span class="dot" style="background:#22c55e"></span>placed</span>
+          <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
+          <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
+          <span><span class="dot" style="background:#ef4444"></span>error</span>
+        </div>
+      </div>
+<div class="market-card">
+        <div class="market-head"><span class="market-title">Real Betis Balompié vs. Elche CF: O/U 1.5 → Over</span></div>
+        <svg viewBox="0 0 1200 280" xmlns="http://www.w3.org/2000/svg" class="chart">
+<rect x="0" y="0" width="1200" height="280" fill="#0b1220"/>
+<line x1="70" y1="193.0" x2="1140" y2="193.0" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="193.0" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1</text>
+<line x1="70" y1="151.1" x2="1140" y2="151.1" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="151.1" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10</text>
+<line x1="70" y1="96.7" x2="1140" y2="96.7" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="96.7" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$100</text>
+<line x1="70" y1="40.4" x2="1140" y2="40.4" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="40.4" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1k</text>
+<text x="20" y="119" fill="#94a3b8" font-size="11" text-anchor="middle" transform="rotate(-90 20 119)">cumulative $ cost (log)</text>
+<text x="1148" y="210.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.00</text>
+<text x="1148" y="164.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.25</text>
+<text x="1148" y="119.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.50</text>
+<text x="1148" y="73.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.75</text>
+<text x="1148" y="28.0" fill="#475569" font-size="10" dominant-baseline="middle">$1.00</text>
+<text x="1186" y="119" fill="#475569" font-size="11" text-anchor="middle" transform="rotate(90 1186 119)">VWAP $</text>
+<line x1="70.0" y1="210.0" x2="70.0" y2="214.0" stroke="#4b5563"/>
+<text x="70.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-10 20:59</text>
+<line x1="248.3" y1="210.0" x2="248.3" y2="214.0" stroke="#4b5563"/>
+<text x="248.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-11 12:20</text>
+<line x1="426.7" y1="210.0" x2="426.7" y2="214.0" stroke="#4b5563"/>
+<text x="426.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 03:40</text>
+<line x1="605.0" y1="210.0" x2="605.0" y2="214.0" stroke="#4b5563"/>
+<text x="605.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 19:01</text>
+<line x1="783.3" y1="210.0" x2="783.3" y2="214.0" stroke="#4b5563"/>
+<text x="783.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 10:22</text>
+<line x1="961.7" y1="210.0" x2="961.7" y2="214.0" stroke="#4b5563"/>
+<text x="961.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 01:43</text>
+<line x1="1140.0" y1="210.0" x2="1140.0" y2="214.0" stroke="#4b5563"/>
+<text x="1140.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 17:04</text>
+<path d="M 70.0 210.0 L 593.4 210.0 L 593.4 170.5 L 595.4 170.5 L 595.4 38.3 L 595.5 38.3 L 595.5 36.2 L 595.5 36.2 L 595.5 35.7 L 597.6 35.7 L 597.6 28.0 L 1140.0 28.0 L 1140.0 210.0 L 70.0 210.0 Z" fill="#10b981" opacity="0.18"/>
+<path d="M 70.0 210.0 L 593.4 210.0 L 593.4 170.5 L 595.4 170.5 L 595.4 38.3 L 595.5 38.3 L 595.5 36.2 L 595.5 36.2 L 595.5 35.7 L 597.6 35.7 L 597.6 28.0 L 1140.0 28.0" fill="none" stroke="#10b981" stroke-width="2"/>
+<circle cx="597.6" cy="28.0" r="3.5" fill="#10b981"/>
+<path d="M 70.0 210.0 L 598.5 210.0 L 598.5 147.1 L 1140.0 147.1" fill="none" stroke="#3b82f6" stroke-width="2"/>
+<circle cx="598.5" cy="147.1" r="3.5" fill="#3b82f6"/>
+<path d="M 593.4 64.4 L 593.4 64.4 L 593.4 64.4 L 595.4 64.4 L 595.4 40.8 L 595.5 40.8 L 595.5 40.8 L 595.5 40.8 L 595.5 40.8 L 597.6 40.8 L 597.6 42.3 L 1140.0 42.3" fill="none" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<path d="M 598.5 48.0 L 598.5 48.0 L 598.5 48.0 L 1140.0 48.0" fill="none" stroke="#3b82f6" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<text x="70" y="234" fill="#9ca3af" font-size="11">our decisions →</text>
+<line x1="70" y1="246" x2="1140" y2="246" stroke="#1f2937"/>
+<circle cx="447.4" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 05:28:04 · Under · below_target_percentile (hedge side)</title></circle>
+<circle cx="593.4" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 18:02:03 · Over · below_target_percentile (hedge side)</title></circle>
+<circle cx="594.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:07:03 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.4" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:22:37 · Under · ok (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:28:02 · Under · ok (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 18:28:03 · Over · ok (hedge side)</title></circle>
+<circle cx="600.5" cy="246.0" r="4" fill="#22c55e" opacity="0.95"><title>2026-05-12 18:38:21 · Under · ok (primary side)</title></circle>
+<circle cx="600.5" cy="246.0" r="4" fill="#22c55e" opacity="0.95"><title>2026-05-12 18:38:21 · Under · ok (primary side)</title></circle>
+<text x="70" y="18" fill="#f3f4f6" font-size="14" font-weight="600">Real Betis Balompié vs. Elche CF: O/U 1.5 <tspan fill="#94a3b8" font-weight="400">→ Over (winner)</tspan></text>
+<text x="1140" y="18" fill="#94a3b8" font-size="11" text-anchor="end">swisstony: $1655 @ VWAP $0.921  ·  us: $11.95 @ VWAP $0.890</text>
+</svg>
+        <div class="legend">
+          <span><span class="line" style="background:#10b981"></span>swisstony $cost</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our $cost</span>
+          <span><span class="line dash" style="color:#10b981"></span>swisstony VWAP</span>
+          <span><span class="line dash" style="color:#3b82f6"></span>Our VWAP</span>
+          <span><span class="dot" style="background:#22c55e"></span>placed</span>
+          <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
+          <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
+          <span><span class="dot" style="background:#ef4444"></span>error</span>
+        </div>
+      </div>
+<div class="market-card">
+        <div class="market-head"><span class="market-title">Real Betis Balompié vs. Elche CF: O/U 2.5 → Over</span></div>
+        <svg viewBox="0 0 1200 280" xmlns="http://www.w3.org/2000/svg" class="chart">
+<rect x="0" y="0" width="1200" height="280" fill="#0b1220"/>
+<line x1="70" y1="196.7" x2="1140" y2="196.7" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="196.7" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1</text>
+<line x1="70" y1="164.1" x2="1140" y2="164.1" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="164.1" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10</text>
+<line x1="70" y1="121.7" x2="1140" y2="121.7" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="121.7" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$100</text>
+<line x1="70" y1="77.8" x2="1140" y2="77.8" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="77.8" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$1k</text>
+<line x1="70" y1="33.8" x2="1140" y2="33.8" stroke="#1f2937" stroke-width="0.6" stroke-dasharray="3,4"/>
+<text x="62" y="33.8" fill="#6b7280" font-size="10" text-anchor="end" dominant-baseline="middle">$10k</text>
+<text x="20" y="119" fill="#94a3b8" font-size="11" text-anchor="middle" transform="rotate(-90 20 119)">cumulative $ cost (log)</text>
+<text x="1148" y="210.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.00</text>
+<text x="1148" y="164.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.25</text>
+<text x="1148" y="119.0" fill="#475569" font-size="10" dominant-baseline="middle">$0.50</text>
+<text x="1148" y="73.5" fill="#475569" font-size="10" dominant-baseline="middle">$0.75</text>
+<text x="1148" y="28.0" fill="#475569" font-size="10" dominant-baseline="middle">$1.00</text>
+<text x="1186" y="119" fill="#475569" font-size="11" text-anchor="middle" transform="rotate(90 1186 119)">VWAP $</text>
+<line x1="70.0" y1="210.0" x2="70.0" y2="214.0" stroke="#4b5563"/>
+<text x="70.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-10 20:59</text>
+<line x1="248.3" y1="210.0" x2="248.3" y2="214.0" stroke="#4b5563"/>
+<text x="248.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-11 12:20</text>
+<line x1="426.7" y1="210.0" x2="426.7" y2="214.0" stroke="#4b5563"/>
+<text x="426.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 03:40</text>
+<line x1="605.0" y1="210.0" x2="605.0" y2="214.0" stroke="#4b5563"/>
+<text x="605.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-12 19:01</text>
+<line x1="783.3" y1="210.0" x2="783.3" y2="214.0" stroke="#4b5563"/>
+<text x="783.3" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-13 10:22</text>
+<line x1="961.7" y1="210.0" x2="961.7" y2="214.0" stroke="#4b5563"/>
+<text x="961.7" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 01:43</text>
+<line x1="1140.0" y1="210.0" x2="1140.0" y2="214.0" stroke="#4b5563"/>
+<text x="1140.0" y="226.0" fill="#9ca3af" font-size="10" text-anchor="middle">05-14 17:04</text>
+<path d="M 70.0 210.0 L 70.0 210.0 L 70.0 158.2 L 458.4 158.2 L 458.4 83.1 L 593.5 83.1 L 593.5 64.1 L 593.5 64.1 L 593.5 54.8 L 593.5 54.8 L 593.5 54.8 L 593.6 54.8 L 593.6 49.0 L 593.6 49.0 L 593.6 45.2 L 594.1 45.2 L 594.1 45.2 L 594.2 45.2 L 594.2 44.0 L 595.0 44.0 L 595.0 39.1 L 595.0 39.1 L 595.0 35.4 L 595.1 35.4 L 595.1 35.3 L 595.1 35.3 L 595.1 32.4 L 595.2 32.4 L 595.2 32.0 L 595.4 32.0 L 595.4 31.9 L 595.8 31.9 L 595.8 31.9 L 600.0 31.9 L 600.0 31.9 L 600.5 31.9 L 600.5 31.7 L 601.9 31.7 L 601.9 31.7 L 602.2 31.7 L 602.2 29.5 L 602.2 29.5 L 602.2 29.5 L 602.7 29.5 L 602.7 28.0 L 602.7 28.0 L 602.7 28.0 L 603.5 28.0 L 603.5 28.0 L 605.0 28.0 L 605.0 28.0 L 1140.0 28.0 L 1140.0 210.0 L 70.0 210.0 Z" fill="#10b981" opacity="0.18"/>
+<path d="M 70.0 210.0 L 70.0 210.0 L 70.0 158.2 L 458.4 158.2 L 458.4 83.1 L 593.5 83.1 L 593.5 64.1 L 593.5 64.1 L 593.5 54.8 L 593.5 54.8 L 593.5 54.8 L 593.6 54.8 L 593.6 49.0 L 593.6 49.0 L 593.6 45.2 L 594.1 45.2 L 594.1 45.2 L 594.2 45.2 L 594.2 44.0 L 595.0 44.0 L 595.0 39.1 L 595.0 39.1 L 595.0 35.4 L 595.1 35.4 L 595.1 35.3 L 595.1 35.3 L 595.1 32.4 L 595.2 32.4 L 595.2 32.0 L 595.4 32.0 L 595.4 31.9 L 595.8 31.9 L 595.8 31.9 L 600.0 31.9 L 600.0 31.9 L 600.5 31.9 L 600.5 31.7 L 601.9 31.7 L 601.9 31.7 L 602.2 31.7 L 602.2 29.5 L 602.2 29.5 L 602.2 29.5 L 602.7 29.5 L 602.7 28.0 L 602.7 28.0 L 602.7 28.0 L 603.5 28.0 L 603.5 28.0 L 605.0 28.0 L 605.0 28.0 L 1140.0 28.0" fill="none" stroke="#10b981" stroke-width="2"/>
+<circle cx="605.0" cy="28.0" r="3.5" fill="#10b981"/>
+<path d="M 70.0 108.1 L 70.0 108.1 L 70.0 108.1 L 458.4 108.1 L 458.4 104.5 L 593.5 104.5 L 593.5 104.5 L 593.5 104.5 L 593.5 104.5 L 593.5 104.5 L 593.5 104.5 L 593.6 104.5 L 593.6 104.5 L 593.6 104.5 L 593.6 104.4 L 594.1 104.4 L 594.1 104.5 L 594.2 104.5 L 594.2 104.7 L 595.0 104.7 L 595.0 105.9 L 595.0 105.9 L 595.0 106.6 L 595.1 106.6 L 595.1 106.6 L 595.1 106.6 L 595.1 107.1 L 595.2 107.1 L 595.2 107.2 L 595.4 107.2 L 595.4 107.2 L 595.8 107.2 L 595.8 107.2 L 600.0 107.2 L 600.0 107.2 L 600.5 107.2 L 600.5 107.1 L 601.9 107.1 L 601.9 107.1 L 602.2 107.1 L 602.2 103.6 L 602.2 103.6 L 602.2 103.6 L 602.7 103.6 L 602.7 101.5 L 602.7 101.5 L 602.7 101.4 L 603.5 101.4 L 603.5 101.4 L 605.0 101.4 L 605.0 101.4 L 1140.0 101.4" fill="none" stroke="#10b981" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
+<text x="70" y="234" fill="#9ca3af" font-size="11">our decisions →</text>
+<line x1="70" y1="246" x2="1140" y2="246" stroke="#1f2937"/>
+<circle cx="70.5" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-10 21:01:45 · Over · below_target_percentile (hedge side)</title></circle>
+<circle cx="70.6" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-10 21:02:27 · Over · below_target_percentile (hedge side)</title></circle>
+<circle cx="209.8" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-11 09:01:20 · Under · below_target_percentile (hedge side)</title></circle>
+<circle cx="211.8" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-11 09:11:31 · Under · ok (hedge side)</title></circle>
+<circle cx="459.1" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 06:28:33 · Over · ok (hedge side)</title></circle>
+<circle cx="468.0" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 07:14:21 · Under · ok (hedge side)</title></circle>
+<circle cx="472.0" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 07:34:58 · Under · ok (hedge side)</title></circle>
+<circle cx="478.9" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 08:10:29 · Under · ok (hedge side)</title></circle>
+<circle cx="482.9" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 08:31:16 · Under · ok (hedge side)</title></circle>
+<circle cx="482.9" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 08:31:22 · Under · already_resting (hedge side)</title></circle>
+<circle cx="583.8" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 17:12:24 · Under · ok (hedge side)</title></circle>
+<circle cx="583.8" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 17:12:25 · Under · already_resting (hedge side)</title></circle>
+<circle cx="586.6" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 17:26:56 · Under · layer_scale_in (hedge side)</title></circle>
+<circle cx="586.6" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 17:27:03 · Under · already_resting (hedge side)</title></circle>
+<circle cx="586.7" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 17:27:12 · Under · already_resting (hedge side)</title></circle>
+<circle cx="587.8" cy="246.0" r="4" fill="#22c55e" opacity="0.45"><title>2026-05-12 17:33:03 · Under · layer_scale_in (hedge side)</title></circle>
+<circle cx="587.8" cy="246.0" r="3" fill="#94a3b8" opacity="0.45"><title>2026-05-12 17:33:10 · Under · already_resting (hedge side)</title></circle>
+<circle cx="593.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:02:09 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="593.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:02:12 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="593.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:02:18 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="593.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:02:19 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="593.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:02:20 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="593.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:02:20 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="593.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:02:22 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="594.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:07:05 · Under · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="594.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:07:11 · Over · position_cap_reached (hedge side)</title></circle>
+<circle cx="596.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:17:13 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="597.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:22:07 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="597.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:22:26 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="597.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:22:31 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="597.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:22:59 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="598.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:27:26 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="598.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:27:46 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:28:24 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="598.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:28:28 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:09 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="599.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:10 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="599.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:59 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="599.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:32:59 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="599.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:33:02 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="599.4" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:33:02 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="599.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:33:19 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="599.5" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:33:19 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="599.6" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:33:40 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="599.6" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:33:40 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="600.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:37:16 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="600.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:37:16 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="600.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:37:17 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="600.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:37:17 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="600.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:37:23 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="600.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:37:23 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="600.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:37:30 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="600.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:37:31 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:47 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:47 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:54 · Over · position_cap_reached (hedge side)</title></circle>
+<circle cx="601.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:42:54 · Over · position_cap_reached (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:26 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:27 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:34 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:35 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="602.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:47:36 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:43 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="603.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:52:46 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="604.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 18:58:25 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="605.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:02:16 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="605.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:02:20 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="605.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:02:33 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="605.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:02:38 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="605.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:03:01 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="605.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:03:09 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="605.3" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:03:10 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="606.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:07:14 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="607.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:12:23 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="608.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:17:28 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:27:30 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="610.0" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:27:53 · Under · target_dominant_other_side (hedge side)</title></circle>
+<circle cx="611.1" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:33:11 · Over · vwap_floor_breach (hedge side)</title></circle>
+<circle cx="611.2" cy="246.0" r="3" fill="#f59e0b" opacity="0.45"><title>2026-05-12 19:33:50 · Under · target_dominant_other_side (hedge side)</title></circle>
+<text x="70" y="18" fill="#f3f4f6" font-size="14" font-weight="600">Real Betis Balompié vs. Elche CF: O/U 2.5 <tspan fill="#94a3b8" font-weight="400">→ Over (winner)</tspan></text>
+<text x="1140" y="18" fill="#94a3b8" font-size="11" text-anchor="end">swisstony: $13526 @ VWAP $0.597</text>
+</svg>
+        <div class="legend">
+          <span><span class="line" style="background:#10b981"></span>swisstony $cost</span>
+          <span><span class="line" style="background:#3b82f6"></span>Our $cost</span>
+          <span><span class="line dash" style="color:#10b981"></span>swisstony VWAP</span>
+          <span><span class="line dash" style="color:#3b82f6"></span>Our VWAP</span>
+          <span><span class="dot" style="background:#22c55e"></span>placed</span>
+          <span><span class="dot" style="background:#94a3b8"></span>skip (signal small)</span>
+          <span><span class="dot" style="background:#f59e0b"></span>skip (algo gate)</span>
+          <span><span class="dot" style="background:#ef4444"></span>error</span>
+        </div>
+      </div>
+  </section>
+
+<section>
+  <h2 style="font-size:14px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-top:32px;">Δ-Cause classification</h2>
+  <div class="cause"><h2>#1 · Wrong-side allocation vs target <span style="color:#6b7280;font-weight:400">(charter D2 · score 331)</span></h2><div class="ev">Our wallet sank $33.11 into the side OPPOSITE swisstony's primary (38% of our cost).</div></div>
+<div class="cause"><h2>#2 · VWAP gate bouncing <span style="color:#6b7280;font-weight:400">(charter D4 · score 241)</span></h2><div class="ev">163 `vwap_floor_breach` skips total; 26 were on swisstony's primary side.</div></div>
+<div class="cause"><h2>#3 · Hedge blindness <span style="color:#6b7280;font-weight:400">(charter D3 · score 145)</span></h2><div class="ev">112 `target_dominant_other_side` skips; 11 on swisstony's final primary side.</div></div>
+<div class="cause"><h2>#4 · Order staleness / churn <span style="color:#6b7280;font-weight:400">(charter D5 · score 52)</span></h2><div class="ev">26 of 48 placements canceled (54%).</div></div>
+</section>
+
+<div class="pareto">
+  <h2>↗ Pareto fix · Stop reacting per-fill; reconcile to a target-position gap</h2>
+  <div class="act">Replace <code>planMirrorFromFill(fill)</code> with <code>planMirrorFromPositionGap(target_state, our_state)</code>. Today every fill is a fresh BUY signal; when target scalps the secondary side we mirror it as directional. Subsumes D3/D4/D6.</div>
+  <div class="charter">Charter row: D2 (subsumes D3, D4, D6)</div>
+</div>
+
+<section>
+  <h2 style="font-size:14px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Placement outcomes</h2>
+  <div class="kpi" style="border-left:3px solid #f59e0b">
+    <div class="big">16 filled <span style="color:#94a3b8;font-size:14px">/ 48 placed</span></div>
+    <div class="sub">$82.56 filled · $364.61 attempted · 26 canceled · 6 errored</div>
+  </div>
+</section>
+
+</body>
+</html>
