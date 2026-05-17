@@ -32,12 +32,15 @@ import {
   runMirrorTick,
 } from "@/features/copy-trade/mirror-pipeline";
 import { targetIdFromWallet } from "@/features/copy-trade/target-id";
+import {
+  buildWalletStatistic,
+  snapshotForTargetWallet,
+} from "@/features/copy-trade/target-percentile-snapshots";
 import type {
   MirrorTargetConfig,
   PositionFollowupPolicy,
   SizingPolicy,
   TargetConditionPositionView,
-  WalletSizeStatistic,
 } from "@/features/copy-trade/types";
 import type { OrderLedger } from "@/features/trading";
 import type { WalletActivitySource } from "@/features/wallet-watch";
@@ -88,99 +91,6 @@ const DEFAULT_POSITION_FOLLOWUP_POLICY: PositionFollowupPolicy = {
   max_hedge_fraction_of_position: 0.25,
   max_layer_fraction_of_position: 0.5,
 };
-const RN1_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea";
-const SWISSTONY_WALLET = "0x204f72f35326db932158cba6adff0b9a1da95e14";
-
-interface WalletSizeSnapshot {
-  wallet: `0x${string}`;
-  label: string;
-  captured_at: string;
-  sample_size: number;
-  percentiles: Record<number, number>;
-}
-
-const TOP_TARGET_SIZE_SNAPSHOTS: Record<string, WalletSizeSnapshot> = {
-  [RN1_WALLET]: {
-    wallet: RN1_WALLET,
-    label: "RN1",
-    captured_at: "2026-05-03T02:34:00Z",
-    sample_size: 3990,
-    percentiles: {
-      50: 40,
-      75: 200,
-      90: 733,
-      95: 1811,
-      99: 5659,
-    },
-  },
-  [SWISSTONY_WALLET]: {
-    wallet: SWISSTONY_WALLET,
-    label: "swisstony",
-    captured_at: "2026-05-03T02:34:00Z",
-    sample_size: 1085,
-    percentiles: {
-      50: 31,
-      75: 146,
-      90: 665,
-      95: 1394,
-      99: 4809,
-    },
-  },
-};
-
-function interpolatePercentile(
-  percentiles: Record<number, number>,
-  percentile: number
-): number {
-  const points = Object.keys(percentiles)
-    .map(Number)
-    .sort((a, b) => a - b);
-  const exact = percentiles[percentile];
-  if (exact !== undefined) return exact;
-  const lower = [...points].reverse().find((p) => p < percentile);
-  const upper = points.find((p) => p > percentile);
-  if (lower === undefined) {
-    const minPoint = points[0];
-    if (minPoint === undefined) {
-      throw new Error("percentile snapshot is empty");
-    }
-    return percentiles[minPoint] ?? 0;
-  }
-  if (upper === undefined) {
-    const maxPoint = points.at(-1);
-    if (maxPoint === undefined) {
-      throw new Error("percentile snapshot is empty");
-    }
-    return percentiles[maxPoint] ?? 0;
-  }
-  const lowerValue = percentiles[lower];
-  const upperValue = percentiles[upper];
-  if (lowerValue === undefined || upperValue === undefined) {
-    throw new Error("percentile snapshot is sparse");
-  }
-  const t = (percentile - lower) / (upper - lower);
-  return Number((lowerValue + (upperValue - lowerValue) * t).toFixed(2));
-}
-
-function buildWalletStatistic(
-  snapshot: WalletSizeSnapshot,
-  percentile: number
-): WalletSizeStatistic {
-  const maxTargetUsdc = snapshot.percentiles[99];
-  if (maxTargetUsdc === undefined) {
-    throw new Error(`missing p99 for ${snapshot.wallet}`);
-  }
-  return {
-    wallet: snapshot.wallet,
-    label: snapshot.label,
-    captured_at: snapshot.captured_at,
-    sample_size: snapshot.sample_size,
-    percentile,
-    min_target_usdc: interpolatePercentile(snapshot.percentiles, percentile),
-    max_target_usdc: maxTargetUsdc,
-  };
-}
-
 function buildSizingPolicy(params: {
   targetWallet: `0x${string}`;
   mirrorFilterPercentile: number;
@@ -202,12 +112,6 @@ function buildSizingPolicy(params: {
     max_usdc_per_condition: params.mirrorMaxUsdcPerTrade,
     statistic: buildWalletStatistic(snapshot, params.mirrorFilterPercentile),
   };
-}
-
-function snapshotForTargetWallet(
-  targetWallet: `0x${string}`
-): WalletSizeSnapshot | undefined {
-  return TOP_TARGET_SIZE_SNAPSHOTS[targetWallet.toLowerCase()];
 }
 
 export function sizingPolicyKindForTargetWallet(
