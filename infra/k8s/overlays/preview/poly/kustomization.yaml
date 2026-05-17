@@ -13,10 +13,10 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    digest: "sha256:6d75ea2add3197b4ea085bd722fbb5f8a6358e1eafad97bacdce709855ce7d8e"
+    digest: "sha256:fc7fb121b44174743f9ea0fb49ae1cb40cc1737ce0f41f1ff909a4d6b9cbe2e0"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    digest: "sha256:1b956848a58e040ffe6fab9e06b16a4f706256c6d6fe6cd5d9c67936c01d7245"
+    digest: "sha256:e96106e8aae2478a8ee506d3f837024ac2e7a415b0cc6491bee6f4d9f541d014"
   # poly-paper-sidecar is a catalog-v2 image; promote-build-payload manages
   # this digest automatically. See candidate-a overlay + docs/spec/catalog-v2.md.
 
