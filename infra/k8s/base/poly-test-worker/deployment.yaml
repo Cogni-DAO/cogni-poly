@@ -18,7 +18,7 @@ spec:
         app.kubernetes.io/name: poly-test-worker
         app.kubernetes.io/part-of: cogni
     spec:
-      terminationGracePeriodSeconds: 15
+      terminationGracePeriodSeconds: 5
       containers:
         - name: poly-test-worker
           # No tag — overlay's images: block substitutes the promoted digest.
