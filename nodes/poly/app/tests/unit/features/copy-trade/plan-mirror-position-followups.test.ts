@@ -78,6 +78,7 @@ function makeFill(tokenId: string, size_usdc: number, price = 0.5): Fill {
 function state(overrides?: Partial<RuntimeState>): RuntimeState {
   return {
     already_placed_ids: [],
+    placed_fill_ids: [],
     cumulative_intent_usdc_for_market: 0,
     position: {
       condition_id: CONDITION_ID,
@@ -114,7 +115,7 @@ describe("planMirrorFromFill() — position-aware followups", () => {
     const d = planMirrorFromFill({
       fill,
       config: CONFIG,
-      state: { already_placed_ids: [] },
+      state: { already_placed_ids: [], placed_fill_ids: [] },
       client_order_id: clientOrderIdFor(
         BILLING_ACCOUNT_ID,
         TARGET_ID,

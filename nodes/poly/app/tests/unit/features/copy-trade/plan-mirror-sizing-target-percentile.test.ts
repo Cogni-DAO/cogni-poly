@@ -28,11 +28,13 @@ const TARGET_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea" as const;
 
 const CLEAN_STATE: RuntimeState = {
   already_placed_ids: [],
+  placed_fill_ids: [],
 };
 
 function stateWithTargetPosition(cost_usdc: number): RuntimeState {
   return {
     already_placed_ids: [],
+    placed_fill_ids: [],
     target_position: {
       condition_id: "prediction-market:polymarket:0xcondition",
       tokens: [
@@ -246,6 +248,7 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile_scaled"
       config: scaledConfig,
       state: {
         already_placed_ids: [],
+        placed_fill_ids: [],
         target_position: {
           condition_id: fill.market_id,
           tokens: [

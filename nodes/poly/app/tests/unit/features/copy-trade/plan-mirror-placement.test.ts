@@ -53,7 +53,7 @@ function makeConfig(
   };
 }
 
-const STATE: RuntimeState = { already_placed_ids: [] };
+const STATE: RuntimeState = { already_placed_ids: [], placed_fill_ids: [] };
 const COID = clientOrderIdFor(BILLING_ACCOUNT_ID, TARGET_ID, FILL.fill_id);
 
 describe("planMirrorFromFill() — placement → intent.attributes.placement", () => {

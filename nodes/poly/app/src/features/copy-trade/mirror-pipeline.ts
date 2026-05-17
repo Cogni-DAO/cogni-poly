@@ -374,6 +374,7 @@ async function processFill(
     config: deps.target,
     state: {
       already_placed_ids: snapshot.already_placed_ids,
+      placed_fill_ids: snapshot.placed_fill_ids,
       cumulative_intent_usdc_for_market,
       position,
       ...(targetPosition !== undefined

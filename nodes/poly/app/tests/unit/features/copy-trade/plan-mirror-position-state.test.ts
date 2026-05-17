@@ -67,9 +67,13 @@ const POSITION_VIEW: MirrorPositionView = {
 
 describe("planMirrorFromFill — state.position passthrough (v0)", () => {
   it("accepts state.position without affecting outcome (pure passthrough in v0)", () => {
-    const stateNoPos: RuntimeState = { already_placed_ids: [] };
+    const stateNoPos: RuntimeState = {
+      already_placed_ids: [],
+      placed_fill_ids: [],
+    };
     const stateWithPos: RuntimeState = {
       already_placed_ids: [],
+      placed_fill_ids: [],
       position: POSITION_VIEW,
     };
     const planA = planMirrorFromFill({
@@ -92,6 +96,7 @@ describe("planMirrorFromFill — state.position passthrough (v0)", () => {
   it("PLAN_IS_PURE — repeat invocations with same inputs return deep-equal outputs", () => {
     const state: RuntimeState = {
       already_placed_ids: [],
+      placed_fill_ids: [],
       position: POSITION_VIEW,
     };
     const args = {
@@ -112,6 +117,7 @@ describe("planMirrorFromFill — state.position passthrough (v0)", () => {
     const before = JSON.parse(JSON.stringify(POSITION_VIEW));
     const state: RuntimeState = {
       already_placed_ids: [],
+      placed_fill_ids: [],
       position: POSITION_VIEW,
     };
     planMirrorFromFill({

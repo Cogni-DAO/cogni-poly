@@ -25,6 +25,7 @@ const TARGET_WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
 
 const CLEAN_STATE: RuntimeState = {
   already_placed_ids: [],
+  placed_fill_ids: [],
 };
 
 function makeConfig(max_usdc_per_condition: number): MirrorTargetConfig {
@@ -177,6 +178,7 @@ describe("planMirrorFromFill() — sizing policy: kind=min_bet (task.0404)", () 
       config: makeConfig(5),
       state: {
         already_placed_ids: [],
+        placed_fill_ids: [],
         cumulative_intent_usdc_for_market: 4.5,
       },
       client_order_id: clientOrderIdFor(

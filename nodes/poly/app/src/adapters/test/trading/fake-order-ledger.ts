@@ -169,6 +169,7 @@ export class FakeOrderLedger implements OrderLedger {
         today_spent_usdc: 0,
         fills_last_hour: 0,
         already_placed_ids: [],
+        placed_fill_ids: [],
         position_aggregates: [],
       };
     }
@@ -190,12 +191,14 @@ export class FakeOrderLedger implements OrderLedger {
       (r) => r.created_at >= oneHourAgo
     ).length;
     const already_placed_ids = myRows.map((r) => r.client_order_id);
+    const placed_fill_ids = myRows.map((r) => r.fill_id);
     const position_aggregates = computeIntentAggregatesForTarget(myRows);
 
     return {
       today_spent_usdc,
       fills_last_hour,
       already_placed_ids,
+      placed_fill_ids,
       position_aggregates,
     };
   }

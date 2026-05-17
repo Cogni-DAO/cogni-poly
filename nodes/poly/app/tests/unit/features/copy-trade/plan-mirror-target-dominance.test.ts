@@ -95,6 +95,7 @@ function makeState(args: {
 }): RuntimeState {
   return {
     already_placed_ids: [],
+    placed_fill_ids: [],
     cumulative_intent_usdc_for_market: 0,
     ...(args.targetPosition !== undefined
       ? { target_position: args.targetPosition }
@@ -558,6 +559,7 @@ describe("planMirrorFromFill — skip precedence (bug.5048)", () => {
       state: {
         ...makeState({ targetPosition: ASYMMETRIC_OVER }),
         already_placed_ids: [cid],
+        placed_fill_ids: [],
       },
       client_order_id: cid,
       min_shares: 5,

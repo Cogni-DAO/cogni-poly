@@ -209,7 +209,20 @@ export function planMirrorFromFill(input: PlanMirrorInput): MirrorPlan {
     now_ms,
   } = input;
 
-  if (state.already_placed_ids.includes(client_order_id)) {
+  // Idempotency gate. Two checks, both correct:
+  //   1. COID membership — fast-path for fresh in-tick placements (the COID
+  //      we just computed already lives in the ledger).
+  //   2. fill_id membership — durable backstop. Catches pre-cutover rows
+  //      whose stored COID was computed with the legacy 2-arg
+  //      `clientOrderIdFor(target_id, fill_id)` and therefore won't match
+  //      the new 3-arg form for the same (target, fill). Without this, a
+  //      cursor regression that re-feeds an old fill would skip the COID
+  //      check and try to re-place — duplicate live order on PROD if the
+  //      market is still active. See the multi-tenant fills PK migration.
+  if (
+    state.already_placed_ids.includes(client_order_id) ||
+    state.placed_fill_ids.includes(fill.fill_id)
+  ) {
     return {
       kind: "skip",
       reason: "already_placed",
