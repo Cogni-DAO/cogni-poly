@@ -11,7 +11,7 @@ resources:
 # Image digest — updated by promote-and-deploy / candidate-flight.
 images:
   - name: ghcr.io/cogni-dao/cogni-template
-    newName: ghcr.io/cogni-dao/cogni-poly
+    newName: ghcr.io/cogni-dao/cogni-template
     digest: "sha256:7e3de7d9139bd91af9015bf3404d38ba0b041fae8cdbab5f1d9f8c3b595b972a"
 
 patches:
