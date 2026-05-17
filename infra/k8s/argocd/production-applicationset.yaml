@@ -20,6 +20,11 @@ spec:
         revision: deploy/production-scheduler-worker
         files:
           - path: "infra/catalog/scheduler-worker.yaml"
+    - git:
+        repoURL: https://github.com/cogni-dao/cogni-poly.git
+        revision: deploy/production-poly-test-worker
+        files:
+          - path: "infra/catalog/poly-test-worker.yaml"
   template:
     metadata:
       name: "production-{{.name}}"
