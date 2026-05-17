@@ -187,7 +187,7 @@ flowchart TD
   D --> E[clientOrderIdFor target_id + fill_id]
   D --> F[ledger.snapshotState]
   D --> G[getMarketConstraints tokenId]
-  D --> H[ledger.cumulativeIntentForMarket]
+  D --> H[ledger.cumulativeIntentForMarketToken]
   D --> I[getTargetConditionPosition]
   F --> J[planMirrorFromFill]
   G --> J
@@ -413,7 +413,7 @@ Derived in SQL inside `OrderLedger.snapshotState` (no new table, no migration, n
 ```ts
 export const RuntimeStateSchema = z.object({
   already_placed_ids: z.array(z.string()),
-  cumulative_intent_usdc_for_market: z.number().optional(),
+  cumulative_intent_usdc_for_token: z.number().optional(),
   /** Mirror position cache view for this fill's condition_id. Undefined ⇒ no prior exposure. */
   position: MirrorPositionViewSchema.optional(),
   /** Target-wallet position on the same condition (v0: Data-API; vNext: persisted target activity). */
@@ -728,7 +728,7 @@ Code review criteria. Every invariant has a named owner file in the Implementati
 - **`MIRROR_REASON_BOUNDED`** — `MirrorReason` is a closed enum. Used verbatim as a Prom label (`poly_mirror_decisions_total{outcome, reason}`). Keep small + stable.
 - **`DECISIONS_TOTAL_HAS_SOURCE`** — `poly_mirror_decisions_total{outcome, reason, source}` always carries `source`. Bounded enum: `source ∈ {data-api, clob-ws, chain}`. `chain` is the live value as of task.5043 (Polygon `OrderFilled` log source); `data-api` is the legacy pre-chain pipeline; `clob-ws` is reserved for a future direct CLOB stream.
 - **`DECISION_LOG_NAMES_VIEW`** — any decision branched on `state.position` must include `position_branch ∈ {none, hedge, layer, sell_close, new_entry}` + `position_qty_shares` + `position_token_id` on the structured Loki log.
-- **`CAP_IS_PER_CONDITION_ID`** (bug.5054) — `cumulativeIntentForMarket` in `applySizingPolicy` groups by `market_id` (= `prediction-market:polymarket:<conditionId>`). Each target's `max_usdc_per_condition` budget bounds the TOTAL committed intent across both YES + NO outcome tokens of a single conditionId (one Polymarket "line" / bet question). Different lines on the same event (handicap, totals, etc.) have distinct conditionIds and each receive their own independent budget. Hedge legs on the SAME conditionId share the budget. The misnamed legacy field `max_usdc_per_trade` was internally renamed in bug.5054; the DB column `mirror_max_usdc_per_trade` and Loki decision-log field `mirror_max_usdc_per_trade` are preserved for external compatibility.
+- **`CAP_IS_PER_TOKEN_ID`** (bug.5004; supersedes `CAP_IS_PER_CONDITION_ID` from bug.5054) — `cumulativeIntentForMarketToken` in `applySizingPolicy` (and the atomic SELECT inside `insertPending`) groups by `(billing_account_id, market_id, token_id)`. Each side (YES / NO outcome token) of a single conditionId gets its own `max_usdc_per_condition`-worth of headroom. Different lines on the same event (handicap, totals, etc.) have distinct conditionIds and each side of each line receives an independent budget. **Behavior change vs bug.5054:** on hedged binaries (target builds both YES and NO) the operator's gross committed intent against a single conditionId can now reach `2 × max_usdc_per_condition` — this is intentional and is the whole motivator for bug.5004 (the prior per-condition cap froze the mirror on the side it entered first when target dominance pivoted mid-condition, and `NO_SELL_IN_MIRROR` made the residue unrecoverable). The per-condition cap is now better understood as a per-leg cap; the misnamed config field `max_usdc_per_condition` is preserved for compatibility and is the next rename candidate. **Operator-level dollar bound** lives at `authorizeIntent` (daily / hourly grant caps on `poly_wallet_grants`), NOT at the per-leg cap; agents reasoning about total capital risk must look there, not here. The DB column `mirror_max_usdc_per_trade` and Loki decision-log field `mirror_max_usdc_per_trade` are preserved for external compatibility. The skip-reason label `position_cap_reached` is preserved; its meaning narrows from per-condition to per-token — dashboards interpreting this counter as "per-market exposure exhausted" need a one-line semantic update.
 - **`TARGET_DOMINANCE_DRIVES_BRANCH`** (bug.5048) — when `config.min_target_side_fraction` is set AND `state.target_position` is available with non-zero total cost, branch selection is computed from `analyzeTargetDominance` (target's per-condition side fractions) FIRST, then routed by our position state per the branch table above. Minority-side fills always skip as `target_dominant_other_side` (master switch — applies to entry, layer, AND hedge). Our position is a downstream input, never the primary discriminator. When disabled (threshold unset or no target data), the planner falls back to legacy our-position routing for backward-compat with pre-bug.5048 tests.
 - **`NEVER_PAY_ABOVE_TARGET_VWAP`** (bug.5048) — when `config.vwap_tolerance` is set, the planner skips with `vwap_floor_breach` when `fill.price > target_vwap_for_fill_token + vwap_tolerance`. Asymmetric upward gate; we are happy to enter below target VWAP. Fails open when target VWAP is unknown.
 - **`NO_SELL_IN_MIRROR`** — the mirror never SELLs to rebalance. Wrong-side residue (from cross-target activity or pre-fix legacy) holds to redemption. The mirror's response to target's hedging is to BUY the opposite side via the `hedge` branch, not to unwind ours.
@@ -804,7 +804,7 @@ The same trap applies to `poly_copy_trade_fills.target_id` (also v5).
 Trading layer (`features/trading/`):
 
 - `clob-executor.ts` — pure composition; wraps an injected `placeOrder` fn with logs + bounded metrics.
-- `order-ledger.ts` — `insertPending`, `markOrderId`, `markError`, `markCanceled`, `updateStatus`, `snapshotState`, `markPositionLifecycleByAsset`, `markPositionLifecycleByConditionId`, `preserveTerminalLifecycle`, `cumulativeIntentForMarket`.
+- `order-ledger.ts` — `insertPending`, `markOrderId`, `markError`, `markCanceled`, `updateStatus`, `snapshotState`, `markPositionLifecycleByAsset`, `markPositionLifecycleByConditionId`, `preserveTerminalLifecycle`, `cumulativeIntentForMarketToken`.
 - `order-ledger.types.ts` — `LedgerStatus`, `LedgerPositionLifecycle`, `StateSnapshot`, `PositionIntentAggregate`.
 - `ledger-lifecycle.ts` — position-lifecycle predicates.
 

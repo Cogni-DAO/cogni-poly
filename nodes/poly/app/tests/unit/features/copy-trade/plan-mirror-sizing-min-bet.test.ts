@@ -179,7 +179,7 @@ describe("planMirrorFromFill() — sizing policy: kind=min_bet (task.0404)", () 
       state: {
         already_placed_ids: [],
         placed_fill_ids: [],
-        cumulative_intent_usdc_for_market: 4.5,
+        cumulative_intent_usdc_for_token: 4.5,
       },
       client_order_id: clientOrderIdFor(
         BILLING_ACCOUNT_ID,

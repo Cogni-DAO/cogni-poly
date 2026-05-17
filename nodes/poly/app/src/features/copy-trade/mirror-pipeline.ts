@@ -337,12 +337,31 @@ async function processFill(
     }
   }
 
-  const cumulative_intent_usdc_for_market =
-    snapshot.already_placed_ids.includes(client_order_id)
+  // CAP_IS_PER_TOKEN_ID (bug.5004): cap is scoped per (market, token). Pull
+  // the token_id from the normalized fill — `fill.attributes.asset` is the
+  // CTF token-id field this pipeline already reads elsewhere (see
+  // plan-mirror.ts:577). When the fill arrives without an asset OR with an
+  // empty asset (defensive — buildIntent's fallback shape), skip the cap-read;
+  // the planner will treat `cumulative_intent_usdc_for_token` as undefined and
+  // bypass the cap check (preserves SELL/legacy paths). The atomic
+  // `insertPending` cap-check applies the same empty-token bypass, so both
+  // enforcement points agree.
+  const rawFillTokenId =
+    typeof fill.attributes?.asset === "string"
+      ? fill.attributes.asset
+      : undefined;
+  const fillTokenId =
+    rawFillTokenId !== undefined && rawFillTokenId.length > 0
+      ? rawFillTokenId
+      : undefined;
+  const cumulative_intent_usdc_for_token =
+    snapshot.already_placed_ids.includes(client_order_id) ||
+    fillTokenId === undefined
       ? undefined
-      : await deps.ledger.cumulativeIntentForMarket(
+      : await deps.ledger.cumulativeIntentForMarketToken(
           deps.target.billing_account_id,
-          fill.market_id
+          fill.market_id,
+          fillTokenId
         );
 
   const positions_by_condition = aggregatePositionRows(
@@ -375,7 +394,7 @@ async function processFill(
     state: {
       already_placed_ids: snapshot.already_placed_ids,
       placed_fill_ids: snapshot.placed_fill_ids,
-      cumulative_intent_usdc_for_market,
+      cumulative_intent_usdc_for_token,
       position,
       ...(targetPosition !== undefined
         ? { target_position: targetPosition }

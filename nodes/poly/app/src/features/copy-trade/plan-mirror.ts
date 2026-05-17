@@ -53,7 +53,7 @@ export function applySizingPolicy(
   targetSizeUsdc: number,
   minShares: number | undefined,
   minUsdcNotional: number | undefined,
-  cumulativeIntentForMarket?: number
+  cumulativeIntentForToken?: number
 ): SizingResult {
   const sized = sizeFromPolicy(
     policy,
@@ -64,8 +64,8 @@ export function applySizingPolicy(
   );
   if (!sized.ok) return sized;
   if (
-    cumulativeIntentForMarket !== undefined &&
-    cumulativeIntentForMarket + sized.size_usdc > policy.max_usdc_per_condition
+    cumulativeIntentForToken !== undefined &&
+    cumulativeIntentForToken + sized.size_usdc > policy.max_usdc_per_condition
   ) {
     return { ok: false, reason: "position_cap_reached" };
   }
@@ -553,7 +553,7 @@ function decideMirrorBranch(
       targetSizingUsdcForFill(fill, state, config.sizing),
       minShares,
       minUsdcNotional,
-      state.cumulative_intent_usdc_for_market
+      state.cumulative_intent_usdc_for_token
     ),
     wrong_side_holding_detected,
   };
@@ -601,7 +601,7 @@ function sizeLayerDominant(
       mirrorExposureUsdc * followup.max_layer_fraction_of_position,
     minShares,
     minUsdcNotional,
-    cumulativeIntentForMarket: state.cumulative_intent_usdc_for_market,
+    cumulativeIntentForToken: state.cumulative_intent_usdc_for_token,
   });
 }
 
@@ -665,7 +665,7 @@ function sizeHedge(
       mirrorExposureUsdc * followup.max_hedge_fraction_of_position,
     minShares,
     minUsdcNotional,
-    cumulativeIntentForMarket: state.cumulative_intent_usdc_for_market,
+    cumulativeIntentForToken: state.cumulative_intent_usdc_for_token,
   });
 }
 
@@ -752,7 +752,7 @@ function applyFollowupSizing(params: {
   maxFollowupUsdc: number;
   minShares: number | undefined;
   minUsdcNotional: number | undefined;
-  cumulativeIntentForMarket: number | undefined;
+  cumulativeIntentForToken: number | undefined;
 }): SizingResult {
   const maxUsdc = Math.min(
     params.policy.max_usdc_per_condition,
@@ -767,8 +767,8 @@ function applyFollowupSizing(params: {
   );
   if (!sized.ok) return sized;
   if (
-    params.cumulativeIntentForMarket !== undefined &&
-    params.cumulativeIntentForMarket + sized.size_usdc >
+    params.cumulativeIntentForToken !== undefined &&
+    params.cumulativeIntentForToken + sized.size_usdc >
       params.policy.max_usdc_per_condition
   ) {
     return { ok: false, reason: "position_cap_reached" };

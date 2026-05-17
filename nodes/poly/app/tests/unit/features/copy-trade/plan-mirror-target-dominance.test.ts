@@ -96,7 +96,7 @@ function makeState(args: {
   return {
     already_placed_ids: [],
     placed_fill_ids: [],
-    cumulative_intent_usdc_for_market: 0,
+    cumulative_intent_usdc_for_token: 0,
     ...(args.targetPosition !== undefined
       ? { target_position: args.targetPosition }
       : {}),

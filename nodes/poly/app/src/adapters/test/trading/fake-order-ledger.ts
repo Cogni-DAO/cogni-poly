@@ -203,9 +203,10 @@ export class FakeOrderLedger implements OrderLedger {
     };
   }
 
-  async cumulativeIntentForMarket(
+  async cumulativeIntentForMarketToken(
     billing_account_id: string,
-    market_id: string
+    market_id: string,
+    token_id: string
   ): Promise<number> {
     if (this.failConfigRead) return Number.POSITIVE_INFINITY;
     return this.rows
@@ -213,6 +214,10 @@ export class FakeOrderLedger implements OrderLedger {
         if (r.billing_account_id !== billing_account_id) return false;
         const attrs = r.attributes as Record<string, unknown> | null;
         if (attrs?.market_id !== market_id) return false;
+        // CAP_IS_PER_TOKEN_ID (bug.5004): scope to a single side of the
+        // condition. Production audit at design-time: 0/29970 rows have NULL
+        // attributes.token_id, so no legacy-fallback OR-clause is needed.
+        if (attrs?.token_id !== token_id) return false;
         return shouldCountLedgerMarketIntent(r);
       })
       .reduce((sum, r) => sum + ledgerCountedIntentUsdc(r), 0);
@@ -240,13 +245,27 @@ export class FakeOrderLedger implements OrderLedger {
         input.intent.market_id
       );
     }
+    // Mirror the real adapter: empty-string token_id from buildIntent's
+    // defensive fallback is treated as "no per-token cap available".
+    const rawTokenId =
+      typeof input.intent.attributes?.token_id === "string"
+        ? input.intent.attributes.token_id
+        : undefined;
+    const intentTokenId =
+      rawTokenId !== undefined && rawTokenId.length > 0
+        ? rawTokenId
+        : undefined;
     if (
       input.max_market_intent_usdc !== undefined &&
-      input.intent.side === "BUY"
+      input.intent.side === "BUY" &&
+      intentTokenId !== undefined
     ) {
-      const currentIntent = await this.cumulativeIntentForMarket(
+      // CAP_IS_PER_TOKEN_ID (bug.5004): mirror the real adapter — atomic
+      // cap-check is per (market, token_id).
+      const currentIntent = await this.cumulativeIntentForMarketToken(
         input.billing_account_id,
-        input.intent.market_id
+        input.intent.market_id,
+        intentTokenId
       );
       if (
         currentIntent + input.intent.size_usdc >
@@ -255,6 +274,7 @@ export class FakeOrderLedger implements OrderLedger {
         throw new PositionCapReachedError(
           input.billing_account_id,
           input.intent.market_id,
+          intentTokenId,
           currentIntent,
           input.intent.size_usdc,
           input.max_market_intent_usdc

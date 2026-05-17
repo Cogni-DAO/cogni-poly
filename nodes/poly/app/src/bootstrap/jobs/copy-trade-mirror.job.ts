@@ -190,8 +190,10 @@ function buildSizingPolicy(params: {
   if (!snapshot) {
     return {
       kind: "min_bet",
-      // DB column `mirror_max_usdc_per_trade` retained; v0 internal rename to
-      // `max_usdc_per_condition` (bug.5054, CAP_IS_PER_CONDITION_ID).
+      // DB column `mirror_max_usdc_per_trade` retained; v0 internal rename
+      // to `max_usdc_per_condition` (bug.5054). bug.5004 narrowed the cap
+      // scope from per-conditionId to per-token_id (CAP_IS_PER_TOKEN_ID) —
+      // the value here now bounds each leg of a hedged binary independently.
       max_usdc_per_condition: params.mirrorMaxUsdcPerTrade,
     };
   }

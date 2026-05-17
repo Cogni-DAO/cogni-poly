@@ -7,7 +7,7 @@
  * Scope: Pure type surface. No drizzle imports, no I/O.
  * Invariants: LEDGER_PORT_SHAPE_IS_STABLE — adding fields is a breaking change. INSERT_BEFORE_PLACE is a caller invariant, not a ledger one.
  * Side-effects: none
- * Public types: `LedgerRow` (includes `synced_at`, `position_lifecycle`, `mode`), `LedgerStatus`, `LedgerMode`, `LedgerPositionLifecycle`, `StateSnapshot`, `TenantBinding`, `InsertPendingInput` (extends TenantBinding), `RecordDecisionInput` (extends TenantBinding), `ListRecentOptions` (tenant-required), `ListOpenOrPendingOptions`, `UpdateStatusInput` (includes `reason?`), `SyncHealthSummary`, `OrderLedger` (snapshotState takes `(target_id, billing_account_id)`).
+ * Public types: `LedgerRow` (includes `synced_at`, `position_lifecycle`, `mode`), `LedgerStatus`, `LedgerMode`, `LedgerPositionLifecycle`, `StateSnapshot`, `TenantBinding`, `InsertPendingInput` (extends TenantBinding; carries `intent.attributes.token_id` for the per-token atomic cap-check), `RecordDecisionInput` (extends TenantBinding), `ListRecentOptions` (tenant-required), `ListOpenOrPendingOptions`, `UpdateStatusInput` (includes `reason?`), `SyncHealthSummary`, `OrderLedger` (snapshotState takes `(target_id, billing_account_id)`; `cumulativeIntentForMarketToken` takes `(billing_account_id, market_id, token_id)` per bug.5004 `CAP_IS_PER_TOKEN_ID`).
  * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md, docs/spec/poly-tenant-and-collateral.md
  * @public
  */
@@ -163,22 +163,27 @@ export class AlreadyRestingError extends Error {
 }
 
 /**
- * Thrown by `insertPending` when the tenant's active intent for a market would
- * exceed the caller-provided per-market cap. Unlike the target-scoped
+ * Thrown by `insertPending` when the tenant's active intent for a (market,
+ * token) would exceed the caller-provided per-leg cap. Unlike the target-scoped
  * `AlreadyRestingError`, this protects aggregate exposure across all copy
  * targets for the same billing account.
+ *
+ * bug.5004 (`CAP_IS_PER_TOKEN_ID`): the cap is scoped per `token_id`, so a
+ * hedged binary can accumulate up to `max_intent_usdc` on each side
+ * independently. The opposite-side intent does NOT count toward `current_intent_usdc`.
  */
 export class PositionCapReachedError extends Error {
   readonly code = "position_cap_reached" as const;
   constructor(
     readonly billing_account_id: string,
     readonly market_id: string,
+    readonly token_id: string,
     readonly current_intent_usdc: number,
     readonly proposed_intent_usdc: number,
     readonly max_intent_usdc: number
   ) {
     super(
-      `PositionCapReachedError: active intent ${current_intent_usdc} + ${proposed_intent_usdc} exceeds ${max_intent_usdc} for (${billing_account_id}, ${market_id})`
+      `PositionCapReachedError: active intent ${current_intent_usdc} + ${proposed_intent_usdc} exceeds ${max_intent_usdc} for (${billing_account_id}, ${market_id}, ${token_id})`
     );
     this.name = "PositionCapReachedError";
   }
@@ -217,11 +222,26 @@ export interface InsertPendingInput extends TenantBinding {
   observed_at: Date;
   intent: OrderIntent;
   /**
-   * Optional atomic cap for active tenant × market intent. When present, the
-   * DB adapter locks `(billing_account_id, market_id)`, re-sums active intent,
-   * and rejects the insert with `PositionCapReachedError` if it would exceed
-   * this bound. Copy-trading passes `max_usdc_per_condition` here so concurrent
-   * target pollers cannot race through the read-side pre-check.
+   * Optional atomic cap for active tenant × market × token intent. When
+   * present AND `intent.attributes.token_id` is set, the DB adapter locks
+   * `(billing_account_id, market_id, token_id)`, re-sums active intent for
+   * that token, and rejects the insert with `PositionCapReachedError` if it
+   * would exceed this bound. Copy-trading passes `max_usdc_per_condition`
+   * here so concurrent target pollers cannot race through the read-side
+   * pre-check.
+   *
+   * bug.5004 (`CAP_IS_PER_TOKEN_ID`): the atomic check is scoped per
+   * token_id; the opposite side of a binary does NOT count against this
+   * token's cap.
+   *
+   * **Bypass contract** (intentional, mirrored by `mirror-pipeline.ts`'s
+   * read-side pre-check): when `intent.attributes.token_id` is missing OR
+   * empty-string (`buildIntent`'s defensive fallback when the upstream fill
+   * has no `asset`), the atomic cap-check is SKIPPED entirely. We prefer
+   * "fail open on malformed fill" over "scope cap to empty-string token +
+   * silently match no rows + leak past the cap". The bypass also applies to
+   * SELL intents (NO_SELL_IN_MIRROR — sells never go through this cap) and
+   * any caller that has not yet opted into the per-token contract.
    */
   max_market_intent_usdc?: number;
 }
@@ -347,8 +367,15 @@ export interface OrderLedger {
 
   /**
    * Sum the cap-relevant USDC component of all `poly_copy_trade_fills` rows
-   * for this tenant × market. Used by the mirror sizing policy to enforce a
-   * per-(tenant, market) position cap.
+   * for this tenant × market × token. Used by the mirror sizing policy to
+   * enforce a per-(tenant, market, token_id) position cap.
+   *
+   * bug.5004 (`CAP_IS_PER_TOKEN_ID`): scope is `(billing_account_id, market_id,
+   * attributes->>'token_id')`. YES + NO outcome tokens of the same conditionId
+   * have independent budgets. Each side of a hedged binary can accumulate up
+   * to `max_usdc_per_condition` without interference from the other side.
+   * Operator-level dollar bound lives at `authorizeIntent` (daily / hourly
+   * grant caps), not here.
    *
    * **Intent for active rows, realized for terminated rows.** Per-status weight:
    *   - `pending | open | filled | partial` → `size_usdc` (full intent — we
@@ -372,18 +399,19 @@ export interface OrderLedger {
    * abandoned) or `attributes.closed_at IS NOT NULL` are excluded outright —
    * the position is no longer in our wallet.
    *
-   * Cross-target by design (the cap is on the tenant's exposure to a market,
-   * not per-target). Fail-closed: returns `Infinity` on DB error so the
-   * caller skips the placement rather than mis-allowing it.
+   * Cross-target by design (the cap is on the tenant's exposure to a market×
+   * token, not per-target). Fail-closed: returns `Infinity` on DB error so
+   * the caller skips the placement rather than mis-allowing it.
    *
    * Mirrored by `ledger-lifecycle::ledgerCountedIntentUsdc` for the in-memory
    * FakeOrderLedger.
    *
-   * Links: bug.5050, bug.0430.
+   * Links: bug.5004, bug.5050, bug.0430.
    */
-  cumulativeIntentForMarket(
+  cumulativeIntentForMarketToken(
     billing_account_id: string,
-    market_id: string
+    market_id: string,
+    token_id: string
   ): Promise<number>;
 
   /**

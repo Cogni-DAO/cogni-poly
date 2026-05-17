@@ -28,13 +28,17 @@ import { z } from "zod";
  * cap-exceed cases are not duplicated at the `authorizeIntent` boundary as
  * `placement_failed` decisions.
  *
- * `max_usdc_per_condition` is a per-conditionId cumulative-intent budget, NOT
- * a per-trade max (bug.5054). The `position_cap_reached` check in
- * `applySizingPolicy` sums `cumulativeIntentForMarket` (grouped by
- * `market_id` = `prediction-market:polymarket:<conditionId>`) against this
- * value, so YES + NO outcome tokens on the same conditionId share the
- * budget; different conditionIds get their own. See spec invariant
- * CAP_IS_PER_CONDITION_ID.
+ * `max_usdc_per_condition` is a per-(conditionId, token_id) cumulative-intent
+ * budget — better understood as a per-leg cap after bug.5004 (the legacy
+ * field name is preserved for compatibility, rename deferred). The
+ * `position_cap_reached` check in `applySizingPolicy` sums
+ * `cumulativeIntentForMarketToken` (grouped by `(market_id, attributes.token_id)`)
+ * against this value, so YES and NO outcome tokens on the same conditionId
+ * each get their own `max_usdc_per_condition`-worth of headroom — a hedged
+ * binary can therefore accumulate up to `2 × max_usdc_per_condition` of
+ * gross intent against one conditionId. Operator-level dollar bound lives
+ * downstream at `authorizeIntent` (per-tenant daily / hourly grant caps,
+ * `CAPS_LIVE_IN_GRANT`), not here. See spec invariant CAP_IS_PER_TOKEN_ID.
  *
  * FCFS budget gating across multi-target copy-trading is handled downstream by
  * `authorizeIntent` against the tenant's `poly_wallet_grants` row
@@ -48,7 +52,7 @@ import { z } from "zod";
  */
 export const MinBetSizingPolicySchema = z.object({
   kind: z.literal("min_bet"),
-  /** Per-conditionId cumulative-intent ceiling (bug.5054). Skip at plan-mirror when floor exceeds this. */
+  /** Per-(conditionId, token_id) cumulative-intent ceiling (bug.5004; supersedes bug.5054 per-conditionId scope). Skip at plan-mirror when floor exceeds this. */
   max_usdc_per_condition: z.number().positive(),
 });
 export type MinBetSizingPolicy = z.infer<typeof MinBetSizingPolicySchema>;
@@ -347,14 +351,16 @@ export const RuntimeStateSchema = z.object({
   placed_fill_ids: z.array(z.string()),
   /**
    * Sum of `intent` `size_usdc` for non-canceled rows for this tenant ×
-   * market (includes `error` rows; bug.0430). Drives the per-position cap
-   * check in `applySizingPolicy`. Intent-based, not filled-based — see
-   * `OrderLedger.cumulativeIntentForMarket` for the rationale. Optional:
-   * when omitted (`undefined`), the
-   * per-position cap is skipped — preserves the SELL path and any caller
-   * that hasn't opted in.
+   * market × token (includes `error` rows where `placement=market_fok`;
+   * bug.0430). Drives the per-leg cap check in `applySizingPolicy`.
+   * Intent-based, not filled-based — see
+   * `OrderLedger.cumulativeIntentForMarketToken` for the rationale.
+   * bug.5004 (`CAP_IS_PER_TOKEN_ID`): scoped per token_id; the opposite side
+   * of a binary does NOT count. Optional: when omitted (`undefined`), the
+   * per-leg cap is skipped — preserves the SELL path and any caller that
+   * hasn't opted in.
    */
-  cumulative_intent_usdc_for_market: z.number().optional(),
+  cumulative_intent_usdc_for_token: z.number().optional(),
   /**
    * Mirror cache view for this fill's `condition_id`, derived from
    * `poly_copy_trade_fills` at snapshot time. Undefined ⇒ no prior
@@ -400,11 +406,14 @@ export const MirrorReasonSchema = z.enum([
    */
   "below_market_min",
   /**
-   * Tenant's existing committed intent on this `market_id` (=
-   * `prediction-market:polymarket:<conditionId>`) plus the proposed intent's
-   * `size_usdc` would exceed `max_usdc_per_condition`. YES + NO outcome tokens
-   * on the same conditionId share this budget; different conditionIds get
-   * their own. task.0424 / bug.5054 (CAP_IS_PER_CONDITION_ID).
+   * Tenant's existing committed intent on this `(market_id, token_id)` plus
+   * the proposed intent's `size_usdc` would exceed `max_usdc_per_condition`.
+   * Per bug.5004 (`CAP_IS_PER_TOKEN_ID`, supersedes the per-conditionId scope
+   * from bug.5054): YES and NO outcome tokens of the same conditionId each
+   * get an independent per-leg budget. Dashboards interpreting this counter
+   * as "per-market exposure exhausted" now mean "per-leg" — operator-level
+   * dollar bound lives at `authorizeIntent` (`CAPS_LIVE_IN_GRANT`).
+   * task.0424 / bug.5054 / bug.5004.
    */
   "position_cap_reached",
   /**

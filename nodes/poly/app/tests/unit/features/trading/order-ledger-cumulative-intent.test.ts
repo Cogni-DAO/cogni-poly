@@ -3,7 +3,7 @@
 
 /**
  * Module: `@tests/unit/features/trading/order-ledger-cumulative-intent`
- * Purpose: Unit tests for `FakeOrderLedger.cumulativeIntentForMarket` — sum intent size_usdc by (billing_account_id, market_id). Non-canceled active rows count their full intent. Canceled rows count their realized fill (`filled_size_usdc`) — pessimistically falling back to `size_usdc` for legacy rows where the reconciler has not yet populated `filled_size_usdc` (bug.5050 CAP_COUNTS_REALIZED_ON_CANCEL). Error rows are scoped to FOK only (bug.0430 broadcast race); limit-order errors don't count (CLOB rejected at API boundary, no on-chain effect).
+ * Purpose: Unit tests for `FakeOrderLedger.cumulativeIntentForMarketToken` — sum intent size_usdc by (billing_account_id, market_id, token_id). Non-canceled active rows count their full intent. Canceled rows count their realized fill (`filled_size_usdc`) — pessimistically falling back to `size_usdc` for legacy rows where the reconciler has not yet populated `filled_size_usdc` (bug.5050 CAP_COUNTS_REALIZED_ON_CANCEL). Error rows are scoped to FOK only (bug.0430 broadcast race); limit-order errors don't count (CLOB rejected at API boundary, no on-chain effect). bug.5004 (`CAP_IS_PER_TOKEN_ID`): cap scope narrows from per-conditionId to per-token_id — YES + NO outcome tokens of the same conditionId have independent budgets.
  * Scope: In-memory FakeOrderLedger only. No DB.
  * Side-effects: none
  * Links: src/adapters/test/trading/fake-order-ledger.ts (task.0424), bug.5050
@@ -18,9 +18,26 @@ const TENANT_A = "00000000-0000-4000-b000-00000000000a";
 const TENANT_B = "00000000-0000-4000-b000-00000000000b";
 const MARKET_X = "prediction-market:polymarket:0xMARKETX";
 const MARKET_Y = "prediction-market:polymarket:0xMARKETY";
+// CAP_IS_PER_TOKEN_ID (bug.5004): cumulativeIntentForMarketToken is scoped per
+// token_id. Default-row test helpers stamp `TOKEN_X` so legacy tests that don't
+// care about the token dimension keep working under the narrower scope.
+const TOKEN_X = "token-x";
+const TOKEN_Y = "token-y";
 
 function makeRow(overrides: Partial<LedgerRow> = {}): LedgerRow {
   const now = new Date();
+  // Merge attributes so callers can override individual keys without losing the
+  // token_id default. Pre-bug.5004 the cap query was per-condition only and a
+  // missing token_id was tolerated; now it's a filter key, so every row needs one.
+  const overrideAttrs =
+    (overrides.attributes as Record<string, unknown> | null) ?? null;
+  const attributes: Record<string, unknown> = {
+    market_id: MARKET_X,
+    token_id: TOKEN_X,
+    size_usdc: 1,
+    ...(overrideAttrs ?? {}),
+  };
+  const { attributes: _ignored, ...restOverrides } = overrides;
   return {
     target_id: "target-1",
     fill_id: "fill-1",
@@ -29,20 +46,24 @@ function makeRow(overrides: Partial<LedgerRow> = {}): LedgerRow {
     order_id: null,
     status: "pending",
     position_lifecycle: null,
-    attributes: { market_id: MARKET_X, size_usdc: 1 },
+    attributes,
     synced_at: null,
     created_at: now,
     updated_at: now,
     billing_account_id: TENANT_A,
     mode: "live",
-    ...overrides,
+    ...restOverrides,
   };
 }
 
-describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
+describe("FakeOrderLedger.cumulativeIntentForMarketToken", () => {
   it("empty ledger → 0", async () => {
     const ledger = new FakeOrderLedger({ initial: [] });
-    const result = await ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X);
+    const result = await ledger.cumulativeIntentForMarketToken(
+      TENANT_A,
+      MARKET_X,
+      TOKEN_X
+    );
     expect(result).toBe(0);
   });
 
@@ -65,7 +86,11 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
         }),
       ],
     });
-    const result = await ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X);
+    const result = await ledger.cumulativeIntentForMarketToken(
+      TENANT_A,
+      MARKET_X,
+      TOKEN_X
+    );
     expect(result).toBe(5);
   });
 
@@ -110,7 +135,11 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
         }),
       ],
     });
-    const result = await ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X);
+    const result = await ledger.cumulativeIntentForMarketToken(
+      TENANT_A,
+      MARKET_X,
+      TOKEN_X
+    );
     expect(result).toBe(10);
   });
 
@@ -128,7 +157,7 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
       ],
     });
     await expect(
-      ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X)
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_X)
     ).resolves.toBe(8);
   });
 
@@ -148,7 +177,7 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
       ],
     });
     await expect(
-      ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X)
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_X)
     ).resolves.toBe(8);
     // NOTE: filled=0 still falls back to size_usdc per the pessimistic rule —
     // `filled_size_usdc=0` is indistinguishable from "reconciler wrote zero
@@ -178,7 +207,7 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
       ],
     });
     await expect(
-      ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X)
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_X)
     ).resolves.toBe(7);
 
     await expect(
@@ -197,7 +226,7 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
           size_usdc: 14,
           limit_price: 0.5,
           client_order_id: "row2-coid",
-          attributes: {},
+          attributes: { token_id: TOKEN_X },
         },
       })
     ).rejects.toBeInstanceOf(PositionCapReachedError);
@@ -220,7 +249,7 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
       ],
     });
     await expect(
-      ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X)
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_X)
     ).resolves.toBe(14);
   });
 
@@ -252,7 +281,7 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
     });
 
     await expect(
-      ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X)
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_X)
     ).resolves.toBe(1);
   });
 
@@ -283,7 +312,7 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
     });
 
     await expect(
-      ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X)
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_X)
     ).resolves.toBe(1);
   });
 
@@ -647,7 +676,7 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
           size_usdc: 2,
           limit_price: 0.5,
           client_order_id: "0xnew",
-          attributes: {},
+          attributes: { token_id: TOKEN_X },
         },
       })
     ).rejects.toBeInstanceOf(PositionCapReachedError);
@@ -666,7 +695,11 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
         }),
       ],
     });
-    const result = await ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X);
+    const result = await ledger.cumulativeIntentForMarketToken(
+      TENANT_A,
+      MARKET_X,
+      TOKEN_X
+    );
     expect(result).toBe(1);
   });
 
@@ -685,7 +718,11 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
         }),
       ],
     });
-    const result = await ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X);
+    const result = await ledger.cumulativeIntentForMarketToken(
+      TENANT_A,
+      MARKET_X,
+      TOKEN_X
+    );
     expect(result).toBe(1);
   });
 
@@ -703,7 +740,11 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
         })
       ),
     });
-    const result = await ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X);
+    const result = await ledger.cumulativeIntentForMarketToken(
+      TENANT_A,
+      MARKET_X,
+      TOKEN_X
+    );
     expect(result).toBe(5);
   });
 
@@ -733,7 +774,11 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
         ),
       ],
     });
-    const result = await ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X);
+    const result = await ledger.cumulativeIntentForMarketToken(
+      TENANT_A,
+      MARKET_X,
+      TOKEN_X
+    );
     expect(result).toBe(0);
   });
 
@@ -746,7 +791,239 @@ describe("FakeOrderLedger.cumulativeIntentForMarket", () => {
       ],
       failConfigRead: true,
     });
-    const result = await ledger.cumulativeIntentForMarket(TENANT_A, MARKET_X);
+    const result = await ledger.cumulativeIntentForMarketToken(
+      TENANT_A,
+      MARKET_X,
+      TOKEN_X
+    );
     expect(result).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  // bug.5004 — per-token isolation. YES + NO tokens of the same conditionId
+  // have independent caps; intent on one side does not count against the other.
+  it("CAP_IS_PER_TOKEN_ID — intent on token A does not count against token B (bug.5004)", async () => {
+    const ledger = new FakeOrderLedger({
+      initial: [
+        makeRow({
+          fill_id: "fill-x-1",
+          attributes: { market_id: MARKET_X, token_id: TOKEN_X, size_usdc: 14 },
+        }),
+        makeRow({
+          fill_id: "fill-x-2",
+          status: "filled",
+          attributes: { market_id: MARKET_X, token_id: TOKEN_X, size_usdc: 6 },
+        }),
+      ],
+    });
+    await expect(
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_X)
+    ).resolves.toBe(20);
+    await expect(
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_Y)
+    ).resolves.toBe(0);
+  });
+
+  // bug.5004 — atomic insertPending parity: $20 burnt on token X must not
+  // block a fresh placement on token Y of the same condition, even when
+  // both sides share the same max_market_intent_usdc.
+  it("CAP_IS_PER_TOKEN_ID — atomic insertPending lets token Y in after cap burned on token X (bug.5004)", async () => {
+    const ledger = new FakeOrderLedger({
+      initial: [
+        makeRow({
+          fill_id: "fill-x-burn",
+          status: "filled",
+          attributes: {
+            market_id: MARKET_X,
+            token_id: TOKEN_X,
+            size_usdc: 14,
+          },
+        }),
+      ],
+    });
+    // Token X — would exceed cap; rejects.
+    await expect(
+      ledger.insertPending({
+        billing_account_id: TENANT_A,
+        created_by_user_id: "user-1",
+        target_id: "target-1",
+        fill_id: "fill-x-more",
+        observed_at: new Date(),
+        max_market_intent_usdc: 15,
+        intent: {
+          provider: "polymarket",
+          market_id: MARKET_X,
+          outcome: "YES",
+          side: "BUY",
+          size_usdc: 5,
+          limit_price: 0.5,
+          client_order_id: "coid-x-more",
+          attributes: { token_id: TOKEN_X },
+        },
+      })
+    ).rejects.toBeInstanceOf(PositionCapReachedError);
+    // Token Y on the SAME condition — independent cap; succeeds.
+    await expect(
+      ledger.insertPending({
+        billing_account_id: TENANT_A,
+        created_by_user_id: "user-2",
+        target_id: "target-2",
+        fill_id: "fill-y-fresh",
+        observed_at: new Date(),
+        max_market_intent_usdc: 15,
+        intent: {
+          provider: "polymarket",
+          market_id: MARKET_X,
+          outcome: "NO",
+          side: "BUY",
+          size_usdc: 14,
+          limit_price: 0.5,
+          client_order_id: "coid-y-fresh",
+          attributes: { token_id: TOKEN_Y },
+        },
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  // bug.5004 — BAL/WSH tape regression. swisstony mlb-bal-wsh-2026-05-16:
+  // $14.15 burnt on BAL via 10 fills, then 7 WSH fills at sizes
+  // $359/$665/$73/$8/$201/$417/$71 each previously rejected with
+  // position_cap_reached. After the fix each WSH fill enters independently
+  // (subject only to its own per-token sized intent budget).
+  it("CAP_IS_PER_TOKEN_ID — BAL/WSH-shaped regression: cap-burnt loser side does not block winner side (bug.5004)", async () => {
+    // Approximate the BAL-side cap exhaustion as 10 filled rows summing to
+    // $14.15 cumulative_intent against TOKEN_X (the would-be loser).
+    const balRows = Array.from({ length: 10 }, (_, i) =>
+      makeRow({
+        fill_id: `bal-${i}`,
+        client_order_id: `bal-coid-${i}`,
+        status: "filled",
+        attributes: {
+          market_id: MARKET_X,
+          token_id: TOKEN_X,
+          size_usdc: 1.415,
+        },
+      })
+    );
+    const ledger = new FakeOrderLedger({ initial: balRows });
+
+    // Sanity: under pre-bug.5004 per-condition scope, token_id wouldn't
+    // appear in the WHERE — total would be 14.15 across both tokens. Under
+    // CAP_IS_PER_TOKEN_ID, querying TOKEN_Y returns 0 and TOKEN_X returns 14.15.
+    await expect(
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_X)
+    ).resolves.toBeCloseTo(14.15, 4);
+    await expect(
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_Y)
+    ).resolves.toBe(0);
+
+    // Replay 3 WSH fills across distinct (target_id) tuples so each one passes
+    // the AlreadyRestingError per-(billing, target, market) partial-unique
+    // gate. Cap $15/leg accommodates each $5 fill; the point of the test is
+    // that NONE should reject for cross-token bleed (TOKEN_X cap exhaustion
+    // must not consume TOKEN_Y's per-leg budget).
+    const wshSizes = [5, 5, 5];
+    for (const [i, size] of wshSizes.entries()) {
+      await expect(
+        ledger.insertPending({
+          billing_account_id: TENANT_A,
+          created_by_user_id: "user-1",
+          target_id: `target-wsh-${i}`,
+          fill_id: `wsh-${i}`,
+          observed_at: new Date(),
+          max_market_intent_usdc: 15,
+          intent: {
+            provider: "polymarket",
+            market_id: MARKET_X,
+            outcome: "NO",
+            side: "BUY",
+            size_usdc: size,
+            limit_price: 0.75,
+            client_order_id: `wsh-coid-${i}`,
+            attributes: { token_id: TOKEN_Y },
+          },
+        })
+      ).resolves.toBeUndefined();
+    }
+  });
+
+  // bug.5004 — when the intent omits token_id, the atomic check is bypassed
+  // (preserves legacy/SELL paths that don't carry a token attribute). This is
+  // intentional: callers must opt in by carrying token_id in intent.attributes.
+  it("CAP_IS_PER_TOKEN_ID — intent without token_id bypasses the atomic cap check (legacy / SELL path)", async () => {
+    const ledger = new FakeOrderLedger({
+      initial: [
+        makeRow({
+          fill_id: "fill-x-1",
+          status: "filled",
+          attributes: { market_id: MARKET_X, token_id: TOKEN_X, size_usdc: 20 },
+        }),
+      ],
+    });
+    await expect(
+      ledger.insertPending({
+        billing_account_id: TENANT_A,
+        created_by_user_id: "user-1",
+        target_id: "target-1",
+        fill_id: "fill-no-token",
+        observed_at: new Date(),
+        max_market_intent_usdc: 1,
+        intent: {
+          provider: "polymarket",
+          market_id: MARKET_X,
+          outcome: "YES",
+          side: "BUY",
+          size_usdc: 100,
+          limit_price: 0.5,
+          client_order_id: "coid-no-token",
+          attributes: {},
+        },
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  // bug.5004 — empty-string token_id (buildIntent's defensive fallback when
+  // `fill.attributes.asset` is missing) is treated equivalently to missing
+  // token_id. Both bypass the atomic cap check rather than scope to an
+  // empty-string token (which would silently match no rows). Catches the
+  // silent-bypass hazard called out in self-review.
+  it("CAP_IS_PER_TOKEN_ID — empty-string token_id is treated as missing (no false-pass cap check)", async () => {
+    const ledger = new FakeOrderLedger({
+      initial: [
+        makeRow({
+          fill_id: "fill-x-1",
+          status: "filled",
+          attributes: { market_id: MARKET_X, token_id: TOKEN_X, size_usdc: 20 },
+        }),
+      ],
+    });
+    // Bypass path: intent carries `token_id: ""` (buildIntent's malformed-fill
+    // fallback). The cap check must skip — NOT try to scope to "". If the
+    // bypass were missing, the read would return 0 for token="", see 0+100≤1
+    // as false, and reject — which is wrong because the real risk ($30 burnt
+    // on TOKEN_X) is not in the "" bucket and the leak would be silent.
+    await expect(
+      ledger.insertPending({
+        billing_account_id: TENANT_A,
+        created_by_user_id: "user-1",
+        target_id: "target-empty-tok",
+        fill_id: "fill-empty-token",
+        observed_at: new Date(),
+        max_market_intent_usdc: 1,
+        intent: {
+          provider: "polymarket",
+          market_id: MARKET_X,
+          outcome: "YES",
+          side: "BUY",
+          size_usdc: 100,
+          limit_price: 0.5,
+          client_order_id: "coid-empty-token",
+          attributes: { token_id: "" },
+        },
+      })
+    ).resolves.toBeUndefined();
+    // Sanity: query for TOKEN_X is unaffected by the empty-token-id bypass row.
+    await expect(
+      ledger.cumulativeIntentForMarketToken(TENANT_A, MARKET_X, TOKEN_X)
+    ).resolves.toBe(20);
   });
 });
