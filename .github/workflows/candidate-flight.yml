@@ -25,7 +25,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: ghcr.io/cogni-dao/cogni-poly
   SLOT: candidate-a
   OVERLAY_ENV: candidate-a
 
@@ -38,6 +37,7 @@ jobs:
       status_url: ${{ steps.meta.outputs.status_url }}
       digests_json: ${{ steps.images.outputs.digests_json }}
       targets_json: ${{ steps.detect.outputs.targets_json }}
+      deploy_units_json: ${{ steps.detect.outputs.deploy_units_json }}
       has_targets: ${{ steps.detect.outputs.has_targets }}
     steps:
       - name: Checkout workflow source
@@ -188,7 +188,7 @@ jobs:
       fail-fast: false
       matrix:
         env: [candidate-a]
-        node: ${{ fromJson(needs.decide.outputs.targets_json) }}
+        node: ${{ fromJson(needs.decide.outputs.deploy_units_json) }}
     concurrency:
       group: candidate-flight-pipeline-${{ matrix.env }}-${{ matrix.node }}
       cancel-in-progress: false
@@ -266,7 +266,7 @@ jobs:
           OVERLAY_ENV: candidate-a
           NODE: ${{ matrix.node }}
           HEAD_SHA: ${{ needs.decide.outputs.head_sha }}
-        run: NODES="$NODE" bash ../ci-src/scripts/ci/promote-build-payload.sh
+        run: bash ../ci-src/scripts/ci/promote-build-payload.sh
 
       - name: Restore non-promoted overlay digests (post-rsync self-heal)
         working-directory: deploy-branch
@@ -345,7 +345,7 @@ jobs:
       fail-fast: false
       matrix:
         env: [candidate-a]
-        node: ${{ fromJson(needs.decide.outputs.targets_json) }}
+        node: ${{ fromJson(needs.decide.outputs.deploy_units_json) }}
     concurrency:
       group: candidate-flight-pipeline-${{ matrix.env }}-${{ matrix.node }}
       cancel-in-progress: false

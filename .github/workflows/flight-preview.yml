@@ -232,10 +232,24 @@ jobs:
           BUILD_SHA: ${{ steps.pr.outputs.head_sha }}
           REPOSITORY: ${{ github.repository }}
           # task.0376: scope promote-and-deploy.yml's matrix to affected
-          # targets (RESOLVED_TARGETS is space-delimited; convert to CSV).
+          # deploy units. Catalog v2: RESOLVED_TARGETS contains image names;
+          # promote-and-deploy iterates DEPLOY UNITS (one leg per deploy
+          # branch). Dedupe image names → owning deploy units.
           RESOLVED_TARGETS: ${{ steps.images.outputs.resolved_targets }}
         run: |
-          NODES_CSV=$(echo "${RESOLVED_TARGETS}" | tr ' ' ',' | sed 's/^,//;s/,$//')
+          . scripts/ci/lib/image-tags.sh
+          declare -A seen=()
+          units=()
+          for img in $(echo "${RESOLVED_TARGETS}" | tr ',' ' '); do
+            [ -z "$img" ] && continue
+            unit=$(deploy_unit_for_image "$img") || continue
+            if [ -z "${seen[$unit]+x}" ]; then
+              seen["$unit"]=1
+              units+=("$unit")
+            fi
+          done
+          NODES_CSV=$(IFS=,; echo "${units[*]}")
+          echo "ℹ️  RESOLVED_TARGETS=${RESOLVED_TARGETS} → NODES_CSV=${NODES_CSV}"
           bash scripts/ci/flight-preview.sh \
             "$HEAD_SHA" \
             "$REPOSITORY" \

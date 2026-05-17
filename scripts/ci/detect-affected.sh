@@ -170,6 +170,32 @@ if [ ${#ordered_images[@]} -gt 0 ]; then
     | python3 -c 'import json,sys; print(json.dumps([line.strip() for line in sys.stdin if line.strip()]))')
 fi
 
+# Deduped deploy-unit list — consumed by per-deploy-branch matrices
+# (candidate-flight, promote-and-deploy). pr-build keeps using targets_json
+# (image names) because it builds per-image. Deploy-branch flights operate
+# per-unit and call promote-build-payload which iterates the unit's images.
+ordered_units=()
+seen_units=()
+for image in "${ordered_images[@]}"; do
+  unit=$(deploy_unit_for_image "$image")
+  already=0
+  for u in "${seen_units[@]}"; do
+    [ "$u" = "$unit" ] && already=1 && break
+  done
+  if [ "$already" = "0" ]; then
+    ordered_units+=("$unit")
+    seen_units+=("$unit")
+  fi
+done
+
+units_csv=""
+units_json="[]"
+if [ ${#ordered_units[@]} -gt 0 ]; then
+  units_csv=$(IFS=,; echo "${ordered_units[*]}")
+  units_json=$(printf '%s\n' "${ordered_units[@]}" \
+    | python3 -c 'import json,sys; print(json.dumps([line.strip() for line in sys.stdin if line.strip()]))')
+fi
+
 changed_paths_count=0
 if [ -n "$changed_paths" ]; then
   changed_paths_count=$(printf "%s\n" "$changed_paths" | sed '/^$/d' | wc -l | tr -d ' ')
@@ -193,6 +219,8 @@ if [ -n "${GITHUB_OUTPUT:-}" ]; then
     echo "has_targets=$has_targets"
     echo "targets=$images_csv"
     echo "targets_json=$images_json"
+    echo "deploy_units=$units_csv"
+    echo "deploy_units_json=$units_json"
   } >> "$GITHUB_OUTPUT"
 fi
 
