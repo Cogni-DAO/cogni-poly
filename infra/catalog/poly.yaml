@@ -1,47 +1,21 @@
-# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-# SPDX-FileCopyrightText: 2025 Cogni-DAO
-#
-# Catalog v2 (docs/spec/catalog-v2.md). Deploy unit "poly" owns 2 images today:
-# the node app + the paper-trading sidecar. A real per-node migrator image
-# would land as a third entry — currently the doltgres migration runs in-process
-# inside the node-app image (see infra/k8s/overlays/<env>/poly/kustomization.yaml
-# initContainer block), so there is no separate migrator build unit yet.
-
-schema_version: 2
 name: poly
 type: node
+port: 3000
 node_id: "5ed2d64f-2745-4676-983b-2fb7e05b2eba"
-
-deploy:
-  candidate_a_branch: deploy/candidate-a-poly
-  preview_branch: deploy/preview-poly
-  production_branch: deploy/production-poly
-  path_prefix: nodes/poly/
-  port: 3000
-  public_url:
-    candidate-a: https://poly-test.cognidao.org
-    preview: https://poly-preview.cognidao.org
-    production: https://poly.cognidao.org
-
-images:
-  - name: poly
-    role: app
-    dockerfile: nodes/poly/app/Dockerfile
-    image_name: ghcr.io/cogni-dao/cogni-poly
-    image_tag_suffix: "-poly"
-    path_prefix: nodes/poly/app/
-    build:
-      target: runner
-      cache_scope: build-poly
-
-  - name: poly-paper-sidecar
-    role: sidecar
-    dockerfile: nodes/poly/sidecars/paper-trader/Dockerfile
-    image_name: ghcr.io/cogni-dao/poly-paper-sidecar
-    image_tag_suffix: ""
-    path_prefix: nodes/poly/sidecars/paper-trader/
-    build:
-      context: nodes/poly/sidecars/paper-trader
-      target: base
-      test_target: test
-      cache_scope: poly-paper-sidecar
+dockerfile: nodes/poly/app/Dockerfile
+# bug.0344 — see infra/catalog/operator.yaml for why these fields exist.
+image_tag_suffix: "-poly"
+migrator_tag_suffix: "-poly-migrate"
+# task.0320 — per-env deploy branches (see operator.yaml).
+candidate_a_branch: deploy/candidate-a-poly
+preview_branch: deploy/preview-poly
+production_branch: deploy/production-poly
+path_prefix: nodes/poly/
+# bug.5002 — per-env public URLs. Verify scripts read these directly
+# instead of computing "${node}-${DOMAIN}" with an "if node = operator"
+# special-case. Each repo's catalog declares the truth for its nodes;
+# no convention-coupling between repos.
+public_url:
+  candidate-a: https://poly-test.cognidao.org
+  preview: https://poly-preview.cognidao.org
+  production: https://poly.cognidao.org
