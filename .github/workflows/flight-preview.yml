@@ -244,30 +244,9 @@ jobs:
           steps.images.outputs.has_images == 'true'
         env:
           PR_IMAGE_TAG: ${{ steps.pr.outputs.image_tag }}
-          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          PREVIEW_TAG: preview-${{ steps.pr.outputs.head_sha }}
           RESOLVED_TARGETS: ${{ steps.images.outputs.resolved_targets }}
-        run: |
-          # Catalog v2: iterate every image declared in infra/catalog/*.yaml
-          # (flat across deploy units). Each image has its own image_name +
-          # image_tag_suffix; the retag preserves both. Adding a new image
-          # is a one-line catalog edit — no workflow change.
-          # shellcheck source=../../scripts/ci/lib/image-tags.sh
-          . scripts/ci/lib/image-tags.sh
-
-          PREVIEW_TAG="preview-${HEAD_SHA}"
-
-          for image in "${ALL_IMAGES[@]}"; do
-            if ! echo "$RESOLVED_TARGETS" | grep -qw "$image"; then
-              echo "Skipping ${image} — not in PR build (not affected or not built)"
-              continue
-            fi
-            src=$(image_tag_for_image "$image" "$PR_IMAGE_TAG")
-            dst=$(image_tag_for_image "$image" "$PREVIEW_TAG")
-            echo "Re-tagging ${image}: ${src##*/} → ${dst##*/}"
-            docker buildx imagetools create --tag "$dst" "$src"
-          done
-
-          echo "✅ Re-tag complete for preview-${HEAD_SHA:0:8}"
+        run: bash scripts/ci/retag-mq-to-preview.sh
 
       # The script writes `status=dispatched|queued` to $GITHUB_OUTPUT and a
       # markdown banner to $GITHUB_STEP_SUMMARY — no decision logic lives in
