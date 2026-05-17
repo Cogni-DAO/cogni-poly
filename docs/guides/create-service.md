@@ -90,8 +90,10 @@ A pod with its own Deployment, Service, optional Ingress, and per-env deploy bra
 
 **Precedents**:
 
-- [`services/poly-test-worker/`](../../services/poly-test-worker/) — **minimal canonical reference** (catalog v2 Shape A e2e exercise). ~150 lines total, standalone (no `@cogni/*` workspace deps), single-stage tsup bundle. Mirror this when adding any net-new Shape A service. Source dir + catalog entry + base + 3 overlays + 3 AppSet generator entries — that's the whole surface.
-- [`services/scheduler-worker/`](../../services/scheduler-worker/) — fuller real-world Shape A. Inherited from pre-catalog-v2 days; carries Temporal + node-endpoint wiring that the test-worker omits. Useful when the new service needs to talk to other components in-cluster.
+- [`services/poly-test-worker/`](../../services/poly-test-worker/) — **minimal canonical reference** (catalog v2 Shape A e2e exercise). Standalone (no `@cogni/*` workspace deps), two-stage Dockerfile (builder transpiles via tsup, runner gets `dist/` + `node_modules/` + `package.json`). Mirror this when adding any net-new Shape A service. Source dir + catalog entry + base + 3 overlays + 3 AppSet generator entries — that's the whole surface.
+- [`services/scheduler-worker/`](../../services/scheduler-worker/) — fuller real-world Shape A. Carries workspace dep wiring via `turbo prune` + `pnpm deploy`. Use this when the new service depends on `@cogni/*` packages or needs to talk to other components in-cluster.
+
+> **Do NOT use `bundle: true` in `tsup.config.ts`.** Pino (and other Node packages with runtime worker-threads or native-module `require()`) cannot be packed into an ESM bundle — they crash on first import with `Error: Dynamic require of "os" is not supported`. The canonical pattern is `bundle: false` + transpile every `src/**/*.ts` + copy `node_modules/` into the runner image. Both precedents above follow this.
 
 **Sub-case — HTTP/SSE MCP server**: Shape A. Own port, own probes, own scaling.
 
