@@ -221,6 +221,21 @@ The single highest-leverage fix is `core__poly_data_user_pnl` + the curve-metric
 - **No autonomous mirror promotion** — every wallet entering the live mirror roster requires human review until the methodology has positive-PnL paper-trade telemetry behind it.
 - **Regulatory tail risk** is structural, not technical — the blocklist categories (geopolitics-insider, FDA/M&A/SCOTUS, reality-TV) cannot be relaxed even if the curve looks clean.
 
+## Target profiles + the north-star conclusion doc
+
+**Start here if you're working on RN1 or swisstony copy-trade design**: [`docs/research/poly/copy-target-north-star-2026-05-16.md`](../../docs/research/poly/copy-target-north-star-2026-05-16.md). Single-page, citation-heavy synthesis of what we know, the precise config recommendation, the budget threshold ($5-10k minimum viable, $15-30k recommended), and what's still gated on outcome fan-out.
+
+## Target profiles (per-wallet operational knowledge)
+
+This charter screens wallets IN. Once a wallet is on the roster, the **operational profile** — how it actually generates edge, what to copy, what to avoid — lives in a per-wallet doc. Future agents working on a copy-trade decision must read both.
+
+| Wallet                                       | Profile                                                                             | Status / verdict                                              |
+| -------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `0x2005d16a84ceefa912d4e380cd32e7ff827875ea` | [target-profile.rn1.md](../../docs/research/poly/target-profile.rn1.md)             | ✅ COPY (primary; faster realization, higher edge-per-dollar) |
+| `0x204f72f35326db932158cba6adff0b9a1da95e14` | [target-profile.swisstony.md](../../docs/research/poly/target-profile.swisstony.md) | ✅ COPY (secondary; slower realization, larger volume)        |
+
+Active operational data + methodology used to author the profiles above: [`docs/research/poly/2026-05-16-rn1-swisstony-aug2025-data-summary.md`](../../docs/research/poly/2026-05-16-rn1-swisstony-aug2025-data-summary.md).
+
 ## Pointers
 
 - Prior research, full multi-pass screen results: [`docs/research/polymarket-copy-trade-candidates.md`](../../docs/research/polymarket-copy-trade-candidates.md)

@@ -26,31 +26,43 @@ export interface WalletSizeSnapshot {
 const RN1_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea";
 const SWISSTONY_WALLET = "0x204f72f35326db932158cba6adff0b9a1da95e14";
 
+// Snapshots calibrated to PRIMARY-side cumulative cost per (condition, token)
+// over the last 30 days of prod activity. The dominance gate
+// (`target_dominant_other_side`, min_target_side_fraction=0.2) already filters
+// hedge-side fills before sizing runs, so the percentiles here are computed
+// on dominant-side positions only — that's the distribution `bet-sizer-v1`
+// effectively sees per decision.
+//
+// Source query: docs/research/poly/queries/q15-past-month-pXX-primary-vs-hedge.sql
+// Methodology + cross-validation: docs/research/poly/copy-target-north-star-2026-05-16.md
+// Recipe for re-calibration: .claude/skills/data-research/recipes/copy-target-pXX-calibration.md
+// Prior snapshot (2026-05-03, mixed primary+hedge) was 2-3× too low at p75/p90
+// because hedge tokens deflated the low-end percentiles.
 export const TOP_TARGET_SIZE_SNAPSHOTS: Record<string, WalletSizeSnapshot> = {
   [RN1_WALLET]: {
     wallet: RN1_WALLET,
     label: "RN1",
-    captured_at: "2026-05-03T02:34:00Z",
-    sample_size: 3990,
+    captured_at: "2026-05-17T02:00:00Z",
+    sample_size: 4486,
     percentiles: {
-      50: 40,
-      75: 200,
-      90: 733,
-      95: 1811,
-      99: 5659,
+      50: 955,
+      75: 3253,
+      90: 8855,
+      95: 14514,
+      99: 30901,
     },
   },
   [SWISSTONY_WALLET]: {
     wallet: SWISSTONY_WALLET,
     label: "swisstony",
-    captured_at: "2026-05-03T02:34:00Z",
-    sample_size: 1085,
+    captured_at: "2026-05-17T02:00:00Z",
+    sample_size: 7414,
     percentiles: {
-      50: 31,
-      75: 146,
-      90: 665,
-      95: 1394,
-      99: 4809,
+      50: 498,
+      75: 1767,
+      90: 5290,
+      95: 10576,
+      99: 28413,
     },
   },
 };
