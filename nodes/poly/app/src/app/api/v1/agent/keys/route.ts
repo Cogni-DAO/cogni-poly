@@ -60,21 +60,12 @@ export const POST = wrapRouteHandlerWithLogging(
     }
 
     // Body is empty by contract; parse to enforce no smuggled fields.
+    // Empty / no body is treated as `{}` (still valid against the schema);
+    // unparseable JSON or non-object payloads are rejected with 400.
+    let body: unknown;
     try {
-      const body = await request.json().catch(() => ({}));
-      const parsed = polyAgentKeysCreateOperation.input.safeParse(body);
-      if (!parsed.success) {
-        logComplete(ctx, {
-          startedAt,
-          status: 400,
-          outcome: "error",
-          errorCode: "invalid_body",
-        });
-        return NextResponse.json(
-          { error: "invalid_body", message: parsed.error.message },
-          { status: 400 }
-        );
-      }
+      const text = await request.text();
+      body = text.trim() === "" ? {} : JSON.parse(text);
     } catch {
       logComplete(ctx, {
         startedAt,
@@ -82,7 +73,23 @@ export const POST = wrapRouteHandlerWithLogging(
         outcome: "error",
         errorCode: "invalid_body",
       });
-      return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+      return NextResponse.json(
+        { error: "invalid_body", message: "Request body is not valid JSON" },
+        { status: 400 }
+      );
+    }
+    const parsed = polyAgentKeysCreateOperation.input.safeParse(body);
+    if (!parsed.success) {
+      logComplete(ctx, {
+        startedAt,
+        status: 400,
+        outcome: "error",
+        errorCode: "invalid_body",
+      });
+      return NextResponse.json(
+        { error: "invalid_body", message: parsed.error.message },
+        { status: 400 }
+      );
     }
 
     const apiKey = issueAgentApiKey({
