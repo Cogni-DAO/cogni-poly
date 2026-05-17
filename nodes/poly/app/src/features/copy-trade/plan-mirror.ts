@@ -176,7 +176,7 @@ function sizeFromPolicy(
  * new ports. Layer accumulation falls out naturally: as our shares grow the
  * gap shrinks, and once `gap ≤ 0` the planner skips `followup_not_needed`.
  */
-export function applyPositionGapSizing(
+function applyPositionGapSizing(
   policy: PositionGapSizingPolicy,
   fill: PlanMirrorInput["fill"],
   state: PlanMirrorInput["state"],
@@ -202,14 +202,24 @@ export function applyPositionGapSizing(
     return { ok: false, reason: "followup_not_needed" };
   }
   const gapUsdc = gapShares * fill.price;
-  // GAP_DRIVES_SIZING: when the gap itself is below market min, skip rather
-  // than round up to the floor. `applyMarketFloors` clamps up by design (so
-  // legacy "place at market min" policies always land a placeable order),
+  // GAP_DRIVES_SIZING: when the gap itself is below the effective market
+  // floor, skip rather than round up. `applyMarketFloors` clamps up by design
+  // (so legacy "place at market min" policies always land a placeable order),
   // but for position_gap the gap IS the target — overpaying to clear the
-  // floor would re-introduce the inverted-weighting failure mode this
-  // policy exists to prevent.
-  if (minUsdcNotional !== undefined && gapUsdc < minUsdcNotional) {
-    return { ok: false, reason: "below_market_min" };
+  // floor would re-introduce the inverted-weighting failure mode this policy
+  // exists to prevent. Mirror `applyMarketFloors`'s floor calc here:
+  // `floorUsdc = max(minShares × price, minUsdcNotional)`. Low-tick markets
+  // (e.g. minShares=5, price=0.85 → $4.25) have floors well above
+  // minUsdcNotional, so comparing against minUsdcNotional alone leaked the
+  // clamp-up on every gap in `[minUsdcNotional, minShares × price)`.
+  if (minUsdcNotional !== undefined) {
+    const effectiveFloorUsdc = Math.max(
+      (minShares ?? 0) * fill.price,
+      minUsdcNotional
+    );
+    if (gapUsdc < effectiveFloorUsdc) {
+      return { ok: false, reason: "below_market_min" };
+    }
   }
   const sized = applyMarketFloors(
     gapUsdc,

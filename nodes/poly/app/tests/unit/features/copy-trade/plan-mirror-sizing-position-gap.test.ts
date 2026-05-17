@@ -288,6 +288,69 @@ describe("planMirrorFromFill() — sizing policy: kind=position_gap (D2 phase 2)
     expect(d.intent.size_usdc).toBeCloseTo(5, 6);
   });
 
+  it("skips below_market_min when gap is above minUsdcNotional but below the share-floor (minShares × price)", () => {
+    // Low-tick markets: minShares × price > minUsdcNotional, so the effective
+    // floor exceeds the USDC floor alone. A naive pre-check against
+    // minUsdcNotional would let this fill through and `applyMarketFloors`
+    // would clamp the gap UP to the share-floor — re-introducing the
+    // inverted-weighting failure mode this policy exists to prevent.
+    //
+    // Fixture: mid-sized target (30,000 Sinner shares) at $0.85, minShares=5.
+    //   desired   = 30000 × 1e-4 = 3 sh
+    //   gap_usdc  = 3 × $0.85    = $2.55
+    //   minUsdcNotional          = $1   (gap > this, naive pre-check passes)
+    //   minShares × price        = $4.25 (gap < this, share-floor clamps up)
+    // Effective floor must be used → skip below_market_min.
+    const midSizedTarget: RuntimeState["target_position"] = {
+      condition_id: CONDITION_ID,
+      tokens: [
+        {
+          token_id: SINNER_TOKEN_ID,
+          size_shares: 30_000,
+          cost_usdc: 30_000 * 0.84,
+          current_value_usdc: 30_000 * SINNER_PRICE,
+        },
+        {
+          token_id: RUUD_TOKEN_ID,
+          size_shares: RUUD_TARGET_SHARES,
+          cost_usdc: RUUD_TARGET_SHARES * 0.031,
+          current_value_usdc: RUUD_TARGET_SHARES * RUUD_PRICE,
+        },
+      ],
+    };
+    const fill = makeFill({
+      tokenId: SINNER_TOKEN_ID,
+      price: SINNER_PRICE,
+      fillSuffix: "sinner-floor",
+    });
+    const d = planMirrorFromFill({
+      fill,
+      config: configForTarget({
+        sizing: {
+          kind: "position_gap",
+          max_usdc_per_condition: 15,
+          target_scale: TARGET_SCALE,
+        },
+      }),
+      state: {
+        ...baseState(),
+        target_position: midSizedTarget,
+      },
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
+      min_shares: 5,
+      min_usdc_notional: 1,
+    });
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "below_market_min",
+      position_branch: "new_entry",
+    });
+  });
+
   it("skips position_cap_reached when cumulative intent + gap exceeds max", () => {
     const fill = makeFill({
       tokenId: SINNER_TOKEN_ID,
