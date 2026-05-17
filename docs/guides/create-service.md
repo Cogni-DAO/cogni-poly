@@ -10,6 +10,7 @@ owner: derekg1729
 created: 2026-02-06
 verified: 2026-05-16
 revisions:
+  - 2026-05-16: Shape A re-exercised post catalog v2 via `poly-test-worker` (canonical minimal living reference). Bootstrap canonicalized on `scripts/ops/bootstrap-per-node-deploy-branches.sh`. Validate section split by Ingress vs non-Ingress probe semantics.
   - 2026-05-16: Shape B rewritten — sidecar container shape lives in kustomize Component co-located with source; host overlays use `components:` line + `images:` placeholder only. Zero inline container patches.
 tags: [deployment, infra, k8s, argo]
 ---
@@ -87,7 +88,14 @@ Same for every shape. Five phases. Each shape's playbook below maps to these.
 
 A pod with its own Deployment, Service, optional Ingress, and per-env deploy branch. Fully integrated with the pipeline. Use this when the new image has independent lifecycle (own restart, own scaling, own /readyz).
 
-**Precedent**: [`services/scheduler-worker/`](../../services/scheduler-worker/) — every reference below is to this implementation. **Sub-case — HTTP/SSE MCP server**: this is Shape A. Own port, own probes, own scaling.
+**Precedents**:
+
+- [`services/poly-test-worker/`](../../services/poly-test-worker/) — **minimal canonical reference** (catalog v2 Shape A e2e exercise). Standalone (no `@cogni/*` workspace deps), two-stage Dockerfile (builder transpiles via tsup, runner gets `dist/` + `node_modules/` + `package.json`). Mirror this when adding any net-new Shape A service. Source dir + catalog entry + base + 3 overlays + 3 AppSet generator entries — that's the whole surface.
+- [`services/scheduler-worker/`](../../services/scheduler-worker/) — fuller real-world Shape A. Carries workspace dep wiring via `turbo prune` + `pnpm deploy`. Use this when the new service depends on `@cogni/*` packages or needs to talk to other components in-cluster.
+
+> **Do NOT use `bundle: true` in `tsup.config.ts`.** Pino (and other Node packages with runtime worker-threads or native-module `require()`) cannot be packed into an ESM bundle — they crash on first import with `Error: Dynamic require of "os" is not supported`. The canonical pattern is `bundle: false` + transpile every `src/**/*.ts` + copy `node_modules/` into the runner image. Both precedents above follow this.
+
+**Sub-case — HTTP/SSE MCP server**: Shape A. Own port, own probes, own scaling.
 
 ### Files to create / edit
 
@@ -129,10 +137,15 @@ A pod with its own Deployment, Service, optional Ingress, and per-env deploy bra
       files:
         - path: "infra/catalog/<name>.yaml"
   ```
+- [ ] **`biome/base.json`** — if you add `tsup.config.ts` and/or `vitest.config.ts` (both use `export default`), append their paths to the `noDefaultExport: off` overrides allowlist. Known Shape A friction; tracked as a follow-up to fold config-file globbing into the rule.
 
 ### Deploy branch bootstrap (chicken-and-egg)
 
-The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile if the branch doesn't exist. After merge, run `git push origin main:deploy/candidate-a-<name> main:deploy/preview-<name> main:deploy/production-<name>` to seed the three deploy branches. Document this in the PR body.
+The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile if the branch doesn't exist.
+
+**Canonical path** — run [`scripts/ops/bootstrap-per-node-deploy-branches.sh`](../../scripts/ops/bootstrap-per-node-deploy-branches.sh) **after merge**. It reads the v2 catalog, finds your new deploy unit, and pushes `deploy/{candidate-a,preview,production}-<name>` from the corresponding `deploy/<env>` whole-slot tips (atomic + idempotent + fast-forward-only). Document the post-merge command in the PR body.
+
+**Manual fallback** — `git push origin main:deploy/candidate-a-<name> main:deploy/preview-<name> main:deploy/production-<name>` if the bootstrap script isn't available.
 
 ### Flight phase 3 → 5 mechanics
 
@@ -144,10 +157,14 @@ The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile
 
 `/validate-candidate` scorecard rows:
 
-- `/livez` 200 from outside the cluster
-- `/readyz` 200 from outside the cluster
+- `kubectl rollout status deploy/<name>` reaches `successfully rolled out` (proves the new ReplicaSet replaces the old — Argo `Healthy` alone is insufficient per [Axiom 15](../spec/ci-cd.md))
 - `/version.buildSha` matches PR head SHA
 - One real request observed in Loki at the deployed SHA
+
+**Ingress vs non-Ingress probe semantics:**
+
+- **With `deploy.public_url.<env>` in catalog**: `verify-buildsha.sh` curls `<public_url>/version` from outside the cluster on every promote. `/livez` + `/readyz` 200 from outside the cluster.
+- **Without `public_url`** (workers, internal services — `poly-test-worker` is the canonical example): `verify-buildsha.sh` filters the unit as "non-Ingress" and writes a `verified-<name>.txt` marker based on rollout-status alone. Manual `/version.buildSha` proof = SSH read-only to the VM and `curl http://<name>.<namespace>.svc.cluster.local:<port>/version`.
 
 ---
 

@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+#
+# Catalog v2 (docs/spec/catalog-v2.md) — Shape A e2e exercise deploy unit.
+# One image (the worker itself), no public Ingress, no per-node migrator.
+# Lives in its own GHCR package (ghcr.io/cogni-dao/poly-test-worker) — the
+# only Shape A reference shipped under catalog v2.
+
+schema_version: 2
+name: poly-test-worker
+type: service
+
+deploy:
+  candidate_a_branch: deploy/candidate-a-poly-test-worker
+  preview_branch: deploy/preview-poly-test-worker
+  production_branch: deploy/production-poly-test-worker
+  path_prefix: services/poly-test-worker/
+  port: 9000
+
+images:
+  - name: poly-test-worker
+    role: app
+    dockerfile: services/poly-test-worker/Dockerfile
+    image_name: ghcr.io/cogni-dao/poly-test-worker
+    image_tag_suffix: ""
+    build:
+      cache_scope: build-poly-test-worker

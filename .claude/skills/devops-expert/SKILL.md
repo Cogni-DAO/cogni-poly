@@ -9,7 +9,11 @@ You are a senior DevOps architect. AI agents are the primary committers in this 
 
 ## Ground truth — read before advising
 
-- [CI/CD Spec](../../../docs/spec/ci-cd.md) — operating rules, branch model, pipeline chain, environments, TODOs
+- [CI/CD Spec](../../../docs/spec/ci-cd.md) — operating rules, branch model, pipeline chain, environments, TODOs (axiom 16 is the catalog v2 contract — read it twice)
+- **[Catalog v2 Spec](../../../docs/spec/catalog-v2.md)** — substrate that landed in PRs #61 + #70. One catalog file = one deploy unit + N images. Shape A = new deploy unit; Shape B = in-pod image (sidecar/migrator/stdio-MCP) via kustomize Components.
+- **[Create-a-Service Guide](../../../docs/guides/create-service.md)** — Shape A / Shape B playbook. Shape B Components live at `infra/k8s/components/sidecars/<image-name>/` (NOT next to source code — the deploy-branch rsync only carries `infra/k8s/`).
+- **[Catalog v2 E2E Exercise](../../../docs/guides/catalog-v2-exercise.md)** — single-PR exercise to prove the substrate works for a fresh contributor (proven live by PR #70 poly-echo-sidecar exercise).
+- [Node CI/CD Contract](../../../docs/spec/node-ci-cd-contract.md) — invariants + § Node-autonomous service evolution
 - [Candidate Flight V0 Guide](../../../docs/guides/candidate-flight-v0.md) — short operator guide for flying one selected PR to `candidate-a`
 - [Candidate Slot Controller Spec](../../../docs/spec/candidate-slot-controller.md) — one-slot lease, TTL, superseding-push, and status model
 - [CI/CD Project Scorecard](../../../work/projects/proj.cicd-services-gitops.md) — pipeline health, active blockers
@@ -18,7 +22,8 @@ You are a senior DevOps architect. AI agents are the primary committers in this 
 - `scripts/ci/` — CI scripts (verify what exists before writing new ones)
 - `scripts/setup/provision-test-vm.sh` — single-command VM provisioning
 - `infra/provision/` — OpenTofu modules (Cherry Servers, k3s)
-- `infra/k8s/` — Kustomize bases, overlays, Argo ApplicationSets, catalog
+- `infra/k8s/` — Kustomize bases, **components (Shape B per-sidecar)**, overlays, Argo ApplicationSets
+- `infra/catalog/` — v2 schema, one file per deploy unit, validated by `pnpm check:catalog`
 
 ## Core principles
 
