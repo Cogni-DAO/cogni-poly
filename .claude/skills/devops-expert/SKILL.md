@@ -142,6 +142,14 @@ Usage (candidate-a only; read-only): `ssh -i .local/candidate-a-vm-key root@$(ca
 
 If `.local/{env}-vm-key` isn't present for the env you need, this device isn't the provisioner for that env. Do not improvise — don't source shell aliases from personal dotfiles, don't paste IPs from Slack, don't copy keys from a teammate. Either re-run `provision-test-vm.sh` (candidate-a only) or drive the change through the pipeline.
 
+## Known gaps (open follow-ups)
+
+Tracked bugs to factor into design reviews of CI/CD changes — closing any of these is welcome substrate work, and PRs that _re-introduce_ the patterns should be flagged.
+
+- **[`bug.5008`](https://poly.cognidao.org/api/v1/work/items/bug.5008)** — `promote-and-deploy.yml` does not auto-bootstrap missing per-node deploy branches for new Shape A units. Cold-start of every new catalog deploy unit currently requires a manual `git push origin main:deploy/{preview,production}-<name>` (or run [`scripts/ops/bootstrap-per-node-deploy-branches.sh`](../../../scripts/ops/bootstrap-per-node-deploy-branches.sh)). Mirror the auto-bootstrap pattern already in `candidate-flight.yml`.
+- **[`bug.5009`](https://poly.cognidao.org/api/v1/work/items/bug.5009)** — `flight-preview.yml` hard-fails on CI/docs/script-only PRs that produce no `mq-{N}-{sha}` images (detect-affected emits zero targets). The error message misleadingly blames admin-merge bypass. Should silent-skip at job level (per Axiom 11) instead, so a CI-only PR's auto-preview shows as grey, not red.
+- **[`bug.5010`](https://poly.cognidao.org/api/v1/work/items/bug.5010)** — poly wallet-analysis tick services (`runMarketOutcomeTick`, `runPriceHistoryTick`) iterate the entire shared seed-DB instead of scoping to the input wallet. PR #77 + #78 marked the surfacing component tests `describe.skip`; re-enable both when the services are scoped or the tests are isolated per-case.
+
 ## Enforcement rules
 
 When reviewing code that touches CI/CD, deploy, or infra:
