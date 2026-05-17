@@ -13,12 +13,12 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    digest: "sha256:a2a09fbb04ed1d0693d3bfe258cec5d774b3f8e32c30a061499e50e28f6b2167"
+    digest: "sha256:6d75ea2add3197b4ea085bd722fbb5f8a6358e1eafad97bacdce709855ce7d8e"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    digest: "sha256:e96106e8aae2478a8ee506d3f837024ac2e7a415b0cc6491bee6f4d9f541d014"
-  # poly-paper-sidecar built by build-poly-paper-sidecar.yml. See candidate-a
-  # overlay for rationale. Bump the sha256 above after a new build.
+    digest: "sha256:1b956848a58e040ffe6fab9e06b16a4f706256c6d6fe6cd5d9c67936c01d7245"
+  # poly-paper-sidecar is a catalog-v2 image; promote-build-payload manages
+  # this digest automatically. See candidate-a overlay + docs/spec/catalog-v2.md.
 
 patches:
   # Node-specific ConfigMap values.
