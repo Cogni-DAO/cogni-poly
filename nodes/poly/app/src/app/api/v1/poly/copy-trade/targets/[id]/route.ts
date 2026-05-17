@@ -128,14 +128,21 @@ export const PATCH = wrapRouteHandlerWithLogging<{
     >;
     const actorId = userActor(toUserId(sessionUser.id));
 
+    // Build the UPDATE SET clause: required fields + optional sizing_policy_kind
+    // when provided. Omitting the key leaves the stored value untouched (DB
+    // CHECK enforces the enum on writes).
+    const updateSet: Record<string, unknown> = {
+      mirrorFilterPercentile: parsed.data.mirror_filter_percentile,
+      mirrorMaxUsdcPerTrade: parsed.data.mirror_max_usdc_per_trade.toFixed(2),
+    };
+    if (parsed.data.sizing_policy_kind !== undefined) {
+      updateSet.sizingPolicyKind = parsed.data.sizing_policy_kind;
+    }
+
     const updatedRows = await withTenantScope(appDb, actorId, async (tx) =>
       tx
         .update(polyCopyTradeTargets)
-        .set({
-          mirrorFilterPercentile: parsed.data.mirror_filter_percentile,
-          mirrorMaxUsdcPerTrade:
-            parsed.data.mirror_max_usdc_per_trade.toFixed(2),
-        })
+        .set(updateSet)
         .where(
           and(
             eq(polyCopyTradeTargets.id, parsed.data.id),
@@ -147,6 +154,7 @@ export const PATCH = wrapRouteHandlerWithLogging<{
           target_wallet: polyCopyTradeTargets.targetWallet,
           mirror_filter_percentile: polyCopyTradeTargets.mirrorFilterPercentile,
           mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
+          sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
         })
     );
 
@@ -158,11 +166,16 @@ export const PATCH = wrapRouteHandlerWithLogging<{
       );
     }
 
+    const storedSizingPolicyKind = coercePatchedSizingPolicyKind(
+      row.sizing_policy_kind
+    );
+
     ctx.log.info(
       {
         target_id: parsed.data.id,
         mirror_filter_percentile: row.mirror_filter_percentile,
         mirror_max_usdc_per_trade: row.mirror_max_usdc_per_trade,
+        sizing_policy_kind: storedSizingPolicyKind,
       },
       "poly.copy_trade.targets.update_success"
     );
@@ -176,8 +189,12 @@ export const PATCH = wrapRouteHandlerWithLogging<{
           mirror_usdc: Number(row.mirror_max_usdc_per_trade),
           mirror_filter_percentile: row.mirror_filter_percentile,
           mirror_max_usdc_per_trade: Number(row.mirror_max_usdc_per_trade),
+          // Surface the EFFECTIVE planner kind (resolves `'auto'` to the
+          // snapshot-inferred kind), not the raw stored value. PATCH callers
+          // want to confirm what the planner will use, not the sentinel.
           sizing_policy_kind: sizingPolicyKindForTargetWallet(
-            row.target_wallet as `0x${string}`
+            row.target_wallet as `0x${string}`,
+            storedSizingPolicyKind
           ),
           source: "db",
         },
@@ -185,3 +202,21 @@ export const PATCH = wrapRouteHandlerWithLogging<{
     );
   }
 );
+
+/**
+ * Narrow a DB text column to the stored-sizing-policy-kind union. DB CHECK
+ * enforces the enum at write time, so an unknown value here means schema
+ * drift — fail closed to `'auto'`.
+ */
+function coercePatchedSizingPolicyKind(
+  value: string
+): "auto" | "min_bet" | "target_percentile_scaled" {
+  if (
+    value === "auto" ||
+    value === "min_bet" ||
+    value === "target_percentile_scaled"
+  ) {
+    return value;
+  }
+  return "auto";
+}

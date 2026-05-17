@@ -196,19 +196,21 @@ DB partial unique index: `(billing_account_id, target_id, token_id, gap_version)
 
 ## Migration path from the current pipeline
 
-This is intentionally NOT a forklift. The migration is staged:
+This is intentionally NOT a forklift. The migration is staged. **Composability seam first** — every later phase ships behind the per-target sizing-policy-kind switch from Phase 1, so legacy targets stay on the legacy planner by construction.
 
-1. **Phase 0 — prerequisite (shipped via task.5043, PR #23):** chain-log source feeds the existing `planMirrorFromFill` with sub-second fills. No data-model change. Verifies the chain-log substrate works.
+1. **Phase 0 — prerequisite (shipped via task.5043, PR #23):** chain-log source feeds the existing `planMirrorFromFill` with sub-second fills. No data-model change.
 
-2. **Phase 1 — shadow target-state:** `target-state-updater` runs alongside the existing pipeline. Populates `poly_copy_target_position_state`. The existing planner remains in control. Dashboard surfaces start reading from the new table to validate it matches reality.
+2. **Phase 1 — per-target sizing-policy switch (the kill-switch seam):** add `sizing_policy_kind text NOT NULL DEFAULT 'auto'` to `poly_copy_trade_targets` with `CHECK ('auto' | 'min_bet' | 'target_percentile_scaled')`. Promote it to user/AI configurable through the existing `POST/PATCH /api/v1/poly/copy-trade/targets` surface. Thread it through `buildSizingPolicy` so explicit kinds override snapshot inference (`'auto'` preserves today's behavior verbatim). Zero production change at deploy. **Future policy variants ship behind this switch:** add a `SizingPolicySchema` variant + a CHECK enum value + a `case` in `applySizingPolicy`, then a user PATCHes one target to A/B against the legacy planner.
 
-3. **Phase 2 — shadow position-mirror:** `planMirrorFromPositionGap` runs in _dry-run_ alongside `planMirrorFromFill`. It writes `would_have_placed` decisions to `poly_copy_trade_decisions` with a new `mirror_mode: "shadow"` flag. Real placements still come from the fill-driven planner. Operators compare deltas in Grafana.
+3. **Phase 2 — `position_gap` SizingPolicy variant:** add `kind: "position_gap"` to `SizingPolicySchema` (poly/app types) and the DB CHECK enum, plus a `case` in `applySizingPolicy`. Gap math uses inputs the planner already receives (`state.target_position.tokens[].size_shares`, `state.position.our_qty_shares`, `state.cumulative_intent_usdc_for_token`). NO new tables. NO new modules. NO new pipeline. Per-target opt-in via PATCH from Phase 1; legacy targets untouched. Done condition: candidate-a A/B shows gap-shaped sizing materially reduces minority-side delta vs `target_percentile_scaled` for the same target on the same markets. **Ship Phase 3+ only if this evidence wins.**
 
-4. **Phase 3 — cutover one target:** flip a single tracked target's `mirror_mode` to `"position"` in `poly_copy_trade_targets`. The other targets remain on fill-mode. Watch delta convergence for 1–2 weeks.
+4. **Phase 3 — chain-driven target state:** authoritative chain-event-driven target-position-state. Resolve in Phase 3 design: extend existing `polyTraderPositionSnapshots` (already has `traderWalletId, conditionId, tokenId, shares, costBasisUsdc, avgPrice`) with `lastBlockNumber, lastEventIndex` provenance + a chain-event UPSERT path, OR build the parallel `poly_copy_target_position_state` table per the data-model section above. Either way, target-state-updater writes only fire for targets flipped to `position_gap`. Still fill-triggered re-evaluation.
 
-5. **Phase 4 — full cutover:** flip remaining targets. Delete `plan-mirror.ts`'s `planMirrorFromFill`, `target_dominant_other_side`, `vwap_floor_breach`, `followup_position_too_small`, and the resting-sweep TTL job. Net delete should be ~1500 LOC.
+5. **Phase 4 — `GapExecutor` + tick-driven reconciliation:** continuous gap re-derivation between fills, cancel-replace under book change, `client_order_id = clientOrderIdFor(target, token, gap_version)`. Replaces resting-sweep TTL job.
 
-Each phase is a separate PR. No phase modifies the contract another phase relies on.
+6. **Phase 5 — full cutover + legacy delete:** flip remaining targets. Delete `planMirrorFromFill`, `target_dominant_other_side`, `vwap_floor_breach`, `followup_position_too_small`, and the resting-sweep TTL job. Net delete ~1500 LOC.
+
+Each phase is a separate PR. Phase 1's switch means each later phase ships ahead of cutover for any specific target.
 
 ## Open questions
 
@@ -238,3 +240,4 @@ Binding when this spec ships. None are enforced today (status: draft).
 ## Status notes
 
 - **2026-05-13:** Spec drafted as the planned successor to the fill-driven mirror. Triggered by the swisstony WTA Parma incident, which exposed that information-lag (D1, PR #23) is necessary but not sufficient — the bigger structural bug is fill-chase (D2). Phase 0 lands with PR #23. Phase 1+ is a separate project, not yet scheduled.
+- **2026-05-17:** Revised migration after the swisstony ATP Sinner/Ruud incident ([report](../../nodes/poly/research/delta-minimizing/atp-sinner-ruud-2026-05-17-2026-05-17T17-30-01/report.html)). Composability-first: Phase 1 is now the per-target sizing-policy-kind switch (no table, no module, no behavior change at deploy), Phase 2 is the `position_gap` `SizingPolicy` variant (uses inputs the planner already has — no new infrastructure), and the original "table + updater + executor + idempotency redesign" is deferred to Phase 3+ pending A/B evidence from Phase 2. Rationale: leverages the `SIZING_POLICY_IS_DISCRIMINATED` invariant in `features/copy-trade/types.ts` so legacy targets stay on the legacy planner by construction. Phase 1 ships as the work item this revision was filed under.

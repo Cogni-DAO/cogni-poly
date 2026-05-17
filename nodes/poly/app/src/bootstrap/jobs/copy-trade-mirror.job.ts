@@ -91,21 +91,49 @@ const DEFAULT_POSITION_FOLLOWUP_POLICY: PositionFollowupPolicy = {
   max_hedge_fraction_of_position: 0.25,
   max_layer_fraction_of_position: 0.5,
 };
+/**
+ * Per-target sizing-policy kind. `'auto'` (the back-compat sentinel) tells
+ * `buildSizingPolicy` to infer the kind from the wallet's curated snapshot;
+ * explicit kinds pin the planner regardless of snapshot. Mirrors the DB
+ * CHECK on `poly_copy_trade_targets.sizing_policy_kind` and the
+ * `SizingPolicySchema` discriminated union — adding a variant requires
+ * updating all three together.
+ */
+type SizingPolicyKindInput = "auto" | "min_bet" | "target_percentile_scaled";
+
+function minBetPolicy(maxUsdcPerCondition: number): SizingPolicy {
+  return {
+    kind: "min_bet",
+    // DB column `mirror_max_usdc_per_trade` retained; v0 internal rename
+    // to `max_usdc_per_condition` (bug.5054). bug.5004 narrowed the cap
+    // scope from per-conditionId to per-token_id (CAP_IS_PER_TOKEN_ID) —
+    // the value here now bounds each leg of a hedged binary independently.
+    max_usdc_per_condition: maxUsdcPerCondition,
+  };
+}
+
 function buildSizingPolicy(params: {
   targetWallet: `0x${string}`;
   mirrorFilterPercentile: number;
   mirrorMaxUsdcPerTrade: number;
+  /** Per-target opt-in; `'auto'` (default) preserves snapshot-derived behavior. */
+  sizingPolicyKind: SizingPolicyKindInput;
 }): SizingPolicy {
   const snapshot = snapshotForTargetWallet(params.targetWallet);
+  const resolvedKind: Exclude<SizingPolicyKindInput, "auto"> =
+    params.sizingPolicyKind === "auto"
+      ? snapshot
+        ? "target_percentile_scaled"
+        : "min_bet"
+      : params.sizingPolicyKind;
+  if (resolvedKind === "min_bet") {
+    return minBetPolicy(params.mirrorMaxUsdcPerTrade);
+  }
+  // `target_percentile_scaled` requires a snapshot. If the user explicitly
+  // pinned this kind on an uncurated wallet, fall back to `min_bet` — same
+  // shape as `'auto'` on uncurated wallets, preserves DEFAULT-no-crash.
   if (!snapshot) {
-    return {
-      kind: "min_bet",
-      // DB column `mirror_max_usdc_per_trade` retained; v0 internal rename
-      // to `max_usdc_per_condition` (bug.5054). bug.5004 narrowed the cap
-      // scope from per-conditionId to per-token_id (CAP_IS_PER_TOKEN_ID) —
-      // the value here now bounds each leg of a hedged binary independently.
-      max_usdc_per_condition: params.mirrorMaxUsdcPerTrade,
-    };
+    return minBetPolicy(params.mirrorMaxUsdcPerTrade);
   }
   return {
     kind: "target_percentile_scaled",
@@ -114,12 +142,25 @@ function buildSizingPolicy(params: {
   };
 }
 
+/**
+ * Resolve the effective sizing-policy kind for a target wallet at config-
+ * load time. `'auto'` inputs (or omitted) inherit from snapshot availability;
+ * explicit kinds pin the result, but `target_percentile_scaled` on a wallet
+ * with no curated snapshot degrades to `min_bet` (same fallback as
+ * `buildSizingPolicy`).
+ */
 export function sizingPolicyKindForTargetWallet(
-  targetWallet: `0x${string}`
+  targetWallet: `0x${string}`,
+  configuredKind: SizingPolicyKindInput = "auto"
 ): "min_bet" | "target_percentile_scaled" {
-  return snapshotForTargetWallet(targetWallet)
-    ? "target_percentile_scaled"
-    : "min_bet";
+  const snapshot = snapshotForTargetWallet(targetWallet);
+  if (configuredKind === "auto") {
+    return snapshot ? "target_percentile_scaled" : "min_bet";
+  }
+  if (configuredKind === "target_percentile_scaled" && !snapshot) {
+    return "min_bet";
+  }
+  return configuredKind;
 }
 
 /**
@@ -143,6 +184,12 @@ export function buildMirrorTargetConfig(params: {
    * tenant boot path.
    */
   mode?: "live" | "paper";
+  /**
+   * Per-target sizing-policy kind. Read from
+   * `poly_copy_trade_targets.sizing_policy_kind` by the enumerator. Defaults
+   * to `'auto'` (snapshot-derived) for back-compat.
+   */
+  sizingPolicyKind?: SizingPolicyKindInput;
 }): MirrorTargetConfig {
   const mirrorFilterPercentile =
     params.mirrorFilterPercentile ?? DEFAULT_CONVICTION_FILTER_PERCENTILE;
@@ -158,6 +205,7 @@ export function buildMirrorTargetConfig(params: {
       targetWallet: params.targetWallet,
       mirrorFilterPercentile,
       mirrorMaxUsdcPerTrade,
+      sizingPolicyKind: params.sizingPolicyKind ?? "auto",
     }),
     // task.5001 — default to mirror_limit (resting GTC at target's entry).
     // Persistence to a per-target column is deferred to task.0347.

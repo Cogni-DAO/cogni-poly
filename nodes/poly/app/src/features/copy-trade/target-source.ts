@@ -49,6 +49,8 @@ export type WalletAddress = `0x${string}`;
  * One enumerated target row carrying enough tenant attribution for the
  * mirror-coordinator to set `withTenantScope` for fills/decisions writes.
  */
+export type SizingPolicyKind = "auto" | "min_bet" | "target_percentile_scaled";
+
 export interface EnumeratedTarget {
   billingAccountId: string;
   createdByUserId: string;
@@ -61,6 +63,12 @@ export interface EnumeratedTarget {
    * Always defined (DB NOT NULL DEFAULT 'live').
    */
   mode: "live" | "paper";
+  /**
+   * Per-target sizing-policy kind. `'auto'` (default) preserves legacy
+   * snapshot-derived behavior; explicit kinds pin a target to a specific
+   * planner policy. Threaded into `buildMirrorTargetConfig`.
+   */
+  sizingPolicyKind: SizingPolicyKind;
 }
 
 /**
@@ -75,6 +83,7 @@ export interface UserTargetRow {
   mirrorFilterPercentile: number;
   mirrorMaxUsdcPerTrade: number;
   mode: "live" | "paper";
+  sizingPolicyKind: SizingPolicyKind;
 }
 
 export interface CopyTradeTargetSource {
@@ -125,6 +134,7 @@ export function envTargetSource(
       mirrorFilterPercentile: 75,
       mirrorMaxUsdcPerTrade: 5,
       mode: "live" as const,
+      sizingPolicyKind: "auto" as const,
     }))
   );
   const enumerated: readonly EnumeratedTarget[] = Object.freeze(
@@ -135,6 +145,7 @@ export function envTargetSource(
       mirrorFilterPercentile: 75,
       mirrorMaxUsdcPerTrade: 5,
       mode: "live" as const,
+      sizingPolicyKind: "auto" as const,
     }))
   );
   return {
@@ -191,6 +202,7 @@ export function dbTargetSource(
             mirror_max_usdc_per_trade:
               polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
             mode: polyCopyTradeTargets.mode,
+            sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
           })
           .from(polyCopyTradeTargets)
           .where(isNull(polyCopyTradeTargets.disabledAt))
@@ -202,6 +214,7 @@ export function dbTargetSource(
         mirrorFilterPercentile: r.mirror_filter_percentile,
         mirrorMaxUsdcPerTrade: Number(r.mirror_max_usdc_per_trade),
         mode: r.mode === "paper" ? ("paper" as const) : ("live" as const),
+        sizingPolicyKind: coerceSizingPolicyKind(r.sizing_policy_kind),
       }));
     },
 
@@ -233,6 +246,7 @@ export function dbTargetSource(
           mirror_filter_percentile: polyCopyTradeTargets.mirrorFilterPercentile,
           mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
           mode: polyCopyTradeTargets.mode,
+          sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
         })
         .from(polyCopyTradeTargets);
 
@@ -275,7 +289,26 @@ export function dbTargetSource(
         mirrorFilterPercentile: r.mirror_filter_percentile,
         mirrorMaxUsdcPerTrade: Number(r.mirror_max_usdc_per_trade),
         mode: r.mode === "paper" ? ("paper" as const) : ("live" as const),
+        sizingPolicyKind: coerceSizingPolicyKind(r.sizing_policy_kind),
       }));
     },
   };
+}
+
+/**
+ * Narrow the DB text column to the SizingPolicyKind union. The DB CHECK on
+ * `poly_copy_trade_targets.sizing_policy_kind` enforces the enum at write
+ * time, so any unknown value here means schema drift — fail closed to
+ * `'auto'` (the back-compat sentinel) so the planner inherits legacy
+ * snapshot-derived behavior instead of crashing.
+ */
+function coerceSizingPolicyKind(value: string): SizingPolicyKind {
+  if (
+    value === "auto" ||
+    value === "min_bet" ||
+    value === "target_percentile_scaled"
+  ) {
+    return value;
+  }
+  return "auto";
 }

@@ -53,6 +53,11 @@ export const dynamic = "force-dynamic";
 /**
  * `id` is the DB row PK from `poly_copy_trade_targets`, exposed as the
  * contract's `target_id` so DELETE/PATCH can find it.
+ *
+ * `sizingPolicyKind` carries the stored per-target choice. The wire field
+ * `sizing_policy_kind` exposes the EFFECTIVE planner kind (resolves
+ * `'auto'` to whatever the snapshot inference would pick at config-build
+ * time) — that's what downstream callers act on.
  */
 function buildTargetView(params: {
   id: string;
@@ -61,6 +66,7 @@ function buildTargetView(params: {
   createdByUserId: string;
   mirrorFilterPercentile: number;
   mirrorMaxUsdcPerTrade: number;
+  sizingPolicyKind: "auto" | "min_bet" | "target_percentile_scaled";
   source: "env" | "db";
 }): PolyCopyTradeTarget {
   const config = buildMirrorTargetConfig({
@@ -69,6 +75,7 @@ function buildTargetView(params: {
     createdByUserId: params.createdByUserId,
     mirrorFilterPercentile: params.mirrorFilterPercentile,
     mirrorMaxUsdcPerTrade: params.mirrorMaxUsdcPerTrade,
+    sizingPolicyKind: params.sizingPolicyKind,
   });
   return {
     target_id: params.id,
@@ -77,7 +84,10 @@ function buildTargetView(params: {
     mirror_usdc: config.sizing.max_usdc_per_condition,
     mirror_filter_percentile: params.mirrorFilterPercentile,
     mirror_max_usdc_per_trade: params.mirrorMaxUsdcPerTrade,
-    sizing_policy_kind: sizingPolicyKindForTargetWallet(params.targetWallet),
+    sizing_policy_kind: sizingPolicyKindForTargetWallet(
+      params.targetWallet,
+      params.sizingPolicyKind
+    ),
     source: params.source,
   };
 }
@@ -117,6 +127,7 @@ export const GET = wrapRouteHandlerWithLogging(
         createdByUserId: sessionUser.id,
         mirrorFilterPercentile: row.mirrorFilterPercentile,
         mirrorMaxUsdcPerTrade: row.mirrorMaxUsdcPerTrade,
+        sizingPolicyKind: row.sizingPolicyKind,
         source: "db",
       })
     );
@@ -153,6 +164,7 @@ export const POST = wrapRouteHandlerWithLogging(
       );
     }
     const targetWallet = parsed.data.target_wallet as `0x${string}`;
+    const sizingPolicyKindInput = parsed.data.sizing_policy_kind ?? "auto";
 
     const container = getContainer();
     const account = await container
@@ -174,6 +186,7 @@ export const POST = wrapRouteHandlerWithLogging(
           billingAccountId: account.id,
           createdByUserId: sessionUser.id,
           targetWallet,
+          sizingPolicyKind: sizingPolicyKindInput,
         })
         // Conflict resolves against the partial unique index
         // `poly_copy_trade_targets_billing_wallet_active_idx` (WHERE disabled_at IS NULL).
@@ -184,6 +197,7 @@ export const POST = wrapRouteHandlerWithLogging(
           created_by_user_id: polyCopyTradeTargets.createdByUserId,
           mirror_filter_percentile: polyCopyTradeTargets.mirrorFilterPercentile,
           mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
+          sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
         })
     );
 
@@ -200,6 +214,7 @@ export const POST = wrapRouteHandlerWithLogging(
               polyCopyTradeTargets.mirrorFilterPercentile,
             mirror_max_usdc_per_trade:
               polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
+            sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
           })
           .from(polyCopyTradeTargets)
           .where(
@@ -242,6 +257,9 @@ export const POST = wrapRouteHandlerWithLogging(
       createdByUserId: sessionUser.id,
       mirrorFilterPercentile: inserted.mirror_filter_percentile,
       mirrorMaxUsdcPerTrade: Number(inserted.mirror_max_usdc_per_trade),
+      sizingPolicyKind: coerceStoredSizingPolicyKind(
+        inserted.sizing_policy_kind
+      ),
       source: "db",
     });
 
@@ -256,3 +274,21 @@ export const POST = wrapRouteHandlerWithLogging(
     );
   }
 );
+
+/**
+ * Narrow a DB text column to the stored-sizing-policy-kind union. The DB
+ * CHECK enforces the enum, so an unknown value here means schema drift —
+ * fail closed to `'auto'` so behavior matches the pre-cutover default.
+ */
+function coerceStoredSizingPolicyKind(
+  value: string
+): "auto" | "min_bet" | "target_percentile_scaled" {
+  if (
+    value === "auto" ||
+    value === "min_bet" ||
+    value === "target_percentile_scaled"
+  ) {
+    return value;
+  }
+  return "auto";
+}

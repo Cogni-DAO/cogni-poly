@@ -35,9 +35,26 @@ const mirrorMaxUsdcPerTradeSchema = z
     message: "Expected a value with at most 2 decimal places",
   });
 
+/**
+ * Per-target sizing-policy kind. `'auto'` (default) preserves legacy
+ * snapshot-derived behavior — `buildSizingPolicy` infers
+ * `target_percentile_scaled` when the wallet has a curated snapshot, else
+ * `min_bet`. Explicit kinds let users / AI pin a target to a specific
+ * planner policy. Adding a new variant means updating the
+ * `SizingPolicySchema` discriminated union in `features/copy-trade/types.ts`
+ * AND the DB CHECK on `poly_copy_trade_targets.sizing_policy_kind` together.
+ */
+const sizingPolicyKindSchema = z.enum([
+  "auto",
+  "min_bet",
+  "target_percentile_scaled",
+]);
+
 const targetPolicySchema = z.object({
   mirror_filter_percentile: z.number().int().min(50).max(99),
   mirror_max_usdc_per_trade: mirrorMaxUsdcPerTradeSchema,
+  /** Optional override; omit (or `'auto'`) to keep legacy snapshot inference. */
+  sizing_policy_kind: sizingPolicyKindSchema.optional(),
 });
 
 const targetSchema = z.object({
@@ -59,8 +76,13 @@ const targetSchema = z.object({
   /** Target-specific max mirror notional; p100 target fills map to this value. */
   mirror_max_usdc_per_trade:
     targetPolicySchema.shape.mirror_max_usdc_per_trade,
-  /** Actual planner sizing policy for this wallet. Uncurated wallets use min_bet. */
-  sizing_policy_kind: z.enum(["min_bet", "target_percentile_scaled"]),
+  /**
+   * Actual planner sizing policy for this wallet. `'auto'` means inherit
+   * from snapshot (uncurated wallets resolve to `min_bet`, curated to
+   * `target_percentile_scaled`). Explicit values pin the planner regardless
+   * of snapshot availability.
+   */
+  sizing_policy_kind: sizingPolicyKindSchema,
   /** Provenance: `"env"` for the local-dev fallback; `"db"` once `dbTargetSource` is wired. */
   source: z.enum(["env", "db"]),
 });
@@ -78,6 +100,11 @@ export const polyCopyTradeTargetsOperation = {
 
 const targetCreateInputSchema = z.object({
   target_wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  /**
+   * Optional initial sizing-policy kind. Defaults to `'auto'` (server-side)
+   * if omitted, matching the DB column default.
+   */
+  sizing_policy_kind: sizingPolicyKindSchema.optional(),
 });
 
 export const polyCopyTradeTargetCreateOperation = {
@@ -113,6 +140,7 @@ export const polyCopyTradeTargetUpdateOperation = {
   }),
 } as const;
 
+export type SizingPolicyKind = z.infer<typeof sizingPolicyKindSchema>;
 export type PolyCopyTradeTarget = z.infer<typeof targetSchema>;
 export type PolyCopyTradeTargetsOutput = z.infer<
   typeof polyCopyTradeTargetsOperation.output

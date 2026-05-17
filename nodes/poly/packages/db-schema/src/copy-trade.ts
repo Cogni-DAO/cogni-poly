@@ -72,6 +72,16 @@ export const polyCopyTradeTargets = pgTable(
      * but no real USDC spent. See `proj.poly-paper-trading`.
      */
     mode: text("mode").notNull().default("live"),
+    /**
+     * Per-target sizing-policy kind. `'auto'` (default) preserves legacy
+     * behavior: `buildSizingPolicy` infers `target_percentile_scaled` when a
+     * curated wallet snapshot exists, else `min_bet`. Explicit kinds let
+     * users/AI pin a target to a specific policy. The discriminated union
+     * lives in `SizingPolicySchema` (poly/app features/copy-trade/types.ts);
+     * adding a new variant means appending here AND there. See spec:
+     * docs/spec/poly-copy-trade-position-mirror.md (Phase 1).
+     */
+    sizingPolicyKind: text("sizing_policy_kind").notNull().default("auto"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -94,6 +104,10 @@ export const polyCopyTradeTargets = pgTable(
     check(
       "poly_copy_trade_targets_mode_check",
       sql`${table.mode} IN ('live','paper')`
+    ),
+    check(
+      "poly_copy_trade_targets_sizing_policy_kind_check",
+      sql`${table.sizingPolicyKind} IN ('auto','min_bet','target_percentile_scaled')`
     ),
     // One active row per (tenant, wallet). Soft-deleted rows allowed to coexist
     // so a previously-disabled wallet can be re-added without violating uniqueness.
