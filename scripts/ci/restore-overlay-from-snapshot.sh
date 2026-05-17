@@ -25,7 +25,10 @@
 #   SNAPSHOT_FILE   (required) TSV path produced by snapshot-overlay-
 #                              digests.sh. 3 cols: deploy_unit\timage_name\tref
 #   OVERLAY_ENV     (required) overlay env (e.g. candidate-a)
-#   RESTORE_MODE    (optional) `always` (default) or `only-when-placeholder`.
+#   RESTORE_MODE    (REQUIRED — no default; per design-review of bug.5012,
+#                    every caller must declare intent so a future YAML edit
+#                    that drops the env line hard-fails instead of silently
+#                    flipping safety). One of:
 #     - `always`: replay every digest pin from snapshot, overwriting whatever
 #       the current overlay holds. Correct for candidate-a where rsync is
 #       from PR-branch (advisory per task.0373) → snapshot always wins.
@@ -46,7 +49,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 SNAPSHOT_FILE=${SNAPSHOT_FILE:?SNAPSHOT_FILE required}
 OVERLAY_ENV=${OVERLAY_ENV:?OVERLAY_ENV required}
-RESTORE_MODE=${RESTORE_MODE:-always}
+# No default — every caller must declare intent. A silent default of
+# `always` for the preview/production caller would regress main's newer
+# digests to snapshot's older ones (the exact bug.5012 inverse). Require
+# explicit mode at every call site so a future YAML edit that drops the
+# env line hard-fails instead of silently flipping safety.
+RESTORE_MODE=${RESTORE_MODE:?RESTORE_MODE required (always | only-when-placeholder)}
 PROMOTE_SCRIPT=${PROMOTE_SCRIPT:-${SCRIPT_DIR}/promote-k8s-image.sh}
 
 case "$RESTORE_MODE" in

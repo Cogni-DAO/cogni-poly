@@ -227,6 +227,7 @@ describe("restore-then-promote end-to-end (catalog v2 multi-image)", () => {
         SNAPSHOT_FILE: snapshotFile,
         OVERLAY_ENV: "candidate-a",
         PROMOTE_SCRIPT,
+        RESTORE_MODE: "always",
       },
       encoding: "utf-8",
     });
@@ -301,6 +302,7 @@ describe("restore-then-promote end-to-end (catalog v2 multi-image)", () => {
         SNAPSHOT_FILE: snapshotFile,
         OVERLAY_ENV: "candidate-a",
         PROMOTE_SCRIPT,
+        RESTORE_MODE: "always",
       },
       encoding: "utf-8",
     });
@@ -360,6 +362,7 @@ images:
         SNAPSHOT_FILE: snapshotFile,
         OVERLAY_ENV: "candidate-a",
         PROMOTE_SCRIPT,
+        RESTORE_MODE: "always",
       },
       encoding: "utf-8",
     });
@@ -512,9 +515,49 @@ images:
         SNAPSHOT_FILE: snapshotFile,
         OVERLAY_ENV: "candidate-a",
         PROMOTE_SCRIPT,
+        RESTORE_MODE: "always",
       },
       encoding: "utf-8",
     });
     expect(restoreRes.status, restoreRes.stderr).toBe(0);
+  });
+
+  it("REQUIRES_EXPLICIT_RESTORE_MODE — script hard-fails when RESTORE_MODE env is unset (bug.5012 design-review B1: no silent-default safety flip)", () => {
+    const snapshotFile = path.join(fixture.root, "empty.tsv");
+    writeFileSync(snapshotFile, "");
+    // Deliberately DO NOT pass RESTORE_MODE. Strip any inherited value.
+    const env = { ...process.env };
+    delete env.RESTORE_MODE;
+    const restoreRes = spawnSync("bash", [RESTORE_SCRIPT], {
+      cwd: fixture.root,
+      env: {
+        ...env,
+        SNAPSHOT_FILE: snapshotFile,
+        OVERLAY_ENV: "candidate-a",
+        PROMOTE_SCRIPT,
+      },
+      encoding: "utf-8",
+    });
+    expect(restoreRes.status).not.toBe(0);
+    // stderr should name the missing var (bash ${VAR:?msg} format).
+    expect(restoreRes.stderr).toMatch(/RESTORE_MODE/);
+  });
+
+  it("REJECTS_INVALID_RESTORE_MODE — script hard-fails on an unknown mode value", () => {
+    const snapshotFile = path.join(fixture.root, "empty.tsv");
+    writeFileSync(snapshotFile, "");
+    const restoreRes = spawnSync("bash", [RESTORE_SCRIPT], {
+      cwd: fixture.root,
+      env: {
+        ...process.env,
+        SNAPSHOT_FILE: snapshotFile,
+        OVERLAY_ENV: "candidate-a",
+        PROMOTE_SCRIPT,
+        RESTORE_MODE: "bogus",
+      },
+      encoding: "utf-8",
+    });
+    expect(restoreRes.status).not.toBe(0);
+    expect(restoreRes.stderr).toMatch(/RESTORE_MODE must be/);
   });
 });
