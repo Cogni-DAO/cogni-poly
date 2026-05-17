@@ -766,9 +766,9 @@ function applyFollowupSizing(params: {
 /**
  * Build a canonical `OrderIntent` from the fill + target config.
  * Mirror size is the selected sizing-policy output, never an adapter concern.
- * `mode` is stamped into `attributes.mode` per PLACEMENT_DISCRIMINATOR_IN_ATTRIBUTES —
- * the trade-executor dispatches on this when selecting between the live CLOB
- * adapter and the paper sidecar.
+ * `mode` is stamped into `attributes.mode` as observability/audit metadata
+ * only — see `PAPER_DISPATCH_IS_ENV_ONLY` in poly-trade-executor.ts. The
+ * executor routes on `PAPER_ENFORCE_MODE` (env), never on this attribute.
  */
 function buildIntent(
   fill: PlanMirrorInput["fill"],
