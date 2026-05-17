@@ -934,6 +934,7 @@ function createContainer(): Container {
               createdByUserId: enumeratedTarget.createdByUserId,
               mirrorFilterPercentile: enumeratedTarget.mirrorFilterPercentile,
               mirrorMaxUsdcPerTrade: enumeratedTarget.mirrorMaxUsdcPerTrade,
+              sizingPolicyKind: enumeratedTarget.sizingPolicyKind,
               // PAPER_DISPATCH_IS_ENV_ONLY — see poly-trade-executor.ts. The
               // executor routes solely on `PAPER_ENFORCE_MODE`; the per-target
               // `mode` column on `poly_copy_trade_targets` is advisory metadata

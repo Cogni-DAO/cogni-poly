@@ -42,6 +42,7 @@ describe("envTargetSource", () => {
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
         mode: "live",
+        sizingPolicyKind: "auto",
       },
       {
         id: targetIdFromWallet(W2),
@@ -49,6 +50,7 @@ describe("envTargetSource", () => {
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
         mode: "live",
+        sizingPolicyKind: "auto",
       },
     ]);
   });
@@ -63,6 +65,7 @@ describe("envTargetSource", () => {
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
         mode: "live",
+        sizingPolicyKind: "auto",
       })
     ).toThrow();
     const second = await src.listForActor(ANY_ACTOR);
@@ -80,6 +83,7 @@ describe("envTargetSource", () => {
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
         mode: "live",
+        sizingPolicyKind: "auto",
       },
       {
         billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
@@ -88,6 +92,7 @@ describe("envTargetSource", () => {
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
         mode: "live",
+        sizingPolicyKind: "auto",
       },
     ]);
   });

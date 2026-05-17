@@ -214,6 +214,84 @@ describe("poly.copy_trade.targets — HTTP round-trip (component)", () => {
     ).toBeUndefined();
   });
 
+  it("POST + PATCH round-trip sizing_policy_kind — explicit kind persists, defaults to 'auto' (resolved to 'min_bet' for uncurated wallet)", async () => {
+    // POST with explicit `sizing_policy_kind` — stored value differs from the
+    // implicit default.
+    const createReq = new NextRequest(
+      "http://localhost/api/v1/poly/copy-trade/targets",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          target_wallet: TARGET_WALLET,
+          sizing_policy_kind: "min_bet",
+        }),
+      }
+    );
+    const createRes = await createTarget(createReq);
+    expect([200, 201]).toContain(createRes.status);
+    const created = (await createRes.json()) as {
+      target: {
+        target_id: string;
+        sizing_policy_kind: "min_bet" | "target_percentile_scaled";
+      };
+    };
+    // 'min_bet' is both stored AND the effective resolution for an uncurated
+    // wallet — the wire `sizing_policy_kind` reports the EFFECTIVE kind.
+    expect(created.target.sizing_policy_kind).toBe("min_bet");
+    const targetRowId = created.target.target_id;
+
+    // PATCH with `sizing_policy_kind: 'auto'` — explicit back-to-sentinel
+    // write should also resolve to 'min_bet' for an uncurated wallet.
+    const patchReq = new NextRequest(
+      `http://localhost/api/v1/poly/copy-trade/targets/${targetRowId}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mirror_filter_percentile: 90,
+          mirror_max_usdc_per_trade: 12,
+          sizing_policy_kind: "auto",
+        }),
+      }
+    );
+    const patchRes = await patchTarget(patchReq, {
+      params: Promise.resolve({ id: targetRowId }),
+    });
+    expect(patchRes.status).toBe(200);
+    const patched = (await patchRes.json()) as {
+      target: {
+        sizing_policy_kind: "min_bet" | "target_percentile_scaled";
+      };
+    };
+    expect(patched.target.sizing_policy_kind).toBe("min_bet");
+
+    // PATCH WITHOUT sizing_policy_kind — leaves the stored value untouched
+    // (the previous PATCH already set it to 'auto'; this round-trip should
+    // still surface 'min_bet').
+    const patchNoSizingReq = new NextRequest(
+      `http://localhost/api/v1/poly/copy-trade/targets/${targetRowId}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mirror_filter_percentile: 80,
+          mirror_max_usdc_per_trade: 8,
+        }),
+      }
+    );
+    const patchNoSizingRes = await patchTarget(patchNoSizingReq, {
+      params: Promise.resolve({ id: targetRowId }),
+    });
+    expect(patchNoSizingRes.status).toBe(200);
+    const patchedNoSizing = (await patchNoSizingRes.json()) as {
+      target: {
+        sizing_policy_kind: "min_bet" | "target_percentile_scaled";
+      };
+    };
+    expect(patchedNoSizing.target.sizing_policy_kind).toBe("min_bet");
+  });
+
   it("DELETE with the deterministic UUIDv5 (from wallet) returns 404 — proves contract id is the row PK, not the synthetic id", async () => {
     // Seed an active target.
     const createReq = new NextRequest(
