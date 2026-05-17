@@ -664,6 +664,45 @@ class Engine:
                 token_id, market.condition_id, since_ts, len(trades), len(orders),
             )
 
+            # Cogni-poly local patch (bug.5005). When trades are present and
+            # zero orders fill (the observed candidate-a steady state as of
+            # 2026-05-17), we need to distinguish "filter rejected a real
+            # crossing trade" (code bug) from "no trade ever crossed our
+            # limits" (market structure). Pre-compute the (order × trade)
+            # cross-product classification + emit one bounded summary so the
+            # main matching loop's silence becomes diagnosable. Counts only
+            # plus one anonymous sample of each side; trade/limit prices are
+            # public market data, not PII.
+            if trades:
+                xprod = {"would_match": 0, "side_mismatch": 0, "wrong_price": 0}
+                for o in orders:
+                    expected_taker = "SELL" if o.side == "buy" else "BUY"
+                    for t in trades:
+                        if t["side"] != expected_taker:
+                            xprod["side_mismatch"] += 1
+                            continue
+                        crossed = (
+                            (o.side == "buy" and t["price"] <= o.limit_price)
+                            or (o.side == "sell" and t["price"] >= o.limit_price)
+                        )
+                        if not crossed:
+                            xprod["wrong_price"] += 1
+                            continue
+                        xprod["would_match"] += 1
+                sample_o = min(orders, key=lambda o: o.id)
+                sample_t = trades[0]
+                _log.info(
+                    "event=maker_fill_scan_detail token_id=%s "
+                    "would_match=%d side_mismatch=%d wrong_price=%d "
+                    "sample_order_side=%s sample_order_limit=%.4f "
+                    "sample_trade_side=%s sample_trade_price=%.4f "
+                    "sample_trade_size=%.4f",
+                    token_id,
+                    xprod["would_match"], xprod["side_mismatch"], xprod["wrong_price"],
+                    sample_o.side, sample_o.limit_price,
+                    sample_t["side"], sample_t["price"], sample_t["size"],
+                )
+
             # With trades, advance to the newest observed ts (next tick's
             # ``ts > since_ts`` filter catches anything newer). Without
             # trades, use the bounded advance so a lagged trade in the

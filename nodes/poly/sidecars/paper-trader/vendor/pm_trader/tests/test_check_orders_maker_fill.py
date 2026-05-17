@@ -506,3 +506,78 @@ class TestObservability:
         assert any(
             "event=maker_fill_scan_failed" in r.message for r in caplog.records
         )
+
+
+# ---------------------------------------------------------------------------
+# Cross-product diagnostic (bug.5005 review — distinguishes filter bug from
+# market structure when zero orders fill despite trades being available)
+# ---------------------------------------------------------------------------
+
+
+class TestScanDetailDiagnostic:
+    def test_no_detail_emitted_when_no_trades(
+        self, engine: Engine, caplog: pytest.LogCaptureFixture
+    ):
+        _make_buy(engine, amount=1.0, limit=0.014)
+        _mock_api(engine, trades=[])
+
+        with caplog.at_level("INFO", logger="pm_trader.engine"):
+            engine.check_orders()
+
+        assert not any(
+            "event=maker_fill_scan_detail" in r.message for r in caplog.records
+        )
+
+    def test_detail_counts_side_mismatch(
+        self, engine: Engine, caplog: pytest.LogCaptureFixture
+    ):
+        # BUY limit; trade is BUY-taker (lifts ask) — wrong side, can't fill.
+        _make_buy(engine, amount=2.80, limit=0.014)
+        _mock_api(engine, trades=[_trade(price=0.014, size=200, side="BUY")])
+
+        with caplog.at_level("INFO", logger="pm_trader.engine"):
+            engine.check_orders()
+
+        detail = [r for r in caplog.records if "event=maker_fill_scan_detail" in r.message]
+        assert len(detail) == 1
+        msg = detail[0].message
+        assert "would_match=0" in msg
+        assert "side_mismatch=1" in msg
+        assert "wrong_price=0" in msg
+
+    def test_detail_counts_wrong_price(
+        self, engine: Engine, caplog: pytest.LogCaptureFixture
+    ):
+        # BUY at 0.014; SELL-taker prints at 0.020 — correct side, above limit.
+        _make_buy(engine, amount=2.80, limit=0.014)
+        _mock_api(engine, trades=[_trade(price=0.020, size=200, side="SELL")])
+
+        with caplog.at_level("INFO", logger="pm_trader.engine"):
+            engine.check_orders()
+
+        detail = [r for r in caplog.records if "event=maker_fill_scan_detail" in r.message]
+        assert len(detail) == 1
+        msg = detail[0].message
+        assert "would_match=0" in msg
+        assert "side_mismatch=0" in msg
+        assert "wrong_price=1" in msg
+
+    def test_detail_counts_would_match(
+        self, engine: Engine, caplog: pytest.LogCaptureFixture
+    ):
+        # The happy path: BUY at 0.014, SELL-taker prints at 0.014 → would match.
+        _make_buy(engine, amount=2.80, limit=0.014)
+        _mock_api(engine, trades=[_trade(price=0.014, size=200, side="SELL")])
+
+        with caplog.at_level("INFO", logger="pm_trader.engine"):
+            engine.check_orders()
+
+        detail = [r for r in caplog.records if "event=maker_fill_scan_detail" in r.message]
+        assert len(detail) == 1
+        msg = detail[0].message
+        assert "would_match=1" in msg
+        assert "side_mismatch=0" in msg
+        assert "wrong_price=0" in msg
+        # Sample fields present (anonymous, public market data)
+        assert "sample_order_side=buy" in msg
+        assert "sample_trade_side=SELL" in msg
