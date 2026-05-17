@@ -49,8 +49,10 @@ type MarketRowRaw = {
   realized_size_usdc: string | null;
   has_open_position: boolean;
   position_lifecycle: string | null;
-  first_fill_at: Date | null;
-  last_fill_at: Date | null;
+  // pg driver returns timestamptz as ISO string (or Date in some configs);
+  // accept both shapes and normalize in `toIso`.
+  first_fill_at: string | Date | null;
+  last_fill_at: string | Date | null;
 };
 
 const toNum = (v: string | null | undefined): number => {
@@ -59,7 +61,11 @@ const toNum = (v: string | null | undefined): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const toIso = (d: Date | null): string | null => (d ? d.toISOString() : null);
+const toIso = (d: string | Date | null | undefined): string | null => {
+  if (d === null || d === undefined) return null;
+  if (typeof d === "string") return d;
+  return d.toISOString();
+};
 
 export async function getCopyTradePnlForTenant(
   db: Db,
