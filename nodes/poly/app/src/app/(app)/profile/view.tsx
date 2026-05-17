@@ -43,6 +43,8 @@ import {
 } from "@/components";
 import { OpenAIIcon } from "@/features/ai/icons/providers/OpenAIIcon";
 
+import { ApiAccessSection } from "./_components/ApiAccessSection";
+
 /* ─── Types ────────────────────────────────────────────────────────── */
 
 interface LinkedProvider {
@@ -951,6 +953,11 @@ export function ProfileView(): ReactElement {
           </div>
         </div>
       )}
+
+      {/* ── API Access ── */}
+
+      <SectionHeading>API Access</SectionHeading>
+      <ApiAccessSection />
 
       {/* ── Ownership ── */}
 
