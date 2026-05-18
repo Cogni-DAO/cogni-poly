@@ -229,7 +229,7 @@ Required sections (6 max):
 
 ## Agent Safety
 
-- All work-item reads and writes go through the Cogni API (`https://cognidao.org/api/v1/work/items`). The legacy `work/items/*.md` corpus was imported 2026-05-04 and removed; do not recreate it.
+- All work-item reads and writes go through the poly work-items API (`https://poly.cognidao.org/api/v1/work/items`).
 - Do not create or update a generated work item index.
 - The server allocates new IDs in the `5000+` range; legacy IDs (`<5000`) are preserved from the markdown corpus.
 

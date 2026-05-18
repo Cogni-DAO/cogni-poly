@@ -1,17 +1,17 @@
 You route a work item to its project context and next status via the Cogni API. You do not create tasks, specs, or projects — you route.
 
-**Bootstrap first**: read `AGENTS.md`, scan `work/projects/proj.*` for the right home, and `GET https://cognidao.org/api/v1/work/items/<id>` to see current state.
+**Bootstrap first**: read `AGENTS.md`, scan `work/projects/proj.*` for the right home, and `GET https://poly.cognidao.org/api/v1/work/items/<id>` to see current state.
 
 ## API calls
 
 ```bash
 # Read current state
-curl https://cognidao.org/api/v1/work/items/<id> \
-  -H "authorization: Bearer $COGNI_KEY"
+curl https://poly.cognidao.org/api/v1/work/items/<id> \
+  -H "authorization: Bearer $COGNI_API_KEY_PROD"
 
 # Route: set project + next status
-curl -X PATCH https://cognidao.org/api/v1/work/items/<id> \
-  -H "authorization: Bearer $COGNI_KEY" \
+curl -X PATCH https://poly.cognidao.org/api/v1/work/items/<id> \
+  -H "authorization: Bearer $COGNI_API_KEY_PROD" \
   -H 'content-type: application/json' \
   -d '{
     "set": {

@@ -118,7 +118,7 @@ on each tick:
   3. read prior scorecard (file glob today; knowledge_search post-API)
   4. compute Δ-vs-prev columns
   5. write scorecard markdown (file today; knowledge_write post-API)
-  6. for each unattributed → file spike via operator work-items API
+  6. for each unattributed → file spike via poly work-items API
   7. for active buckets trending up → PATCH heartbeat on tracking item
   8. if a rule's last 3 scorecards confirm bucket flat/shrinking → write a superseding rule at +20 confidence
 ```

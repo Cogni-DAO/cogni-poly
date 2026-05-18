@@ -13,7 +13,7 @@ You are an agent inside a multi-agent system. This repo (`cogni-poly`) owns its 
 5. Run [`/validate-candidate`](.claude/skills/validate-candidate/SKILL.md) against the deployed build. Adherence to its validation flow and scorecard format is strict — that's how the system confirms you followed the contract.
 6. Hit a contract blocker (auth, broken endpoint, invariant you can't satisfy)? File a bug against this repo's API: `POST https://poly.cognidao.org/api/v1/work/items {type:'bug', node:'poly'}`, link from your active item.
 
-> Bearer token expected. New contributors register once via [`/contribute-to-cogni`](.claude/skills/contribute-to-cogni/SKILL.md); existing agents reuse the saved token.
+> Bearer token: `$COGNI_API_KEY_PROD` from `.env.cogni` (poly-scoped). If missing, register against the poly node and save the result back: `curl -X POST https://poly.cognidao.org/api/v1/agent/register -H 'content-type: application/json' -d '{"name":"<agent>"}'` returns `{apiKey, userId, billingAccountId}` — write those as `COGNI_API_KEY_PROD` / `COGNI_USER_ID_PROD` / `COGNI_BILLING_ACCOUNT_PROD`. Full lifecycle: [`/contribute-to-cogni`](.claude/skills/contribute-to-cogni/SKILL.md).
 
 ## Definition of Done
 
