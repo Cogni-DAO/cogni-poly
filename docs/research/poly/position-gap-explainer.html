@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>position_gap — the 60-second version</title>
+<style>
+  :root { --bg:#fbfaf7; --ink:#1a1a1a; --muted:#6b6b6b; --rule:#e5e2dc; --accent:#2b5cd1; --code-bg:#f4f2ec; --hi:#fff3b0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif; -webkit-font-smoothing:antialiased; }
+  main { max-width: 680px; margin: 0 auto; padding: 56px 28px 80px; }
+  h1 { font-size: 32px; line-height: 1.1; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 20px; margin: 40px 0 10px; }
+  .lede { color: var(--muted); margin: 0 0 32px; }
+  code, .mono { font: 14.5px/1.5 ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre.math { background: var(--code-bg); padding: 14px 18px; border-radius: 8px; overflow-x: auto; font: 15px/1.6 ui-monospace, "JetBrains Mono", Menlo, monospace; }
+  mark { background: var(--hi); padding: 0 2px; border-radius: 2px; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 36px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 15px; }
+  th, td { border-bottom: 1px solid var(--rule); padding: 7px 10px; text-align: left; }
+  th { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .small { color: var(--muted); font-size: 13.5px; }
+  .pointers { color: var(--muted); font-size: 13.5px; margin-top: 32px; }
+  .pointers a { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1><code>position_gap</code> — the 60-second version</h1>
+<p class="lede">What the policy does, the math, what we're testing, where to look for more.</p>
+
+<hr />
+
+<h2>What it does</h2>
+
+<p>The legacy policy sizes each target fill in isolation, which inverts the mirror when target's position is lopsided. <code>position_gap</code> instead sizes from the gap between target's <em>current position</em> and ours. Every fill is a re-evaluation trigger, not a sizing input.</p>
+
+<pre class="math">desired_shares = <mark>target_shares</mark> &times; <mark>target_scale</mark>
+gap_shares     = desired_shares &minus; <mark>our_shares</mark>
+intent_usdc    = gap_shares &times; <mark>fill.price</mark>
+                 &darr; clamp to market floors &amp; per-leg cap
+PLACE or SKIP</pre>
+
+<p>Layering falls out for free (gap shrinks as we fill). Minority-side fills collapse below market min and skip — the Sinner/Ruud inverted-weighting bug is structurally impossible under this policy.</p>
+
+<hr />
+
+<h2>What's being tested right now</h2>
+
+<p>A 24h A/B is running on candidate-a, same target (swisstony), same caps (p80 / $15), only the sizing kind differs:</p>
+
+<table>
+  <thead><tr><th>tenant</th><th>policy</th></tr></thead>
+  <tbody>
+    <tr><td><strong>cand-a/VALIDATION</strong> (control)</td><td><code>target_percentile_scaled</code> (legacy)</td></tr>
+    <tr><td><strong>cand-a/GAP</strong> (experiment)</td><td><code>position_gap</code> ← <strong>just patched 2026-05-18</strong></td></tr>
+  </tbody>
+</table>
+
+<p>Done condition: re-run the <a href="../../../work/charters/POLY_ALGO_TENANT_MATRIX.md">charter audit query</a> in 24h. If <code>cand-a/GAP</code> produces sensible placement rate + lower minority-side delta than <code>cand-a/VALIDATION</code>, Phase 2 is proven. Otherwise, retune.</p>
+
+<hr />
+
+<h2>The two policy knobs</h2>
+
+<table>
+  <thead><tr><th>UI knob</th><th>maps to</th></tr></thead>
+  <tbody>
+    <tr><td><strong>P100 MAX</strong> ($15)</td><td><code>mirror_max_usdc_per_trade</code> — per-leg cap on <code>intent_usdc</code>. Same field as the legacy policy.</td></tr>
+    <tr><td><strong>THRESHOLD P80</strong></td><td>nothing under <code>position_gap</code> — no per-fill percentile filter exists. The conviction knob is <code>target_scale</code> (currently a bootstrap constant <code>1e-4</code>; per-target tunability is a follow-up).</td></tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2>The one real algorithmic gap to flag</h2>
+
+<p>VWAP is not first-class on either side today. The <code>vwap_floor_breach</code> gate compares <code>fill.price</code> against target's residual cost-basis (derived per-fill from a Polymarket Data-API snapshot). Our own VWAP is tracked in the mirror cache but unused under <code>position_gap</code>. Phase 4's <code>GapExecutor</code> promotes both to first-class fields backed by chain truth and shifts the constraint onto the order's <code>limit_price</code> instead of skipping per-fill.</p>
+
+<p class="small">Until Phase 4: a half-day patch can backport that mechanism to <code>position_gap</code> alone — cap <code>intent.limit_price = min(fill.price, target_vwap + ε)</code>, drop the per-fill skip. Decide after the 24h A/B data lands.</p>
+
+<hr />
+
+<p class="pointers">
+<strong>For more:</strong>
+<a href="./2026-05-18-position-gap-cost-of-skip-scorecard.md">2026-05-18 cost-of-skip scorecard (the data)</a> &middot;
+<a href="../../spec/poly-copy-trade-position-mirror.md">design spec</a> &middot;
+<a href="../../../work/charters/POLY_ALGO_TENANT_MATRIX.md">tenant-matrix charter</a> &middot;
+<a href="../../../work/charters/POLY_COPY_DELTA.md">delta-class charter (D2)</a>
+</p>
+
+</main>
+</body>
+</html>
