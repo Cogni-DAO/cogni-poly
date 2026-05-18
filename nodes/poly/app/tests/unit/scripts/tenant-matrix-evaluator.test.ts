@@ -14,22 +14,27 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregateDecisions,
-  aggregateFillsForTarget,
   compareTenants,
+  cumulativeFromBuckets,
   discoverTenants,
-  filterMarketsByTargetWallet,
   isLowSample,
+  marketCoverage,
   placementRate,
   type TenantMetrics,
 } from "../../../../scripts/tenant-matrix-evaluator";
 
 const baseFills: TenantMetrics["fills"] = {
-  markets_count: 0,
-  markets_with_open_position: 0,
   fills_count: 0,
   filled_count: 0,
+  open_count: 0,
+  canceled_count: 0,
+  error_count: 0,
+  markets_count: 0,
+  markets_with_open_position: 0,
   intent_usdc: 0,
   realized_size_usdc: 0,
+  first_fill_at: null,
+  last_fill_at: null,
 };
 
 const baseDecisions: TenantMetrics["decisions"] = {
@@ -39,6 +44,19 @@ const baseDecisions: TenantMetrics["decisions"] = {
   errored: 0,
   skip_reasons: {},
   error_reasons: {},
+};
+
+const baseCumulative: TenantMetrics["cumulative"] = {
+  intent_usdc: [],
+  realized_usdc: [],
+  fills_count: [],
+};
+
+const basePnl: TenantMetrics["pnl"] = {
+  realized_pnl_usdc: 0,
+  resolved_markets: 0,
+  markets_won: 0,
+  markets_lost: 0,
 };
 
 function mkMetrics(
@@ -61,7 +79,10 @@ function mkMetrics(
     decisions: { ...baseDecisions },
     placement_rate: null,
     fills: { ...baseFills },
-    markets: [],
+    pnl: { ...basePnl },
+    our_market_set: [],
+    market_coverage_pct: null,
+    cumulative: { ...baseCumulative },
     low_sample: false,
     errors: [],
     ...overrides,
@@ -130,124 +151,38 @@ describe("discoverTenants", () => {
   });
 });
 
-describe("filterMarketsByTargetWallet", () => {
-  it("case-insensitive match on target_wallet", () => {
-    const resp = {
-      billing_account_id: "x",
-      mode: "all" as const,
-      since: null,
-      until: null,
-      captured_at: "x",
-      summary: {} as never,
-      markets: [
-        {
-          market_id: "0xabc",
-          target_id: "tid",
-          target_wallet: "0xABCDEF",
-          fills_count: 2,
-          filled_count: 1,
-          open_count: 0,
-          pending_count: 0,
-          canceled_count: 0,
-          error_count: 0,
-          buy_count: 1,
-          sell_count: 0,
-          intent_usdc: 10,
-          realized_size_usdc: 5,
-          has_open_position: false,
-          position_lifecycle: null,
-          first_fill_at: null,
-          last_fill_at: null,
-        },
-        {
-          market_id: "0xdef",
-          target_id: "tid",
-          target_wallet: "0x999",
-          fills_count: 0,
-          filled_count: 0,
-          open_count: 0,
-          pending_count: 0,
-          canceled_count: 0,
-          error_count: 0,
-          buy_count: 0,
-          sell_count: 0,
-          intent_usdc: 0,
-          realized_size_usdc: 0,
-          has_open_position: false,
-          position_lifecycle: null,
-          first_fill_at: null,
-          last_fill_at: null,
-        },
-      ],
-    };
-    const filtered = filterMarketsByTargetWallet(resp, "0xabcdef");
-    expect(filtered).toHaveLength(1);
-    expect(filtered[0]?.market_id).toBe("0xabc");
+describe("marketCoverage", () => {
+  it("returns shared / target.size", () => {
+    expect(marketCoverage(["a", "b", "c"], ["a", "b", "d", "e"])).toBeCloseTo(
+      0.5
+    );
+  });
+  it("returns 1 when our set is a superset of target", () => {
+    expect(marketCoverage(["a", "b", "c", "d"], ["a", "b"])).toBe(1);
+  });
+  it("returns 0 when no overlap", () => {
+    expect(marketCoverage(["x", "y"], ["a", "b"])).toBe(0);
+  });
+  it("returns null when target set is empty (avoid divide-by-zero)", () => {
+    expect(marketCoverage(["a"], [])).toBeNull();
   });
 });
 
-describe("aggregateFillsForTarget", () => {
-  it("sums fields across rows; counts open positions", () => {
-    const rows = [
-      {
-        market_id: "m1",
-        target_id: "tid",
-        target_wallet: "0x1",
-        fills_count: 3,
-        filled_count: 2,
-        open_count: 1,
-        pending_count: 0,
-        canceled_count: 0,
-        error_count: 0,
-        buy_count: 2,
-        sell_count: 0,
-        intent_usdc: 30,
-        realized_size_usdc: 15,
-        has_open_position: true,
-        position_lifecycle: "open",
-        first_fill_at: null,
-        last_fill_at: null,
-      },
-      {
-        market_id: "m2",
-        target_id: "tid",
-        target_wallet: "0x1",
-        fills_count: 1,
-        filled_count: 1,
-        open_count: 0,
-        pending_count: 0,
-        canceled_count: 0,
-        error_count: 0,
-        buy_count: 1,
-        sell_count: 0,
-        intent_usdc: 10,
-        realized_size_usdc: 10,
-        has_open_position: false,
-        position_lifecycle: null,
-        first_fill_at: null,
-        last_fill_at: null,
-      },
-    ];
-    const agg = aggregateFillsForTarget(rows);
-    expect(agg).toEqual({
-      markets_count: 2,
-      markets_with_open_position: 1,
-      fills_count: 4,
-      filled_count: 3,
-      intent_usdc: 40,
-      realized_size_usdc: 25,
-    });
+describe("cumulativeFromBuckets", () => {
+  it("running-sums bucket values into cumulative points", () => {
+    const out = cumulativeFromBuckets([
+      { ts: "2026-05-17T00:00:00Z", value: 10 },
+      { ts: "2026-05-17T01:00:00Z", value: 5 },
+      { ts: "2026-05-17T02:00:00Z", value: 20 },
+    ]);
+    expect(out).toEqual([
+      { ts: "2026-05-17T00:00:00Z", value: 10 },
+      { ts: "2026-05-17T01:00:00Z", value: 15 },
+      { ts: "2026-05-17T02:00:00Z", value: 35 },
+    ]);
   });
-
-  it("returns zeros for empty input", () => {
-    expect(aggregateFillsForTarget([])).toEqual({
-      markets_count: 0,
-      markets_with_open_position: 0,
-      fills_count: 0,
-      filled_count: 0,
-      intent_usdc: 0,
-      realized_size_usdc: 0,
-    });
+  it("returns [] on empty input", () => {
+    expect(cumulativeFromBuckets([])).toEqual([]);
   });
 });
 
