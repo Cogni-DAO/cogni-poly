@@ -1,0 +1,21 @@
+{
+  "report_path": "nodes/poly/research/tenant-matrix/2026-05-18T16-25-42/report.html",
+  "primary_class": "D6",
+  "primary_confidence": 0.92,
+  "primary_one_liner": "preview swiss-gap (position_gap target_scale=1e-4) placed 0/8127 decisions on swisstony in 24h; 45% of skips are below_market_min from gap_usdc < effective_floor gate at plan-mirror.ts:215-222 — replicates the cand-a RN1 f472b6ad row and falsifies the charter's 'high-volume target makes this less likely' hypothesis.",
+  "secondary_class": "matrix-ab",
+  "secondary_confidence": 0.7,
+  "secondary_one_liner": "cand-a GAP and cand-a VALIDATION show ~equal placement rates (1.31% vs 1.47%) and similar skip-reason mixes because cand-a is still on a stale SHA running target_percentile_scaled via the 'auto' default — they are NOT yet an A/B of position_gap vs tps. Re-flight cand-a from main before treating GAP·cand-a numbers as a position_gap signal.",
+  "authored_at": "2026-05-18T16:30:00Z",
+  "notes": {
+    "data_caveats": [
+      "production LIVE pnl_fetch_failed (HTTP 500 from /api/v1/poly/research/copy-trade-pnl) — decisions side still populated (26970 / 151 placed).",
+      "v0 deferred metrics: VWAP, realized PnL, winrate (require poly_market_outcomes + poly_trader_position_snapshots joins)."
+    ],
+    "sample_size": {
+      "preview_GAP_decisions": 8127,
+      "low_sample_threshold": 50,
+      "verdict": "well above floor; finding is structural not noise"
+    }
+  }
+}
