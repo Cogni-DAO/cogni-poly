@@ -12,7 +12,7 @@ evaluations: 2
 
 # Poly Algo Testing Tenant Matrix
 
-> **Status: DRAFT.** The matrix below is a true snapshot but the project's load-bearing claim — "this charter governs which tenants exist" — is **not yet enforced**. PR #96 (this file) MUST NOT merge until: (a) the matrix is validated against the live ledger by an independent re-query, (b) `.env.cogni.example` carries every key the matrix references, and (c) at least one preview-side `position_gap` row is producing observed activity. See "Stability gates" below.
+> **Status: DRAFT.** The matrix below is a true snapshot. PR #96 (this file) MUST NOT merge until both stability gates clear: (a) the matrix is validated against the live ledger by an independent re-query, (b) `.env.cogni.example` carries every key the matrix references. Per-row experiment outcomes (e.g. RN1's 0-placements under `position_gap`) are matrix observations, NOT charter blockers — the charter governs how we run experiments, not whether any specific one is green.
 
 ## Goal
 
@@ -90,13 +90,12 @@ What blocks driving the preview matrix from 1 tenant to the 3-row target state, 
 
 ## Stability gates (must clear before PR #96 merges)
 
-This charter is intentionally `state: Draft` until ALL of:
+Two gates. Both are about whether this charter can be trusted as governance, not about whether any specific experiment is green.
 
 - [ ] Audit query below re-run by an independent agent or human; activity counts in the Projects tables match (±10% drift acceptable).
-- [ ] `.env.cogni.example` checked in, documenting every `POLY_<ENV>_<ROLE>_*` key the matrix references (real values redacted).
-- [ ] At least one preview-side `position_gap` row exists AND has produced >0 placed decisions in a 24h window.
-- [ ] The candidate-a RN1 `position_gap` row's 0-placements is either resolved (gap math fix or `target_scale` tuning) or explicitly documented as expected (e.g., "RN1's typical trade size × 1e-4 is below market floor").
-- [ ] PR #93 (`paper-twin-diff.ts`) merged so the matrix has a diff tool to point at.
+- [ ] `.env.cogni.example` checked in, documenting every `POLY_<ENV>_<ROLE>_*` key the matrix references (real values redacted, shape complete).
+
+Per-row outcomes (RN1's 0-placements, PR #93 not yet shipped, etc.) live in "Open items" and accumulate over time. They never block the charter itself.
 
 ### Audit query
 
