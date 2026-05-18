@@ -66,13 +66,6 @@ export const polyCopyTradeTargets = pgTable(
       .notNull()
       .default("5.00"),
     /**
-     * Execution mode for this target. `live` routes orders to the CLOB.
-     * `paper` routes orders to the `agent-next/polymarket-paper-trader`
-     * sidecar — same algorithm, same ledger, same redemption listener,
-     * but no real USDC spent. See `proj.poly-paper-trading`.
-     */
-    mode: text("mode").notNull().default("live"),
-    /**
      * Per-target sizing-policy kind. `'auto'` (default) preserves legacy
      * behavior: `buildSizingPolicy` infers `target_percentile_scaled` when a
      * curated wallet snapshot exists, else `min_bet`. Explicit kinds let
@@ -100,10 +93,6 @@ export const polyCopyTradeTargets = pgTable(
     check(
       "poly_copy_trade_targets_max_bet_positive",
       sql`${table.mirrorMaxUsdcPerTrade} > 0`
-    ),
-    check(
-      "poly_copy_trade_targets_mode_check",
-      sql`${table.mode} IN ('live','paper')`
     ),
     check(
       "poly_copy_trade_targets_sizing_policy_kind_check",

@@ -395,8 +395,7 @@ export function planMirrorFromFill(input: PlanMirrorInput): MirrorPlan {
     client_order_id,
     config.placement,
     decision.position_branch,
-    normalizedPrice.price,
-    config.mode
+    normalizedPrice.price
   );
 
   return {
@@ -539,7 +538,7 @@ type BranchDecision =
     }
   | {
       kind: "place";
-      reason: "ok" | "mode_paper" | "layer_scale_in" | "hedge_followup";
+      reason: "ok" | "layer_scale_in" | "hedge_followup";
       position_branch: PositionBranch;
       sizing: SizingResult;
       wrong_side_holding_detected: boolean;
@@ -659,7 +658,7 @@ function decideMirrorBranch(
   // per-fill notional that drives the other policies.
   return {
     kind: "place",
-    reason: config.mode === "paper" ? "mode_paper" : "ok",
+    reason: "ok",
     position_branch: "new_entry",
     sizing:
       config.sizing.kind === "position_gap"
@@ -924,9 +923,10 @@ function applyFollowupSizing(params: {
 /**
  * Build a canonical `OrderIntent` from the fill + target config.
  * Mirror size is the selected sizing-policy output, never an adapter concern.
- * `mode` is stamped into `attributes.mode` as observability/audit metadata
- * only — see `PAPER_DISPATCH_IS_ENV_ONLY` in poly-trade-executor.ts. The
- * executor routes on `PAPER_ENFORCE_MODE` (env), never on this attribute.
+ * The planner is mode-agnostic — execution mode is stamped by the ledger from
+ * `PAPER_ENFORCE_MODE` env (MODE_STAMPED_AT_LEDGER_FROM_ENV in
+ * order-ledger.ts). Pair with `PAPER_DISPATCH_IS_ENV_ONLY` in
+ * poly-trade-executor.ts.
  */
 function buildIntent(
   fill: PlanMirrorInput["fill"],
@@ -934,8 +934,7 @@ function buildIntent(
   client_order_id: `0x${string}`,
   policy: PlacementPolicy,
   position_branch: PositionBranch,
-  limit_price: number,
-  mode: "live" | "paper"
+  limit_price: number
 ): OrderIntent {
   const placement: "limit" | "market_fok" =
     policy.kind === "mirror_limit" ? "limit" : "market_fok";
@@ -960,7 +959,6 @@ function buildIntent(
       target_wallet: fill.target_wallet,
       placement,
       position_branch,
-      mode,
       title:
         typeof fill.attributes?.title === "string"
           ? fill.attributes.title

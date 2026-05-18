@@ -68,15 +68,21 @@ export interface LedgerRow {
    */
   billing_account_id: string;
   /**
-   * Execution mode stamped on the row at decision-time. `live` rows are real
-   * CLOB orders; `paper` rows are simulated by the paper sidecar but otherwise
-   * participate in cap accounting identically. Schema default is `'live'`
-   * (migration 0049) so legacy rows surface as `live`.
+   * Execution mode stamped on the row at write-time by the ledger
+   * (MODE_STAMPED_AT_LEDGER_FROM_ENV — `order-ledger.ts`). `live` rows are
+   * real CLOB orders; `paper` rows are simulated by the paper sidecar but
+   * otherwise participate in cap accounting identically. Schema default is
+   * `'live'` (migration 0049); migration 0053 self-heals pre-cutover cand-a
+   * / preview rows.
    */
   mode: LedgerMode;
 }
 
-/** Execution mode stamped on every fill row. Inherited from the target row. */
+/**
+ * Execution mode stamped on every fill / decision row. Sourced from the
+ * ledger's `paperEnforceMode` dep — env is the single authority. Pair with
+ * `PAPER_DISPATCH_IS_ENV_ONLY` (poly-trade-executor.ts).
+ */
 export type LedgerMode = "live" | "paper";
 
 /**

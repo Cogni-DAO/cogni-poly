@@ -933,6 +933,12 @@ function createContainer(): Container {
           targetSource: copyTradeTargetSource,
           startPollForTarget: (enumeratedTarget) => {
             const targetWallet = enumeratedTarget.targetWallet;
+            // MODE_STAMPED_AT_LEDGER_FROM_ENV — the ledger reads
+            // PAPER_ENFORCE_MODE once at construction and stamps every fill /
+            // decision row with the env-derived mode. No need to thread mode
+            // through `MirrorTargetConfig`; the planner + pipeline are mode-
+            // agnostic. Pair with PAPER_DISPATCH_IS_ENV_ONLY
+            // (poly-trade-executor.ts).
             const target = buildMirrorTargetConfig({
               targetWallet,
               billingAccountId: enumeratedTarget.billingAccountId,
@@ -940,16 +946,6 @@ function createContainer(): Container {
               mirrorFilterPercentile: enumeratedTarget.mirrorFilterPercentile,
               mirrorMaxUsdcPerTrade: enumeratedTarget.mirrorMaxUsdcPerTrade,
               sizingPolicyKind: enumeratedTarget.sizingPolicyKind,
-              // PAPER_DISPATCH_IS_ENV_ONLY — see poly-trade-executor.ts. The
-              // executor routes solely on `PAPER_ENFORCE_MODE`; the per-target
-              // `mode` column on `poly_copy_trade_targets` is advisory metadata
-              // (no longer a dispatch hook). We mirror that here: stamp the
-              // effective execution mode from env alone, ignoring
-              // `enumeratedTarget.mode`. The value flows through
-              // `MirrorTargetConfig.mode` → `intent.attributes.mode` (audit) +
-              // DB writes (`poly_copy_trade_{fills,decisions}.mode`), so paper
-              // and live rows are correctly labeled for analytics.
-              mode: env.PAPER_ENFORCE_MODE === "paper" ? "paper" : "live",
             });
             const source = createPolymarketChainActivitySource({
               publicClient: chainPublicClient,

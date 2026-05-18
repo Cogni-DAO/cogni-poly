@@ -46,7 +46,6 @@ const CONFIG: MirrorTargetConfig = {
   target_wallet: TARGET_WALLET,
   billing_account_id: "00000000-0000-4000-b000-000000000000",
   created_by_user_id: "00000000-0000-4000-a000-000000000001",
-  mode: "live",
   sizing: {
     kind: "min_bet",
     max_usdc_per_condition: 1.0,

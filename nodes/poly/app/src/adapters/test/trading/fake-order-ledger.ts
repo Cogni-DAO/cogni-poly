@@ -46,6 +46,13 @@ export interface FakeOrderLedgerConfig {
   initial?: LedgerRow[];
   /** If set, `snapshotState` throws internally and the fake returns the fail-closed shape. */
   failConfigRead?: boolean;
+  /**
+   * Mirrors `OrderLedgerDeps.paperEnforceMode` on the Drizzle adapter
+   * (MODE_STAMPED_AT_LEDGER_FROM_ENV). Every `insertPending` stamps
+   * `mode = paperEnforceMode === 'paper' ? 'paper' : 'live'`. Tests that
+   * exercise paper-flow behavior set this; default is `undefined` → 'live'.
+   */
+  paperEnforceMode?: "paper" | undefined;
 }
 
 /**
@@ -156,10 +163,13 @@ export class FakeOrderLedger implements OrderLedger {
   readonly rows: LedgerRow[];
   readonly decisions: RecordDecisionInput[] = [];
   failConfigRead: boolean;
+  private readonly effectiveMode: "live" | "paper";
 
   constructor(config?: FakeOrderLedgerConfig) {
     this.rows = [...(config?.initial ?? [])];
     this.failConfigRead = config?.failConfigRead ?? false;
+    this.effectiveMode =
+      config?.paperEnforceMode === "paper" ? "paper" : "live";
   }
 
   async snapshotState(target_id: string): Promise<StateSnapshot> {
@@ -301,14 +311,6 @@ export class FakeOrderLedger implements OrderLedger {
       attrs.source_fill_id = input.intent.attributes.source_fill_id;
     }
     const now = new Date();
-    // Mirror the Drizzle schema default (`live`) when the intent doesn't carry
-    // an explicit mode override. Paper rows surface as `paper` in the fake too.
-    const modeFromIntent =
-      typeof input.intent.attributes?.mode === "string"
-        ? input.intent.attributes.mode
-        : null;
-    const mode: LedgerRow["mode"] =
-      modeFromIntent === "paper" ? "paper" : "live";
     this.rows.push({
       target_id: input.target_id,
       fill_id: input.fill_id,
@@ -322,7 +324,8 @@ export class FakeOrderLedger implements OrderLedger {
       created_at: now,
       updated_at: now,
       billing_account_id: input.billing_account_id,
-      mode,
+      // MODE_STAMPED_AT_LEDGER_FROM_ENV — mirrors the Drizzle ledger.
+      mode: this.effectiveMode,
     });
   }
 

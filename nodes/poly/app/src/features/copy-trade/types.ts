@@ -203,8 +203,6 @@ export const MirrorTargetConfigSchema = z.object({
   billing_account_id: z.string(),
   /** RLS key column. FK → users.id — owner of this tracked target. */
   created_by_user_id: z.string(),
-  /** `live` → PolymarketClobAdapter; `paper` → paper adapter. */
-  mode: z.enum(["live", "paper"]),
   /** Per-target sizing policy. See SizingPolicySchema. */
   sizing: SizingPolicySchema,
   /**
@@ -417,7 +415,6 @@ export type RuntimeState = z.infer<typeof RuntimeStateSchema>;
  */
 export const MirrorReasonSchema = z.enum([
   "already_placed",
-  "mode_paper",
   "market_unknown",
   "ok",
   /** SELL fill where the operator holds no position — skip, do not open a short. */
@@ -499,7 +496,7 @@ export type MirrorReason = z.infer<typeof MirrorReasonSchema>;
 export type MirrorPlan =
   | {
       kind: "place";
-      reason: "ok" | "mode_paper" | "layer_scale_in" | "hedge_followup";
+      reason: "ok" | "layer_scale_in" | "hedge_followup";
       position_branch: PositionBranch;
       intent: OrderIntent;
       /**

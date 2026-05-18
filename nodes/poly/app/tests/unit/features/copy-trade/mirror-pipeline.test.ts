@@ -42,7 +42,6 @@ const BASE_TARGET: MirrorTargetConfig = {
   target_wallet: TARGET_WALLET,
   billing_account_id: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
   created_by_user_id: TEST_USER_ID_1,
-  mode: "live",
   sizing: {
     kind: "min_bet",
     max_usdc_per_condition: 5,
@@ -122,7 +121,6 @@ describe("mirror-pipeline.runMirrorTick — idempotent re-run", () => {
           updated_at: new Date(),
           synced_at: null,
           billing_account_id: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
-          mode: "live",
         },
       ],
     });
@@ -645,7 +643,6 @@ describe("mirror-pipeline.runMirrorTick — BUY fill smoke", () => {
           updated_at: new Date(),
           synced_at: null,
           billing_account_id: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
-          mode: "live",
         },
       ],
     });
@@ -999,7 +996,6 @@ describe("mirror-pipeline.runMirrorTick — bug.5048 target dominance + wrong-si
           updated_at: new Date(),
           synced_at: null,
           billing_account_id: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
-          mode: "live",
         },
       ],
     });

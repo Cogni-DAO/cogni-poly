@@ -185,7 +185,6 @@ export const PATCH = wrapRouteHandlerWithLogging<{
         target: {
           target_id: row.id,
           target_wallet: row.target_wallet,
-          mode: "live",
           mirror_usdc: Number(row.mirror_max_usdc_per_trade),
           mirror_filter_percentile: row.mirror_filter_percentile,
           mirror_max_usdc_per_trade: Number(row.mirror_max_usdc_per_trade),

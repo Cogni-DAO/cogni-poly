@@ -939,11 +939,6 @@ async function processSellFill(args: {
       source_fill_id: fill.fill_id,
       target_wallet: fill.target_wallet,
       position_branch: "sell_close",
-      // Advisory metadata only — see PAPER_DISPATCH_IS_ENV_ONLY in
-      // poly-trade-executor.ts. Stamped on the intent + ledger row so Loki
-      // queries can filter by execution_mode, but the executor never
-      // dispatches on this value. Routing is env-driven (PAPER_ENFORCE_MODE).
-      mode: deps.target.mode,
     },
   };
 
@@ -1310,7 +1305,6 @@ function buildDecisionIntentBlob(
     fill_size_usdc_target: fill.size_usdc,
     fill_price_target: fill.price,
     mirror_usdc: nominalSizeUsdc(target.sizing),
-    mode: target.mode,
     client_order_id,
     ...extra,
   };

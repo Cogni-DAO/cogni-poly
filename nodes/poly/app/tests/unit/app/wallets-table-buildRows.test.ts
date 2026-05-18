@@ -23,7 +23,6 @@ function target(): PolyCopyTradeTarget {
   return {
     target_id: "11111111-1111-4111-8111-111111111111",
     target_wallet: TARGET_WALLET,
-    mode: "live",
     mirror_usdc: 5,
     mirror_filter_percentile: 75,
     mirror_max_usdc_per_trade: 5,

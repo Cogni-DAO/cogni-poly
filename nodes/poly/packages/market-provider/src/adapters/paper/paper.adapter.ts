@@ -50,8 +50,8 @@ const DEFAULT_SIDECAR_BASE_URL = "http://localhost:9100";
 
 export interface PaperAdapterConfig extends MarketProviderConfig {
   /**
-   * The underlying platform this paper adapter simulates. Labels telemetry and
-   * downstream `attributes.mode`-grouped queries.
+   * The underlying platform this paper adapter simulates. Used as a label on
+   * telemetry emitted by the sidecar wrapper.
    */
   providerIdentity?: MarketProvider;
   /**
