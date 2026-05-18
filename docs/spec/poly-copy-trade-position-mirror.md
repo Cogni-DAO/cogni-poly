@@ -281,6 +281,7 @@ Binding when this spec ships. None are enforced today (status: draft).
 - `STATE_VERSION_MONOTONIC_PER_BLOCK` — same `last_block_number` + same `last_event_index` ⇒ same `cumulative_shares` / `cumulative_cost_usdc`. Replay determinism.
 - `GAP_DRIVES_EVERYTHING` — `client_order_id`, sizing, limit price, and cancel-decision are all derived from a `(gap, target_state)` tuple. No fill-history references in the placement path.
 - `GAP_CONSULTS_BOTH_LEGS` — `applyPositionGapSizing` reads `our_qty_shares` for the fill token from _either_ `our_token_id` _or_ `opposite_token_id` if either matches. The current Phase 2 implementation only checks `our_token_id` (see §"Intelligent-monitoring gaps" #2.1); the one-line fix lives in Phase 2 cleanup, not Phase 3. Without it, two-leg holdings over-state the gap by `opposite_qty_shares`.
+- `GAP_UPPER_BOUND_VIA_VWAP` — `position_gap` passes `+Infinity` as the per-fill ceiling, so the planner's own math does not cap `intent_usdc`. The de-facto upper bound comes from the upstream vwap gate: `fill.price ≤ target_vwap_on_token × (1 + vwap_tolerance)`. Composed with `target_shares × target_vwap = target_token_cost ≤ Σ target_book_cost`, this yields `intent_usdc ≤ capital_alloc_usdc × (1 + vwap_tolerance)` on any placed fill. **Disabling or widening `vwap_tolerance` removes the only ceiling on per-fill cost.** Edge: if `target_vwap_on_token` is undefined (no per-token fill history visible) the vwap gate fail-opens and this bound does not hold — currently latent (Σ-guard fail-closes most such cases), tracked here so it isn't relearned.
 
 ## Pointers
 
@@ -312,6 +313,8 @@ Binding when this spec ships. None are enforced today (status: draft).
   ```
 
   Planner passes `+Infinity` as the ceiling to `applyMarketFloors` so per-fill intent can exceed `alloc` when target averages up past their cost-basis VWAP. `alloc` is the per-target whole-book budget, NOT a per-trade ceiling.
+
+  **Why an unbounded ceiling is safe (`GAP_UPPER_BOUND_VIA_VWAP`).** The upstream `vwap_floor_breach` gate enforces `fill.price ≤ target_vwap_on_token × (1 + vwap_tolerance)`. Combined with `target_shares × target_vwap = target_token_cost ≤ Σ target_book_cost` and `scale = alloc / Σ`, the math collapses to `intent_usdc ≤ alloc × (1 + vwap_tolerance)` on any placed fill. With the default `vwap_tolerance = 0.005`, per-fill is bounded at `alloc × 1.005`. The vwap gate is therefore load-bearing: disable or widen it and the only ceiling on per-fill cost disappears. Edge case — if `target_vwap_on_token` is undefined the gate fail-opens; today the Σ-guard fail-closes most such cases but it is not an exhaustive backstop (see invariant).
 
   **Derived conviction threshold (no explicit knob):** `target_position_threshold = market_min × target_book / alloc`. Floats with target's book size and our alloc. Replaces both the legacy pXX statistical filter (different conviction model — kept side-by-side under `target_percentile_scaled` until A/B picks a winner) and any hand-set `min_target_position_usdc`.
 
