@@ -16,7 +16,7 @@ At each phase: search the resource roots below for the relevant guides, specs, a
 - `.claude/skills/` — executable skills
 - `.claude/commands/` — slash commands
 - `work/charters/` — project charters and scope
-- `work/items/` — legacy reference corpus; active work items live at `https://poly.cognidao.org/api/v1/work/items`
+- Active work items live at `https://poly.cognidao.org/api/v1/work/items` (CRUD via Bearer auth)
 - `docs/guides/` — how-to guides
 - `docs/spec/` — architecture and design specs
 - `docs/runbooks/` — operational procedures
@@ -26,17 +26,18 @@ At each phase: search the resource roots below for the relevant guides, specs, a
 ## Phase 1 — Implement
 
 1. Worktree off `main`. Read the root `AGENTS.md` and the `AGENTS.md` files for every dir you'll touch.
-2. Discover the poly node and register if you need a Bearer token:
+2. Bearer token: use `$COGNI_API_KEY_PROD` from `.env.cogni` (poly-scoped). If missing, register against the poly node and save the result:
    ```bash
    BASE=https://poly.cognidao.org
-   curl $BASE/.well-known/agent.json | jq .registrationUrl
-   API_KEY=$(curl -s -X POST $BASE/api/v1/agent/register \
+   curl -sS -X POST $BASE/api/v1/agent/register \
      -H "Content-Type: application/json" \
-     -d '{"name": "my-agent"}' | jq -r .apiKey)
+     -d '{"name": "<agent-name>"}'
+   # → save apiKey as COGNI_API_KEY_PROD, userId as COGNI_USER_ID_PROD,
+   #   billingAccountId as COGNI_BILLING_ACCOUNT_PROD in .env.cogni
    ```
 3. **Tie your work to exactly one work item. 1 work item ≈ 1 PR.** Prefer adopting an existing item over creating a new one (anti-sprawl).
    - Already assigned? Use it.
-   - Looking for work? Query `GET $BASE/api/v1/work/items?statuses=needs_implement,needs_design` first. Use `work/items/` only as legacy reference.
+   - Looking for work? Query `GET $BASE/api/v1/work/items?statuses=needs_implement,needs_design` first.
    - New request that fits nothing existing? Create it:
      ```bash
      curl -X POST $BASE/api/v1/work/items \
