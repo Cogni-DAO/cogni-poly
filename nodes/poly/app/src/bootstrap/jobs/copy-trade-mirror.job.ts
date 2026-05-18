@@ -106,16 +106,20 @@ type SizingPolicyKindInput =
   | "position_gap";
 
 /**
- * Default per-target share allocation for `position_gap`. Justified by the
- * swisstony ATP Sinner/Ruud math (2026-05-17): target's final position was
- * 88,931 sh Sinner / 14,925 sh Ruud. At `1e-4`, desired = 8.89 sh / 1.49 sh —
- * a $0.85 Sinner fill maps to ~$7.55 of intent (sits cleanly inside the v0
- * $5–$15 per-trade caps), while a $0.16 Ruud fill maps to ~$0.24 and skips
- * `below_market_min`. Lower scales (1e-5) collapse both legs below the market
- * floor; higher scales (1e-3) blow past the per-leg cap on a typical target
- * position. Per-target override lives on the `position_gap` policy itself.
+ * Default per-target share allocation for `position_gap`. Bumped 5× from
+ * `1e-4` to `5e-4` on 2026-05-18 after preview/GAP (swisstony, p80/$15)
+ * produced 8,365 decisions / 0 placements over 24h: the original Sinner/Ruud
+ * calibration (`1e-4`) was anchored on an $80k+ outlier position. Swisstony's
+ * typical token cost-basis is $1–7k (charter `chr.poly-algo-tenant-matrix`
+ * audit), so `1e-4` collapses ~70% of fills below `market_min` before sizing
+ * even runs. At `5e-4`:
+ *   - $2k cost-basis × 5e-4 / $0.50 = 2 sh desired → ~$1 gap → clears floor
+ *   - $7k cost-basis × 5e-4 / $0.50 = 7 sh desired → ~$3.50 gap → clears floor
+ *   - $80k Sinner outlier still clamps at the `$15` per-leg cap — no regression
+ * Per-target override lives on the `position_gap` policy itself; a per-target
+ * DB column is a follow-up if/when targets need different scales.
  */
-const DEFAULT_POSITION_GAP_TARGET_SCALE = 1e-4;
+const DEFAULT_POSITION_GAP_TARGET_SCALE = 5e-4;
 
 function minBetPolicy(maxUsdcPerCondition: number): SizingPolicy {
   return {
