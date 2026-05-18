@@ -252,6 +252,8 @@ Anything that could run independently → Shape A instead.
 
 - [ ] If host needs to call the sidecar, add `<NAME>_URL: http://localhost:<port>` via a ConfigMap patch in the same overlay.
 
+- [ ] **Loki collection is automatic when the container writes structured JSON to stdout/stderr.** The cluster's log-collector picks up every container under `{namespace=~"cogni-.*"}` and parses `| json`; the container's own name becomes the `container=` label. No DaemonSet patch, no annotation. Verify after first deploy with `scripts/loki-query.sh '{namespace="cogni-candidate-a", container="<your-sidecar>"}'` — if streams return, you're done. If empty, the container is logging to a file instead of stdout (fix the app, not the infra). Emit Pino/`structlog`-shaped JSON so adapter errors classify cleanly via `errorCode`/`errorClass` labels — bare `throw new Error("…")` paths vanish into a generic bucket (bug.5060).
+
 ### Production overlay decision
 
 Decide explicitly whether the image runs in production. The paper-trading sidecar deliberately does **not** ship to prod — its overlay simply omits the `images:` entry for the sidecar. `promote-build-payload.sh` exits-2 (legitimate skip, not error) when there's no matching `images:` entry; the deploy unit's `promoted_apps` still reflects the apps that actually wrote.

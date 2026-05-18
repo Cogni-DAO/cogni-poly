@@ -21,7 +21,10 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { PaperAdapter } from "../src/adapters/paper/paper.adapter.js";
+import {
+  PaperAdapter,
+  PaperAdapterError,
+} from "../src/adapters/paper/paper.adapter.js";
 import type { OrderIntent } from "../src/domain/order.js";
 import type { MarketProviderPort } from "../src/port/market-provider.port.js";
 
@@ -84,7 +87,7 @@ describe("PaperAdapter — sidecar IPC", () => {
     });
   });
 
-  it("placeOrder rejects when sidecar returns non-2xx", async () => {
+  it("placeOrder rejects when sidecar returns non-2xx — with structured details (bug.5060)", async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValue(new Response("boom", { status: 500 }));
@@ -92,9 +95,60 @@ describe("PaperAdapter — sidecar IPC", () => {
       sidecarBaseUrl: "http://sidecar:9100",
       fetchImpl,
     });
-    await expect(adapter.placeOrder(makeIntent())).rejects.toThrow(
-      /place-order failed: 500/
-    );
+    try {
+      await adapter.placeOrder(makeIntent());
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(PaperAdapterError);
+      const e = err as PaperAdapterError;
+      expect(e.message).toMatch(/place-order failed: 500/);
+      expect(e.details).toEqual({
+        error_code: "paper_sidecar_http_error",
+        reason: "boom",
+        error_class: "PaperAdapterError",
+        operation: "placeOrder",
+        http_status: 500,
+        response_body: "boom",
+      });
+    }
+  });
+
+  it("placeOrder throws paper_intent_invalid with Zod reason when intent fails the request schema (bug.5060)", async () => {
+    const fetchImpl = vi.fn();
+    const adapter = new PaperAdapter({
+      sidecarBaseUrl: "http://sidecar:9100",
+      fetchImpl,
+    });
+    // size_usdc=0 violates `z.number().positive()` — must throw BEFORE
+    // hitting the network and surface a typed reason.
+    try {
+      await adapter.placeOrder(makeIntent({ size_usdc: 0 }));
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(PaperAdapterError);
+      const e = err as PaperAdapterError;
+      expect(e.details.error_code).toBe("paper_intent_invalid");
+      expect(e.details.operation).toBe("placeOrder");
+      expect(e.details.reason).toMatch(/size_usdc/);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
+  });
+
+  it("placeOrder throws paper_sidecar_unavailable when fetch rejects (network error, bug.5060)", async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
+    const adapter = new PaperAdapter({
+      sidecarBaseUrl: "http://sidecar:9100",
+      fetchImpl,
+    });
+    try {
+      await adapter.placeOrder(makeIntent());
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(PaperAdapterError);
+      const e = err as PaperAdapterError;
+      expect(e.details.error_code).toBe("paper_sidecar_unavailable");
+      expect(e.details.reason).toBe("ECONNREFUSED");
+    }
   });
 
   it("getOrder returns { found } on 200 and { status: 'not_found' } on 404", async () => {
