@@ -1,0 +1,12 @@
+{
+  "report_path": "nodes/poly/research/paper-twin-diff/2026-05-18T00-27-57/report.html",
+  "bucket_breakdown": "n/a (synthetic validation run, not a real twin-vs-PROD diff)",
+  "primary_class": "n/a",
+  "primary_confidence": null,
+  "primary_one_liner": "Synthetic exercise of the tool end-to-end on candidate-a orphan tenants (20fdb57a vs acd63233) to validate the HTML/bundle/findings write path after the toIso 500 fix in PR #93. Not a real twin diff — both sides are cand-a; twin side filters mode=paper which returns 0 because cand-a orphan rows all stamp mode=live per PAPER_DISPATCH_IS_ENV_ONLY.",
+  "secondary_class": null,
+  "secondary_confidence": null,
+  "secondary_one_liner": null,
+  "recommended_next_fix": "After PR #93 merges + preview/PROD redeploy, re-invoke /paper-trade-diff-analysis with default env vars (POLY_PREVIEW_TRUST_TWIN_* for twin, POLY_PROD_TENANT_* for live) and PAPER_TWIN_DIFF_SINCE=2026-05-17T20:32:00Z. That produces the first interpretable diff.",
+  "authored_at": "2026-05-18T00:30:00Z"
+}

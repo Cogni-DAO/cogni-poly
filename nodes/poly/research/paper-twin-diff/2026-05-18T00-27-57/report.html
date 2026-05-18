@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Paper-Twin Diff · 2026-05-18T00:27:57.944Z</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0 auto; padding: 24px; max-width: 1320px; }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+.sub { color: #94a3b8; font-size: 13px; margin-bottom: 18px; }
+.sub a { color: #60a5fa; text-decoration: none; }
+.sub code { background: #131826; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+.kpis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 12px 0 18px; }
+.kpi { background: #131826; border: 1px solid #1f2937; border-radius: 8px; padding: 14px 16px; }
+.kpi h3 { margin: 0 0 6px; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.kpi .big { font-size: 24px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi .row { display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; margin-top: 6px; }
+.kpi.twin { border-left: 3px solid #3b82f6; }
+.kpi.live { border-left: 3px solid #10b981; }
+.kpi.delta { border-left: 3px solid #f59e0b; }
+.pos { color: #22c55e; } .neg { color: #ef4444; }
+.bucket-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 22px; }
+.bucket { background: #131826; border: 1px solid #1f2937; border-radius: 6px; padding: 10px 12px; text-align: center; }
+.bucket .n { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bucket .l { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+.bucket.both_open  { border-left: 3px solid #34d399; }
+.bucket.twin_only  { border-left: 3px solid #60a5fa; }
+.bucket.live_only  { border-left: 3px solid #f87171; }
+.bucket.both_closed { border-left: 3px solid #6b7280; }
+.takeaway { background: linear-gradient(180deg, #1f1410 0%, #131826 100%); border: 1px solid #f59e0b; border-radius: 8px; padding: 18px 22px; margin: 12px 0 26px; }
+.takeaway h2 { margin: 0 0 12px; font-size: 13px; color: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.takeaway .placeholder { color: #64748b; font-style: italic; font-size: 13px; }
+table.markets { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+table.markets th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: 7px 9px; background: #0e1422; border-bottom: 1px solid #1f2937; position: sticky; top: 0; }
+table.markets td { padding: 7px 9px; border-bottom: 1px solid #1f2937; }
+table.markets td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.markets td.market { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: #94a3b8; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+table.markets td.state { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.state-both_open { color: #34d399; }
+.state-twin_only { color: #60a5fa; }
+.state-live_only { color: #f87171; }
+.state-both_closed { color: #6b7280; }
+.footer-note { margin-top: 24px; padding-top: 18px; border-top: 1px solid #1f2937; font-size: 11px; color: #6b7280; }
+.footer-note a { color: #60a5fa; }</style>
+</head>
+<body>
+<h1>Paper-Twin Diff Report</h1>
+<div class="sub">
+  Twin (paper, preview): <code>20fdb57a-4db2-4669-8abc-20cf4d6b8862</code> · Live (PROD): <code>acd63233-764b-46a6-8d91-b645cc3417bd</code> · Target wallet: <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code><br/>
+  Captured: <code>2026-05-18T00:27:57.944Z</code> · Window: since=<code>2026-05-17T20:32:00Z</code> until=<code>now</code><br/>
+  Project: <a href="../../../../work/projects/proj.poly-paper-trading.md">proj.poly-paper-trading</a> · Spec: <a href="../../../../docs/spec/poly-copy-trade-execution.md">poly-copy-trade-execution</a> · Skill: <code>/paper-trade-diff-analysis</code>
+</div>
+
+<!-- TAKEAWAY:START -->
+<div class="takeaway">
+  <h2>↗ Synthetic validation run · not a real twin diff</h2>
+  <div style="color:#e5e7eb; font-size:13px; line-height:1.55;">
+    This report is the inaugural artifact for the <code>paper-twin-diff</code> tool, produced as part of PR #93 <code>/validate-candidate</code>. <strong>It is not a real twin-vs-PROD comparison.</strong> Both "twin" and "live" sides point at candidate-a orphan tenants (<code>20fdb57a</code> and <code>acd63233</code>), so the diff has no interpretive meaning — its only purpose was to confirm the tool's HTML + bundle + findings write path works end-to-end after the 500 fix in <code>copy-trade-pnl-service.ts</code> (string-vs-Date handling in <code>toIso</code>).
+    <div class="fix" style="margin-top:14px; padding-top:12px; border-top:1px solid #f59e0b33;">
+      <strong style="color:#34d399">First real diff:</strong> happens after PR #93 merges + preview/PROD redeploy with the fix. The skill workflow at <code>.claude/skills/paper-trade-diff-analysis/SKILL.md</code> will run end-to-end with <code>POLY_PREVIEW_TRUST_TWIN_*</code> (fb8f65d5 preview swisstony) vs <code>POLY_PROD_TENANT_*</code> (207795de PROD Derek), windowed to twin-registration time <code>2026-05-17T20:32Z</code>.
+    </div>
+  </div>
+</div>
+<!-- TAKEAWAY:END -->
+
+<div class="kpis">
+  <div class="kpi twin">
+    <h3>Twin · paper · preview</h3>
+    <div class="big">0 <span style="font-size:12px;color:#94a3b8">fills</span></div>
+    <div class="row"><span>markets</span><span>0</span></div>
+    <div class="row"><span>open positions</span><span>0</span></div>
+    <div class="row"><span>intent $</span><span>$0.00</span></div>
+    <div class="row"><span>realized $</span><span>$0.00</span></div>
+  </div>
+  <div class="kpi live">
+    <h3>Live · PROD</h3>
+    <div class="big">51 <span style="font-size:12px;color:#94a3b8">fills</span></div>
+    <div class="row"><span>markets</span><span>32</span></div>
+    <div class="row"><span>open positions</span><span>17</span></div>
+    <div class="row"><span>intent $</span><span>$136.79</span></div>
+    <div class="row"><span>realized $</span><span>$49.61</span></div>
+  </div>
+  <div class="kpi delta">
+    <h3>Δ · twin − live</h3>
+    <div class="big neg">-$49.61</div>
+    <div class="row"><span>Δ intent $</span><span class="neg">-$136.79</span></div>
+    <div class="row"><span>Δ fills</span><span>-51</span></div>
+    <div class="row"><span>fill overlap (2·min/total)</span><span>0.0%</span></div>
+  </div>
+</div>
+
+<div class="bucket-strip">
+  <div class="bucket both_open"><div class="n">0</div><div class="l">both open</div></div>
+  <div class="bucket twin_only"><div class="n">0</div><div class="l">twin only</div></div>
+  <div class="bucket live_only"><div class="n">17</div><div class="l">live only</div></div>
+  <div class="bucket both_closed"><div class="n">15</div><div class="l">both closed</div></div>
+</div>
+
+<h2 style="font-size:14px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin:24px 0 6px">Top 25 markets by |Δ realized $|</h2>
+<table class="markets">
+  <thead>
+    <tr>
+      <th>market_id</th><th>state</th>
+      <th class="num">twin fills</th><th class="num">live fills</th><th class="num">Δ fills</th>
+      <th class="num">twin intent $</th><th class="num">live intent $</th><th class="num">Δ intent $</th>
+      <th class="num">twin real $</th><th class="num">live real $</th><th class="num">Δ real $</th>
+    </tr>
+  </thead>
+  <tbody>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0xfaf35c60218d102463018fdb521cf120884ef08e4ce139f9b176619b8a9e0b87">8fdb521cf120884ef08e4ce139f9b176619b8a9e0b87</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">2</td>
+  <td class="num neg">-2</td>
+  <td class="num">—</td>
+  <td class="num">$4.90</td>
+  <td class="num neg">-$4.90</td>
+  <td class="num">—</td>
+  <td class="num">$4.90</td>
+  <td class="num neg">-$4.90</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x24e1822ce95bd39aa19a01adea86b71f006e2503eb67b28beea96df3bd446732">01adea86b71f006e2503eb67b28beea96df3bd446732</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$4.66</td>
+  <td class="num neg">-$4.66</td>
+  <td class="num">—</td>
+  <td class="num">$4.66</td>
+  <td class="num neg">-$4.66</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x2776596baba0c8c2e27c50fae83035c8005f3ca3be9311070a35b5bf0c447efb">50fae83035c8005f3ca3be9311070a35b5bf0c447efb</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$4.47</td>
+  <td class="num neg">-$4.47</td>
+  <td class="num">—</td>
+  <td class="num">$4.47</td>
+  <td class="num neg">-$4.47</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x80a3b00a52532c070d2ec4a1c30eeff26f77f077aad3d6788a88b67594c59c03">c4a1c30eeff26f77f077aad3d6788a88b67594c59c03</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$4.37</td>
+  <td class="num neg">-$4.37</td>
+  <td class="num">—</td>
+  <td class="num">$4.37</td>
+  <td class="num neg">-$4.37</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x0022ddfbb65f8df399dde3384dc5f3fd277ef891c7e4915d5f3a041aab41766e">e3384dc5f3fd277ef891c7e4915d5f3a041aab41766e</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">2</td>
+  <td class="num neg">-2</td>
+  <td class="num">—</td>
+  <td class="num">$8.21</td>
+  <td class="num neg">-$8.21</td>
+  <td class="num">—</td>
+  <td class="num">$4.21</td>
+  <td class="num neg">-$4.21</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x3e133631f95ffb9bb2ef9caaee9f36ccb29a34eec5e172d29ad88a14298fe94e">9caaee9f36ccb29a34eec5e172d29ad88a14298fe94e</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">3</td>
+  <td class="num neg">-3</td>
+  <td class="num">—</td>
+  <td class="num">$10.75</td>
+  <td class="num neg">-$10.75</td>
+  <td class="num">—</td>
+  <td class="num">$4.00</td>
+  <td class="num neg">-$4.00</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x60aef3e6319a84b6ee2df875a0b145a98909e6b3d64cf07d1e534cfc3728d138">f875a0b145a98909e6b3d64cf07d1e534cfc3728d138</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">2</td>
+  <td class="num neg">-2</td>
+  <td class="num">—</td>
+  <td class="num">$4.75</td>
+  <td class="num neg">-$4.75</td>
+  <td class="num">—</td>
+  <td class="num">$3.50</td>
+  <td class="num neg">-$3.50</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0xadcc6a914047cf176b6ac977d80ad3608c0c80e5a1ddf8f844a0f6ab8615f617">c977d80ad3608c0c80e5a1ddf8f844a0f6ab8615f617</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">3</td>
+  <td class="num neg">-3</td>
+  <td class="num">—</td>
+  <td class="num">$7.15</td>
+  <td class="num neg">-$7.15</td>
+  <td class="num">—</td>
+  <td class="num">$2.63</td>
+  <td class="num neg">-$2.63</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x699a11c39257f280fc31f5af2261cd4fe81ed97cbab850ed1db3dcda93be4ab2">f5af2261cd4fe81ed97cbab850ed1db3dcda93be4ab2</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">5</td>
+  <td class="num neg">-5</td>
+  <td class="num">—</td>
+  <td class="num">$13.26</td>
+  <td class="num neg">-$13.26</td>
+  <td class="num">—</td>
+  <td class="num">$2.55</td>
+  <td class="num neg">-$2.55</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x4c7a0425f91021ccba703953c183e953a38eaa7a18a9670e32e54dffd7d007df">3953c183e953a38eaa7a18a9670e32e54dffd7d007df</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">3</td>
+  <td class="num neg">-3</td>
+  <td class="num">—</td>
+  <td class="num">$7.05</td>
+  <td class="num neg">-$7.05</td>
+  <td class="num">—</td>
+  <td class="num">$2.50</td>
+  <td class="num neg">-$2.50</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x66de2a2ba37d46bb698a0e80e7718293b44069ec821ce1088e1565579cdb72ad">0e80e7718293b44069ec821ce1088e1565579cdb72ad</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">2</td>
+  <td class="num neg">-2</td>
+  <td class="num">—</td>
+  <td class="num">$4.60</td>
+  <td class="num neg">-$4.60</td>
+  <td class="num">—</td>
+  <td class="num">$2.50</td>
+  <td class="num neg">-$2.50</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0xc6d96ff2d5f42099c1a11c29f30413a190c6dc283fcf6373e2efb44a11788c0a">1c29f30413a190c6dc283fcf6373e2efb44a11788c0a</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$1.66</td>
+  <td class="num neg">-$1.66</td>
+  <td class="num">—</td>
+  <td class="num">$1.66</td>
+  <td class="num neg">-$1.66</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0xd3e03250cdfe0df6507494c1f9f22136383d685102a1da4555b8b2d251a58102">94c1f9f22136383d685102a1da4555b8b2d251a58102</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$1.62</td>
+  <td class="num neg">-$1.62</td>
+  <td class="num">—</td>
+  <td class="num">$1.62</td>
+  <td class="num neg">-$1.62</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x2fac80276e97303a59320ce639af79825a8e5d2b177b2d39cf9140637f697315">0ce639af79825a8e5d2b177b2d39cf9140637f697315</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$1.55</td>
+  <td class="num neg">-$1.55</td>
+  <td class="num">—</td>
+  <td class="num">$1.55</td>
+  <td class="num neg">-$1.55</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x11cc81a9dde9fc5a42693f434f2a5ef57e4046333bda8da80841a0dfb423ced9">3f434f2a5ef57e4046333bda8da80841a0dfb423ced9</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$1.55</td>
+  <td class="num neg">-$1.55</td>
+  <td class="num">—</td>
+  <td class="num">$1.55</td>
+  <td class="num neg">-$1.55</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x5f0e69421b9c9fe4c918badb567470292c97eba6a2d0457f37291dc9c37f8cbb">badb567470292c97eba6a2d0457f37291dc9c37f8cbb</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$1.50</td>
+  <td class="num neg">-$1.50</td>
+  <td class="num">—</td>
+  <td class="num">$1.50</td>
+  <td class="num neg">-$1.50</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x902f40d1371bf28450fe0c83dfd0bb352069da00eeabf28122b28d634dea22c7">0c83dfd0bb352069da00eeabf28122b28d634dea22c7</td>
+  <td class="state state-live_only">live only</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$1.45</td>
+  <td class="num neg">-$1.45</td>
+  <td class="num">—</td>
+  <td class="num">$1.45</td>
+  <td class="num neg">-$1.45</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x82aa4c3bd56422ff13b392b6a220ed16d9492e6c63efa4ea178094513152f817">92b6a220ed16d9492e6c63efa4ea178094513152f817</td>
+  <td class="state state-both_closed">both closed</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$3.66</td>
+  <td class="num neg">-$3.66</td>
+  <td class="num">—</td>
+  <td class="num">$0.00</td>
+  <td class="num "> $0.00</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0xeb65e949ca82e5bdeb163fbbf7d5c54ec7f7d35530059e22ad241062e9f677b2">3fbbf7d5c54ec7f7d35530059e22ad241062e9f677b2</td>
+  <td class="state state-both_closed">both closed</td>
+  <td class="num">—</td>
+  <td class="num">2</td>
+  <td class="num neg">-2</td>
+  <td class="num">—</td>
+  <td class="num">$6.50</td>
+  <td class="num neg">-$6.50</td>
+  <td class="num">—</td>
+  <td class="num">$0.00</td>
+  <td class="num "> $0.00</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0xe1bce56173b5d19adedb62a49ec86c662083ea255cbf4c31fc5b2b55b514dffc">62a49ec86c662083ea255cbf4c31fc5b2b55b514dffc</td>
+  <td class="state state-both_closed">both closed</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$2.42</td>
+  <td class="num neg">-$2.42</td>
+  <td class="num">—</td>
+  <td class="num">$0.00</td>
+  <td class="num "> $0.00</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x887cb47e0dbaeae38e3f97ea773effcfb50608e661c59341faefccb37d060505">97ea773effcfb50608e661c59341faefccb37d060505</td>
+  <td class="state state-both_closed">both closed</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$2.60</td>
+  <td class="num neg">-$2.60</td>
+  <td class="num">—</td>
+  <td class="num">$0.00</td>
+  <td class="num "> $0.00</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x94a6d07339f420c514f417d1cd588669437171092ff8d198c01094e224feae9b">17d1cd588669437171092ff8d198c01094e224feae9b</td>
+  <td class="state state-both_closed">both closed</td>
+  <td class="num">—</td>
+  <td class="num">3</td>
+  <td class="num neg">-3</td>
+  <td class="num">—</td>
+  <td class="num">$7.30</td>
+  <td class="num neg">-$7.30</td>
+  <td class="num">—</td>
+  <td class="num">$0.00</td>
+  <td class="num "> $0.00</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0xe83becdec34836b9f52761b22de1a79bfad20f2ae9e38557890230a53bd856f8">61b22de1a79bfad20f2ae9e38557890230a53bd856f8</td>
+  <td class="state state-both_closed">both closed</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$1.15</td>
+  <td class="num neg">-$1.15</td>
+  <td class="num">—</td>
+  <td class="num">$0.00</td>
+  <td class="num "> $0.00</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0x4c0f58142dd9adda5626a985869d4b75070d15012382468daa6cd8d90641ccdc">a985869d4b75070d15012382468daa6cd8d90641ccdc</td>
+  <td class="state state-both_closed">both closed</td>
+  <td class="num">—</td>
+  <td class="num">2</td>
+  <td class="num neg">-2</td>
+  <td class="num">—</td>
+  <td class="num">$5.84</td>
+  <td class="num neg">-$5.84</td>
+  <td class="num">—</td>
+  <td class="num">$0.00</td>
+  <td class="num "> $0.00</td>
+</tr>
+<tr>
+  <td class="market" title="prediction-market:polymarket:0xeef2531a1237210efcd13f6bed7d51222d6901192b8dd710362291f00eda089c">3f6bed7d51222d6901192b8dd710362291f00eda089c</td>
+  <td class="state state-both_closed">both closed</td>
+  <td class="num">—</td>
+  <td class="num">1</td>
+  <td class="num neg">-1</td>
+  <td class="num">—</td>
+  <td class="num">$2.71</td>
+  <td class="num neg">-$2.71</td>
+  <td class="num">—</td>
+  <td class="num">$0.00</td>
+  <td class="num "> $0.00</td>
+</tr>
+  </tbody>
+</table>
+<div style="margin-top:10px;font-size:11px;color:#6b7280">…and 7 more markets in <a href="bundle.json">bundle.json</a></div>
+
+<div class="footer-note">
+  <a href="bundle.json">bundle.json</a> (AI read surface) · <a href="findings.json">findings.json</a> (LLM scratchpad) · Tool: <code>nodes/poly/scripts/paper-twin-diff.ts</code>
+</div>
+
+</body>
+</html>
