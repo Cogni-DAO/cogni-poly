@@ -95,6 +95,8 @@ Load multiple if you're crossing domains (e.g., a research view that drives a ta
 The markdown work-item corpus was retired on 2026-04-25 (PR #1241). Items now live in Doltgres and are read via the operator API:
 
 - [proj.poly-copy-trading](../../../work/projects/proj.poly-copy-trading.md) — full roadmap, open bugs, constraints (still markdown)
+- [chr.poly-copy-delta](../../../work/charters/POLY_COPY_DELTA.md) — failure-mode taxonomy (D1–D8 classes); every delta-minimizer report cites a row here
+- [chr.poly-algo-tenant-matrix](../../../work/charters/POLY_ALGO_TENANT_MATRIX.md) — per-(env, tenant) paper-trading accounts we operate for algo A/B; tells you which `POLY_<ENV>_TENANT_<ROLE>_*` env key drives which tenant, and which policies are under test
 - Active poly items: `GET https://cognidao.org/api/v1/work/items?node=poly&statuses=needs_implement,needs_design,in_review`
 - Specific item: `GET https://cognidao.org/api/v1/work/items/{id}` (e.g. `task.5012`, `task.0322`, `bug.5012`, `spike.5024`)
 
