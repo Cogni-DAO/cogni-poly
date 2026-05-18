@@ -1,5 +1,5 @@
 {
-  "id": "9a416149-1a90-4f95-86df-b3e18f66a87e",
+  "id": "a9fa8616-0b53-4362-a67e-2225e288aea3",
   "prevId": "29ffbc0e-856d-4163-9907-0f4c2810fe1e",
   "version": "7",
   "dialect": "postgresql",
@@ -4522,13 +4522,6 @@
           "notNull": true,
           "default": "'5.00'"
         },
-        "mode": {
-          "name": "mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'live'"
-        },
         "sizing_policy_kind": {
           "name": "sizing_policy_kind",
           "type": "text",
@@ -4605,10 +4598,6 @@
         "poly_copy_trade_targets_max_bet_positive": {
           "name": "poly_copy_trade_targets_max_bet_positive",
           "value": "\"poly_copy_trade_targets\".\"mirror_max_usdc_per_trade\" > 0"
-        },
-        "poly_copy_trade_targets_mode_check": {
-          "name": "poly_copy_trade_targets_mode_check",
-          "value": "\"poly_copy_trade_targets\".\"mode\" IN ('live','paper')"
         },
         "poly_copy_trade_targets_sizing_policy_kind_check": {
           "name": "poly_copy_trade_targets_sizing_policy_kind_check",

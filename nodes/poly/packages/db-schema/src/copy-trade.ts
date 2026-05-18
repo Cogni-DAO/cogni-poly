@@ -267,8 +267,11 @@ export const polyCopyTradeDecisions = pgTable(
      * MODE_STAMPED_AT_LEDGER_FROM_ENV — replaces the legacy advisory chain
      * `targets.mode → intent.attributes.mode → JSONB blob` which never
      * reached this column. Defaulted to `'live'` for legacy pre-cutover
-     * rows; migration 0053 self-heals cand-a/preview rows from the stored
-     * `intent->>'mode'` blob.
+     * rows; task.5003 ships NO retroactive backfill because the only
+     * candidate join key (`intent->>'mode' = 'paper'`) cannot distinguish
+     * "actually executed on paper sidecar" from "PROD-era target manually
+     * flipped to paper while the executor still routed live" — mislabeling
+     * real-money trades as paper is worse than the analytics gap.
      */
     mode: text("mode").notNull().default("live"),
   },

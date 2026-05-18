@@ -65,10 +65,10 @@ Task.5003 collapses to one source of truth:
 - **Consumers (read env at process start):**
   1. Executor factory — `PAPER_DISPATCH_IS_ENV_ONLY` (unchanged).
   2. Order-ledger — **new** `MODE_STAMPED_AT_LEDGER_FROM_ENV`; bootstrap passes the resolved value to `createOrderLedger`, which stamps `effectiveMode` on every `insertPending` + `recordDecision` insert.
-- **Removed:** `polyCopyTradeTargets.mode` column (migration 0054), `MirrorTargetConfig.mode`, `EnumeratedTarget.mode`, `UserTargetRow.mode`, `intent.attributes.mode`, the `mode_paper` `MirrorReason` variant, `mode` from the contract response, the `mode: "live"` PATCH hardcode.
-- **Backfill (migration 0053):** self-heals cand-a + preview rows by reading the already-stored `intent->>'mode'` JSONB blob (set by the now-deleted writer at the time those rows were inserted). PROD-safe by construction — PROD blobs say `'live'`, UPDATE is a no-op.
+- **Removed:** `polyCopyTradeTargets.mode` column (migration 0053), `MirrorTargetConfig.mode`, `EnumeratedTarget.mode`, `UserTargetRow.mode`, `intent.attributes.mode`, the `mode_paper` `MirrorReason` variant, `mode` from the contract response, the `mode: "live"` PATCH hardcode.
+- **No retroactive backfill.** An initial backfill draft would have flipped fills+decisions to `mode='paper'` where `decisions.intent->>'mode' = 'paper'`, but that join cannot distinguish actual paper execution from the pre-`PAPER_DISPATCH_IS_ENV_ONLY` "trapdoor era" (a PROD target manually PATCHed to `mode='paper'` would write `intent.mode='paper'` to JSONB while the executor still routed real-money to live CLOB). Mislabeling real trades as paper is worse than the analytics gap — pre-cutover paper rows on cand-a/preview stay labeled `'live'`; new activity rebuilds analytics correctly.
 
-Net effect: one authority, two truthful audit columns, three dead echoes gone. Research dashboards now reflect reality on paper-enforced envs.
+Net effect: one authority, two truthful audit columns going forward, three dead echoes gone, zero risk of data-integrity corruption on PROD.
 
 **Real gaps blocking the next phase** (each verified against code, NOT speculation):
 

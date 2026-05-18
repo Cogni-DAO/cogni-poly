@@ -80,9 +80,9 @@ Decisions same story.
 **Fix as landed (task.5003 / PR #98):**
 
 1. Establishes `MODE_STAMPED_AT_LEDGER_FROM_ENV` invariant — the order-ledger is the single write authority for the column. Bootstrap passes `serverEnv().PAPER_ENFORCE_MODE` to `createOrderLedger`, which resolves `effectiveMode` once at construction and stamps every `insertPending` + `recordDecision` insert with it.
-2. Migration `0053` self-heals existing cand-a/preview rows by reading the already-stored `intent->>'mode'` JSONB blob — PROD-safe by construction (PROD blobs say `'live'`, UPDATE is a no-op).
-3. Migration `0054` drops `poly_copy_trade_targets.mode` (never load-bearing, only misleading).
-4. Drops the dead echoes: `MirrorTargetConfig.mode`, `intent.attributes.mode`, the `mode_paper` `MirrorReason` variant. Pairs with `PAPER_DISPATCH_IS_ENV_ONLY`.
+2. Migration `0053` drops `poly_copy_trade_targets.mode` (never load-bearing, only misleading).
+3. Drops the dead echoes: `MirrorTargetConfig.mode`, `intent.attributes.mode`, the `mode_paper` `MirrorReason` variant. Pairs with `PAPER_DISPATCH_IS_ENV_ONLY`.
+4. **No retroactive backfill.** Initial draft would have flipped pre-cutover rows where `decisions.intent->>'mode' = 'paper'`, but on PROD that signal is unreliable: anyone who PATCHed a target's `mode` column to `'paper'` in the pre-`PAPER_DISPATCH_IS_ENV_ONLY` era left `intent.mode='paper'` in the JSONB while the executor still routed live. Flipping `fills.mode` based on that would mislabel real-money trades as paper. The analytics gap (pre-cutover paper rows stay labeled `'live'` on cand-a/preview) is accepted; new activity rebuilds analytics correctly.
 
 ### 2. `promote-k8s-image.sh` sed eats comments containing "digest"
 

@@ -72,8 +72,12 @@ export interface LedgerRow {
    * (MODE_STAMPED_AT_LEDGER_FROM_ENV — `order-ledger.ts`). `live` rows are
    * real CLOB orders; `paper` rows are simulated by the paper sidecar but
    * otherwise participate in cap accounting identically. Schema default is
-   * `'live'` (migration 0049); migration 0053 self-heals pre-cutover cand-a
-   * / preview rows.
+   * `'live'` (migration 0049). Pre-cutover rows on paper-enforced envs
+   * (cand-a / preview) keep their inherited `'live'` label — no retroactive
+   * backfill ships in task.5003 because the only candidate signal
+   * (`decisions.intent->>'mode' = 'paper'`) has historical false positives
+   * on PROD from the per-target trapdoor era. New activity rebuilds paper
+   * analytics from scratch.
    */
   mode: LedgerMode;
 }
