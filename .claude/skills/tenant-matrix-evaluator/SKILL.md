@@ -67,7 +67,7 @@ Default control: `POLY_PREVIEW_TENANT_TRUST_TWIN`. Default window: last 24h. Out
 
 ## Meta loop — improving the matrix itself
 
-Each invocation is also an opportunity to ask "is the matrix or the tool the bottleneck?" Capture these in the finding's secondary slot or as a follow-up `bug.*` / `task.*` via the operator API:
+Each invocation is also an opportunity to ask "is the matrix or the tool the bottleneck?" Capture these in the finding's secondary slot or as a follow-up `bug.*` / `task.*` via the poly work-items API:
 
 - **Data-analysis efficiency:** decisions query slow / OOM-risk over wide windows → file a `data-research`-skill task to migrate to SQL-only aggregation per the bug.5012 pattern. Don't band-aid with `LIMIT`.
 - **Algorithm tuning:** if the matrix surfaces a stable signal (e.g. swiss-gap consistently under-fills minority side by X%), the next move is a planner change in `plan-mirror.ts` or `copy-trade-mirror.job.ts` — propose the smallest concrete edit, link the report.
