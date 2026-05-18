@@ -129,9 +129,12 @@ export type TargetPercentileScaledSizingPolicy = z.infer<
  * threshold derived for free: `market_min × target_book / alloc`.
  *
  * **No per-trade cap.** `mirror_max_usdc_per_trade` would throttle the
- * proportional copy mechanism (anti-tracking). Wire-level safety lives in
+ * proportional copy mechanism (anti-tracking). The planner passes
+ * `+Infinity` as the per-fill ceiling to `applyMarketFloors`, so only the
+ * market-floor LOWER bound applies. Wire-level safety lives downstream in
  * `poly_wallet_grants` (`CAPS_LIVE_IN_GRANT`). This schema deliberately omits
- * `max_usdc_per_condition` that other variants carry.
+ * the `max_usdc_per_condition` field that other variants carry — `alloc` is
+ * the per-target whole-book budget, NOT a per-trade ceiling.
  *
  * Phase-2 scope: gap math is computed only for the new_entry path
  * (`decideMirrorBranch` short-circuits layer/hedge routing when this kind is

@@ -31,6 +31,7 @@ import {
   type OperatorPosition,
   runMirrorTick,
 } from "@/features/copy-trade/mirror-pipeline";
+import { positionCostUsdc } from "@/features/copy-trade/position-cost";
 import { targetIdFromWallet } from "@/features/copy-trade/target-id";
 import {
   buildWalletStatistic,
@@ -271,19 +272,9 @@ export function targetConditionPositionFromDataApiPositions(
   };
 }
 
-function positionCostUsdc(position: {
-  size: number;
-  avgPrice: number;
-  initialValue: number;
-}): number {
-  if (Number.isFinite(position.initialValue) && position.initialValue > 0) {
-    return position.initialValue;
-  }
-  if (Number.isFinite(position.size) && Number.isFinite(position.avgPrice)) {
-    return Math.max(0, position.size * position.avgPrice);
-  }
-  return 0;
-}
+// `positionCostUsdc` moved to `@features/copy-trade/position-cost` so the
+// bootstrap container's whole-book Σ hydrator shares the same fallback
+// semantics. Re-imported below.
 
 export interface MirrorJobDeps {
   /** Target config — built via `buildMirrorTargetConfig`; Phase 4 reads from a tenant-aware table. */

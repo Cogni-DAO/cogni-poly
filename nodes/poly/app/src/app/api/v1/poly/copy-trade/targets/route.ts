@@ -36,6 +36,7 @@ import {
   type PolyCopyTradeTarget,
   polyCopyTradeTargetCreateOperation,
   polyCopyTradeTargetsOperation,
+  validatePositionGapCapitalAlloc,
 } from "@cogni/poly-node-contracts";
 import { and, eq, isNull } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
@@ -174,15 +175,20 @@ export const POST = wrapRouteHandlerWithLogging(
     const capitalAllocInput = parsed.data.mirror_capital_alloc_usdc;
 
     // Server-side mirror of the DB CHECK so we return a 400 instead of a
-    // 500 on misuse (POST a position_gap target without alloc).
-    if (
-      sizingPolicyKindInput === "position_gap" &&
-      capitalAllocInput === undefined
-    ) {
+    // 500 on misuse (POST a position_gap target without alloc). Shared
+    // predicate lives in the contract package so it's testable in isolation.
+    const allocRuleError = validatePositionGapCapitalAlloc({
+      sizing_policy_kind: sizingPolicyKindInput,
+      ...(capitalAllocInput !== undefined
+        ? { mirror_capital_alloc_usdc: capitalAllocInput }
+        : {}),
+    });
+    if (allocRuleError !== null) {
       return NextResponse.json(
         {
           error:
             "position_gap targets require mirror_capital_alloc_usdc — no default, set explicitly",
+          code: allocRuleError,
         },
         { status: 400 }
       );

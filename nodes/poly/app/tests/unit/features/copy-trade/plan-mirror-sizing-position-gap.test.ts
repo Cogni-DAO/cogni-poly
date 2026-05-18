@@ -149,8 +149,9 @@ describe("planMirrorFromFill() — sizing policy: kind=position_gap (2026-05-18 
     expect(d.position_branch).toBe("new_entry");
     // scale = 50 / 75,165.075 ≈ 0.000665
     // desired = 88_931 × 0.000665 ≈ 59.13 sh ; gap_usdc ≈ 59.13 × 0.85 ≈ $50.26
-    // Clamped to alloc=$50 (sanity ceiling).
-    expect(d.intent.size_usdc).toBeCloseTo(50, 1);
+    // No per-trade clamp — planner passes +Infinity ceiling so intent lands
+    // at the full gap × fill.price (matches the locked spec).
+    expect(d.intent.size_usdc).toBeCloseTo(50.26, 1);
   });
 
   it("skips below_market_min on minority side (Ruud $0.16) — book-proportional slice collapses below floor", () => {
@@ -353,15 +354,16 @@ describe("planMirrorFromFill() — sizing policy: kind=position_gap (2026-05-18 
     });
   });
 
-  it("clamps an over-budget gap to alloc (sanity ceiling, not a per-trade throttle)", () => {
-    // alloc=$50, but target_book is small enough that gap_usdc could exceed
-    // alloc on the first fill (would mean target's whole-token cost > alloc,
-    // which shouldn't happen for a sane target but we sanity-clamp anyway).
-    // Use a tiny book so scale ≈ 1.
+  it("does NOT clamp an over-budget gap — no per-trade ceiling under position_gap", () => {
+    // Pathological-but-valid case: target averaged up past their cost-basis
+    // VWAP, so `gap_usdc = (target_shares × alloc / target_book) × fill.price`
+    // exceeds `alloc`. Locked spec: place the full gap × fill.price —
+    // proportional tracking is the priority, cross-fill safety lives at the
+    // grant. Verifies the +Infinity ceiling passed to applyMarketFloors.
     const fill = makeFill({
       tokenId: SINNER_TOKEN_ID,
       price: SINNER_PRICE,
-      fillSuffix: "sinner-cap",
+      fillSuffix: "sinner-over-alloc",
     });
     const d = planMirrorFromFill({
       fill,
@@ -369,7 +371,7 @@ describe("planMirrorFromFill() — sizing policy: kind=position_gap (2026-05-18 
         sizing: { kind: "position_gap", capital_alloc_usdc: 5 },
       }),
       // book = $50 → scale = 5/50 = 0.1 → desired = 88_931 × 0.1 = 8_893 sh
-      // gap_usdc = 8_893 × 0.85 = $7,559 → clamped to alloc $5.
+      // gap_usdc = 8_893 × 0.85 = $7,559 → NOT clamped (no per-trade ceiling).
       state: baseState({ target_total_open_book_cost_usdc: 50 }),
       client_order_id: clientOrderIdFor(
         BILLING_ACCOUNT_ID,
@@ -380,7 +382,9 @@ describe("planMirrorFromFill() — sizing policy: kind=position_gap (2026-05-18 
       min_usdc_notional: 1,
     });
     if (d.kind !== "place") throw new Error(`expected place, got ${d.reason}`);
-    expect(d.intent.size_usdc).toBeCloseTo(5, 6);
+    // 8893.1 sh × $0.85 = $7,559.135 — placed as-is, no clamp.
+    expect(d.intent.size_usdc).toBeCloseTo(7559.135, 1);
+    expect(d.intent.size_usdc).toBeGreaterThan(5);
   });
 
   it("does NOT consult cumulative_intent_usdc_for_token (no per-trade cap under position_gap)", () => {
@@ -408,6 +412,6 @@ describe("planMirrorFromFill() — sizing policy: kind=position_gap (2026-05-18 
     });
     if (d.kind !== "place")
       throw new Error(`expected place under position_gap, got ${d.reason}`);
-    expect(d.intent.size_usdc).toBeCloseTo(50, 1);
+    expect(d.intent.size_usdc).toBeCloseTo(50.26, 1);
   });
 });

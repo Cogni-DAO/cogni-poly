@@ -308,8 +308,10 @@ Binding when this spec ships. None are enforced today (status: draft).
   scale          = capital_alloc_usdc / Σ target_total_open_book_cost_usdc
   desired_shares = target_shares × scale            (per token target holds)
   gap_shares     = desired_shares − our_shares
-  intent_usdc    = gap_shares × fill.price          → clamp to market_min only → PLACE or SKIP
+  intent_usdc    = gap_shares × fill.price          → market-floor LOWER bound only (no upper cap) → PLACE or SKIP
   ```
+
+  Planner passes `+Infinity` as the ceiling to `applyMarketFloors` so per-fill intent can exceed `alloc` when target averages up past their cost-basis VWAP. `alloc` is the per-target whole-book budget, NOT a per-trade ceiling.
 
   **Derived conviction threshold (no explicit knob):** `target_position_threshold = market_min × target_book / alloc`. Floats with target's book size and our alloc. Replaces both the legacy pXX statistical filter (different conviction model — kept side-by-side under `target_percentile_scaled` until A/B picks a winner) and any hand-set `min_target_position_usdc`.
 

@@ -128,6 +128,46 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
     });
     expect(config.position_followup).toBeUndefined();
   });
+
+  it("position_gap with explicit alloc builds the new-shape policy", () => {
+    const config = buildMirrorTargetConfig({
+      targetWallet: SWISSTONY,
+      billingAccountId: BILLING_ACCOUNT_ID,
+      createdByUserId: CREATED_BY_USER_ID,
+      sizingPolicyKind: "position_gap",
+      capitalAllocUsdc: 50,
+    });
+    expect(config.sizing).toEqual({
+      kind: "position_gap",
+      capital_alloc_usdc: 50,
+    });
+  });
+
+  it("position_gap without alloc throws (CHECK constraint mirror, no fallback)", () => {
+    // Locked design 2026-05-18 — `buildSizingPolicy` is the user's last-line
+    // defence after the DB CHECK. No `FALLBACK_POSITION_GAP_TARGET_SCALE`,
+    // no default — misconfigured tenants fail fast at bootstrap.
+    expect(() =>
+      buildMirrorTargetConfig({
+        targetWallet: SWISSTONY,
+        billingAccountId: BILLING_ACCOUNT_ID,
+        createdByUserId: CREATED_BY_USER_ID,
+        sizingPolicyKind: "position_gap",
+      })
+    ).toThrow(/mirror_capital_alloc_usdc/);
+  });
+
+  it("position_gap with non-positive alloc throws (defensive belt to the CHECK)", () => {
+    expect(() =>
+      buildMirrorTargetConfig({
+        targetWallet: SWISSTONY,
+        billingAccountId: BILLING_ACCOUNT_ID,
+        createdByUserId: CREATED_BY_USER_ID,
+        sizingPolicyKind: "position_gap",
+        capitalAllocUsdc: 0,
+      })
+    ).toThrow(/mirror_capital_alloc_usdc/);
+  });
 });
 
 describe("targetConditionPositionFromDataApiPositions()", () => {

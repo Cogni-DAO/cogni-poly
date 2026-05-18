@@ -161,6 +161,34 @@ export const polyCopyTradeTargetUpdateOperation = {
   }),
 } as const;
 
+/**
+ * Cross-field rule that the DB CHECK constraint enforces at write-time:
+ * `position_gap` targets MUST carry an explicit `mirror_capital_alloc_usdc`.
+ * The route uses this to return a 400 (instead of letting the DB 500 with a
+ * CHECK violation). Tests pin the rule on inputs that look valid to the Zod
+ * schema but violate the cross-field invariant.
+ *
+ * Returns `null` when the input is valid, or a stable string code when not.
+ * No throwing — the caller wraps the code into its preferred HTTP error shape.
+ *
+ * @public
+ */
+export type CapitalAllocRuleViolation =
+  "position_gap_requires_capital_alloc_usdc";
+
+export function validatePositionGapCapitalAlloc(input: {
+  sizing_policy_kind?: SizingPolicyKind | undefined;
+  mirror_capital_alloc_usdc?: number | undefined;
+}): CapitalAllocRuleViolation | null {
+  if (
+    input.sizing_policy_kind === "position_gap" &&
+    input.mirror_capital_alloc_usdc === undefined
+  ) {
+    return "position_gap_requires_capital_alloc_usdc";
+  }
+  return null;
+}
+
 export type SizingPolicyKind = z.infer<typeof sizingPolicyKindSchema>;
 export type PolyCopyTradeTarget = z.infer<typeof targetSchema>;
 export type PolyCopyTradeTargetsOutput = z.infer<

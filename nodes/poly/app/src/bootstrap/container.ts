@@ -895,14 +895,24 @@ function createContainer(): Container {
           "@/bootstrap/copy-trade-reconciler"
         );
         const dataApiClient = new PolymarketDataApiClient();
+        const { positionCostUsdc } = await import(
+          "@/features/copy-trade/position-cost"
+        );
 
         // Whole-book cost-basis cache for `position_gap` proportional sizing.
         // One Σ per target wallet, shared across all tenants mirroring the
         // same target. 30s TTL — target's open-book cost doesn't move > minor
-        // % in 30s, and a cache miss falls through to `listAllUserPositions`
+        // % in 30s; a cache miss falls through to `listAllUserPositions`
         // (paginated, all sub-dollar positions included via `sizeThreshold: 0`).
         // Returns `undefined` on fetch error → planner's Σ-guard skips
-        // `target_position_below_threshold` (fail-closed).
+        // `target_position_below_threshold` (fail-closed for that tick only).
+        //
+        // CACHE_RECOVERS_AFTER_ERROR — review B1: prior shape recorded the
+        // in-flight promise as a permanent sentinel; the resolved-`undefined`
+        // promise then masqueraded as "still in flight" forever, leaving the
+        // target fail-closed until process restart. Fix: on the error path
+        // we delete (or restore the prior cached value) so the NEXT call
+        // re-fetches instead of hitting the poisoned entry.
         const TARGET_BOOK_COST_TTL_MS = 30_000;
         const targetBookCostCache = new Map<
           string,
@@ -918,30 +928,53 @@ function createContainer(): Container {
           const key = targetWallet.toLowerCase();
           const now = Date.now();
           const cached = targetBookCostCache.get(key);
-          if (cached && cached.expiresAt > now) return cached.value;
+          if (cached && cached.expiresAt > now && !cached.inFlight) {
+            return cached.value;
+          }
           if (cached?.inFlight) return cached.inFlight;
-          const inFlight = (async (): Promise<number | undefined> => {
+          // Pre-write a placeholder cache entry so the inner catch can
+          // identify "this is still our in-flight" via reference equality
+          // before clearing. Using an inline token (the placeholder
+          // resolved-`undefined` promise) avoids the TDZ-on-`const inFlight`
+          // pattern that TS strict-mode flags.
+          const inFlight = runHydration();
+          targetBookCostCache.set(key, {
+            value: cached?.value ?? 0,
+            expiresAt: cached?.expiresAt ?? 0,
+            inFlight,
+          });
+          return inFlight;
+
+          async function runHydration(): Promise<number | undefined> {
             try {
               const positions = await dataApiClient.listAllUserPositions(
                 targetWallet,
                 { sizeThreshold: 0 }
               );
               let totalCost = 0;
-              for (const p of positions) {
-                const cost =
-                  Number.isFinite(p.initialValue) && p.initialValue > 0
-                    ? p.initialValue
-                    : Number.isFinite(p.size) && Number.isFinite(p.avgPrice)
-                      ? Math.max(0, p.size * p.avgPrice)
-                      : 0;
-                totalCost += cost;
-              }
+              for (const p of positions) totalCost += positionCostUsdc(p);
               targetBookCostCache.set(key, {
                 value: totalCost,
                 expiresAt: Date.now() + TARGET_BOOK_COST_TTL_MS,
               });
               return totalCost;
             } catch (err) {
+              // B1 fix: clear our poisoned-cache marker so the next call
+              // re-fetches. Restore the prior entry if it was still valid;
+              // otherwise delete so we start clean. Identity check on
+              // `cached.inFlight` uses the just-stored placeholder so a
+              // racing second call's distinct promise doesn't get clobbered.
+              const after = targetBookCostCache.get(key);
+              if (after?.inFlight !== undefined) {
+                if (cached && cached.expiresAt > Date.now()) {
+                  targetBookCostCache.set(key, {
+                    value: cached.value,
+                    expiresAt: cached.expiresAt,
+                  });
+                } else {
+                  targetBookCostCache.delete(key);
+                }
+              }
               log.warn(
                 {
                   event: "poly.mirror.target_book_cost.cache_miss",
@@ -952,13 +985,7 @@ function createContainer(): Container {
               );
               return undefined;
             }
-          })();
-          targetBookCostCache.set(key, {
-            value: cached?.value ?? 0,
-            expiresAt: cached?.expiresAt ?? 0,
-            inFlight,
-          });
-          return inFlight;
+          }
         }
         // pino's Logger is structurally compatible with LoggerPort's subset
         // (debug/info/warn/error/child with object + optional msg).

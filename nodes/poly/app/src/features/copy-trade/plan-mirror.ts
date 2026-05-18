@@ -246,20 +246,20 @@ function applyPositionGapSizing(
       return { ok: false, reason: "below_market_min" };
     }
   }
-  // `applyMarketFloors` clamps to `[floor, ceiling]`. Pass `capital_alloc_usdc`
-  // as the per-fill ceiling — a sane sanity bound (no single fill ever
-  // intends more than our total budget for this target) without
-  // re-introducing a per-trade throttle. In practice `gapUsdc ≤ alloc`
-  // already holds because `gapUsdc = (target_shares × alloc / target_book) ×
-  // fill.price` and `target_shares × fill.price ≤ target_book` for a single
-  // token; the clamp is belt for the case where target's book hydration is
-  // momentarily stale.
+  // **NO per-trade ceiling under `position_gap`** (locked design 2026-05-18).
+  // A per-fill clamp would throttle proportional tracking — when target
+  // averages up at a higher price than their cost-basis VWAP, `gapUsdc` can
+  // exceed `capital_alloc_usdc` legitimately, and clamping there would
+  // under-mirror the position. The grant chain (`poly_wallet_grants`,
+  // `CAPS_LIVE_IN_GRANT`) is the only cross-fill safety stop; per-tick
+  // staleness is bounded by the Σ-guard above. Pass `+Infinity` so
+  // `applyMarketFloors` only enforces the lower bound (market floor).
   return applyMarketFloors(
     gapUsdc,
     fill.price,
     minShares,
     minUsdcNotional,
-    policy.capital_alloc_usdc
+    Number.POSITIVE_INFINITY
   );
 }
 

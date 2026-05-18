@@ -131,7 +131,7 @@ PLACE or SKIP</pre>
   <li><strong>No percentile filter.</strong> <code>target_percentile_scaled</code>'s pXX is a legacy conviction model ("small for THEM = noise"); <code>position_gap</code>'s conviction model is mechanical ("too small for US to economically mirror"). The derived threshold IS the filter. Keep both policies side-by-side until A/B tells us which model wins.</li>
 </ul>
 
-<p class="small"><strong>Cross-target portfolio cap</strong> = on-chain <code>poly_wallet_grants.total_at_risk_usdc</code> trips. <strong>Cross-target velocity</strong> = <code>poly_wallet_grants.daily_cap_usdc</code>. <strong>Per-fill blast radius</strong> = market's structural floor on the low end, alloc-derived intent on the high end. The policy stays clean; safety lives in the grant.</p>
+<p class="small"><strong>Cross-target portfolio cap</strong> = on-chain <code>poly_wallet_grants.total_at_risk_usdc</code> trips. <strong>Cross-target velocity</strong> = <code>poly_wallet_grants.daily_cap_usdc</code>. <strong>Per-fill blast radius</strong>: lower bound = market's structural floor (<code>min_usdc_notional</code>); upper bound = <em>none at the policy layer</em>. Planner passes <code>+Infinity</code> as the ceiling to <code>applyMarketFloors</code> so per-fill intent can exceed <code>alloc</code> when target averages up past their cost-basis VWAP. The grant is the only cross-fill stop. The policy stays clean; safety lives in the grant.</p>
 
 <hr />
 
