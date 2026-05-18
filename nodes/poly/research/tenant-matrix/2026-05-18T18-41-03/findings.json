@@ -1,0 +1,21 @@
+{
+  "report_path": "nodes/poly/research/tenant-matrix/2026-05-18T18-41-03/report.html",
+  "primary_class": "paper-engine-bug",
+  "primary_confidence": 0.95,
+  "primary_one_liner": "Paper sidecar (pm_trader OSS engine) under-fills by ~80% vs live CLOB — 0 order_filled events in 3h Loki window despite 71 place_order; queue model requires limit ≤ BBO, live matches deeper. Filed bug.5060 with handoff. Until fixed, every paper PnL number is reading the engine bug not the planner.",
+  "secondary_class": "schema-drift",
+  "secondary_confidence": 0.85,
+  "secondary_one_liner": "Schema diverged across envs: prod has `mode` column (no sizing_policy_kind), preview has sizing_policy_kind (no mode), candidate-a has both + target_scale. PR #89 (sizing-policy dispatch) hasn't reached prod; preview's `policy=auto` runs new code, prod runs legacy hardcoded planner. Designed for behavioral parity, but the 3% decision-mismatch may be partially planner-code divergence rather than 100% engine. Re-measure parity after PR #89 lands on prod.",
+  "authored_at": "2026-05-18T18:43:00Z",
+  "linked_work_items": ["bug.5060", "task.5048"],
+  "promotion_gate": {
+    "verdict": "DO NOT PROMOTE",
+    "blockers": [
+      "Paper fill rate within ±5% of live (today: -80%, FAIL)",
+      "Decision fidelity ≥99% on shared fills (today: 97%, FAIL by 2pp)",
+      "Schema unified across envs (PR #89 migration must reach prod)",
+      "position_gap produces non-zero placements on preview swiss-gap (today: 0/24h)",
+      "candidate-a re-flighted from main onto current SHA"
+    ]
+  }
+}

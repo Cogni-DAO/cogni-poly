@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Tenant Matrix · 0x204f72f3</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0 auto; padding: 22px; max-width: 1100px; line-height: 1.45; }
+h1 { font-size: 20px; font-weight: 600; margin: 0 0 2px; }
+.header-sub { color: #6b7280; font-size: 11px; margin-bottom: 16px; }
+.header-sub code { background: #131826; padding: 1px 5px; border-radius: 3px; }
+.header-sub a { color: #60a5fa; }
+.q { background: linear-gradient(180deg, #0f172a 0%, #131826 100%); border: 2px solid #475569; border-radius: 10px; padding: 22px 26px; margin: 0 0 16px; }
+.q.pos { border-color: #22c55e; }
+.q.neg { border-color: #ef4444; }
+.q.gated { border-color: #6b7280; border-style: dashed; opacity: 0.85; }
+.q-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; }
+.q-number { font-size: 56px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.0; margin: 6px 0 0; color: #e5e7eb; }
+.q.pos .q-number { color: #22c55e; }
+.q.neg .q-number { color: #ef4444; }
+.q.gated .q-number { color: #94a3b8; font-size: 36px; letter-spacing: 0.04em; }
+.q-verdict { font-size: 15px; font-weight: 600; color: #e5e7eb; margin: 4px 0 8px; }
+.q-cause { font-size: 12px; color: #cbd5e1; }
+.q-cause code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 11px; }
+.q-ref { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+.q-ref code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; color: #cbd5e1; }
+.takeaway { background: linear-gradient(180deg, #1f1410 0%, #131826 100%); border: 1px solid #f59e0b; border-radius: 8px; padding: 14px 18px; margin: 0 0 16px; }
+.takeaway h2 { margin: 0 0 8px; font-size: 11px; color: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.takeaway .placeholder { color: #64748b; font-style: italic; font-size: 11px; }
+details { background: #0e1422; border: 1px solid #1f2937; border-radius: 6px; padding: 0; margin: 10px 0; }
+details > summary { cursor: pointer; padding: 12px 16px; font-size: 12px; color: #cbd5e1; font-weight: 600; user-select: none; }
+details > summary:hover { background: #131826; }
+details[open] > summary { border-bottom: 1px solid #1f2937; color: #fbbf24; }
+details > .details-body { padding: 14px 16px; }
+.muted { color: #6b7280; font-size: 11px; }
+.muted code { background: #131826; padding: 1px 4px; border-radius: 3px; color: #cbd5e1; }
+table.ab { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+table.ab th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: 7px 9px; background: #131826; border-bottom: 1px solid #1f2937; }
+table.ab td { padding: 7px 9px; border-bottom: 1px solid #1f2937; font-variant-numeric: tabular-nums; }
+table.ab td.num { text-align: right; font-family: 'SF Mono', Menlo, monospace; }
+table.ab td.role { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; }
+table.ab td.skips { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: #94a3b8; max-width: 380px; }
+table.ab.algo tr.rank-1 td { background: rgba(251,191,36,0.08); }
+table.ab.algo tr.rank-1 td.role { color: #fbbf24 !important; font-weight: 600; }
+table.ab.algo tr.ref td { background: rgba(16,185,129,0.05); border-top: 2px solid #1f2937; }
+table.ab.algo tr.ref td.role { color: #34d399 !important; font-style: italic; }
+.pos { color: #22c55e; } .neg { color: #ef4444; }
+.chart { background: #0e1422; border: 1px solid #1f2937; border-radius: 6px; padding: 6px; margin: 10px 0; }
+.chart svg { display: block; width: 100%; height: auto; }
+.line-chart .chart-title { fill: #cbd5e1; font-size: 13px; font-weight: 600; }
+.line-chart .axis { fill: #94a3b8; font-size: 10px; font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, monospace; }
+.line-chart .legend { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
+.footer-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid #1f2937; font-size: 10px; color: #6b7280; }
+.footer-note a { color: #60a5fa; }</style>
+</head>
+<body>
+<h1>Tenant Matrix Evaluator</h1>
+<div class="header-sub">
+  Target: <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code> · Window: <code>2026-05-17T18:40:22.117Z</code> → <code>2026-05-18T18:40:22.117Z</code> · 5 tenants · <a href="#appendix">↓ jump to appendix</a>
+</div>
+
+<!-- TAKEAWAY:START -->
+<div class="takeaway">
+  <h2>↗ Top finding · bug.5060 · 95% confidence</h2>
+  <p style="margin:0 0 8px;font-size:13px;color:#e5e7eb;line-height:1.45">
+    <strong style="color:#f87171">Paper twin under-fills vs live by ~80%</strong> ($50 vs $267 over 24h). Loki proof: <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;color:#fbbf24">poly-paper-sidecar</code> pod is alive, fill_loop ticking every 30s, but every tick reports <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;color:#fbbf24">pending_count: 22, filled_count: 0</code>. Over 3h Loki: 71 place_order events, 29 cancel_order, <strong>0 order_filled</strong>. Orders rest until reconciler-TTL cancels them; <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;color:#fbbf24">filled_size_usdc</code> stays 0.
+  </p>
+  <p style="margin:0 0 8px;font-size:13px;color:#cbd5e1;line-height:1.45">
+    Root cause: the OSS <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;color:#fbbf24">pm_trader</code> queue model (<a href="../../../../nodes/poly/sidecars/paper-trader/vendor/pm_trader/" style="color:#60a5fa">vendor/pm_trader/</a>) requires resting limit price to be at/better than BBO — live CLOB matches deeper. Spec claimed 96-98% fidelity ceiling; observed reality is 19%. Filed as <strong style="color:#fbbf24">bug.5060</strong> · handoff at <a href="../../../../work/handoffs/bug.5060.handoff.md" style="color:#60a5fa">work/handoffs/bug.5060.handoff.md</a>.
+  </p>
+  <p style="margin:0;font-size:12px;color:#94a3b8">
+    <strong>Implication for Q2:</strong> until bug.5060 is fixed, every paper PnL number is reading the engine bug, not the planner. Q2 stays gated. Do NOT promote any policy to prod based on current matrix data. Schema drift (preview has <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;color:#cbd5e1">sizing_policy_kind</code>, prod doesn't) is a separate concern — PR #89 migration needs to reach prod before "auto" parity is enforceable.
+  </p>
+</div>
+<!-- TAKEAWAY:END -->
+
+<div class="q neg">
+  <div class="q-label">Q1 · Does paper twin match prod live?</div>
+  <div class="q-number">96.9%</div>
+  <div class="q-verdict">NO — paper twin does NOT match prod</div>
+  <div class="q-cause">Biggest mismatch: <code>143</code> fills where TWIN said <code>placed(mode_paper)</code> but LIVE said <code>skipped(followup_position_too_small)</code>.</div>
+</div>
+
+<div class="q gated">
+  <div class="q-label">Q2 · Best paper algo (PnL on resolved markets)</div>
+  <div class="q-number">GATED</div>
+  <div class="q-verdict">wait — Q1 must pass first (currently 96.9%)</div>
+  <div class="q-ref">prod LIVE reference: <code>+$8.77</code> over <code>36</code> resolved markets</div>
+</div>
+
+<a id="appendix"></a>
+
+<details>
+  <summary>📊 Q1 detail — top decision mismatches (twin vs live)</summary>
+  <div class="details-body">
+    <p class="muted">shared fills: <code>20085</code> · exact match: <code>19462</code> · outcome match but reason differs: <code>351</code> · outcome disagree: <code>272</code> · twin-only: <code>86</code> · live-only: <code>3440</code></p>
+    <table class="ab"><thead><tr><th>twin said</th><th>live said</th><th class="num">count</th></tr></thead><tbody><tr><td>placed <span class="muted">(mode_paper)</span></td><td>skipped <span class="muted">(followup_position_too_small)</span></td><td class="num"><strong>143</strong></td></tr><tr><td>placed <span class="muted">(mode_paper)</span></td><td>placed <span class="muted">(ok)</span></td><td class="num"><strong>62</strong></td></tr><tr><td>skipped <span class="muted">(already_resting)</span></td><td>skipped <span class="muted">(position_cap_reached)</span></td><td class="num"><strong>48</strong></td></tr><tr><td>skipped <span class="muted">(already_resting)</span></td><td>skipped <span class="muted">(followup_position_too_small)</span></td><td class="num"><strong>47</strong></td></tr><tr><td>placed <span class="muted">(mode_paper)</span></td><td>skipped <span class="muted">(below_market_min)</span></td><td class="num"><strong>44</strong></td></tr></tbody></table>
+    <p class="muted" style="margin-top: 12px">Visual sanity check — cumulative <code>$ filled</code> by tenant. Visual diverges from numbers when one tenant filled mostly outside the window; trust the table above.</p>
+    <div class="chart"><svg viewBox="0 0 1100 260" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="line-chart">
+  <defs><linearGradient id="grad-0" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-1" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0.0"/>
+    </linearGradient></defs>
+  <text x="12" y="20" class="chart-title">$ filled — twin vs live</text>
+  <g transform="translate(76, 22)">
+        <rect width="10" height="10" rx="2" fill="#fbbf24"/>
+        <text x="16" y="9" class="legend">TWIN · paper</text>
+      </g><g transform="translate(244, 22)">
+        <rect width="10" height="10" rx="2" fill="#34d399"/>
+        <text x="16" y="9" class="legend">LIVE · real</text>
+      </g>
+  <line x1="76" y1="224" x2="1076" y2="224" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="179" x2="1076" y2="179" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="134" x2="1076" y2="134" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="89" x2="1076" y2="89" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="44" x2="1076" y2="44" stroke="#1f2937" stroke-width="0.5"/>
+  <line x1="76" y1="224" x2="1076" y2="224" stroke="#475569" stroke-width="1"/>
+  <path d="M 89.6329050925926,224 L 89.6329050925926,216.64543427590192 L 131.29957175925927,180.60055793479214 L 172.96623842592592,179.7208466752365 L 214.6329050925926,179.7208466752365 L 256.29957175925927,179.7208466752365 L 297.9662384259259,179.7208466752365 L 339.6329050925926,179.7208466752365 L 381.29957175925927,179.7208466752365 L 422.96623842592595,179.7208466752365 L 464.6329050925926,179.7208466752365 L 506.29957175925927,179.7208466752365 L 547.9662384259259,179.7208466752365 L 589.6329050925926,179.7208466752365 L 631.2995717592593,179.7208466752365 L 672.9662384259259,179.7208466752365 L 714.6329050925926,179.7208466752365 L 756.2995717592593,179.7208466752365 L 797.9662384259259,179.7208466752365 L 839.6329050925926,179.7208466752365 L 881.2995717592593,179.7208466752365 L 922.9662384259259,179.7208466752365 L 964.6329050925926,179.7208466752365 L 1006.2995717592593,179.7208466752365 L 1047.966238425926,179.7208466752365 L 1047.966238425926,224 Z" fill="url(#grad-0)" /><polyline points="89.6329050925926,216.64543427590192 131.29957175925927,180.60055793479214 172.96623842592592,179.7208466752365 214.6329050925926,179.7208466752365 256.29957175925927,179.7208466752365 297.9662384259259,179.7208466752365 339.6329050925926,179.7208466752365 381.29957175925927,179.7208466752365 422.96623842592595,179.7208466752365 464.6329050925926,179.7208466752365 506.29957175925927,179.7208466752365 547.9662384259259,179.7208466752365 589.6329050925926,179.7208466752365 631.2995717592593,179.7208466752365 672.9662384259259,179.7208466752365 714.6329050925926,179.7208466752365 756.2995717592593,179.7208466752365 797.9662384259259,179.7208466752365 839.6329050925926,179.7208466752365 881.2995717592593,179.7208466752365 922.9662384259259,179.7208466752365 964.6329050925926,179.7208466752365 1006.2995717592593,179.7208466752365 1047.966238425926,179.7208466752365" fill="none" stroke="#fbbf24" stroke-width="1.75" stroke-linejoin="round"/><path d="M 47.96623842592592,224 L 47.96623842592592,218.19654482071152 L 89.6329050925926,196.49582746999323 L 131.29957175925927,178.22703968505337 L 172.96623842592592,170.81740768806822 L 214.6329050925926,157.5630620537214 L 256.29957175925927,152.98935524416572 L 297.9662384259259,146.74340530132076 L 339.6329050925926,141.5319957997132 L 381.29957175925927,139.06880427295744 L 422.96623842592595,135.37612828984675 L 506.29957175925927,129.6370679747577 L 547.9662384259259,129.6370679747577 L 589.6329050925926,125.63068695648947 L 672.9662384259259,122.0253214361784 L 714.6329050925926,116.97762619997417 L 756.2995717592593,113.45878116175165 L 797.9662384259259,111.39559434471582 L 839.6329050925926,104.60501516107996 L 881.2995717592593,77.90920930747885 L 922.9662384259259,73.86253751352297 L 964.6329050925926,58.97781820741534 L 1006.2995717592593,49.49819537222268 L 1047.966238425926,44 L 1047.966238425926,224 Z" fill="url(#grad-1)" /><polyline points="47.96623842592592,218.19654482071152 89.6329050925926,196.49582746999323 131.29957175925927,178.22703968505337 172.96623842592592,170.81740768806822 214.6329050925926,157.5630620537214 256.29957175925927,152.98935524416572 297.9662384259259,146.74340530132076 339.6329050925926,141.5319957997132 381.29957175925927,139.06880427295744 422.96623842592595,135.37612828984675 506.29957175925927,129.6370679747577 547.9662384259259,129.6370679747577 589.6329050925926,125.63068695648947 672.9662384259259,122.0253214361784 714.6329050925926,116.97762619997417 756.2995717592593,113.45878116175165 797.9662384259259,111.39559434471582 839.6329050925926,104.60501516107996 881.2995717592593,77.90920930747885 922.9662384259259,73.86253751352297 964.6329050925926,58.97781820741534 1006.2995717592593,49.49819537222268 1047.966238425926,44" fill="none" stroke="#34d399" stroke-width="1.75" stroke-linejoin="round"/>
+  <text x="68" y="228" text-anchor="end" class="axis">$0.00</text><text x="68" y="183" text-anchor="end" class="axis">$51</text><text x="68" y="138" text-anchor="end" class="axis">$102</text><text x="68" y="93" text-anchor="end" class="axis">$153</text><text x="68" y="48" text-anchor="end" class="axis">$205</text>
+  <text x="76" y="244" text-anchor="middle" class="axis">May 17 18:00</text><text x="326" y="244" text-anchor="middle" class="axis">May 18 00:00</text><text x="576" y="244" text-anchor="middle" class="axis">May 18 06:00</text><text x="826" y="244" text-anchor="middle" class="axis">May 18 12:00</text><text x="1076" y="244" text-anchor="middle" class="axis">May 18 18:00</text>
+</svg></div>
+  </div>
+</details>
+
+<details>
+  <summary>📊 Q2 detail — full ranking (all paper tenants + prod reference)</summary>
+  <div class="details-body">
+    <p class="muted">swisstony traded <code>1142</code> markets totaling <code>$1674006.48</code>. <code>PnL $</code> = realized gain/loss on markets resolved in window. <code>Δ vs swisstony</code> = 100% − (our markets ∩ swisstony's markets) ÷ swisstony's markets.</p>
+    <table class="ab algo"><thead><tr><th>tenant</th><th class="num">PnL $</th><th class="num">resolved</th><th class="num">W/L</th><th class="num">Δ vs swisstony</th><th class="num">$ filled</th><th class="num">capture %</th></tr></thead><tbody><tr class="rank-1"><td class="role" style="color:#fbbf24">TRUST_TWIN · preview (control)</td><td class="num pos"><strong>+$5.98</strong></td><td class="num">10</td><td class="num">4/6</td><td class="num">99.1%</td><td class="num">$50.33</td><td class="num">0.003%</td></tr><tr class=""><td class="role" style="color:#60a5fa">GAP · candidate-a</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">97.7%</td><td class="num">$107.79</td><td class="num">0.006%</td></tr><tr class=""><td class="role" style="color:#34d399">VALIDATION · candidate-a</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">97.9%</td><td class="num">$215.58</td><td class="num">0.013%</td></tr><tr class=""><td class="role" style="color:#f472b6">GAP · preview</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">100.0%</td><td class="num">$0.00</td><td class="num">0.000%</td></tr><tr class="ref"><td class="role" style="color:#a78bfa">LIVE · production (prod ref)</td><td class="num pos"><strong>+$8.77</strong></td><td class="num">36</td><td class="num">20/19</td><td class="num">95.8%</td><td class="num">$204.61</td><td class="num">0.012%</td></tr></tbody></table>
+    <div class="chart"><svg viewBox="0 0 1100 280" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="line-chart">
+  <defs><linearGradient id="grad-0" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#60a5fa" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-1" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-2" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f472b6" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#f472b6" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-3" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-4" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.0"/>
+    </linearGradient></defs>
+  <text x="12" y="20" class="chart-title">$ filled — all paper tenants</text>
+  <g transform="translate(76, 22)">
+        <rect width="10" height="10" rx="2" fill="#60a5fa"/>
+        <text x="16" y="9" class="legend">GAP · candidate-a</text>
+      </g><g transform="translate(244, 22)">
+        <rect width="10" height="10" rx="2" fill="#34d399"/>
+        <text x="16" y="9" class="legend">VALIDATION · candidate-a</text>
+      </g><g transform="translate(412, 22)">
+        <rect width="10" height="10" rx="2" fill="#f472b6"/>
+        <text x="16" y="9" class="legend">GAP · preview</text>
+      </g><g transform="translate(580, 22)">
+        <rect width="10" height="10" rx="2" fill="#fbbf24"/>
+        <text x="16" y="9" class="legend">TRUST_TWIN · preview</text>
+      </g><g transform="translate(748, 22)">
+        <rect width="10" height="10" rx="2" fill="#a78bfa"/>
+        <text x="16" y="9" class="legend">LIVE · production</text>
+      </g>
+  <line x1="76" y1="244" x2="1076" y2="244" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="194" x2="1076" y2="194" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="144" x2="1076" y2="144" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="94" x2="1076" y2="94" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="44" x2="1076" y2="44" stroke="#1f2937" stroke-width="0.5"/>
+  <line x1="76" y1="244" x2="1076" y2="244" stroke="#475569" stroke-width="1"/>
+  <path d="M 339.6329050925926,244 L 339.6329050925926,232.44963856303892 L 381.29957175925927,228.92422704011105 L 422.96623842592595,225.46166373033168 L 506.29957175925927,221.4115091170709 L 547.9662384259259,213.21669036365915 L 589.6329050925926,207.18638117970357 L 672.9662384259259,191.13648135163717 L 714.6329050925926,187.0658097886694 L 756.2995717592593,176.19214214776972 L 797.9662384259259,163.81609222254394 L 839.6329050925926,159.42104986964628 L 881.2995717592593,153.62267565430437 L 922.9662384259259,149.35507223181273 L 964.6329050925926,144.00242820454298 L 964.6329050925926,244 Z" fill="url(#grad-0)" /><polyline points="339.6329050925926,232.44963856303892 381.29957175925927,228.92422704011105 422.96623842592595,225.46166373033168 506.29957175925927,221.4115091170709 547.9662384259259,213.21669036365915 589.6329050925926,207.18638117970357 672.9662384259259,191.13648135163717 714.6329050925926,187.0658097886694 756.2995717592593,176.19214214776972 797.9662384259259,163.81609222254394 839.6329050925926,159.42104986964628 881.2995717592593,153.62267565430437 922.9662384259259,149.35507223181273 964.6329050925926,144.00242820454298" fill="none" stroke="#60a5fa" stroke-width="1.75" stroke-linejoin="round"/><path d="M 297.9662384259259,244 L 297.9662384259259,240.845684426854 L 339.6329050925926,216.2141907600816 L 381.29957175925927,207.58620992765285 L 422.96623842592595,200.3952802099645 L 464.6329050925926,193.76194010761338 L 506.29957175925927,184.04022649717808 L 547.9662384259259,180.0045580433001 L 589.6329050925926,165.81013796414314 L 631.2995717592593,161.72808251654243 L 672.9662384259259,156.16164326981422 L 714.6329050925926,149.6324610395415 L 756.2995717592593,135.32615586315939 L 797.9662384259259,123.44304164853824 L 839.6329050925926,104.99742882925958 L 881.2995717592593,76.77101337100493 L 922.9662384259259,64.38568604703462 L 964.6329050925926,49.05618231577813 L 1006.2995717592593,44 L 1006.2995717592593,244 Z" fill="url(#grad-1)" /><polyline points="297.9662384259259,240.845684426854 339.6329050925926,216.2141907600816 381.29957175925927,207.58620992765285 422.96623842592595,200.3952802099645 464.6329050925926,193.76194010761338 506.29957175925927,184.04022649717808 547.9662384259259,180.0045580433001 589.6329050925926,165.81013796414314 631.2995717592593,161.72808251654243 672.9662384259259,156.16164326981422 714.6329050925926,149.6324610395415 756.2995717592593,135.32615586315939 797.9662384259259,123.44304164853824 839.6329050925926,104.99742882925958 881.2995717592593,76.77101337100493 922.9662384259259,64.38568604703462 964.6329050925926,49.05618231577813 1006.2995717592593,44" fill="none" stroke="#34d399" stroke-width="1.75" stroke-linejoin="round"/><path d="M 1047.966238425926,244 L 1047.966238425926,244 L 1047.966238425926,244 Z" fill="url(#grad-2)" /><polyline points="1047.966238425926,244" fill="none" stroke="#f472b6" stroke-width="1.75" stroke-linejoin="round"/><path d="M 89.6329050925926,244 L 89.6329050925926,236.24390525024063 L 131.29957175925927,198.23112697987008 L 172.96623842592592,197.3033871054154 L 214.6329050925926,197.3033871054154 L 256.29957175925927,197.3033871054154 L 297.9662384259259,197.3033871054154 L 339.6329050925926,197.3033871054154 L 381.29957175925927,197.3033871054154 L 422.96623842592595,197.3033871054154 L 464.6329050925926,197.3033871054154 L 506.29957175925927,197.3033871054154 L 547.9662384259259,197.3033871054154 L 589.6329050925926,197.3033871054154 L 631.2995717592593,197.3033871054154 L 672.9662384259259,197.3033871054154 L 714.6329050925926,197.3033871054154 L 756.2995717592593,197.3033871054154 L 797.9662384259259,197.3033871054154 L 839.6329050925926,197.3033871054154 L 881.2995717592593,197.3033871054154 L 922.9662384259259,197.3033871054154 L 964.6329050925926,197.3033871054154 L 1006.2995717592593,197.3033871054154 L 1047.966238425926,197.3033871054154 L 1047.966238425926,244 Z" fill="url(#grad-3)" /><polyline points="89.6329050925926,236.24390525024063 131.29957175925927,198.23112697987008 172.96623842592592,197.3033871054154 214.6329050925926,197.3033871054154 256.29957175925927,197.3033871054154 297.9662384259259,197.3033871054154 339.6329050925926,197.3033871054154 381.29957175925927,197.3033871054154 422.96623842592595,197.3033871054154 464.6329050925926,197.3033871054154 506.29957175925927,197.3033871054154 547.9662384259259,197.3033871054154 589.6329050925926,197.3033871054154 631.2995717592593,197.3033871054154 672.9662384259259,197.3033871054154 714.6329050925926,197.3033871054154 756.2995717592593,197.3033871054154 797.9662384259259,197.3033871054154 839.6329050925926,197.3033871054154 881.2995717592593,197.3033871054154 922.9662384259259,197.3033871054154 964.6329050925926,197.3033871054154 1006.2995717592593,197.3033871054154 1047.966238425926,197.3033871054154" fill="none" stroke="#fbbf24" stroke-width="1.75" stroke-linejoin="round"/><path d="M 47.96623842592592,244 L 47.96623842592592,237.8797000482223 L 89.6329050925926,214.99421282517366 L 131.29957175925927,195.72802440034772 L 172.96623842592592,187.91385698579063 L 214.6329050925926,173.93587861934392 L 256.29957175925927,169.11246623806647 L 297.9662384259259,162.52551312943808 L 339.6329050925926,157.0295821131684 L 381.29957175925927,154.43191046469522 L 422.96623842592595,150.53762956768418 L 506.29957175925927,144.48524017471658 L 547.9662384259259,144.48524017471658 L 589.6329050925926,140.26012723847498 L 672.9662384259259,136.45792359626364 L 714.6329050925926,131.13464497063 L 756.2995717592593,127.42368547281119 L 797.9662384259259,125.24785714525255 L 839.6329050925926,118.08654028034927 L 881.2995717592593,89.93325327615935 L 922.9662384259259,85.6656498536677 L 964.6329050925926,69.9682861217118 L 1006.2995717592593,59.971114886865905 L 1047.966238425926,54.172740671524 L 1047.966238425926,244 Z" fill="url(#grad-4)" /><polyline points="47.96623842592592,237.8797000482223 89.6329050925926,214.99421282517366 131.29957175925927,195.72802440034772 172.96623842592592,187.91385698579063 214.6329050925926,173.93587861934392 256.29957175925927,169.11246623806647 297.9662384259259,162.52551312943808 339.6329050925926,157.0295821131684 381.29957175925927,154.43191046469522 422.96623842592595,150.53762956768418 506.29957175925927,144.48524017471658 547.9662384259259,144.48524017471658 589.6329050925926,140.26012723847498 672.9662384259259,136.45792359626364 714.6329050925926,131.13464497063 756.2995717592593,127.42368547281119 797.9662384259259,125.24785714525255 839.6329050925926,118.08654028034927 881.2995717592593,89.93325327615935 922.9662384259259,85.6656498536677 964.6329050925926,69.9682861217118 1006.2995717592593,59.971114886865905 1047.966238425926,54.172740671524" fill="none" stroke="#a78bfa" stroke-width="1.75" stroke-linejoin="round"/>
+  <text x="68" y="248" text-anchor="end" class="axis">$0.00</text><text x="68" y="198" text-anchor="end" class="axis">$54</text><text x="68" y="148" text-anchor="end" class="axis">$108</text><text x="68" y="98" text-anchor="end" class="axis">$162</text><text x="68" y="48" text-anchor="end" class="axis">$216</text>
+  <text x="76" y="264" text-anchor="middle" class="axis">May 17 18:00</text><text x="326" y="264" text-anchor="middle" class="axis">May 18 00:00</text><text x="576" y="264" text-anchor="middle" class="axis">May 18 06:00</text><text x="826" y="264" text-anchor="middle" class="axis">May 18 12:00</text><text x="1076" y="264" text-anchor="middle" class="axis">May 18 18:00</text>
+</svg></div>
+  </div>
+</details>
+
+<details>
+  <summary>🔍 Decisions reference — skip-reason breakdown per tenant</summary>
+  <div class="details-body">
+    <p class="muted">Why did orders not place? Decision-side counts and top 3 skip reasons per tenant. Explanatory only — NOT a ranking surface.</p>
+    <table class="ab">
+      <thead><tr><th>tenant</th><th class="num">decisions</th><th class="num">placed</th><th class="num">placement rate</th><th class="num">Δ rate vs control</th><th>top skip reasons</th></tr></thead>
+      <tbody><tr><td class="role" style="color:#fbbf24">TRUST_TWIN · preview</td><td class="num">20171</td><td class="num">272</td><td class="num">1.35%</td><td class="num">—</td><td class="skips">below_target_percentile=8580 · vwap_floor_breach=6286 · target_dominant_other_side=3387</td></tr><tr><td class="role" style="color:#60a5fa">GAP · candidate-a</td><td class="num">8625</td><td class="num">110</td><td class="num">1.28%</td><td class="num">-5.4%</td><td class="skips">below_target_percentile=3123 · vwap_floor_breach=2684 · target_dominant_other_side=1545</td></tr><tr><td class="role" style="color:#34d399">VALIDATION · candidate-a</td><td class="num">9915</td><td class="num">152</td><td class="num">1.53%</td><td class="num">13.7%</td><td class="skips">below_target_percentile=3913 · vwap_floor_breach=2961 · target_dominant_other_side=1709</td></tr><tr><td class="role" style="color:#f472b6">GAP · preview</td><td class="num">9863</td><td class="num">0</td><td class="num">0.00%</td><td class="num">-100.0%</td><td class="skips">below_market_min=4389 · vwap_floor_breach=3125 · target_dominant_other_side=1781</td></tr><tr><td class="role" style="color:#a78bfa">LIVE · production</td><td class="num">23525</td><td class="num">113</td><td class="num">0.48%</td><td class="num">-64.4%</td><td class="skips">below_target_percentile=9612 · vwap_floor_breach=7681 · target_dominant_other_side=4005</td></tr></tbody>
+    </table>
+  </div>
+</details>
+
+<details>
+  <summary>🤖 AI agent appendix — what to investigate next</summary>
+  <div class="details-body">
+    <p class="muted">If <strong>Q1 &lt; 99%</strong>: paper sidecar is missing planner gates. Top mismatch reason names the gate (e.g. <code>followup_position_too_small</code> means the paper sidecar's planner is letting through orders the live planner correctly skips). Cite <code>nodes/poly/sidecars/paper-trader/server.py</code> or the planner gate in <code>nodes/poly/app/src/features/copy-trade/plan-mirror.ts</code> in the LLM finding.</p>
+    <p class="muted">If <strong>Q2 is GATED</strong>: do NOT promote any paper policy. Fix Q1 first. If Q2 is ungated and a paper tenant beats prod ref with ≥3 resolved markets, that's the promotion candidate.</p>
+    <p class="muted">Many <strong>live-only fills</strong> (in mismatch summary) = twin's wallet-watch missed entire chunks of target activity. Check poll cadence + websocket health.</p>
+    <p class="muted">Full structured data: <a href="bundle.json">bundle.json</a> · LLM stub: <a href="findings.json">findings.json</a>.</p>
+  </div>
+</details>
+
+<div class="footer-note">
+  Tool: <code>nodes/poly/scripts/tenant-matrix-evaluator.ts</code> · Skill: <code>/tenant-matrix-evaluator</code> · Captured: <code>2026-05-18T18:41:03.060Z</code>
+</div>
+
+</body>
+</html>

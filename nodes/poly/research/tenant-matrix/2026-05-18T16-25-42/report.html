@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Tenant Matrix · 0x204f72f3 · 2026-05-18T16:25:42.506Z</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0 auto; padding: 20px; max-width: 1280px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+.sub { color: #94a3b8; font-size: 12px; margin-bottom: 14px; }
+.sub a { color: #60a5fa; text-decoration: none; }
+.sub code { background: #131826; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+.takeaway { background: linear-gradient(180deg, #1f1410 0%, #131826 100%); border: 1px solid #f59e0b; border-radius: 8px; padding: 16px 20px; margin: 8px 0 18px; }
+.takeaway h2 { margin: 0 0 10px; font-size: 12px; color: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.takeaway .placeholder { color: #64748b; font-style: italic; font-size: 12px; }
+.bars-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 18px; }
+.chart { background: #0e1422; border: 1px solid #1f2937; border-radius: 6px; padding: 4px 6px; }
+.chart svg { display: block; width: 100%; height: auto; }
+svg .title { fill: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+svg .label { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
+svg .label.control { fill: #fbbf24; font-weight: 600; }
+svg .value { fill: #e5e7eb; font-size: 11px; font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, monospace; }
+svg .meta { fill: #6b7280; font-size: 10px; }
+svg .bar { opacity: 0.85; }
+table.ab { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.ab th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: 6px 8px; background: #0e1422; border-bottom: 1px solid #1f2937; }
+table.ab td { padding: 6px 8px; border-bottom: 1px solid #1f2937; font-variant-numeric: tabular-nums; }
+table.ab td.num { text-align: right; font-family: 'SF Mono', Menlo, monospace; }
+table.ab td.role { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: #cbd5e1; }
+.pos { color: #22c55e; } .neg { color: #ef4444; }
+h3.section { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px; }
+.footer-note { margin-top: 20px; padding-top: 14px; border-top: 1px solid #1f2937; font-size: 11px; color: #6b7280; }
+.footer-note a { color: #60a5fa; }
+.legend { font-size: 11px; color: #94a3b8; }
+.legend code { background: #131826; padding: 1px 4px; border-radius: 3px; }</style>
+</head>
+<body>
+<h1>Tenant Matrix Evaluator</h1>
+<div class="sub">
+  Target wallet: <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code> · target_id: <code>473e0467-8257-583e-ac93-dea278662cb2</code><br/>
+  Window: <code>2026-05-17T16:25:17.376Z</code> → <code>2026-05-18T16:25:17.376Z</code> · Captured: <code>2026-05-18T16:25:42.506Z</code><br/>
+  Control: <strong style="color:#fbbf24">TRUST_TWIN · preview</strong> · 5 tenants · Spec: <a href="../../../../docs/spec/poly-tenant-matrix-evaluator.md">poly-tenant-matrix-evaluator</a> · Charter: <a href="../../../../work/charters/POLY_ALGO_TENANT_MATRIX.md">poly-algo-tenant-matrix</a>
+</div>
+
+<!-- TAKEAWAY:START -->
+<div class="takeaway">
+  <h2>↗ Top finding · D6 · 92% confidence</h2>
+  <p style="margin:0 0 8px;font-size:13px;color:#e5e7eb;line-height:1.45">
+    <strong style="color:#f87171">preview swiss-gap (position_gap, target_scale=1e-4) placed 0 of 8,127 decisions in 24h</strong> against swisstony. Top skip is <code style="background:#131826;padding:1px 5px;border-radius:3px">below_market_min</code> = 3,671 (45% of decisions) — vs ≤179 on every <code style="background:#131826;padding:1px 5px;border-radius:3px">target_percentile_scaled</code> tenant on the same target. The structural skip is <a href="../../../../nodes/poly/app/src/features/copy-trade/plan-mirror.ts">plan-mirror.ts:215–222</a>: when <code>gap_usdc &lt; max(minShares×price, minUsdcNotional)</code> position_gap fails closed by design. At <code>target_scale = 1e-4</code>, swisstony's typical token positions yield gaps in the cents — far below any CLOB floor.
+  </p>
+  <p style="margin:0 0 10px;font-size:12px;color:#cbd5e1">
+    <strong>Replicates charter row <code style="background:#131826;padding:1px 5px;border-radius:3px">f472b6ad</code></strong> (cand-a RN1, 1,190 / 0 placed). Earlier hypothesis "swisstony has much higher volume so this is less likely" is <em>falsified</em>: the gap math, not the target's volume, is what's below the floor. cand-a GAP <em>does</em> place (106) because it's still on the pre-PR-#92 SHA (<code>target_percentile_scaled</code> via <code>auto</code> default), per <a href="../../../../work/charters/POLY_ALGO_TENANT_MATRIX.md">charter</a>. Sample size: 8,127 decisions (well above 50 floor); structural, not noise.
+  </p>
+  <div class="fix" style="background:#0e1422;border-left:3px solid #fbbf24;padding:8px 12px;border-radius:0 4px 4px 0;font-size:12px;color:#cbd5e1">
+    <strong style="color:#fbbf24">Pareto fix:</strong> raise <code>target_scale</code> default (probably 1e-3 or 5e-4) OR widen the gap-vs-floor predicate at <a href="../../../../nodes/poly/app/src/features/copy-trade/plan-mirror.ts">plan-mirror.ts:215–222</a> to allow a one-shot clamp-up when <code>minUsdcNotional ≤ gap_usdc &lt; effective_floor</code> — accept overpaying by ≤1× minShares×price as the cost of getting a non-zero mirror size at low scales. Re-flight cand-a from main first to land an apples-to-apples <code>position_gap</code> A/B on swisstony (GAP·cand-a is currently running tps under the hood).
+  </div>
+  <p style="margin:8px 0 0;font-size:11px;color:#6b7280">
+    NB: <em>production LIVE pnl_fetch_failed (HTTP 500 from /api/v1/poly/research/copy-trade-pnl)</em> — decisions side still populated (26,970 / 151). Server-side bug, not a tool regression. File against poly.cognidao.org research endpoints.
+  </p>
+</div>
+<!-- TAKEAWAY:END -->
+
+<div class="bars-grid">
+  <div class="chart"><svg viewBox="0 0 720 188" width="720" height="188" xmlns="http://www.w3.org/2000/svg">
+  <text class="title" x="12" y="20">decisions (window)</text>
+  
+  
+  <text class="label control" x="220" y="54" text-anchor="end">TRUST_TWIN · preview</text>
+  <rect class="bar" x="228" y="42" width="250.17463848720803" height="16" fill="#fbbf24" rx="2"/>
+  <text class="value" x="712" y="54" text-anchor="end">18435</text>
+  
+  <text class="label" x="220" y="82" text-anchor="end">GAP · candidate-a</text>
+  <rect class="bar" x="228" y="70" width="110.11212458286985" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="82" text-anchor="end">8114</text>
+  
+  <text class="label" x="220" y="110" text-anchor="end">VALIDATION · candidate-a</text>
+  <rect class="bar" x="228" y="98" width="127.6182424916574" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="110" text-anchor="end">9404</text>
+  
+  <text class="label" x="220" y="138" text-anchor="end">GAP · preview</text>
+  <rect class="bar" x="228" y="126" width="110.2885428253615" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="138" text-anchor="end">8127</text>
+  
+  <text class="label" x="220" y="166" text-anchor="end">LIVE · production</text>
+  <rect class="bar" x="228" y="154" width="366" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="166" text-anchor="end">26970</text>
+  
+</svg></div>
+  <div class="chart"><svg viewBox="0 0 720 188" width="720" height="188" xmlns="http://www.w3.org/2000/svg">
+  <text class="title" x="12" y="20">placed (window)</text>
+  
+  
+  <text class="label control" x="220" y="54" text-anchor="end">TRUST_TWIN · preview</text>
+  <rect class="bar" x="228" y="42" width="366" height="16" fill="#fbbf24" rx="2"/>
+  <text class="value" x="712" y="54" text-anchor="end">225</text>
+  
+  <text class="label" x="220" y="82" text-anchor="end">GAP · candidate-a</text>
+  <rect class="bar" x="228" y="70" width="172.42666666666665" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="82" text-anchor="end">106</text>
+  
+  <text class="label" x="220" y="110" text-anchor="end">VALIDATION · candidate-a</text>
+  <rect class="bar" x="228" y="98" width="224.48" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="110" text-anchor="end">138</text>
+  
+  <text class="label" x="220" y="138" text-anchor="end">GAP · preview</text>
+  <rect class="bar" x="228" y="126" width="2" height="16" fill="#6b7280" rx="2"/>
+  <text class="value" x="712" y="138" text-anchor="end">0</text>
+  
+  <text class="label" x="220" y="166" text-anchor="end">LIVE · production</text>
+  <rect class="bar" x="228" y="154" width="245.62666666666667" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="166" text-anchor="end">151</text>
+  
+</svg></div>
+  <div class="chart"><svg viewBox="0 0 720 188" width="720" height="188" xmlns="http://www.w3.org/2000/svg">
+  <text class="title" x="12" y="20">placement rate (placed / decisions)</text>
+  
+  
+  <text class="label control" x="220" y="54" text-anchor="end">TRUST_TWIN · preview</text>
+  <rect class="bar" x="228" y="42" width="4.467046379170057" height="16" fill="#fbbf24" rx="2"/>
+  <text class="value" x="712" y="54" text-anchor="end">1.2%</text>
+  
+  <text class="label" x="220" y="82" text-anchor="end">GAP · candidate-a</text>
+  <rect class="bar" x="228" y="70" width="4.781365541040177" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="82" text-anchor="end">1.3%</text>
+  
+  <text class="label" x="220" y="110" text-anchor="end">VALIDATION · candidate-a</text>
+  <rect class="bar" x="228" y="98" width="5.3709059974478945" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="110" text-anchor="end">1.5%</text>
+  
+  <text class="label" x="220" y="138" text-anchor="end">GAP · preview</text>
+  <rect class="bar" x="228" y="126" width="2" height="16" fill="#6b7280" rx="2"/>
+  <text class="value" x="712" y="138" text-anchor="end">0.0%</text>
+  
+  <text class="label" x="220" y="166" text-anchor="end">LIVE · production</text>
+  <rect class="bar" x="228" y="154" width="2.04916573971079" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="166" text-anchor="end">0.6%</text>
+  
+</svg></div>
+  <div class="chart"><svg viewBox="0 0 720 188" width="720" height="188" xmlns="http://www.w3.org/2000/svg">
+  <text class="title" x="12" y="20">intent USDC (window)</text>
+  
+  
+  <text class="label control" x="220" y="54" text-anchor="end">TRUST_TWIN · preview</text>
+  <rect class="bar" x="228" y="42" width="366" height="16" fill="#fbbf24" rx="2"/>
+  <text class="value" x="712" y="54" text-anchor="end">$1036.17</text>
+  
+  <text class="label" x="220" y="82" text-anchor="end">GAP · candidate-a</text>
+  <rect class="bar" x="228" y="70" width="96.31960823250121" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="82" text-anchor="end">$272.69</text>
+  
+  <text class="label" x="220" y="110" text-anchor="end">VALIDATION · candidate-a</text>
+  <rect class="bar" x="228" y="98" width="138.45863619527586" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="110" text-anchor="end">$391.98</text>
+  
+  <text class="label" x="220" y="138" text-anchor="end">GAP · preview</text>
+  <rect class="bar" x="228" y="126" width="2" height="16" fill="#6b7280" rx="2"/>
+  <text class="value" x="712" y="138" text-anchor="end">$0.00</text>
+  
+  <text class="label" x="220" y="166" text-anchor="end">LIVE · production</text>
+  <rect class="bar" x="228" y="154" width="2" height="16" fill="#6b7280" rx="2"/>
+  <text class="value" x="712" y="166" text-anchor="end">$0.00</text>
+  
+</svg></div>
+  <div class="chart"><svg viewBox="0 0 720 188" width="720" height="188" xmlns="http://www.w3.org/2000/svg">
+  <text class="title" x="12" y="20">realized size USDC (window)</text>
+  
+  
+  <text class="label control" x="220" y="54" text-anchor="end">TRUST_TWIN · preview</text>
+  <rect class="bar" x="228" y="42" width="95.15366533590125" height="16" fill="#fbbf24" rx="2"/>
+  <text class="value" x="712" y="54" text-anchor="end">$50.33</text>
+  
+  <text class="label" x="220" y="82" text-anchor="end">GAP · candidate-a</text>
+  <rect class="bar" x="228" y="70" width="192.85792318438234" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="82" text-anchor="end">$102.02</text>
+  
+  <text class="label" x="220" y="110" text-anchor="end">VALIDATION · candidate-a</text>
+  <rect class="bar" x="228" y="98" width="366" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="110" text-anchor="end">$193.60</text>
+  
+  <text class="label" x="220" y="138" text-anchor="end">GAP · preview</text>
+  <rect class="bar" x="228" y="126" width="2" height="16" fill="#6b7280" rx="2"/>
+  <text class="value" x="712" y="138" text-anchor="end">$0.00</text>
+  
+  <text class="label" x="220" y="166" text-anchor="end">LIVE · production</text>
+  <rect class="bar" x="228" y="154" width="2" height="16" fill="#6b7280" rx="2"/>
+  <text class="value" x="712" y="166" text-anchor="end">$0.00</text>
+  
+</svg></div>
+  <div class="chart"><svg viewBox="0 0 720 188" width="720" height="188" xmlns="http://www.w3.org/2000/svg">
+  <text class="title" x="12" y="20">open positions (markets w/ open position)</text>
+  
+  
+  <text class="label control" x="220" y="54" text-anchor="end">TRUST_TWIN · preview</text>
+  <rect class="bar" x="228" y="42" width="152.5" height="16" fill="#fbbf24" rx="2"/>
+  <text class="value" x="712" y="54" text-anchor="end">10</text>
+  
+  <text class="label" x="220" y="82" text-anchor="end">GAP · candidate-a</text>
+  <rect class="bar" x="228" y="70" width="366" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="82" text-anchor="end">24</text>
+  
+  <text class="label" x="220" y="110" text-anchor="end">VALIDATION · candidate-a</text>
+  <rect class="bar" x="228" y="98" width="320.25" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="110" text-anchor="end">21</text>
+  
+  <text class="label" x="220" y="138" text-anchor="end">GAP · preview</text>
+  <rect class="bar" x="228" y="126" width="2" height="16" fill="#6b7280" rx="2"/>
+  <text class="value" x="712" y="138" text-anchor="end">0</text>
+  
+  <text class="label" x="220" y="166" text-anchor="end">LIVE · production</text>
+  <rect class="bar" x="228" y="154" width="2" height="16" fill="#6b7280" rx="2"/>
+  <text class="value" x="712" y="166" text-anchor="end">0</text>
+  
+</svg></div>
+  <div class="chart"><svg viewBox="0 0 720 188" width="720" height="188" xmlns="http://www.w3.org/2000/svg">
+  <text class="title" x="12" y="20">markets touched (with ≥1 fill row)</text>
+  
+  
+  <text class="label control" x="220" y="54" text-anchor="end">TRUST_TWIN · preview</text>
+  <rect class="bar" x="228" y="42" width="366" height="16" fill="#fbbf24" rx="2"/>
+  <text class="value" x="712" y="54" text-anchor="end">51</text>
+  
+  <text class="label" x="220" y="82" text-anchor="end">GAP · candidate-a</text>
+  <rect class="bar" x="228" y="70" width="265.52941176470586" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="82" text-anchor="end">37</text>
+  
+  <text class="label" x="220" y="110" text-anchor="end">VALIDATION · candidate-a</text>
+  <rect class="bar" x="228" y="98" width="193.76470588235296" height="16" fill="#22c55e" rx="2"/>
+  <text class="value" x="712" y="110" text-anchor="end">27</text>
+  
+  <text class="label" x="220" y="138" text-anchor="end">GAP · preview</text>
+  <rect class="bar" x="228" y="126" width="2" height="16" fill="#6b7280" rx="2"/>
+  <text class="value" x="712" y="138" text-anchor="end">0</text>
+  
+  <text class="label" x="220" y="166" text-anchor="end">LIVE · production</text>
+  <rect class="bar" x="228" y="154" width="2" height="16" fill="#6b7280" rx="2"/>
+  <text class="value" x="712" y="166" text-anchor="end">0</text>
+  
+</svg></div>
+</div>
+
+<h3 class="section">A/B vs control (% delta — treatment − control / |control|)</h3>
+<table class="ab">
+  <thead>
+    <tr>
+      <th>tenant</th>
+      <th class="num">Δ decisions</th>
+      <th class="num">Δ placed</th>
+      <th class="num">Δ placement rate</th>
+      <th class="num">Δ intent $</th>
+      <th class="num">Δ realized $</th>
+      <th class="num">Δ open positions</th>
+    </tr>
+  </thead>
+  <tbody>
+<tr>
+  <td class="role">GAP · candidate-a</td>
+  <td class="num"><span class="neg">-56.0%</span></td>
+  <td class="num"><span class="neg">-52.9%</span></td>
+  <td class="num"><span class="pos">7.0%</span></td>
+  <td class="num"><span class="neg">-73.7%</span></td>
+  <td class="num"><span class="pos">102.7%</span></td>
+  <td class="num"><span class="pos">140.0%</span></td>
+</tr>
+<tr>
+  <td class="role">VALIDATION · candidate-a</td>
+  <td class="num"><span class="neg">-49.0%</span></td>
+  <td class="num"><span class="neg">-38.7%</span></td>
+  <td class="num"><span class="pos">20.2%</span></td>
+  <td class="num"><span class="neg">-62.2%</span></td>
+  <td class="num"><span class="pos">284.6%</span></td>
+  <td class="num"><span class="pos">110.0%</span></td>
+</tr>
+<tr>
+  <td class="role">GAP · preview</td>
+  <td class="num"><span class="neg">-55.9%</span></td>
+  <td class="num"><span class="neg">-100.0%</span></td>
+  <td class="num"><span class="neg">-100.0%</span></td>
+  <td class="num"><span class="neg">-100.0%</span></td>
+  <td class="num"><span class="neg">-100.0%</span></td>
+  <td class="num"><span class="neg">-100.0%</span></td>
+</tr>
+<tr>
+  <td class="role">LIVE · production</td>
+  <td class="num"><span class="pos">46.3%</span></td>
+  <td class="num"><span class="neg">-32.9%</span></td>
+  <td class="num"><span class="neg">-54.1%</span></td>
+  <td class="num"><span class="neg">-100.0%</span></td>
+  <td class="num"><span class="neg">-100.0%</span></td>
+  <td class="num"><span class="neg">-100.0%</span></td>
+</tr>
+  </tbody>
+</table>
+
+<div class="legend" style="margin-top: 8px">
+  🟡 = low sample (decisions &lt; 50 OR resolved markets &lt; 3) · control row highlighted in <span style="color:#fbbf24">amber</span> · NB: resolved-PnL + winrate axes are v0 deferred (require <code>poly_market_outcomes</code> join — see bundle.json &amp; SKILL.md).
+</div>
+
+<div class="footer-note">
+  <a href="bundle.json">bundle.json</a> · <a href="findings.json">findings.json</a> · Tool: <code>nodes/poly/scripts/tenant-matrix-evaluator.ts</code> · Skill: <code>/tenant-matrix-evaluator</code>
+</div>
+
+</body>
+</html>
