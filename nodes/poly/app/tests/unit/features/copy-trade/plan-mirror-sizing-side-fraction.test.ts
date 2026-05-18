@@ -35,7 +35,6 @@ const SCALED_CONFIG: MirrorTargetConfig = {
   target_wallet: TARGET_WALLET,
   billing_account_id: BILLING_ACCOUNT_ID,
   created_by_user_id: "00000000-0000-4000-a000-000000000001",
-  mode: "live",
   sizing: {
     kind: "target_percentile_scaled",
     max_usdc_per_condition: 20,

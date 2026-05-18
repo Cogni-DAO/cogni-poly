@@ -68,8 +68,6 @@ const targetSchema = z.object({
   target_id: z.string().uuid(),
   /** 0x-prefixed 40-hex — the wallet being watched / copied. */
   target_wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-  /** `"paper"` = shadow into paper_orders (P3); `"live"` = real Polymarket placement. */
-  mode: z.enum(["paper", "live"]),
   /** Effective max mirror notional per fill (USDC) for this target. */
   mirror_usdc: z.number().positive(),
   /** Target fill percentile floor; fills below this target-wallet size percentile skip. */

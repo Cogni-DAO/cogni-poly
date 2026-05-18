@@ -53,7 +53,6 @@ function configForTarget(
     target_wallet: TARGET_WALLET,
     billing_account_id: BILLING_ACCOUNT_ID,
     created_by_user_id: CREATED_BY_USER_ID,
-    mode: "live",
     sizing: {
       kind: "position_gap",
       max_usdc_per_condition: 5,

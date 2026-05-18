@@ -66,13 +66,6 @@ export const polyCopyTradeTargets = pgTable(
       .notNull()
       .default("5.00"),
     /**
-     * Execution mode for this target. `live` routes orders to the CLOB.
-     * `paper` routes orders to the `agent-next/polymarket-paper-trader`
-     * sidecar — same algorithm, same ledger, same redemption listener,
-     * but no real USDC spent. See `proj.poly-paper-trading`.
-     */
-    mode: text("mode").notNull().default("live"),
-    /**
      * Per-target sizing-policy kind. `'auto'` (default) preserves legacy
      * behavior: `buildSizingPolicy` infers `target_percentile_scaled` when a
      * curated wallet snapshot exists, else `min_bet`. Explicit kinds let
@@ -100,10 +93,6 @@ export const polyCopyTradeTargets = pgTable(
     check(
       "poly_copy_trade_targets_max_bet_positive",
       sql`${table.mirrorMaxUsdcPerTrade} > 0`
-    ),
-    check(
-      "poly_copy_trade_targets_mode_check",
-      sql`${table.mode} IN ('live','paper')`
     ),
     check(
       "poly_copy_trade_targets_sizing_policy_kind_check",
@@ -171,11 +160,15 @@ export const polyCopyTradeFills = pgTable(
      */
     syncedAt: timestamp("synced_at", { withTimezone: true }),
     /**
-     * Execution mode of the order that produced this fill. Inherited from
-     * `poly_copy_trade_targets.mode` at decision time and stamped on the
-     * `OrderIntent.attributes.mode` discriminator. Paper rows participate in
-     * cap accounting (CAP_COUNTS_REALIZED_ON_CANCEL) identically to live
-     * rows; the paper sidecar populates `filled_size_usdc` correctly.
+     * Execution mode of the order that produced this fill. Stamped at write
+     * time by `order-ledger.ts::insertPending` from the ledger's
+     * `paperEnforceMode` dep, which the bootstrap resolves once from
+     * `PAPER_ENFORCE_MODE` env. Answers exactly one question correctly:
+     * "where did this order execute?" Paper rows participate in cap
+     * accounting (CAP_COUNTS_REALIZED_ON_CANCEL) identically to live rows;
+     * the paper sidecar populates `filled_size_usdc` correctly.
+     * See MODE_STAMPED_AT_LEDGER_FROM_ENV (order-ledger.ts) + pair invariant
+     * PAPER_DISPATCH_IS_ENV_ONLY (poly-trade-executor.ts).
      */
     mode: text("mode").notNull().default("live"),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -268,9 +261,17 @@ export const polyCopyTradeDecisions = pgTable(
     receipt: jsonb("receipt").$type<Record<string, unknown>>(),
     decidedAt: timestamp("decided_at", { withTimezone: true }).notNull(),
     /**
-     * Execution mode of the decision. `live` rows hit the CLOB; `paper` rows
-     * route to the OSS sidecar (see `proj.poly-paper-trading`). Defaulted to
-     * `'live'` so existing rows remain semantically correct without backfill.
+     * Execution mode of the decision. Stamped at write time by
+     * `order-ledger.ts::recordDecision` from the ledger's `paperEnforceMode`
+     * dep (resolved once from `PAPER_ENFORCE_MODE` env at bootstrap).
+     * MODE_STAMPED_AT_LEDGER_FROM_ENV — replaces the legacy advisory chain
+     * `targets.mode → intent.attributes.mode → JSONB blob` which never
+     * reached this column. Defaulted to `'live'` for legacy pre-cutover
+     * rows; task.5003 ships NO retroactive backfill because the only
+     * candidate join key (`intent->>'mode' = 'paper'`) cannot distinguish
+     * "actually executed on paper sidecar" from "PROD-era target manually
+     * flipped to paper while the executor still routed live" — mislabeling
+     * real-money trades as paper is worse than the analytics gap.
      */
     mode: text("mode").notNull().default("live"),
   },

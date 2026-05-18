@@ -55,6 +55,21 @@ PR1–PR3 of the original roadmap (below) shipped in PR #56 (merged to `main` as
 - **PR #60** — `mode='paper'` DB stamping (the `5b545b627` commit). Closes the gap where paper-enforced envs wrote `mode='live'` on every ledger row. **Superseded by the hardening PR below**, which also fixes the analytics gap and additionally rips out the per-target dispatch trapdoor.
 - **Hardening PR (this branch, `derekg1729/paper-mode-env-only-dispatch`)** — establishes `PAPER_DISPATCH_IS_ENV_ONLY`. `PAPER_ENFORCE_MODE` is the sole switch that activates paper routing. Per-target `mode` column on `poly_copy_trade_targets` becomes pure advisory metadata (still stamped for analytics, no longer dispatched on). `intent.attributes.mode` retained for Loki visibility, ignored by the executor. Closes a latent trapdoor where a DB row with `mode='paper'` in PROD could (in theory, given a sidecar deployment) silently mis-route money-path placements to a paper sidecar.
 
+**Update (2026-05-18, task.5003 / PR #98):**
+
+Continuing the cleanup arc: the hardening PR left three advisory shadows in place (`poly_copy_trade_targets.mode` column, `MirrorTargetConfig.mode`, `intent.attributes.mode`) and never actually stamped `mode` on `poly_copy_trade_{fills,decisions}` rows — every row got the DB default `'live'` regardless of env. Knock-on: `/api/v1/poly/research/copy-trade-pnl?mode=paper` returned 0 on cand-a + preview.
+
+Task.5003 collapses to one source of truth:
+
+- **Authority:** `PAPER_ENFORCE_MODE` env (k8s overlay, set once at pod start).
+- **Consumers (read env at process start):**
+  1. Executor factory — `PAPER_DISPATCH_IS_ENV_ONLY` (unchanged).
+  2. Order-ledger — **new** `MODE_STAMPED_AT_LEDGER_FROM_ENV`; bootstrap passes the resolved value to `createOrderLedger`, which stamps `effectiveMode` on every `insertPending` + `recordDecision` insert.
+- **Removed:** `polyCopyTradeTargets.mode` column (migration 0053), `MirrorTargetConfig.mode`, `EnumeratedTarget.mode`, `UserTargetRow.mode`, `intent.attributes.mode`, the `mode_paper` `MirrorReason` variant, `mode` from the contract response, the `mode: "live"` PATCH hardcode.
+- **No retroactive backfill.** An initial backfill draft would have flipped fills+decisions to `mode='paper'` where `decisions.intent->>'mode' = 'paper'`, but that join cannot distinguish actual paper execution from the pre-`PAPER_DISPATCH_IS_ENV_ONLY` "trapdoor era" (a PROD target manually PATCHed to `mode='paper'` would write `intent.mode='paper'` to JSONB while the executor still routed real-money to live CLOB). Mislabeling real trades as paper is worse than the analytics gap — pre-cutover paper rows on cand-a/preview stay labeled `'live'`; new activity rebuilds analytics correctly.
+
+Net effect: one authority, two truthful audit columns going forward, three dead echoes gone, zero risk of data-integrity corruption on PROD.
+
 **Real gaps blocking the next phase** (each verified against code, NOT speculation):
 
 1. **`/copy-trade/orders` ignores tenant.** `nodes/poly/app/src/app/api/v1/poly/copy-trade/orders/route.ts:89` — `TODO(HARDCODED_USER)`. Calls `ledger.listRecent({limit, target_id})` with zero tenant scoping; every authenticated caller sees every tenant's ledger rows. This is the **#1 blocker for multi-tenant paper experimentation** because each agent must observe its own PnL, not the global pool. **A worktree subagent is closing this on `derekg1729/orders-route-tenant-scope` (separate PR).**

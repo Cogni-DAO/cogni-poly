@@ -41,7 +41,6 @@ describe("envTargetSource", () => {
         targetWallet: W1,
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
-        mode: "live",
         sizingPolicyKind: "auto",
       },
       {
@@ -49,7 +48,6 @@ describe("envTargetSource", () => {
         targetWallet: W2,
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
-        mode: "live",
         sizingPolicyKind: "auto",
       },
     ]);
@@ -64,7 +62,6 @@ describe("envTargetSource", () => {
         targetWallet: W1,
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
-        mode: "live",
         sizingPolicyKind: "auto",
       })
     ).toThrow();
@@ -82,7 +79,6 @@ describe("envTargetSource", () => {
         targetWallet: W1,
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
-        mode: "live",
         sizingPolicyKind: "auto",
       },
       {
@@ -91,7 +87,6 @@ describe("envTargetSource", () => {
         targetWallet: W2,
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
-        mode: "live",
         sizingPolicyKind: "auto",
       },
     ]);

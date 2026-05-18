@@ -201,13 +201,6 @@ export function buildMirrorTargetConfig(params: {
   mirrorFilterPercentile?: number;
   mirrorMaxUsdcPerTrade?: number;
   /**
-   * Execution mode for this target. Read from `poly_copy_trade_targets.mode`
-   * by the enumerator (`dbTargetSource.listAllActive`) and threaded here.
-   * Defaults to `"live"` for back-compat with envTargetSource + the system
-   * tenant boot path.
-   */
-  mode?: "live" | "paper";
-  /**
    * Per-target sizing-policy kind. Read from
    * `poly_copy_trade_targets.sizing_policy_kind` by the enumerator. Defaults
    * to `'auto'` (snapshot-derived) for back-compat.
@@ -223,7 +216,6 @@ export function buildMirrorTargetConfig(params: {
     target_wallet: params.targetWallet,
     billing_account_id: params.billingAccountId,
     created_by_user_id: params.createdByUserId,
-    mode: params.mode ?? "live",
     sizing: buildSizingPolicy({
       targetWallet: params.targetWallet,
       mirrorFilterPercentile,
@@ -340,7 +332,6 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
     component: "mirror-job",
     target_id: deps.target.target_id,
     target_wallet: deps.target.target_wallet,
-    mode: deps.target.mode,
     billing_account_id: deps.target.billing_account_id,
   });
 

@@ -49,11 +49,13 @@
  *   - PAPER_DISPATCH_IS_ENV_ONLY — `PAPER_ENFORCE_MODE=paper` is the ONLY thing
  *     that activates paper routing. The factory chooses between `buildExecutor`
  *     (live CLOB) and `buildPaperOnlyExecutor` (sidecar) once, at executor-
- *     construction time, based on the env. `intent.attributes.mode` and the
- *     per-target `mode` column on `poly_copy_trade_targets` are advisory
- *     metadata only — they never re-route a placement at runtime. Hardening
- *     follow-up to PR #56 / PR #60 after the per-target trapdoor surfaced as a
- *     latent safety issue.
+ *     construction time, based on the env. Pairs with
+ *     `MODE_STAMPED_AT_LEDGER_FROM_ENV` (order-ledger.ts) — the ledger writes
+ *     the same env-derived value to `poly_copy_trade_{fills,decisions}.mode`,
+ *     so audit + dispatch agree by construction. Per-target `mode` columns
+ *     and `intent.attributes.mode` shadows were removed (task.5003); any new
+ *     attribute placed on an intent is purely advisory and the executor never
+ *     reads it.
  * Side-effects: on first `placeIntent` for a new tenant: HTTPS to Polymarket
  *   CLOB + Privy API. Subsequent calls reuse cached clients.
  * Links: work/items/task.0318 (Phase B3), work/items/task.0388,

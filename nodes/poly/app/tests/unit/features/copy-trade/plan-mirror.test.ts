@@ -3,7 +3,7 @@
 
 /**
  * Module: `@features/copy-trade/plan-mirror.test`
- * Purpose: Unit tests for the pure copy-trade `planMirrorFromFill()` function — idempotency, mode=paper routing, happy path `{kind: "place"}`.
+ * Purpose: Unit tests for the pure copy-trade `planMirrorFromFill()` function — idempotency, tick-grid normalization, happy path `{kind: "place"}`.
  * Scope: Pure function tests. Does not hit the DB, does not import adapters. Daily / hourly cap enforcement moved to `authorizeIntent` (CAPS_LIVE_IN_GRANT) and lives in adapter component tests.
  * Invariants: IDEMPOTENT_BY_CLIENT_ID. (bug.0438 dropped the kill-switch.)
  * Side-effects: none
@@ -42,7 +42,6 @@ const CONFIG: MirrorTargetConfig = {
   target_wallet: TARGET_WALLET,
   billing_account_id: "00000000-0000-4000-b000-000000000000",
   created_by_user_id: "00000000-0000-4000-a000-000000000001",
-  mode: "live",
   sizing: {
     kind: "min_bet",
     max_usdc_per_condition: 1.0,
@@ -179,19 +178,6 @@ describe("planMirrorFromFill() — place branches", () => {
       reason: "price_outside_clob_bounds",
       position_branch: "new_entry",
     });
-  });
-
-  it("kind=place + reason=mode_paper when config.mode='paper'", () => {
-    const d = planMirrorFromFill({
-      fill: FILL,
-      config: { ...CONFIG, mode: "paper" },
-      state: CLEAN_STATE,
-      client_order_id: COID,
-      min_usdc_notional: 1.0,
-    });
-    if (d.kind !== "place") throw new Error("expected place");
-    expect(d.reason).toBe("mode_paper");
-    expect(d.intent.provider).toBe("polymarket");
   });
 
   it("empty token_id is passed through (executor rejects)", () => {

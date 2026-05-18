@@ -66,6 +66,15 @@ export interface OrderLedgerDeps {
   db: NodePgDatabase;
   /** Pino logger. Bind `component: "order-ledger"` at the caller if desired. */
   logger: Logger;
+  /**
+   * MODE_STAMPED_AT_LEDGER_FROM_ENV — the ledger is the single write
+   * authority for `poly_copy_trade_{fills,decisions}.mode`. Bootstrap reads
+   * `PAPER_ENFORCE_MODE` once at process start and passes the resolved value
+   * here; every row this ledger writes is stamped with the resulting
+   * execution mode. Pair invariant: `PAPER_DISPATCH_IS_ENV_ONLY` in
+   * `poly-trade-executor.ts`.
+   */
+  paperEnforceMode?: "paper" | undefined;
 }
 
 /** Postgres unique-violation SQLSTATE — partial unique index rejection. */
@@ -138,6 +147,10 @@ function materializeIntentAggregates(
 
 export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
   const log = deps.logger.child({ component: "order-ledger" });
+  // MODE_STAMPED_AT_LEDGER_FROM_ENV — resolved once at construction. Every
+  // insertPending / recordDecision write stamps this onto the row.
+  const effectiveMode: "live" | "paper" =
+    deps.paperEnforceMode === "paper" ? "paper" : "live";
 
   return {
     async snapshotState(
@@ -434,6 +447,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         status: "pending" as const,
         positionLifecycle: null,
         attributes: attrs,
+        mode: effectiveMode,
       };
 
       const insert = async (db: Pick<NodePgDatabase, "insert">) => {
@@ -609,6 +623,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         intent: input.intent,
         receipt: input.receipt,
         decidedAt: input.decided_at,
+        mode: effectiveMode,
       });
     },
 
