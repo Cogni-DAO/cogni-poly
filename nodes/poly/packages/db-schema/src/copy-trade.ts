@@ -75,6 +75,25 @@ export const polyCopyTradeTargets = pgTable(
      * docs/spec/poly-copy-trade-position-mirror.md (Phase 1).
      */
     sizingPolicyKind: text("sizing_policy_kind").notNull().default("auto"),
+    /**
+     * Per-target conviction knob for `position_gap` sizing — the fraction of
+     * target's per-token shares the mirror aims to hold. `desired_shares =
+     * target_shares × target_scale`. Read by `buildSizingPolicy` when the
+     * resolved policy kind is `position_gap`; ignored by `min_bet` /
+     * `target_percentile_scaled` but populated on every row for typing
+     * symmetry with the rest of the sizing knobs (same pattern as
+     * `mirror_filter_percentile` on min_bet rows).
+     *
+     * `numeric(8,7)` supports the full useful range — `1e-7` (Sinner-class
+     * $80k+ position outlier where 1e-4 would clip the per-leg cap) through
+     * `1.0`. Default `0.0005` is calibrated for swisstony's typical $1–7k
+     * token cost-basis distribution (charter chr.poly-algo-tenant-matrix
+     * audit, 2026-05-18) so the gap math produces $1–$3.50 desired_usdc on a
+     * typical fill — above market_min, well below the $15 per-leg cap.
+     */
+    targetScale: numeric("target_scale", { precision: 8, scale: 7 })
+      .notNull()
+      .default("0.0005"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -97,6 +116,10 @@ export const polyCopyTradeTargets = pgTable(
     check(
       "poly_copy_trade_targets_sizing_policy_kind_check",
       sql`${table.sizingPolicyKind} IN ('auto','min_bet','target_percentile_scaled','position_gap')`
+    ),
+    check(
+      "poly_copy_trade_targets_target_scale_range",
+      sql`${table.targetScale} > 0 AND ${table.targetScale} <= 1`
     ),
     // One active row per (tenant, wallet). Soft-deleted rows allowed to coexist
     // so a previously-disabled wallet can be re-added without violating uniqueness.

@@ -51,11 +51,22 @@ const sizingPolicyKindSchema = z.enum([
   "position_gap",
 ]);
 
+/**
+ * Per-target conviction knob for `position_gap` sizing. Bounded `(0, 1]`,
+ * matching the DB CHECK + the `PositionGapSizingPolicySchema` field in
+ * `features/copy-trade/types.ts`. Populated on every row for schema symmetry
+ * but only read by the planner when `sizing_policy_kind` resolves to
+ * `position_gap`.
+ */
+const targetScaleSchema = z.number().positive().max(1).finite();
+
 const targetPolicySchema = z.object({
   mirror_filter_percentile: z.number().int().min(50).max(99),
   mirror_max_usdc_per_trade: mirrorMaxUsdcPerTradeSchema,
   /** Optional override; omit (or `'auto'`) to keep legacy snapshot inference. */
   sizing_policy_kind: sizingPolicyKindSchema.optional(),
+  /** Optional `position_gap` conviction knob. Omit to keep current value (PATCH) or default (POST). */
+  target_scale: targetScaleSchema.optional(),
 });
 
 const targetSchema = z.object({
@@ -82,6 +93,8 @@ const targetSchema = z.object({
    * of snapshot availability.
    */
   sizing_policy_kind: sizingPolicyKindSchema,
+  /** Per-target conviction knob for `position_gap` (fraction of target's per-token shares to mirror). Populated on every row, read only when policy resolves to `position_gap`. */
+  target_scale: targetScaleSchema,
   /** Provenance: `"env"` for the local-dev fallback; `"db"` once `dbTargetSource` is wired. */
   source: z.enum(["env", "db"]),
 });
@@ -104,6 +117,12 @@ const targetCreateInputSchema = z.object({
    * if omitted, matching the DB column default.
    */
   sizing_policy_kind: sizingPolicyKindSchema.optional(),
+  /**
+   * Optional initial `position_gap` conviction knob. Defaults to the DB
+   * column default (`0.0005`) if omitted. Only consulted when the resolved
+   * planner policy is `position_gap`.
+   */
+  target_scale: targetScaleSchema.optional(),
 });
 
 export const polyCopyTradeTargetCreateOperation = {

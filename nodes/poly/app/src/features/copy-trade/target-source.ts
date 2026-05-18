@@ -67,6 +67,13 @@ export interface EnumeratedTarget {
    * planner policy. Threaded into `buildMirrorTargetConfig`.
    */
   sizingPolicyKind: SizingPolicyKind;
+  /**
+   * Per-target conviction knob for `position_gap` sizing — fraction of
+   * target's per-token shares the mirror aims to hold. Populated on every
+   * row (DB NOT NULL DEFAULT `0.0005`); the planner reads it only when the
+   * resolved sizing kind is `position_gap`.
+   */
+  targetScale: number;
 }
 
 /**
@@ -81,6 +88,7 @@ export interface UserTargetRow {
   mirrorFilterPercentile: number;
   mirrorMaxUsdcPerTrade: number;
   sizingPolicyKind: SizingPolicyKind;
+  targetScale: number;
 }
 
 export interface CopyTradeTargetSource {
@@ -131,6 +139,7 @@ export function envTargetSource(
       mirrorFilterPercentile: 75,
       mirrorMaxUsdcPerTrade: 5,
       sizingPolicyKind: "auto" as const,
+      targetScale: 0.0005,
     }))
   );
   const enumerated: readonly EnumeratedTarget[] = Object.freeze(
@@ -141,6 +150,7 @@ export function envTargetSource(
       mirrorFilterPercentile: 75,
       mirrorMaxUsdcPerTrade: 5,
       sizingPolicyKind: "auto" as const,
+      targetScale: 0.0005,
     }))
   );
   return {
@@ -197,6 +207,7 @@ export function dbTargetSource(
             mirror_max_usdc_per_trade:
               polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
             sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
+            target_scale: polyCopyTradeTargets.targetScale,
           })
           .from(polyCopyTradeTargets)
           .where(isNull(polyCopyTradeTargets.disabledAt))
@@ -208,6 +219,7 @@ export function dbTargetSource(
         mirrorFilterPercentile: r.mirror_filter_percentile,
         mirrorMaxUsdcPerTrade: Number(r.mirror_max_usdc_per_trade),
         sizingPolicyKind: coerceSizingPolicyKind(r.sizing_policy_kind),
+        targetScale: Number(r.target_scale),
       }));
     },
 
@@ -239,6 +251,7 @@ export function dbTargetSource(
           mirror_filter_percentile: polyCopyTradeTargets.mirrorFilterPercentile,
           mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
           sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
+          target_scale: polyCopyTradeTargets.targetScale,
         })
         .from(polyCopyTradeTargets);
 
@@ -281,6 +294,7 @@ export function dbTargetSource(
         mirrorFilterPercentile: r.mirror_filter_percentile,
         mirrorMaxUsdcPerTrade: Number(r.mirror_max_usdc_per_trade),
         sizingPolicyKind: coerceSizingPolicyKind(r.sizing_policy_kind),
+        targetScale: Number(r.target_scale),
       }));
     },
   };

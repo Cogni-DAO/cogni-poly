@@ -379,6 +379,13 @@
       "when": 1779080424501,
       "tag": "0053_yummy_black_bolt",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1779127591867,
+      "tag": "0054_poly_copy_trade_target_scale",
+      "breakpoints": true
     }
   ]
 }

@@ -946,6 +946,7 @@ function createContainer(): Container {
               mirrorFilterPercentile: enumeratedTarget.mirrorFilterPercentile,
               mirrorMaxUsdcPerTrade: enumeratedTarget.mirrorMaxUsdcPerTrade,
               sizingPolicyKind: enumeratedTarget.sizingPolicyKind,
+              targetScale: enumeratedTarget.targetScale,
             });
             const source = createPolymarketChainActivitySource({
               publicClient: chainPublicClient,

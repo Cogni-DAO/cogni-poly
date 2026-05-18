@@ -138,6 +138,9 @@ export const PATCH = wrapRouteHandlerWithLogging<{
     if (parsed.data.sizing_policy_kind !== undefined) {
       updateSet.sizingPolicyKind = parsed.data.sizing_policy_kind;
     }
+    if (parsed.data.target_scale !== undefined) {
+      updateSet.targetScale = parsed.data.target_scale.toString();
+    }
 
     const updatedRows = await withTenantScope(appDb, actorId, async (tx) =>
       tx
@@ -155,6 +158,7 @@ export const PATCH = wrapRouteHandlerWithLogging<{
           mirror_filter_percentile: polyCopyTradeTargets.mirrorFilterPercentile,
           mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
           sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
+          target_scale: polyCopyTradeTargets.targetScale,
         })
     );
 
@@ -176,6 +180,7 @@ export const PATCH = wrapRouteHandlerWithLogging<{
         mirror_filter_percentile: row.mirror_filter_percentile,
         mirror_max_usdc_per_trade: row.mirror_max_usdc_per_trade,
         sizing_policy_kind: storedSizingPolicyKind,
+        target_scale: row.target_scale,
       },
       "poly.copy_trade.targets.update_success"
     );
@@ -195,6 +200,7 @@ export const PATCH = wrapRouteHandlerWithLogging<{
             row.target_wallet as `0x${string}`,
             storedSizingPolicyKind
           ),
+          target_scale: Number(row.target_scale),
           source: "db",
         },
       })
