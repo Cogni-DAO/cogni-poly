@@ -5,88 +5,185 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>position_gap — the 60-second version</title>
 <style>
-  :root { --bg:#fbfaf7; --ink:#1a1a1a; --muted:#6b6b6b; --rule:#e5e2dc; --accent:#2b5cd1; --code-bg:#f4f2ec; --hi:#fff3b0; }
+  :root { --bg:#fbfaf7; --ink:#1a1a1a; --muted:#6b6b6b; --rule:#e5e2dc; --accent:#2b5cd1; --code-bg:#f4f2ec; --hi:#fff3b0; --money:#0f7a35; --warn:#a04400; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif; -webkit-font-smoothing:antialiased; }
-  main { max-width: 680px; margin: 0 auto; padding: 56px 28px 80px; }
-  h1 { font-size: 32px; line-height: 1.1; margin: 0 0 6px; letter-spacing: -0.01em; }
-  h2 { font-size: 20px; margin: 40px 0 10px; }
-  .lede { color: var(--muted); margin: 0 0 32px; }
-  code, .mono { font: 14.5px/1.5 ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace; }
+  main { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: 30px; line-height: 1.1; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 19px; margin: 36px 0 10px; }
+  .lede { color: var(--muted); margin: 0 0 24px; }
+  code, .mono { font: 14px/1.5 ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace; }
   code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
-  pre.math { background: var(--code-bg); padding: 14px 18px; border-radius: 8px; overflow-x: auto; font: 15px/1.6 ui-monospace, "JetBrains Mono", Menlo, monospace; }
+  pre.math { background: var(--code-bg); padding: 14px 18px; border-radius: 8px; overflow-x: auto; font: 14.5px/1.6 ui-monospace, "JetBrains Mono", Menlo, monospace; }
   mark { background: var(--hi); padding: 0 2px; border-radius: 2px; }
-  hr { border: 0; border-top: 1px solid var(--rule); margin: 36px 0; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
   table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 15px; }
-  th, td { border-bottom: 1px solid var(--rule); padding: 7px 10px; text-align: left; }
+  th, td { border-bottom: 1px solid var(--rule); padding: 7px 10px; text-align: left; vertical-align: top; }
   th { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.05em; }
   .small { color: var(--muted); font-size: 13.5px; }
   .pointers { color: var(--muted); font-size: 13.5px; margin-top: 32px; }
   .pointers a { color: var(--muted); }
+  .northstar { background: #ecf3ff; border: 1px solid #b9cdf2; border-radius: 10px; padding: 14px 18px; margin: 0 0 20px; }
+  .northstar h2 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+  .northstar p { margin: 0; font-size: 17px; }
+  .tldr { background: #fff8e3; border: 1px solid #ead17a; border-radius: 10px; padding: 14px 18px; margin: 0 0 24px; }
+  .tldr h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: #7a5d10; }
+  .tldr ul { margin: 0; padding-left: 20px; }
+  .tldr li { margin: 5px 0; }
+  .money { color: var(--money); font-weight: 600; }
+  .worked { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: stretch; margin: 14px 0; }
+  .worked .box { background: var(--code-bg); border-radius: 8px; padding: 12px 14px; font: 13.5px/1.55 ui-monospace, Menlo, monospace; }
+  .worked .arrow { font-size: 22px; color: var(--accent); align-self: center; }
+  .worked .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 6px; font-family: ui-sans-serif, system-ui, sans-serif; font-weight: 600; }
+  .pill { display: inline-block; font-size: 11.5px; padding: 1px 7px; border-radius: 10px; background: #e6efff; color: var(--accent); font-weight: 600; letter-spacing: 0.02em; margin-right: 6px; vertical-align: middle; }
+  .pill.warn { background: #ffeec9; color: var(--warn); }
+  .pill.gone { background: #f0e6e6; color: #884444; text-decoration: line-through; }
+  ul.bites { margin: 6px 0 0; padding-left: 18px; }
+  ul.bites li { margin: 7px 0; }
+  @media (max-width: 620px) {
+    .worked { grid-template-columns: 1fr; }
+    .worked .arrow { transform: rotate(90deg); justify-self: center; }
+  }
 </style>
 </head>
 <body>
 <main>
 
-<h1><code>position_gap</code> — the 60-second version</h1>
-<p class="lede">What the policy does, the math, what we're testing, where to look for more.</p>
+<h1><code>position_gap</code> &mdash; the 60-second version</h1>
+<p class="lede">North star, one knob, what's deliberately missing.</p>
+
+<div class="northstar">
+<h2>North star</h2>
+<p>Hold a miniature of target's <strong>BOOK</strong>. As they grow / shrink / rotate, our positions track theirs in proportion &mdash; scaled to our budget.</p>
+</div>
+
+<div class="tldr">
+<h2>TL;DR &mdash; 2026-05-18 redesign</h2>
+<ul>
+  <li><span class="pill gone">target_scale</span>Opaque <code>0.0005</code>-style fraction dropped. PR #102 shipped the wrong abstraction; pre-prod policy lets us purge cleanly.</li>
+  <li><span class="pill">mirror_capital_alloc_usdc</span>One knob, in dollars: <em>"I'm betting <span class="money">$C</span> of my book tracking this target's whole book."</em></li>
+  <li><span class="pill warn">no per-trade cap</span><code>mirror_max_usdc_per_trade</code> is an anti-pattern under book matching &mdash; it throttles tracking. <code>position_gap</code> ignores it; <code>poly_wallet_grants</code> is the wire-level safety net.</li>
+</ul>
+</div>
 
 <hr />
 
-<h2>What it does</h2>
+<h2>The math</h2>
 
-<p>The legacy policy sizes each target fill in isolation, which inverts the mirror when target's position is lopsided. <code>position_gap</code> instead sizes from the gap between target's <em>current position</em> and ours. Every fill is a re-evaluation trigger, not a sizing input.</p>
+<p>Every target fill is a re-evaluation trigger, not a sizing input. Fill arrives &rarr; re-derive scale &rarr; re-derive gap &rarr; close it.</p>
 
-<pre class="math">desired_shares = <mark>target_shares</mark> &times; <mark>target_scale</mark>
+<pre class="math">scale          = <mark>capital_alloc_usdc</mark> / &Sigma; <mark>target_total_open_book_cost_usdc</mark>
+desired_shares = <mark>target_shares</mark> &times; scale            (per token target holds)
 gap_shares     = desired_shares &minus; <mark>our_shares</mark>
 intent_usdc    = gap_shares &times; <mark>fill.price</mark>
-                 &darr; clamp to market floors &amp; per-leg cap
+                 &darr; clamp to market floor only
 PLACE or SKIP</pre>
 
-<p>Layering falls out for free (gap shrinks as we fill). Minority-side fills collapse below market min and skip — the Sinner/Ruud inverted-weighting bug is structurally impossible under this policy.</p>
+<p>Layering falls out for free (gap shrinks as we fill). Minority-side fills collapse below market min and skip &mdash; the Sinner/Ruud inverted-weighting bug is structurally impossible.</p>
+
+<h2>A worked example &mdash; alloc = <span class="money">$50</span></h2>
+
+<p>Target holds $50,000 across 30 markets total. You set <code>capital_alloc_usdc = $50</code>. <code>scale = 50 / 50,000 = 0.001</code> (0.1%). Now watch how individual positions size:</p>
+
+<div class="worked">
+  <div class="box">
+    <div class="label">Target position A</div>
+    cost = $5,000<br>
+    shares = 10,000<br>
+    (10% of their book)
+  </div>
+  <div class="arrow">&rarr;</div>
+  <div class="box">
+    <div class="label">Our desired</div>
+    desired = 10,000 &times; 0.001 = <strong>10 sh</strong><br>
+    value at target's VWAP: <span class="money">$5.00</span><br>
+    🟢 PLACE
+  </div>
+</div>
+
+<div class="worked">
+  <div class="box">
+    <div class="label">Target position B</div>
+    cost = $500<br>
+    shares = 1,000<br>
+    (1% of their book)
+  </div>
+  <div class="arrow">&rarr;</div>
+  <div class="box">
+    <div class="label">Our desired</div>
+    desired = 1,000 &times; 0.001 = <strong>1 sh</strong><br>
+    intent at $0.50 = $0.50<br>
+    🔴 SKIP <code>below_market_min</code>
+  </div>
+</div>
+
+<p class="small"><strong>Implicit conviction threshold derived for free:</strong> <code>target_position_threshold = market_min &times; target_book / alloc = $1 &times; $50k / $50 = $1,000</code>. Target positions below $1k get skipped automatically, no explicit filter needed. Threshold floats as target's book grows / alloc changes.</p>
+
+<p class="small"><strong>The invariant:</strong> our desired position, valued at target's per-share cost, stays at a fixed fraction (<code>alloc / target_book</code>) of target's. As target concentrates → we concentrate. As they diversify → we diversify. As they halve → we halve.</p>
+
+<hr />
+
+<h2>What's deliberately NOT a knob</h2>
+
+<ul class="bites">
+  <li><strong>No <code>min_target_position_usdc</code> floor.</strong> Polymarket's per-market <code>min_usdc_notional</code> + the derived threshold formula above already handle this. Adding a hand-set $-floor would duplicate one of those two mechanisms.</li>
+  <li><strong>No <code>mirror_max_usdc_per_trade</code> for <code>position_gap</code>.</strong> The whole point of book-matching is to track target proportionally. A per-trade cap would throttle that tracking. Wire-level safety is the grant's job, not the policy's. (Column stays on the row for legacy policies that still use it; <code>position_gap</code> just doesn't read it.)</li>
+  <li><strong>No percentile filter.</strong> <code>target_percentile_scaled</code>'s pXX is a legacy conviction model ("small for THEM = noise"); <code>position_gap</code>'s conviction model is mechanical ("too small for US to economically mirror"). The derived threshold IS the filter. Keep both policies side-by-side until A/B tells us which model wins.</li>
+</ul>
+
+<p class="small"><strong>Cross-target portfolio cap</strong> = on-chain <code>poly_wallet_grants.total_at_risk_usdc</code> trips. <strong>Cross-target velocity</strong> = <code>poly_wallet_grants.daily_cap_usdc</code>. <strong>Per-fill blast radius</strong>: lower bound = market's structural floor (<code>min_usdc_notional</code>); upper bound = <em>none at the policy layer</em>. Planner passes <code>+Infinity</code> as the ceiling to <code>applyMarketFloors</code> so per-fill intent can exceed <code>alloc</code> when target averages up past their cost-basis VWAP. The grant is the only cross-fill stop. The policy stays clean; safety lives in the grant.</p>
+
+<hr />
+
+<h2>The tradeoff (read this before you ship)</h2>
+
+<p>Dollar-anchored proportional sizing has a real property to understand:</p>
+
+<table>
+  <thead><tr><th>🟢 risk discipline</th><th>🟡 anti-conviction in trending winners</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>As target's VWAP rises, our share count shrinks. We hold less per share than target as they average up &mdash; we can't bag-hold worse than target's own cost curve.</td>
+      <td>When target adds conviction at higher prices in a trending move (their thesis still holds), we mirror with progressively fewer shares. We trail trending winners.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="small">Whether this net-wins depends on whether target's late-stage conviction adds are informed (we should over-weight, this policy under-weights) or revert (we should hold dollar value steady, this policy does). v1 picks the latter. Revisit if A/B shows we trail trending winners more than we save on falling knives.</p>
 
 <hr />
 
 <h2>What's being tested right now</h2>
 
-<p>A 24h A/B is running on candidate-a, same target (swisstony), same caps (p80 / $15), only the sizing kind differs:</p>
+<p>24h A/B on candidate-a, same target (swisstony), same caps (p80 / $15), only sizing kind differs:</p>
 
 <table>
   <thead><tr><th>tenant</th><th>policy</th></tr></thead>
   <tbody>
     <tr><td><strong>cand-a/VALIDATION</strong> (control)</td><td><code>target_percentile_scaled</code> (legacy)</td></tr>
-    <tr><td><strong>cand-a/GAP</strong> (experiment)</td><td><code>position_gap</code> ← <strong>just patched 2026-05-18</strong></td></tr>
+    <tr><td><strong>cand-a/GAP</strong> (experiment)</td><td><code>position_gap</code> &larr; <strong>patched 2026-05-18</strong></td></tr>
   </tbody>
 </table>
 
-<p>Done condition: re-run the <a href="../../../work/charters/POLY_ALGO_TENANT_MATRIX.md">charter audit query</a> in 24h. If <code>cand-a/GAP</code> produces sensible placement rate + lower minority-side delta than <code>cand-a/VALIDATION</code>, Phase 2 is proven. Otherwise, retune.</p>
+<p>Done condition: re-run the <a href="../../../work/charters/POLY_ALGO_TENANT_MATRIX.md">charter audit query</a> in 24h. If <code>cand-a/GAP</code> produces sensible placement rate + lower minority-side delta than <code>cand-a/VALIDATION</code>, Phase 2 is proven.</p>
 
 <hr />
 
-<h2>The two policy knobs</h2>
+<h2>What still bites (flag, do not ship blind)</h2>
 
-<table>
-  <thead><tr><th>UI knob</th><th>maps to</th></tr></thead>
-  <tbody>
-    <tr><td><strong>P100 MAX</strong> ($15)</td><td><code>mirror_max_usdc_per_trade</code> — per-leg cap on <code>intent_usdc</code>. Same field as the legacy policy.</td></tr>
-    <tr><td><strong>THRESHOLD P80</strong></td><td>nothing under <code>position_gap</code> — no per-fill percentile filter exists. The conviction knob is <code>target_scale</code> (currently a bootstrap constant <code>1e-4</code>; per-target tunability is a follow-up).</td></tr>
-  </tbody>
-</table>
-
-<hr />
-
-<h2>The one real algorithmic gap to flag</h2>
-
-<p>VWAP is not first-class on either side today. The <code>vwap_floor_breach</code> gate compares <code>fill.price</code> against target's residual cost-basis (derived per-fill from a Polymarket Data-API snapshot). Our own VWAP is tracked in the mirror cache but unused under <code>position_gap</code>. Phase 4's <code>GapExecutor</code> promotes both to first-class fields backed by chain truth and shifts the constraint onto the order's <code>limit_price</code> instead of skipping per-fill.</p>
-
-<p class="small">Until Phase 4: a half-day patch can backport that mechanism to <code>position_gap</code> alone — cap <code>intent.limit_price = min(fill.price, target_vwap + ε)</code>, drop the per-fill skip. Decide after the 24h A/B data lands.</p>
-
-<hr />
+<ul class="bites">
+  <li><strong>Σ requires target's WHOLE book, not just the current condition.</strong> v0 needs a cached per-target full-positions fetch (reuse <code>listAllUserPositions</code>, TTL ~30s). New dep, but cheap.</li>
+  <li><strong>Σ = 0 needs an explicit guard.</strong> Target closes everything between snapshot and fill, or live read fails &mdash; planner skips <code>target_position_below_threshold</code>, never divides by zero.</li>
+  <li><strong>VWAP gate is per-fill, not per-order.</strong> <code>vwap_floor_breach</code> compares <code>fill.price</code> to target's residual cost-basis per fill. Phase 4's <code>GapExecutor</code> promotes this to <code>limit_price = min(fill.price, target_vwap + &epsilon;)</code>.</li>
+  <li><strong>Static $ alloc, not %.</strong> Alloc doesn't auto-grow / shrink with our wallet equity. Tenant rebalances manually. v1 (filed as follow-up) switches to <code>mirror_capital_alloc_pct</code> of wallet equity &mdash; fractional-Kelly framing, auto-throttling. Requires a wallet-equity read path; deferred.</li>
+  <li><strong>Account balance &lt; alloc.</strong> Planner stays naive (doesn't read balance). Executor wire fails <code>INSUFFICIENT_BALANCE</code>; placements pause until cash frees up via redeem/SELL/deposit. Clean separation.</li>
+  <li><strong>Multi-target same-market collision.</strong> Two targets long different sides of the same binary &mdash; each computes its scale independently against the same <code>our_shares</code>. Evaluation order determines allocation. Phase 3+ cross-target reconciler.</li>
+</ul>
 
 <p class="pointers">
 <strong>For more:</strong>
 <a href="./2026-05-18-position-gap-cost-of-skip-scorecard.md">2026-05-18 cost-of-skip scorecard (the data)</a> &middot;
-<a href="../../spec/poly-copy-trade-position-mirror.md">design spec</a> &middot;
+<a href="../../spec/poly-copy-trade-position-mirror.md">design spec (see 2026-05-18 status note)</a> &middot;
 <a href="../../../work/charters/POLY_ALGO_TENANT_MATRIX.md">tenant-matrix charter</a> &middot;
 <a href="../../../work/charters/POLY_COPY_DELTA.md">delta-class charter (D2)</a>
 </p>

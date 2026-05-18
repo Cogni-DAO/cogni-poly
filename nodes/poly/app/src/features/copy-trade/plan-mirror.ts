@@ -68,11 +68,17 @@ export function applySizingPolicy(
     targetSideFraction
   );
   if (!sized.ok) return sized;
-  if (
-    cumulativeIntentForToken !== undefined &&
-    cumulativeIntentForToken + sized.size_usdc > policy.max_usdc_per_condition
-  ) {
-    return { ok: false, reason: "position_cap_reached" };
+  // `position_gap` doesn't carry `max_usdc_per_condition` (no per-trade cap
+  // under proportional book copy — anti-tracking). Its own sizer runs
+  // upstream via `applyPositionGapSizing`; this helper is only reachable for
+  // legacy policies.
+  if (policy.kind !== "position_gap") {
+    if (
+      cumulativeIntentForToken !== undefined &&
+      cumulativeIntentForToken + sized.size_usdc > policy.max_usdc_per_condition
+    ) {
+      return { ok: false, reason: "position_cap_reached" };
+    }
   }
   return sized;
 }
@@ -108,13 +114,13 @@ function sizeFromPolicy(
       );
     }
     case "position_gap": {
-      // D2 phase 2: gap math is the new_entry path for this policy and runs
-      // before `sizeFromPolicy` via `applyPositionGapSizing`. Layer/hedge
-      // dispatch is short-circuited in `decideMirrorBranch`, so a fill that
-      // reaches here under `position_gap` would have to come from a future
-      // call site that doesn't route through `decideMirrorBranch`. Defensive
-      // fall-through: treat the same as an unsized fill so the planner stays
-      // a total function. Phase 4 deletes this branch entirely.
+      // 2026-05-18 redesign: gap math is the new_entry path for this policy
+      // and runs before `sizeFromPolicy` via `applyPositionGapSizing`.
+      // Layer/hedge dispatch is short-circuited in `decideMirrorBranch`, so a
+      // fill that reaches here under `position_gap` would have to come from a
+      // future call site that doesn't route through `decideMirrorBranch`.
+      // Defensive fall-through: treat the same as an unsized fill so the
+      // planner stays a total function. Phase 4 deletes this branch entirely.
       return { ok: false, reason: "below_market_min" };
     }
     case "target_percentile_scaled": {
@@ -167,27 +173,46 @@ function sizeFromPolicy(
 }
 
 /**
- * D2 phase 2 — gap-driven sizing for `kind: "position_gap"`. The mirror's
- * desired share count on the fill's token is `target_shares × target_scale`;
- * the gap is `desired − ours`. Fill price converts gap-shares to USDC; market
- * floors + the per-token cumulative-intent cap then clamp.
+ * 2026-05-18 redesign — proportional book copy for `kind: "position_gap"`.
  *
- * Inputs are restricted to state the planner already receives — no I/O, no
- * new ports. Layer accumulation falls out naturally: as our shares grow the
- * gap shrinks, and once `gap ≤ 0` the planner skips `followup_not_needed`.
+ * **North star.** Hold a miniature of target's WHOLE BOOK. Mirror's desired
+ * share count on the fill's token is `target_shares × scale`, where
+ * `scale = capital_alloc_usdc / Σ target_total_open_book_cost_usdc`. The gap
+ * is `desired − ours`. Fill price converts gap-shares to USDC; market floor
+ * is the only clamp.
+ *
+ * **No per-trade cap.** `position_gap` deliberately omits
+ * `max_usdc_per_condition` — capping per-fill would throttle the proportional
+ * copy mechanism and is anti-tracking. Wire-level safety lives in
+ * `poly_wallet_grants` (`CAPS_LIVE_IN_GRANT`).
+ *
+ * **Σ ≤ 0 guard.** When `state.target_total_open_book_cost_usdc` is missing
+ * or zero (target closed everything, live read failed) we skip
+ * `target_position_below_threshold` rather than divide by zero. Fail-closed.
+ *
+ * Inputs are restricted to state the planner already receives — no I/O. Layer
+ * accumulation falls out naturally: as our shares grow the gap shrinks, and
+ * once `gap ≤ 0` the planner skips `followup_not_needed`.
+ *
+ * See docs/spec/poly-copy-trade-position-mirror.md (locked design status note).
  */
 function applyPositionGapSizing(
   policy: PositionGapSizingPolicy,
   fill: PlanMirrorInput["fill"],
   state: PlanMirrorInput["state"],
   minShares: number | undefined,
-  minUsdcNotional: number | undefined,
-  cumulativeIntentForToken: number | undefined
+  minUsdcNotional: number | undefined
 ): SizingResult {
   const tokenId =
     typeof fill.attributes?.asset === "string" ? fill.attributes.asset : "";
   if (tokenId === "") {
     return { ok: false, reason: "below_market_min" };
+  }
+  // Σ ≤ 0 guard — target's whole-book cost must be hydrated and positive for
+  // the proportional scale to be defined. Skip rather than divide by zero.
+  const targetBookCost = state.target_total_open_book_cost_usdc;
+  if (targetBookCost === undefined || targetBookCost <= 0) {
+    return { ok: false, reason: "target_position_below_threshold" };
   }
   const targetShares =
     state.target_position?.tokens.find((t) => t.token_id === tokenId)
@@ -196,22 +221,22 @@ function applyPositionGapSizing(
     state.position?.our_token_id === tokenId
       ? state.position.our_qty_shares
       : 0;
-  const desiredShares = targetShares * policy.target_scale;
+  const scale = policy.capital_alloc_usdc / targetBookCost;
+  const desiredShares = targetShares * scale;
   const gapShares = desiredShares - ourShares;
   if (gapShares <= 0) {
     return { ok: false, reason: "followup_not_needed" };
   }
   const gapUsdc = gapShares * fill.price;
-  // GAP_DRIVES_SIZING: when the gap itself is below the effective market
-  // floor, skip rather than round up. `applyMarketFloors` clamps up by design
-  // (so legacy "place at market min" policies always land a placeable order),
-  // but for position_gap the gap IS the target — overpaying to clear the
-  // floor would re-introduce the inverted-weighting failure mode this policy
+  // When the gap itself is below the effective market floor, skip rather
+  // than round up. `applyMarketFloors` clamps up by design (so legacy
+  // "place at market min" policies always land a placeable order), but for
+  // position_gap the gap IS the target — overpaying to clear the floor
+  // would re-introduce the inverted-weighting failure mode this policy
   // exists to prevent. Mirror `applyMarketFloors`'s floor calc here:
   // `floorUsdc = max(minShares × price, minUsdcNotional)`. Low-tick markets
   // (e.g. minShares=5, price=0.85 → $4.25) have floors well above
-  // minUsdcNotional, so comparing against minUsdcNotional alone leaked the
-  // clamp-up on every gap in `[minUsdcNotional, minShares × price)`.
+  // minUsdcNotional alone.
   if (minUsdcNotional !== undefined) {
     const effectiveFloorUsdc = Math.max(
       (minShares ?? 0) * fill.price,
@@ -221,21 +246,21 @@ function applyPositionGapSizing(
       return { ok: false, reason: "below_market_min" };
     }
   }
-  const sized = applyMarketFloors(
+  // **NO per-trade ceiling under `position_gap`** (locked design 2026-05-18).
+  // A per-fill clamp would throttle proportional tracking — when target
+  // averages up at a higher price than their cost-basis VWAP, `gapUsdc` can
+  // exceed `capital_alloc_usdc` legitimately, and clamping there would
+  // under-mirror the position. The grant chain (`poly_wallet_grants`,
+  // `CAPS_LIVE_IN_GRANT`) is the only cross-fill safety stop; per-tick
+  // staleness is bounded by the Σ-guard above. Pass `+Infinity` so
+  // `applyMarketFloors` only enforces the lower bound (market floor).
+  return applyMarketFloors(
     gapUsdc,
     fill.price,
     minShares,
     minUsdcNotional,
-    policy.max_usdc_per_condition
+    Number.POSITIVE_INFINITY
   );
-  if (!sized.ok) return sized;
-  if (
-    cumulativeIntentForToken !== undefined &&
-    cumulativeIntentForToken + sized.size_usdc > policy.max_usdc_per_condition
-  ) {
-    return { ok: false, reason: "position_cap_reached" };
-  }
-  return sized;
 }
 
 function applyMarketFloors(
@@ -667,8 +692,7 @@ function decideMirrorBranch(
             fill,
             state,
             minShares,
-            minUsdcNotional,
-            state.cumulative_intent_usdc_for_token
+            minUsdcNotional
           )
         : applySizingPolicy(
             config.sizing,
@@ -898,6 +922,13 @@ function applyFollowupSizing(params: {
   minUsdcNotional: number | undefined;
   cumulativeIntentForToken: number | undefined;
 }): SizingResult {
+  // Layer/hedge follow-up is short-circuited under `position_gap` (gap math
+  // produces layering via desired − ours), so this helper should never see
+  // a `position_gap` policy. Narrow defensively + fail-closed if a future
+  // refactor breaks that invariant.
+  if (params.policy.kind === "position_gap") {
+    return { ok: false, reason: "followup_not_needed" };
+  }
   const maxUsdc = Math.min(
     params.policy.max_usdc_per_condition,
     params.maxFollowupUsdc

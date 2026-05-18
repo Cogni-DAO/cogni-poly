@@ -31,6 +31,7 @@ import {
   type OperatorPosition,
   runMirrorTick,
 } from "@/features/copy-trade/mirror-pipeline";
+import { positionCostUsdc } from "@/features/copy-trade/position-cost";
 import { targetIdFromWallet } from "@/features/copy-trade/target-id";
 import {
   buildWalletStatistic,
@@ -105,15 +106,6 @@ type SizingPolicyKindInput =
   | "target_percentile_scaled"
   | "position_gap";
 
-/**
- * Fallback `target_scale` for `position_gap` when no per-target value is
- * supplied (env target source). The DB target source always supplies a value
- * from the `target_scale` column (NOT NULL DEFAULT `0.0005` in the schema),
- * so this constant only governs env-mode tests + the system-tenant boot
- * path. Production tenants override per-target via the PATCH API.
- */
-const FALLBACK_POSITION_GAP_TARGET_SCALE = 0.0005;
-
 function minBetPolicy(maxUsdcPerCondition: number): SizingPolicy {
   return {
     kind: "min_bet",
@@ -131,8 +123,12 @@ function buildSizingPolicy(params: {
   mirrorMaxUsdcPerTrade: number;
   /** Per-target opt-in; `'auto'` (default) preserves snapshot-derived behavior. */
   sizingPolicyKind: SizingPolicyKindInput;
-  /** Per-target conviction knob for `position_gap`; falls back to `FALLBACK_POSITION_GAP_TARGET_SCALE`. */
-  targetScale?: number;
+  /**
+   * Per-target whole-book proportional alloc for `position_gap`. Required
+   * when `resolvedKind === 'position_gap'`; throws otherwise. Locked design
+   * 2026-05-18 — no fallback constant, no default.
+   */
+  capitalAllocUsdc?: number;
 }): SizingPolicy {
   const snapshot = snapshotForTargetWallet(params.targetWallet);
   const resolvedKind: Exclude<SizingPolicyKindInput, "auto"> =
@@ -145,10 +141,17 @@ function buildSizingPolicy(params: {
     return minBetPolicy(params.mirrorMaxUsdcPerTrade);
   }
   if (resolvedKind === "position_gap") {
+    if (
+      params.capitalAllocUsdc === undefined ||
+      !(params.capitalAllocUsdc > 0)
+    ) {
+      throw new Error(
+        `position_gap target ${params.targetWallet} missing mirror_capital_alloc_usdc — CHECK constraint should have caught this at the DB layer`
+      );
+    }
     return {
       kind: "position_gap",
-      max_usdc_per_condition: params.mirrorMaxUsdcPerTrade,
-      target_scale: params.targetScale ?? FALLBACK_POSITION_GAP_TARGET_SCALE,
+      capital_alloc_usdc: params.capitalAllocUsdc,
     };
   }
   // `target_percentile_scaled` requires a snapshot. If the user explicitly
@@ -206,11 +209,13 @@ export function buildMirrorTargetConfig(params: {
    */
   sizingPolicyKind?: SizingPolicyKindInput;
   /**
-   * Per-target `target_scale` for `position_gap`. Read from
-   * `poly_copy_trade_targets.target_scale` by the enumerator. Defaults to
-   * `FALLBACK_POSITION_GAP_TARGET_SCALE` when omitted (env-source path).
+   * Per-target whole-book proportional alloc for `position_gap`. Read from
+   * `poly_copy_trade_targets.mirror_capital_alloc_usdc` by the enumerator.
+   * Required when `sizingPolicyKind === 'position_gap'` (CHECK constraint
+   * enforced at the DB layer). Throws at `buildSizingPolicy` time if absent
+   * for a `position_gap` target — locked design 2026-05-18, no fallback.
    */
-  targetScale?: number;
+  capitalAllocUsdc?: number;
 }): MirrorTargetConfig {
   const mirrorFilterPercentile =
     params.mirrorFilterPercentile ?? DEFAULT_CONVICTION_FILTER_PERCENTILE;
@@ -226,8 +231,8 @@ export function buildMirrorTargetConfig(params: {
       mirrorFilterPercentile,
       mirrorMaxUsdcPerTrade,
       sizingPolicyKind: params.sizingPolicyKind ?? "auto",
-      ...(params.targetScale !== undefined
-        ? { targetScale: params.targetScale }
+      ...(params.capitalAllocUsdc !== undefined
+        ? { capitalAllocUsdc: params.capitalAllocUsdc }
         : {}),
     }),
     // task.5001 — default to mirror_limit (resting GTC at target's entry).
@@ -267,19 +272,9 @@ export function targetConditionPositionFromDataApiPositions(
   };
 }
 
-function positionCostUsdc(position: {
-  size: number;
-  avgPrice: number;
-  initialValue: number;
-}): number {
-  if (Number.isFinite(position.initialValue) && position.initialValue > 0) {
-    return position.initialValue;
-  }
-  if (Number.isFinite(position.size) && Number.isFinite(position.avgPrice)) {
-    return Math.max(0, position.size * position.avgPrice);
-  }
-  return 0;
-}
+// `positionCostUsdc` moved to `@features/copy-trade/position-cost` so the
+// bootstrap container's whole-book Σ hydrator shares the same fallback
+// semantics. Re-imported below.
 
 export interface MirrorJobDeps {
   /** Target config — built via `buildMirrorTargetConfig`; Phase 4 reads from a tenant-aware table. */
@@ -305,6 +300,13 @@ export interface MirrorJobDeps {
   getMarketConstraints?: MirrorPipelineDeps["getMarketConstraints"];
   /** Optional target-position read; v0 production uses Polymarket Data API. */
   getTargetConditionPosition?: MirrorPipelineDeps["getTargetConditionPosition"];
+  /**
+   * Optional whole-book cost-basis read for `position_gap` proportional sizing
+   * (Σ over target's open positions across every condition). v0 production
+   * uses `PolymarketDataApiClient.listAllUserPositions` behind a 30s shared
+   * cache. See `MirrorPipelineDeps.getTargetTotalBookCost` for semantics.
+   */
+  getTargetTotalBookCost?: MirrorPipelineDeps["getTargetTotalBookCost"];
   /** Structured log sink. */
   logger: LoggerPort;
   /** Metrics sink. */
@@ -366,6 +368,7 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
       : {}),
     getMarketConstraints: deps.getMarketConstraints,
     getTargetConditionPosition: deps.getTargetConditionPosition,
+    getTargetTotalBookCost: deps.getTargetTotalBookCost,
     target: deps.target,
     getCursor: () => cursor,
     setCursor: (n) => {

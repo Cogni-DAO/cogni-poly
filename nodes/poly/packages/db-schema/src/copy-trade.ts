@@ -76,24 +76,29 @@ export const polyCopyTradeTargets = pgTable(
      */
     sizingPolicyKind: text("sizing_policy_kind").notNull().default("auto"),
     /**
-     * Per-target conviction knob for `position_gap` sizing — the fraction of
-     * target's per-token shares the mirror aims to hold. `desired_shares =
-     * target_shares × target_scale`. Read by `buildSizingPolicy` when the
-     * resolved policy kind is `position_gap`; ignored by `min_bet` /
-     * `target_percentile_scaled` but populated on every row for typing
-     * symmetry with the rest of the sizing knobs (same pattern as
-     * `mirror_filter_percentile` on min_bet rows).
+     * Per-target dollar budget for `position_gap` proportional book copy —
+     * "I'm betting $C of my book tracking this target's whole book." Drives
+     * `scale = capital_alloc_usdc / Σ target_total_open_book_cost_usdc`,
+     * applied uniformly across every token target holds. Per-fill recompute.
      *
-     * `numeric(8,7)` supports the full useful range — `1e-7` (Sinner-class
-     * $80k+ position outlier where 1e-4 would clip the per-leg cap) through
-     * `1.0`. Default `0.0005` is calibrated for swisstony's typical $1–7k
-     * token cost-basis distribution (charter chr.poly-algo-tenant-matrix
-     * audit, 2026-05-18) so the gap math produces $1–$3.50 desired_usdc on a
-     * typical fill — above market_min, well below the $15 per-leg cap.
+     * NULLable on the row so non-`position_gap` policies (`min_bet`,
+     * `target_percentile_scaled`, `auto`) don't carry a meaningless default.
+     * The conditional CHECK constraint below requires NOT NULL when
+     * `sizing_policy_kind = 'position_gap'`; misconfigured tenants fail at
+     * bootstrap rather than silently inheriting an arbitrary value.
+     *
+     * No `mirror_max_usdc_per_trade` is read under `position_gap` —
+     * per-trade caps would throttle the proportional copy mechanism that is
+     * the whole point of book-matching. Wire-level safety lives in
+     * `poly_wallet_grants` (`CAPS_LIVE_IN_GRANT`).
+     *
+     * See docs/spec/poly-copy-trade-position-mirror.md (2026-05-18 locked
+     * design status note) for the full rationale.
      */
-    targetScale: numeric("target_scale", { precision: 8, scale: 7 })
-      .notNull()
-      .default("0.0005"),
+    mirrorCapitalAllocUsdc: numeric("mirror_capital_alloc_usdc", {
+      precision: 10,
+      scale: 2,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -118,8 +123,14 @@ export const polyCopyTradeTargets = pgTable(
       sql`${table.sizingPolicyKind} IN ('auto','min_bet','target_percentile_scaled','position_gap')`
     ),
     check(
-      "poly_copy_trade_targets_target_scale_range",
-      sql`${table.targetScale} > 0 AND ${table.targetScale} <= 1`
+      "poly_copy_trade_targets_capital_alloc_positive",
+      sql`${table.mirrorCapitalAllocUsdc} IS NULL OR ${table.mirrorCapitalAllocUsdc} > 0`
+    ),
+    // 2026-05-18 locked design: position_gap requires an explicit alloc. No
+    // default — misconfigured tenants fail fast at bootstrap.
+    check(
+      "poly_copy_trade_targets_position_gap_requires_alloc",
+      sql`${table.sizingPolicyKind} <> 'position_gap' OR ${table.mirrorCapitalAllocUsdc} IS NOT NULL`
     ),
     // One active row per (tenant, wallet). Soft-deleted rows allowed to coexist
     // so a previously-disabled wallet can be re-added without violating uniqueness.
