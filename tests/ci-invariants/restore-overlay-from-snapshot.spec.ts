@@ -14,6 +14,12 @@
  *                                          image unit leaves sibling images on
  *                                          their prior digest — the bug class
  *                                          that bug.5004's symptom-cascade hid)
+ *   - ALWAYS_SNAPSHOT_WINS_ON_DIGEST      (bug.5013 inversion of the prior
+ *                                          ONLY_WHEN_PLACEHOLDER_MAIN_WINS axiom:
+ *                                          snapshot wins for every image,
+ *                                          because main:overlays/ digest pins
+ *                                          can be stale — the digest-seed loop
+ *                                          is best-effort, not authoritative)
  *   - REMOVED_IMAGE_IS_NOOP               (snapshot row whose image was removed
  *                                          from the overlay → promote-k8s rc=2 →
  *                                          restore script exits 0, no phantom
@@ -382,13 +388,20 @@ images:
     expect(finalOverlay).not.toContain("poly-echo-sidecar");
   });
 
-  it("ONLY_WHEN_PLACEHOLDER_MAIN_WINS_ON_DIGEST — preview/production mode keeps the rsync'd digest (main is canonical per Axiom 17)", () => {
-    // Scenario: snapshot has an OLDER echo digest; rsync from main brought
-    // a NEWER digest (task.0349 seed updated main). RESTORE_MODE=only-when-
-    // placeholder must NOT regress to the older snapshot digest.
+  it("ALWAYS_SNAPSHOT_WINS_ON_DIGEST — bug.5013: snapshot wins even when main's rsync brought a real digest, because main can be stale", () => {
+    // Live repro: preview deploy commit 9f4e64855 (PR #88, research-endpoint
+    // PR that did not touch sidecar) regressed poly-paper-sidecar from
+    // a72f751b (PR #86's good digest) to e96106e8 (PR #56's v0). Root cause:
+    // main:infra/k8s/overlays/preview/poly/kustomization.yaml had the v0 pin
+    // baked in from PR #61 and the task.0349 digest-seed loop had never fired
+    // on this repo (zero `chore(preview)` commits). The prior
+    // ONLY_WHEN_PLACEHOLDER mode treated main's stale-but-real digest as
+    // canonical and discarded the snapshot's good digest. Inverted axiom:
+    // snapshot wins. Main:overlays/ is the cold-start seed; the deploy
+    // branch is authoritative for live digests.
     writeFileSync(
       fixture.overlayPath,
-      overlayYaml(polyAllDigest({ kind: "digest", value: DIGEST_ECHO_LIVE })) // snapshot state
+      overlayYaml(polyAllDigest({ kind: "digest", value: DIGEST_ECHO_LIVE })) // snapshot has CURRENT good digests
     );
     const snapshotFile = path.join(fixture.root, "snapshot.tsv");
     const snapRes = spawnSync("bash", [SNAPSHOT_SCRIPT], {
@@ -398,31 +411,30 @@ images:
     });
     writeFileSync(snapshotFile, snapRes.stdout);
 
-    // Rsync brings NEWER digests from main for ALL three images (simulates
-    // task.0349 seed run that updated everything). Using distinct values
-    // per image so an erroneous "always" restore would visibly regress
-    // poly+paper too (not just echo) — the original test only differentiated
-    // echo and was tautological for the sibling rows.
-    const DIGEST_POLY_NEWER_FROM_MAIN =
+    // Rsync from main brings DIFFERENT-but-real digests for every image
+    // (simulating main's stale pins surviving from a prior catalog edit
+    // while the deploy branch advanced via per-PR promotes). If the script
+    // honored main's pins, every image would regress. It must not.
+    const DIGEST_POLY_STALE_FROM_MAIN =
       "sha256:5555555555555555555555555555555555555555555555555555555555555555";
-    const DIGEST_PAPER_NEWER_FROM_MAIN =
+    const DIGEST_PAPER_STALE_FROM_MAIN =
       "sha256:6666666666666666666666666666666666666666666666666666666666666666";
-    const DIGEST_ECHO_NEWER_FROM_MAIN =
+    const DIGEST_ECHO_STALE_FROM_MAIN =
       "sha256:4444444444444444444444444444444444444444444444444444444444444444";
     writeFileSync(
       fixture.overlayPath,
       overlayYaml([
         {
           name: IMG_POLY,
-          pin: { kind: "digest", value: DIGEST_POLY_NEWER_FROM_MAIN },
+          pin: { kind: "digest", value: DIGEST_POLY_STALE_FROM_MAIN },
         },
         {
           name: IMG_PAPER,
-          pin: { kind: "digest", value: DIGEST_PAPER_NEWER_FROM_MAIN },
+          pin: { kind: "digest", value: DIGEST_PAPER_STALE_FROM_MAIN },
         },
         {
           name: IMG_ECHO,
-          pin: { kind: "digest", value: DIGEST_ECHO_NEWER_FROM_MAIN },
+          pin: { kind: "digest", value: DIGEST_ECHO_STALE_FROM_MAIN },
         },
       ])
     );
@@ -434,38 +446,26 @@ images:
         SNAPSHOT_FILE: snapshotFile,
         OVERLAY_ENV: "candidate-a",
         PROMOTE_SCRIPT,
-        RESTORE_MODE: "only-when-placeholder",
+        RESTORE_MODE: "always",
       },
       encoding: "utf-8",
     });
     expect(restoreRes.status, restoreRes.stderr).toBe(0);
-    // ALL three images must still be on main's NEWER digest, none regressed.
-    // If `only-when-placeholder` accidentally restored a row whose current
-    // overlay value is already a digest pin, this would surface as a regress
-    // to {POLY,PAPER,ECHO}_LIVE on that image.
+    // Every image returns to the snapshot's digest. None retains main's pin.
     const finalOverlay = readFileSync(fixture.overlayPath, "utf-8");
-    expect(digestOfImage(finalOverlay, IMG_POLY)).toBe(
-      DIGEST_POLY_NEWER_FROM_MAIN
-    );
-    expect(digestOfImage(finalOverlay, IMG_PAPER)).toBe(
-      DIGEST_PAPER_NEWER_FROM_MAIN
-    );
-    expect(digestOfImage(finalOverlay, IMG_ECHO)).toBe(
-      DIGEST_ECHO_NEWER_FROM_MAIN
-    );
-    // Belt-and-suspenders: stdout reports all 3 main-wins skips.
-    expect(restoreRes.stdout).toMatch(/3 main-wins row\(s\)/);
+    expect(digestOfImage(finalOverlay, IMG_POLY)).toBe(DIGEST_POLY_LIVE);
+    expect(digestOfImage(finalOverlay, IMG_PAPER)).toBe(DIGEST_PAPER_LIVE);
+    expect(digestOfImage(finalOverlay, IMG_ECHO)).toBe(DIGEST_ECHO_LIVE);
   });
 
-  it("ONLY_WHEN_PLACEHOLDER_SNAPSHOT_FILLS_PLACEHOLDER — bug.5012 fix: preview/production mode restores when main has placeholder", () => {
-    // Scenario: deploy-branch snapshot has a real echo digest (from a prior
-    // healed promote); main's overlay still has the cold-start placeholder
-    // (task.0349 never updated it because affected-only CI skipped echo).
-    // RESTORE_MODE=only-when-placeholder must restore the snapshot digest,
-    // preventing ImagePullBackOff. This is the live bug.5012 repro.
+  it("PLACEHOLDER_HOLE_SELF_HEAL — bug.5012 fix preserved under always: when main has a placeholder, snapshot's real digest still fills the hole", () => {
+    // Coverage carried forward from the deleted ONLY_WHEN_PLACEHOLDER_SNAPSHOT_FILLS
+    // test. Asserts the bug.5012 self-heal still works under bug.5013's
+    // RESTORE_MODE=always (which is strictly more aggressive — replays every
+    // digest pin, including over placeholder holes).
     writeFileSync(
       fixture.overlayPath,
-      overlayYaml(polyAllDigest({ kind: "digest", value: DIGEST_ECHO_LIVE })) // snapshot has real
+      overlayYaml(polyAllDigest({ kind: "digest", value: DIGEST_ECHO_LIVE }))
     );
     const snapshotFile = path.join(fixture.root, "snapshot.tsv");
     const snapRes = spawnSync("bash", [SNAPSHOT_SCRIPT], {
@@ -475,7 +475,7 @@ images:
     });
     writeFileSync(snapshotFile, snapRes.stdout);
 
-    // Rsync from main brings the cold-start placeholder.
+    // Rsync from main brings the cold-start placeholder for echo.
     writeFileSync(
       fixture.overlayPath,
       overlayYaml(
@@ -493,16 +493,33 @@ images:
         SNAPSHOT_FILE: snapshotFile,
         OVERLAY_ENV: "candidate-a",
         PROMOTE_SCRIPT,
-        RESTORE_MODE: "only-when-placeholder",
+        RESTORE_MODE: "always",
       },
       encoding: "utf-8",
     });
     expect(restoreRes.status, restoreRes.stderr).toBe(0);
-    // Echo must be restored to snapshot digest (placeholder filled).
     const finalOverlay = readFileSync(fixture.overlayPath, "utf-8");
-    expect(
-      digestOfImage(finalOverlay, "ghcr.io/cogni-dao/poly-echo-sidecar")
-    ).toBe(DIGEST_ECHO_LIVE);
+    expect(digestOfImage(finalOverlay, IMG_ECHO)).toBe(DIGEST_ECHO_LIVE);
+  });
+
+  it("REJECTS_REMOVED_MODE — `only-when-placeholder` is no longer valid (bug.5013 removed the buggy axiom)", () => {
+    const snapshotFile = path.join(fixture.root, "empty.tsv");
+    writeFileSync(snapshotFile, "");
+    const restoreRes = spawnSync("bash", [RESTORE_SCRIPT], {
+      cwd: fixture.root,
+      env: {
+        ...process.env,
+        SNAPSHOT_FILE: snapshotFile,
+        OVERLAY_ENV: "candidate-a",
+        PROMOTE_SCRIPT,
+        RESTORE_MODE: "only-when-placeholder",
+      },
+      encoding: "utf-8",
+    });
+    expect(restoreRes.status).not.toBe(0);
+    expect(restoreRes.stderr).toMatch(
+      /only-when-placeholder.*removed.*bug\.5013/
+    );
   });
 
   it("COLD_START_IS_NOOP — empty snapshot file exits 0 without error", () => {

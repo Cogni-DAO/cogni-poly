@@ -28,14 +28,16 @@
 #   RESTORE_MODE    (REQUIRED — no default; per design-review of bug.5012,
 #                    every caller must declare intent so a future YAML edit
 #                    that drops the env line hard-fails instead of silently
-#                    flipping safety). One of:
+#                    flipping safety). Only valid value: `always`.
 #     - `always`: replay every digest pin from snapshot, overwriting whatever
-#       the current overlay holds. Correct for candidate-a where rsync is
-#       from PR-branch (advisory per task.0373) → snapshot always wins.
-#     - `only-when-placeholder`: replay snapshot digest ONLY when current
-#       overlay holds a tag pin (placeholder). Correct for preview/production
-#       where rsync is from main (canonical per Axiom 17) → main wins on real
-#       digests, snapshot fills placeholder holes. Closes bug.5012.
+#       the current overlay holds. The deploy branch's prior digest is
+#       authoritative for live images; rsync sources (PR branch for
+#       candidate-flight, main for promote-and-deploy) are cold-start seeds
+#       only — see bug.5013 for why main is not trustworthy as a digest
+#       source for live images.
+#     The legacy `only-when-placeholder` mode (which let main's stale digests
+#     override the snapshot) was removed in bug.5013 after live evidence that
+#     main's digest pins regress unaffected sidecars on every promote.
 #   OVERLAY_DIGEST_LIB (optional) path to lib/overlay-digest.sh (default:
 #       resolved from PROMOTE_SCRIPT or SCRIPT_DIR siblings).
 #   PROMOTE_SCRIPT  (optional) path to promote-k8s-image.sh
@@ -49,18 +51,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 SNAPSHOT_FILE=${SNAPSHOT_FILE:?SNAPSHOT_FILE required}
 OVERLAY_ENV=${OVERLAY_ENV:?OVERLAY_ENV required}
-# No default — every caller must declare intent. A silent default of
-# `always` for the preview/production caller would regress main's newer
-# digests to snapshot's older ones (the exact bug.5012 inverse). Require
-# explicit mode at every call site so a future YAML edit that drops the
-# env line hard-fails instead of silently flipping safety.
-RESTORE_MODE=${RESTORE_MODE:?RESTORE_MODE required (always | only-when-placeholder)}
+# No default — every caller must declare intent. Keeps the safety-axiom
+# from bug.5012 design-review B1: a future YAML edit that drops the env
+# line hard-fails instead of silently flipping behavior.
+RESTORE_MODE=${RESTORE_MODE:?RESTORE_MODE required (always)}
 PROMOTE_SCRIPT=${PROMOTE_SCRIPT:-${SCRIPT_DIR}/promote-k8s-image.sh}
 
 case "$RESTORE_MODE" in
-  always|only-when-placeholder) ;;
+  always) ;;
   *)
-    echo "[ERROR] RESTORE_MODE must be 'always' or 'only-when-placeholder' (got: ${RESTORE_MODE})" >&2
+    echo "[ERROR] RESTORE_MODE must be 'always' (got: ${RESTORE_MODE}). The 'only-when-placeholder' mode was removed in bug.5013." >&2
     exit 1
     ;;
 esac
@@ -82,18 +82,6 @@ fi
 # shellcheck source=./lib/overlay-digest.sh disable=SC1090
 . "$OVERLAY_DIGEST_LIB"
 
-# Returns 0 if current overlay value for (unit, image_name) is a tag pin
-# (placeholder) or missing → safe to restore from snapshot. Returns 1 if
-# it's already a digest pin → keep the current value (main wins).
-current_is_placeholder() {
-  local unit="$1" image_name="$2" current
-  current=$(extract_overlay_image_refs_all "$OVERLAY_ENV" "$unit" 2>/dev/null \
-    | awk -F'\t' -v n="$image_name" '$1==n {print $2; exit}')
-  # Missing entry counts as placeholder — promote-k8s-image will rc=2 and
-  # we skip cleanly per the existing case below.
-  [[ "$current" != *"@sha256:"* ]]
-}
-
 if [ ! -s "$SNAPSHOT_FILE" ]; then
   echo "ℹ️  No snapshot rows (cold-start) — nothing to restore"
   exit 0
@@ -101,7 +89,6 @@ fi
 
 restored=0
 skipped_non_digest=0
-skipped_main_wins=0
 skipped_removed=0
 while IFS=$'\t' read -r unit image_name ref; do
   [ -z "$unit" ] && continue
@@ -110,13 +97,6 @@ while IFS=$'\t' read -r unit image_name ref; do
   # legitimately skip via rc=2). Only digest pins are safe to replay.
   if [[ "$ref" != *"@sha256:"* ]]; then
     skipped_non_digest=$((skipped_non_digest + 1))
-    continue
-  fi
-  # `only-when-placeholder` mode (preview/production): if main's rsync
-  # brought a real digest, keep it — Axiom 17 INFRA_K8S_MAIN_DERIVED says
-  # main is canonical. Only fill placeholder holes from snapshot.
-  if [ "$RESTORE_MODE" = "only-when-placeholder" ] && ! current_is_placeholder "$unit" "$image_name"; then
-    skipped_main_wins=$((skipped_main_wins + 1))
     continue
   fi
   # promote-k8s-image exit codes (contract):
@@ -146,4 +126,4 @@ while IFS=$'\t' read -r unit image_name ref; do
   esac
 done < "$SNAPSHOT_FILE"
 
-echo "Restored ${restored} digest pin(s); skipped ${skipped_non_digest} non-digest row(s), ${skipped_main_wins} main-wins row(s), ${skipped_removed} removed-image row(s) (mode=${RESTORE_MODE})"
+echo "Restored ${restored} digest pin(s); skipped ${skipped_non_digest} non-digest row(s), ${skipped_removed} removed-image row(s)"
