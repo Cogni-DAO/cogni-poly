@@ -81,6 +81,29 @@ const noopLogger: LoggerPort = {
   },
 };
 
+// Capturing logger for log-binding assertions. Records every `error`-level
+// call so tests can assert on the structured fields the pipeline emits.
+function makeCapturingLogger(): {
+  errors: Array<Record<string, unknown>>;
+  logger: LoggerPort;
+} {
+  const errors: Array<Record<string, unknown>> = [];
+  const logger: LoggerPort = {
+    debug() {},
+    info() {},
+    warn() {},
+    error(bindings: Record<string, unknown> | unknown) {
+      if (bindings && typeof bindings === "object") {
+        errors.push(bindings as Record<string, unknown>);
+      }
+    },
+    child() {
+      return logger;
+    },
+  };
+  return { errors, logger };
+}
+
 describe("extractAdapterErrorReceipt — regression: read err.name, not err.constructor.name", () => {
   it("persists the explicit this.name string (survives terser minification), not the class identifier", async () => {
     // Simulates a production-bundled error class: terser would minify
@@ -128,5 +151,55 @@ describe("extractAdapterErrorReceipt — regression: read err.name, not err.cons
       error_code: "unknown",
       error_class: "ClobUpstreamFailure",
     });
+  });
+});
+
+// bug.5060 — the mirror-pipeline placement-error log binding must include the
+// underlying error message + the planner's `size_usdc` / `limit_price`. Without
+// these, generic `throw new Error("…")` paths (paper adapter on non-2xx
+// sidecar response, Zod schema rejections) vanish into Loki as
+// `placement_failed | Error | ` with no `errorReason`, forcing a DB dive
+// every time someone investigates a paper-vs-live fidelity gap.
+describe("mirror-pipeline placement-error log binding — bug.5060 observability fix", () => {
+  it("includes errorMessage + size_usdc + limit_price on every placement error", async () => {
+    const fill = makeFill();
+    const ledger = new FakeOrderLedger();
+    const metrics = createRecordingMetrics();
+    const { errors, logger } = makeCapturingLogger();
+    let cursor: number | undefined;
+
+    const placeIntent = vi.fn(async () => {
+      // Generic Error, no `.details` — the exact shape that was vanishing
+      // into Loki's "placement_failed" bucket before bug.5060.
+      throw new Error(
+        "paper sidecar place-order failed: 422 size_usdc: number must be positive"
+      );
+    });
+
+    await runMirrorTick({
+      source: makeSource([fill]),
+      ledger,
+      placeIntent,
+      target: BASE_TARGET,
+      getMarketConstraints: async () => ({
+        minShares: 1,
+        minUsdcNotional: 1,
+        tickSize: 0.01,
+      }),
+      getCursor: () => cursor,
+      setCursor: (n) => {
+        cursor = n;
+      },
+      logger,
+      metrics,
+    });
+
+    const placementError = errors.find((b) => b.reason === "placement_failed");
+    expect(placementError).toBeDefined();
+    expect(placementError?.errorMessage).toBe(
+      "paper sidecar place-order failed: 422 size_usdc: number must be positive"
+    );
+    expect(typeof placementError?.size_usdc).toBe("number");
+    expect(typeof placementError?.limit_price).toBe("number");
   });
 });

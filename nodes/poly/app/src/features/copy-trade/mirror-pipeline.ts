@@ -1263,10 +1263,22 @@ async function executeMirrorOrder(
         errorCode: adapterErrorCode ?? "placement_failed",
         errorReason: adapterErrorReason,
         errorClass: adapterErrorClass,
+        // Underlying error text from the adapter (or `String(err)` if non-Error
+        // was thrown). Without this, generic `throw new Error("…")` paths —
+        // e.g. paper adapter on non-2xx sidecar response, or Zod parse failure
+        // in the request schema — vanish from observability and force a DB
+        // dive via the ledger's `error` column. bug.5060.
+        errorMessage: msg,
         reason: "placement_failed",
         source,
         fill_id: fill.fill_id,
         client_order_id,
+        // Sized notional + limit from the planner. Mirrors the `placed` log
+        // line so failure analysis can join intent shape vs adapter rejection
+        // (size below market min, limit outside tick grid, etc.) without
+        // round-tripping to the ledger's `intent` JSONB. bug.5060.
+        size_usdc: intent.size_usdc,
+        limit_price: intent.limit_price,
         ...decisionLogFields,
       },
       isFokNoMatch

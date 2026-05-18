@@ -76,6 +76,35 @@ export interface PaperAdapterConfig extends MarketProviderConfig {
 /** Network timeout for a single sidecar call (ms). */
 const SIDECAR_TIMEOUT_MS = 10_000;
 
+/**
+ * Structured failure thrown by every paper-adapter HTTP method. Carries
+ * `.details` shaped like the live-CLOB error path so the mirror-pipeline
+ * catch (`err.details.error_code`) classifies paper failures the same way it
+ * classifies CLOB failures — instead of falling back to the generic
+ * `placement_failed` bucket with no `errorReason` (bug.5060).
+ */
+export class PaperAdapterError extends Error {
+  readonly details: {
+    error_code:
+      | "paper_intent_invalid"
+      | "paper_sidecar_http_error"
+      | "paper_sidecar_unavailable";
+    reason: string;
+    error_class: "PaperAdapterError";
+    operation: "placeOrder" | "cancelOrder" | "getOrder";
+    http_status?: number;
+    response_body?: string;
+  };
+  constructor(
+    message: string,
+    details: Omit<PaperAdapterError["details"], "error_class">
+  ) {
+    super(message);
+    this.name = "PaperAdapterError";
+    this.details = { ...details, error_class: "PaperAdapterError" };
+  }
+}
+
 /** Request body shape posted to the sidecar's place-order endpoint. */
 const PlaceOrderRequestSchema = z.object({
   client_order_id: z.string().min(1),
@@ -130,7 +159,7 @@ export class PaperAdapter implements MarketProviderPort {
   async placeOrder(intent: OrderIntent): Promise<OrderReceiptSchemaInferred> {
     // Sidecar speaks the same shape as our OrderIntent (minus provider — implied
     // by sidecar identity). Strip provider; the rest passes through.
-    const body = PlaceOrderRequestSchema.parse({
+    const parsed = PlaceOrderRequestSchema.safeParse({
       client_order_id: intent.client_order_id,
       market_id: intent.market_id,
       token_id:
@@ -145,21 +174,54 @@ export class PaperAdapter implements MarketProviderPort {
       limit_price: intent.limit_price,
       attributes: intent.attributes,
     });
+    if (!parsed.success) {
+      const reason = parsed.error.issues
+        .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
+        .join("; ");
+      throw new PaperAdapterError(
+        `paper adapter rejected intent: ${reason}`,
+        {
+          error_code: "paper_intent_invalid",
+          reason,
+          operation: "placeOrder",
+        }
+      );
+    }
+    const body = parsed.data;
 
-    const response = await this.fetchWithTimeout(
-      `${this.sidecarBaseUrl}/place-order`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      }
-    );
+    let response: Response;
+    try {
+      response = await this.fetchWithTimeout(
+        `${this.sidecarBaseUrl}/place-order`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new PaperAdapterError(
+        `paper sidecar unreachable: ${reason}`,
+        {
+          error_code: "paper_sidecar_unavailable",
+          reason,
+          operation: "placeOrder",
+        }
+      );
+    }
 
     if (!response.ok) {
-      throw new Error(
-        `paper sidecar place-order failed: ${response.status} ${await this.safeReadText(
-          response
-        )}`
+      const text = await this.safeReadText(response);
+      throw new PaperAdapterError(
+        `paper sidecar place-order failed: ${response.status} ${text}`,
+        {
+          error_code: "paper_sidecar_http_error",
+          reason: text,
+          operation: "placeOrder",
+          http_status: response.status,
+          response_body: text,
+        }
       );
     }
 
@@ -177,10 +239,16 @@ export class PaperAdapter implements MarketProviderPort {
     // should not raise per the port contract.
     if (response.status === 404) return;
     if (!response.ok) {
-      throw new Error(
-        `paper sidecar cancel-order failed: ${response.status} ${await this.safeReadText(
-          response
-        )}`
+      const text = await this.safeReadText(response);
+      throw new PaperAdapterError(
+        `paper sidecar cancel-order failed: ${response.status} ${text}`,
+        {
+          error_code: "paper_sidecar_http_error",
+          reason: text,
+          operation: "cancelOrder",
+          http_status: response.status,
+          response_body: text,
+        }
       );
     }
   }
@@ -209,10 +277,16 @@ export class PaperAdapter implements MarketProviderPort {
     if (response.status === 404) return { status: "not_found" };
 
     if (!response.ok) {
-      throw new Error(
-        `paper sidecar get-order failed: ${response.status} ${await this.safeReadText(
-          response
-        )}`
+      const text = await this.safeReadText(response);
+      throw new PaperAdapterError(
+        `paper sidecar get-order failed: ${response.status} ${text}`,
+        {
+          error_code: "paper_sidecar_http_error",
+          reason: text,
+          operation: "getOrder",
+          http_status: response.status,
+          response_body: text,
+        }
       );
     }
 

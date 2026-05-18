@@ -11,4 +11,8 @@
  * @public
  */
 
-export { PaperAdapter, type PaperAdapterConfig } from "./paper.adapter.js";
+export {
+  PaperAdapter,
+  type PaperAdapterConfig,
+  PaperAdapterError,
+} from "./paper.adapter.js";
