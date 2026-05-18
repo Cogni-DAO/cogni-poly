@@ -21,10 +21,10 @@
 // Two halves: TWIN (paper, on preview) and LIVE (PROD).
 //
 // Required:
-//   POLY_PREVIEW_TRUST_TWIN_API_KEY         — bearer for preview tenant
-//   POLY_PREVIEW_TRUST_TWIN_BILLING_ACCOUNT_ID
-//   POLY_PROD_TENANT_API_KEY                — bearer for Derek's PROD tenant
-//   POLY_PROD_TENANT_BILLING_ACCOUNT_ID
+//   POLY_PREVIEW_TENANT_TRUST_TWIN_API_KEY         — bearer for preview tenant
+//   POLY_PREVIEW_TENANT_TRUST_TWIN_BILLING_ACCOUNT_ID
+//   POLY_PROD_TENANT_LIVE_API_KEY                — bearer for Derek's PROD tenant
+//   POLY_PROD_TENANT_LIVE_BILLING_ACCOUNT_ID
 // Optional:
 //   POLY_PREVIEW_BASE_URL      (default https://poly-preview.cognidao.org)
 //   POLY_PROD_BASE_URL         (default https://poly.cognidao.org)
@@ -530,10 +530,10 @@ async function main(): Promise<void> {
     process.env.POLY_PREVIEW_BASE_URL ?? "https://poly-preview.cognidao.org";
   const prodBase =
     process.env.POLY_PROD_BASE_URL ?? "https://poly.cognidao.org";
-  const twinBearer = envRequired("POLY_PREVIEW_TRUST_TWIN_API_KEY");
-  const twinAccount = envRequired("POLY_PREVIEW_TRUST_TWIN_BILLING_ACCOUNT_ID");
-  const liveBearer = envRequired("POLY_PROD_TENANT_API_KEY");
-  const liveAccount = envRequired("POLY_PROD_TENANT_BILLING_ACCOUNT_ID");
+  const twinBearer = envRequired("POLY_PREVIEW_TENANT_TRUST_TWIN_API_KEY");
+  const twinAccount = envRequired("POLY_PREVIEW_TENANT_TRUST_TWIN_BILLING_ACCOUNT_ID");
+  const liveBearer = envRequired("POLY_PROD_TENANT_LIVE_API_KEY");
+  const liveAccount = envRequired("POLY_PROD_TENANT_LIVE_BILLING_ACCOUNT_ID");
   const topN = Number(process.env.PAPER_TWIN_DIFF_TOP_N ?? 25);
   const sinceRaw = process.env.PAPER_TWIN_DIFF_SINCE;
   const untilRaw = process.env.PAPER_TWIN_DIFF_UNTIL;

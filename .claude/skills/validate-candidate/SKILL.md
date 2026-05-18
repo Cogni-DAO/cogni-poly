@@ -315,5 +315,6 @@ UI page exercise runs are cheap (headless Chromium, single pageview). API route 
 - `docs/guides/agent-api-validation.md` — API-flow reference
 - `scripts/dev/smoke-authed-state.mjs` — template for authed Playwright runs
 - `.local-auth/*.storageState.json` — the captured sessions (gitignored)
+- `work/charters/POLY_ALGO_TENANT_MATRIX.md` — `chr.poly-algo-tenant-matrix`; lists the long-lived candidate-a tenant (`POLY_CANDIDATE_A_TENANT_VALIDATION_*`) this skill is expected to drive per-PR exercises against. New PRs touching poly copy-trade surfaces should exercise via that tenant's API key + billing account ID rather than registering throwaway tenants.
 - `work/items/task.0309.qa-agent-e2e-validation.md` — the graph-agent successor
 - `work/projects/proj.cicd-services-gitops.md` (E2E Success Milestone section) — the bar this skill works toward
