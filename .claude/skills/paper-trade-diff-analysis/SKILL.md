@@ -30,7 +30,7 @@ PAPER_TWIN_DIFF_SINCE=<twin-registration-time-ISO> \
   pnpm tsx nodes/poly/scripts/paper-twin-diff.ts
 ```
 
-Reads `POLY_PREVIEW_TRUST_TWIN_*` and `POLY_PROD_TENANT_*` from `.env.cogni` (sourced or symlinked into the worktree). Writes a timestamped subdir:
+Reads `POLY_PREVIEW_TENANT_TRUST_TWIN_*` and `POLY_PROD_TENANT_*` from `.env.cogni` (sourced or symlinked into the worktree). Writes a timestamped subdir:
 
 ```
 nodes/poly/research/paper-twin-diff/<iso-utc>/
