@@ -3,433 +3,92 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>position_gap — how it works</title>
+<title>position_gap — the 60-second version</title>
 <style>
-  :root {
-    --bg: #fbfaf7;
-    --ink: #1a1a1a;
-    --muted: #6b6b6b;
-    --rule: #e5e2dc;
-    --accent: #2b5cd1;
-    --good: #1d8a4b;
-    --bad:  #c0392b;
-    --hi:   #fff3b0;
-    --code-bg: #f4f2ec;
-  }
+  :root { --bg:#fbfaf7; --ink:#1a1a1a; --muted:#6b6b6b; --rule:#e5e2dc; --accent:#2b5cd1; --code-bg:#f4f2ec; --hi:#fff3b0; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
-  body { font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif; -webkit-font-smoothing: antialiased; }
-  main { max-width: 760px; margin: 0 auto; padding: 48px 28px 88px; }
-  h1 { font-size: 30px; line-height: 1.15; margin: 0 0 4px; letter-spacing: -0.01em; }
-  h2 { font-size: 20px; margin: 44px 0 10px; letter-spacing: -0.005em; }
-  h3 { font-size: 13px; margin: 22px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
-  .lede { color: var(--muted); font-size: 16px; margin: 0 0 22px; }
-  p { margin: 10px 0; }
-  code, .mono { font: 14px/1.5 ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif; -webkit-font-smoothing:antialiased; }
+  main { max-width: 680px; margin: 0 auto; padding: 56px 28px 80px; }
+  h1 { font-size: 32px; line-height: 1.1; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 20px; margin: 40px 0 10px; }
+  .lede { color: var(--muted); margin: 0 0 32px; }
+  code, .mono { font: 14.5px/1.5 ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace; }
   code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
-  pre.math, pre.flow {
-    background: var(--code-bg); padding: 14px 16px; border-radius: 8px;
-    overflow-x: auto; font: 13.5px/1.55 ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
-    margin: 10px 0;
-  }
-  pre.flow { background: #fff; border: 1px solid var(--rule); }
+  pre.math { background: var(--code-bg); padding: 14px 18px; border-radius: 8px; overflow-x: auto; font: 15px/1.6 ui-monospace, "JetBrains Mono", Menlo, monospace; }
   mark { background: var(--hi); padding: 0 2px; border-radius: 2px; }
-  hr.rule { border: 0; border-top: 1px solid var(--rule); margin: 36px 0; }
-  .small { font-size: 13px; color: var(--muted); }
-  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; }
-  .pill.bad { background: #fbe6e2; color: var(--bad); }
-  .pill.good { background: #e1f3e7; color: var(--good); }
-  .pill.muted { background: var(--code-bg); color: var(--muted); }
-  /* Bars */
-  .bar { display: flex; height: 22px; border-radius: 4px; overflow: hidden; border: 1px solid var(--rule); background: #fff; font: 600 11px/22px ui-monospace, monospace; }
-  .bar span { display: block; color: #fff; text-align: center; white-space: nowrap; padding: 0 6px; }
-  .bar .a { background: #2b5cd1; }
-  .bar .b { background: #c0392b; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 8px 0 14px; }
-  @media (max-width: 620px) { .grid2 { grid-template-columns: 1fr; } }
-  .grid2 > div { font-size: 13px; }
-  .grid2 .label { color: var(--muted); font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
-  /* Two-column Q/A */
-  .qa { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 16px 0; }
-  .qa .q { font-weight: 600; }
-  .qa .a { color: var(--ink); margin-top: 4px; }
-  .footer { color: var(--muted); font-size: 12.5px; margin-top: 44px; }
-  /* Table */
-  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13.5px; }
-  th, td { border-bottom: 1px solid var(--rule); padding: 6px 8px; text-align: left; vertical-align: top; }
-  th { font-weight: 600; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; }
-  td .mono { white-space: nowrap; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 36px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 15px; }
+  th, td { border-bottom: 1px solid var(--rule); padding: 7px 10px; text-align: left; }
+  th { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .small { color: var(--muted); font-size: 13.5px; }
+  .pointers { color: var(--muted); font-size: 13.5px; margin-top: 32px; }
+  .pointers a { color: var(--muted); }
 </style>
 </head>
 <body>
 <main>
 
-<h1><code>position_gap</code> in five minutes</h1>
-<p class="lede">How the policy works · the data model it reads · the math (it&rsquo;s mostly math) · where branching still exists. <a href="#section9" style="color:var(--accent);"><strong>&sect;9 is the live cost-of-skip data</strong></a> &mdash; jump there if you only want the next move.</p>
+<h1><code>position_gap</code> — the 60-second version</h1>
+<p class="lede">What the policy does, the math, what we're testing, where to look for more.</p>
 
-<hr class="rule" />
+<hr />
 
-<h2>1. The shape of the problem</h2>
+<h2>What it does</h2>
 
-<p>Legacy <code>target_percentile_scaled</code> sizes each fill in isolation. When target&rsquo;s position is lopsided, the per-fill view inverts — we end up over-weighted on the side target barely cares about.</p>
+<p>The legacy policy sizes each target fill in isolation, which inverts the mirror when target's position is lopsided. <code>position_gap</code> instead sizes from the gap between target's <em>current position</em> and ours. Every fill is a re-evaluation trigger, not a sizing input.</p>
 
-<p>swisstony ATP Sinner/Ruud, 2026-05-17:</p>
-
-<div class="grid2">
-  <div>
-    <div class="label">Target's actual position</div>
-    <div class="bar"><span class="a" style="flex:99.5">99.5% Sinner</span><span class="b" style="flex:0.5">.</span></div>
-  </div>
-  <div>
-    <div class="label">Our mirror (legacy)</div>
-    <div class="bar"><span class="a" style="flex:28">28% Sinner</span><span class="b" style="flex:72">72% Ruud</span></div>
-  </div>
-</div>
-<p class="small">Our Ruud VWAP ended up 5.75&times; target&rsquo;s. The bug is structural — per-fill sizing has no concept of &ldquo;target&rsquo;s current state vs ours.&rdquo;</p>
-
-<hr class="rule" />
-
-<h2>2. The whole policy, in five lines</h2>
-
-<p><code>position_gap</code> sizes from <em>desired position</em> minus <em>actual position</em>, not from the fill notional. Every fill becomes a re-evaluation trigger, not a sizing input.</p>
-
-<pre class="math">desired_shares = <mark>target_shares[token]</mark>  &times;  <mark>target_scale</mark>     <span style="color:var(--muted)"># per-target knob, e.g. 0.0001</span>
-gap_shares     = desired_shares  &minus;  <mark>our_shares[token]</mark>
-gap_usdc       = gap_shares  &times;  <mark>fill.price</mark>
+<pre class="math">desired_shares = <mark>target_shares</mark> &times; <mark>target_scale</mark>
+gap_shares     = desired_shares &minus; <mark>our_shares</mark>
+intent_usdc    = gap_shares &times; <mark>fill.price</mark>
                  &darr; clamp to market floors &amp; per-leg cap
-intent_usdc</pre>
+PLACE or SKIP</pre>
 
-<p>The four inputs are already in the planner&rsquo;s hands at fill time. No new tables, no new RPC, no new ports.</p>
+<p>Layering falls out for free (gap shrinks as we fill). Minority-side fills collapse below market min and skip — the Sinner/Ruud inverted-weighting bug is structurally impossible under this policy.</p>
 
-<hr class="rule" />
+<hr />
 
-<h2>3. Logic vs math: where does branching live?</h2>
+<h2>What's being tested right now</h2>
 
-<p>Inside the policy itself: <strong>almost no branching</strong>. Just four short-circuit guards on the math. Skip-reason precedence top-to-bottom; first hit wins:</p>
-
-<pre class="flow">if  tokenId is missing on the fill        &rarr; skip  below_market_min
-if  gap_shares  &le; 0                       &rarr; skip  followup_not_needed
-if  gap_usdc    &lt; min_usdc_notional       &rarr; skip  below_market_min
-   sized = clamp_to_market_floors(gap_usdc)
-if  cumulative_intent + sized &gt; cap        &rarr; skip  position_cap_reached
-else                                       &rarr; <span class="pill good">PLACE</span></pre>
-
-<p>No discriminated routing, no per-side cases, no &ldquo;is this a layer or a hedge?&rdquo; question. Just one inequality at each step.</p>
-
-<p>The legacy <code>layer</code> / <code>hedge</code> branches at the <em>outer</em> dispatch (<code>decideMirrorBranch</code>) are short-circuited when the policy kind is <code>position_gap</code> — every fill lands as <code>new_entry</code> and the gap math handles same-token follow-ups naturally (the gap shrinks as our position grows).</p>
-
-<hr class="rule" />
-
-<h2>4. The full planner flow it sits in</h2>
-
-<p>The policy is the sizing step. The gates ahead of it still run, and <strong>that&rsquo;s where the actual decision-tree branching lives</strong>:</p>
-
-<pre class="flow">already_placed              &larr; idempotency on (target_id, fill_id)
-market_past_end_date        &larr; market resolved before plan-time
-price_outside_clob_bounds   &larr; tick-grid rejection
-target_dominant_other_side  &larr; bug.5048 dominance gate (cost-fraction)
-vwap_floor_breach           &larr; bug.5048 VWAP gate                 <span class="pill muted">see §6</span>
-<span style="color:var(--accent)">position_gap sizing</span>         &larr; <em>policy lives here</em>          <span class="pill muted">see §3</span>
-PLACE                       &rarr; intent &rarr; authorizeIntent (tenant cap)</pre>
-
-<p class="small">Each gate is a single boolean. They&rsquo;re shared across all sizing policies — Phase 4&rsquo;s <code>GapExecutor</code> dissolves several of them by moving their semantics into the gap order itself (price-limit ceiling instead of a per-fill VWAP gate, etc.).</p>
-
-<hr class="rule" />
-
-<h2>5. The data model the planner reads</h2>
-
-<p>One snapshot per fill. Four fields out of the bundle drive <code>position_gap</code>:</p>
+<p>A 24h A/B is running on candidate-a, same target (swisstony), same caps (p80 / $15), only the sizing kind differs:</p>
 
 <table>
-  <thead><tr><th>field</th><th>shape</th><th>source</th></tr></thead>
+  <thead><tr><th>tenant</th><th>policy</th></tr></thead>
   <tbody>
-    <tr>
-      <td><code>state.target_position.tokens[]</code></td>
-      <td><code>{ token_id, size_shares, cost_usdc, current_value_usdc }</code></td>
-      <td>Polymarket Data-API <code>/positions?user=&lt;target&gt;&amp;market=&lt;cid&gt;</code> at snapshot time</td>
-    </tr>
-    <tr>
-      <td><code>state.position</code> <span class="small">(MirrorPositionView)</span></td>
-      <td><code>{ our_token_id, our_qty_shares, our_vwap_usdc, opposite_token_id, opposite_qty_shares }</code></td>
-      <td>aggregated from <code>poly_copy_trade_fills</code> for (tenant, target, market)</td>
-    </tr>
-    <tr>
-      <td><code>state.cumulative_intent_usdc_for_token</code></td>
-      <td><code>number</code></td>
-      <td>sum of non-canceled intents on (tenant, market, token) — drives per-leg cap</td>
-    </tr>
-    <tr>
-      <td><code>fill.price</code>, <code>fill.attributes.asset</code></td>
-      <td><code>number</code>, <code>token_id</code></td>
-      <td>the triggering fill itself</td>
-    </tr>
+    <tr><td><strong>cand-a/VALIDATION</strong> (control)</td><td><code>target_percentile_scaled</code> (legacy)</td></tr>
+    <tr><td><strong>cand-a/GAP</strong> (experiment)</td><td><code>position_gap</code> ← <strong>just patched 2026-05-18</strong></td></tr>
   </tbody>
 </table>
 
-<p class="small">Note: <code>our_vwap_usdc</code> exists on the cache view but <code>position_gap</code> doesn&rsquo;t consult it. See §6.</p>
+<p>Done condition: re-run the <a href="../../../work/charters/POLY_ALGO_TENANT_MATRIX.md">charter audit query</a> in 24h. If <code>cand-a/GAP</code> produces sensible placement rate + lower minority-side delta than <code>cand-a/VALIDATION</code>, Phase 2 is proven. Otherwise, retune.</p>
 
-<h3>Per-token math &mdash; one example for each side</h3>
+<hr />
+
+<h2>The two policy knobs</h2>
 
 <table>
-  <thead><tr><th>fill</th><th>target_shares</th><th>desired</th><th>ours</th><th>gap</th><th>price</th><th>gap_usdc</th><th>verdict</th></tr></thead>
+  <thead><tr><th>UI knob</th><th>maps to</th></tr></thead>
   <tbody>
-    <tr>
-      <td>Sinner BUY</td><td class="mono">88,931</td><td class="mono">8.89</td><td class="mono">0</td><td class="mono">8.89</td><td class="mono">$0.85</td><td class="mono">$7.56</td>
-      <td><span class="pill good">PLACE $7.56</span></td>
-    </tr>
-    <tr>
-      <td>Ruud BUY</td><td class="mono">14,925</td><td class="mono">1.49</td><td class="mono">0</td><td class="mono">1.49</td><td class="mono">$0.16</td><td class="mono">$0.24</td>
-      <td><span class="pill bad">SKIP below_market_min</span></td>
-    </tr>
-    <tr>
-      <td>Sinner (after $7.56 filled)</td><td class="mono">88,931</td><td class="mono">8.89</td><td class="mono">~8.9</td><td class="mono">~0</td><td class="mono">$0.85</td><td class="mono">~$0</td>
-      <td><span class="pill muted">SKIP followup_not_needed</span></td>
-    </tr>
+    <tr><td><strong>P100 MAX</strong> ($15)</td><td><code>mirror_max_usdc_per_trade</code> — per-leg cap on <code>intent_usdc</code>. Same field as the legacy policy.</td></tr>
+    <tr><td><strong>THRESHOLD P80</strong></td><td>nothing under <code>position_gap</code> — no per-fill percentile filter exists. The conviction knob is <code>target_scale</code> (currently a bootstrap constant <code>1e-4</code>; per-target tunability is a follow-up).</td></tr>
   </tbody>
 </table>
 
-<p>Same policy, same code path. The minority side collapses below the market floor &mdash; structurally, not by a special-case gate. <strong>That&rsquo;s the whole win.</strong></p>
+<hr />
 
-<hr class="rule" />
+<h2>The one real algorithmic gap to flag</h2>
 
-<h2>6. VWAP &mdash; should be first-class on BOTH sides; today it isn&rsquo;t</h2>
+<p>VWAP is not first-class on either side today. The <code>vwap_floor_breach</code> gate compares <code>fill.price</code> against target's residual cost-basis (derived per-fill from a Polymarket Data-API snapshot). Our own VWAP is tracked in the mirror cache but unused under <code>position_gap</code>. Phase 4's <code>GapExecutor</code> promotes both to first-class fields backed by chain truth and shifts the constraint onto the order's <code>limit_price</code> instead of skipping per-fill.</p>
 
-<div class="qa">
-  <div class="q">Why isn&rsquo;t VWAP first-class for both target wallets and our wallets?</div>
-  <div class="a"><strong>You&rsquo;re right that it should be. Today it isn&rsquo;t &mdash; that&rsquo;s a real design gap.</strong> Phase 2 reads target VWAP as a derived quantity per-fill and ignores our own VWAP entirely. Phase 3+ promotes it to a stored field on both sides. Specifics below.</div>
-</div>
+<p class="small">Until Phase 4: a half-day patch can backport that mechanism to <code>position_gap</code> alone — cap <code>intent.limit_price = min(fill.price, target_vwap + ε)</code>, drop the per-fill skip. Decide after the 24h A/B data lands.</p>
 
-<h3>What today actually does</h3>
+<hr />
 
-<table>
-  <thead><tr><th>Field</th><th>How it&rsquo;s computed</th><th>Where stored</th><th>Used by position_gap?</th></tr></thead>
-  <tbody>
-    <tr>
-      <td><code>target_vwap_for_token</code></td>
-      <td><code>&Sigma; cost_usdc / &Sigma; size_shares</code> per token, derived per-fill from <code>state.target_position</code> (a Polymarket Data-API <code>/positions</code> snapshot at decision time).</td>
-      <td>Not stored. Re-derived every fill.</td>
-      <td>Read only by the upstream <code>vwap_floor_breach</code> gate (skips fills above this + tolerance). Not consulted by the gap math itself.</td>
-    </tr>
-    <tr>
-      <td><code>our_vwap_usdc</code></td>
-      <td><code>gross_usdc_in / gross_shares_in</code>, computed in <code>aggregatePositionRows</code> from our own <code>poly_copy_trade_fills</code>.</td>
-      <td>On <code>MirrorPositionView</code> &mdash; in memory, derived at snapshot time.</td>
-      <td><strong>Ignored under position_gap.</strong> Only the legacy <code>layer</code> / <code>hedge</code> sizers consult it, and those branches are short-circuited under this policy.</td>
-    </tr>
-  </tbody>
-</table>
-
-<p>Cost-basis-on-residual caveat: <code>target_vwap_for_token</code> derives from currently-held shares only. If target enters at $0.30, sells half at $0.50, and holds the rest, the residual <code>avgPrice</code> is the entry-cost on what remains &mdash; not the running cash-flow VWAP. Data-API returns this shape; chain-truth would give a true running VWAP. (See <a href="../../spec/poly-copy-trade-position-mirror.md">spec §"Intelligent-monitoring gaps" #3.1</a>.)</p>
-
-<h3>What Phase 3 + Phase 4 promise (the design that&rsquo;s in the spec, not yet built)</h3>
-
-<pre class="math"><span style="color:var(--accent)">poly_copy_target_position_state</span>                <span style="color:var(--muted)"># chain-truth, per (target_wallet, token_id)</span>
-  cumulative_shares,
-  cumulative_cost_usdc,
-  cumulative_vwap,                              <span style="color:var(--muted)"># first-class</span>
-  last_block_number, last_event_index
-
-<span style="color:var(--accent)">MirrorPositionView</span> (our side, already exists)    <span style="color:var(--muted)"># needs to be promoted to a sizing input</span>
-  our_qty_shares,
-  our_vwap_usdc,                                <span style="color:var(--muted)"># first-class but unused</span>
-  &hellip;
-
-<span style="color:var(--accent)">vwap_ceiling</span> = target.cumulative_vwap + &epsilon;       <span style="color:var(--muted)"># derived on the desired-position row</span>
-
-<span style="color:var(--accent)">GapExecutor (Phase 4)</span>:
-  intent.limit_price = min(book.ask, vwap_ceiling)   <span style="color:var(--muted)"># order-level invariant, not per-fill gate</span>
-  if our.cumulative_vwap &gt; target.cumulative_vwap + &epsilon;:
-      &hellip; back off, we&rsquo;re already worse than target</pre>
-
-<h3>Pre-Phase-4 patch that keeps position_gap intellectually honest</h3>
-
-<p>Until Phase 3 ships, we can still promote VWAP discipline to the <em>order</em> rather than skipping per-fill. The diff is small:</p>
-
-<pre class="math"><span style="color:var(--muted)"># Under position_gap only, in applyPositionGapSizing:</span>
-target_vwap = sum(t.cost_usdc) / sum(t.size_shares)   <span style="color:var(--muted)"># same derivation</span>
-vwap_ceiling = target_vwap + vwap_tolerance
-<span style="color:#1d8a4b">intent.limit_price = min(fill.price, vwap_ceiling)</span>   <span style="color:var(--muted)"># NEW: cap at ceiling</span>
-<span style="color:#c0392b">drop vwap_floor_breach skip for this policy</span>          <span style="color:var(--muted)"># gate becomes property of order</span></pre>
-
-<p>This is the Phase-4 mechanism, backported to one policy. Without Phase 3, target_vwap is still residual-cost-basis (the cost-basis-on-residual caveat above). With Phase 3, it becomes chain-truth running VWAP &mdash; same code path, better data.</p>
-
-<hr class="rule" />
-
-<h2>7. Hedges &mdash; no special case</h2>
-
-<div class="qa">
-  <div class="q">Do we factor in entry points of hedges?</div>
-  <div class="a">No, and we don&rsquo;t need to. Each <code>token_id</code> on a market gets its own independent <code>desired_shares</code>. The &ldquo;hedge&rdquo; side of a binary is just another token; we size to its gap the same way.</div>
-</div>
-
-<p>Concrete: target holds Sinner <em>and</em> Ruud, so there are two entries in <code>state.target_position.tokens[]</code>. Two fills arriving on different tokens compute two unrelated gaps:</p>
-
-<pre class="math">// Sinner fill
-desired = 88,931 &times; 1e-4 = 8.89        gap = 8.89 - our_sinner
-
-// Ruud fill (totally independent)
-desired = 14,925 &times; 1e-4 = 1.49        gap = 1.49 - our_ruud</pre>
-
-<p>The legacy <code>position_followup</code> machinery (<code>min_target_hedge_ratio</code>, <code>min_target_hedge_usdc</code>, <code>max_hedge_fraction_of_position</code>, etc.) is bypassed when <code>policy.kind === "position_gap"</code>. Each gap stands alone.</p>
-
-<p class="small"><strong>Honest gotcha:</strong> the current <code>applyPositionGapSizing</code> reads <code>our_qty_shares</code> only if <code>state.position.our_token_id === fill_token_id</code>. If the fill arrives on the <em>other</em> leg we hold (<code>opposite_token_id</code>), we&rsquo;d see <code>our_shares = 0</code> for that token and over-state the gap by exactly <code>opposite_qty_shares</code>. Not currently a real-world bug (we rarely hold both legs under the dominance gate) but worth knowing &mdash; trivially fixable when it matters.</p>
-
-<hr class="rule" />
-
-<h2>8. Neg-risk &mdash; invisible to the planner</h2>
-
-<div class="qa">
-  <div class="q">Do we factor in neg-risk?</div>
-  <div class="a">No. The planner doesn&rsquo;t know which markets are neg-risk. It&rsquo;s a per-market routing flag the CLOB adapter looks up at <em>order-signing</em> time.</div>
-</div>
-
-<p>Same <code>OrderIntent</code> shape goes out of the planner regardless. The Polymarket adapter (<code>polymarket.clob.adapter.ts</code>) calls <code>getMarketConstraints(tokenId)</code> and gets back <code>{ tickSize, negRisk, feeRateBps }</code>, then routes the signed order to the right exchange contract (regular vs. neg-risk). Neg-risk markets:</p>
-
-<ul>
-  <li>need <code>setApprovalForAll</code> on a <em>different</em> CTF exchange address (handled at wallet provisioning, not at fill time);</li>
-  <li>carry different fee math (also adapter-side);</li>
-  <li>have the same on-chain settlement vocabulary so the position snapshot looks identical to the planner.</li>
-</ul>
-
-<p>If neg-risk ever needs to influence sizing (it doesn&rsquo;t today), the seam is to add a field on <code>MarketConstraints</code> and read it in the planner &mdash; not to add it to <code>SizingPolicy</code>.</p>
-
-<hr class="rule" />
-
-<h2 id="section9">9. What the live data says &mdash; cost-of-skip scorecard (corrected 2026-05-18)</h2>
-
-<p><strong>Correction from v1 of this doc.</strong> The earlier draft attributed the position_gap experiment to swisstony &mdash; that was wrong. Per <a href="../../../work/charters/POLY_ALGO_TENANT_MATRIX.md"><code>chr.poly-algo-tenant-matrix</code></a>, the only position_gap tenant on candidate-a is <strong>cand-a/RN1-GAP</strong> mirroring <strong>RN1</strong> (<code>0x2005&hellip;75ea</code>) at <code>p80 / $15 / target_scale=1e-4</code>. The Loki sweep was correctly filtered to <code>sizing_policy_kind="position_gap"</code>, but the cost-of-skip analysis is therefore about RN1's position distribution, not swisstony's.</p>
-
-<p>Postgres ground-truth (charter audit query, candidate-a, 24h):</p>
-
-<table>
-  <thead><tr><th>tenant</th><th>target</th><th>policy</th><th>p%</th><th>$ cap</th><th>decisions/24h</th><th>placed/24h</th><th>place-rate</th></tr></thead>
-  <tbody>
-    <tr><td>cand-a/orphan-1</td><td>swisstony</td><td class="mono">auto (TPS)</td><td>75</td><td>$5</td><td class="mono">25,828</td><td class="mono">888</td><td>3.4%</td></tr>
-    <tr><td>cand-a/orphan-2</td><td>swisstony</td><td class="mono">auto (TPS)</td><td>75</td><td>$5</td><td class="mono">24,988</td><td class="mono">883</td><td>3.5%</td></tr>
-    <tr><td>cand-a/orphan-3</td><td>swisstony</td><td class="mono">auto (TPS)</td><td>75</td><td>$5</td><td class="mono">24,976</td><td class="mono">883</td><td>3.5%</td></tr>
-    <tr><td><strong>cand-a/VALIDATION</strong></td><td>swisstony</td><td class="mono">auto (TPS)</td><td>80</td><td>$15</td><td class="mono">9,290</td><td class="mono">138</td><td>1.5%</td></tr>
-    <tr><td><strong>cand-a/GAP</strong></td><td>swisstony</td><td class="mono">auto (TPS) <span class="small">(slot for position_gap)</span></td><td>75</td><td>$5</td><td class="mono">7,999</td><td class="mono">106</td><td>1.3%</td></tr>
-    <tr style="background:#fff8e1;"><td><strong>cand-a/RN1-GAP</strong></td><td><strong>RN1</strong></td><td class="mono"><strong>position_gap</strong></td><td><strong>80</strong></td><td><strong>$15</strong></td><td class="mono"><strong>3,233</strong></td><td class="mono"><strong>7 (paper)</strong></td><td><strong>0.2%</strong></td></tr>
-  </tbody>
-</table>
-
-<p><strong>Headline:</strong> position_gap placed <strong>7 times</strong> in 24h (all <code>reason=mode_paper</code> &mdash; routed through the paper sidecar; see <a href="../../../work/charters/POLY_ALGO_TENANT_MATRIX.md">charter</a> open item on the <code>mode</code>-column anti-pattern). That's an order of magnitude below the nearest control. <strong>Cross-target comparison is confounded</strong> &mdash; RN1 and swisstony have different position distributions, so the 0.2%-vs-1.5% gap is partly policy, partly target.</p>
-
-<h3>The right A/B (per charter) is on swisstony, not RN1</h3>
-
-<p>RN1 is the wrong substrate for evaluating position_gap. The <a href="../../../work/charters/POLY_ALGO_TENANT_MATRIX.md">tenant-matrix charter</a> is explicit about this: <em>"all mirroring swisstony (NOT RN1 &mdash; swisstony has the volume to produce meaningful per-policy delta)."</em> The swisstony+position_gap slot already exists as <strong>cand-a/GAP</strong> &mdash; currently still running <code>auto</code> (target_percentile_scaled) per the charter open item, pending the PATCH.</p>
-
-<p>The control is <strong>cand-a/VALIDATION</strong> (swisstony, <code>auto</code>, p80/$15) at 138 placed / 9,290 decisions = 1.5% place-rate. Patching <strong>cand-a/GAP</strong> to <code>position_gap</code> with the same p80/$15 makes the only-variable the sizing kind &mdash; the apples-to-apples cell the charter asks for.</p>
-
-<h3>The Pareto move &mdash; PATCH, not PR</h3>
-
-<p><strong>No code change required.</strong> The schema CHECK enum already accepts <code>position_gap</code> (merged in PR&nbsp;#92). The bootstrap reads <code>sizing_policy_kind</code> from the column. One PATCH against candidate-a&rsquo;s API flips <strong>cand-a/GAP</strong> onto the new policy:</p>
-
-<pre class="math">curl -X PATCH https://poly-test.cognidao.org/api/v1/poly/copy-trade/targets/$POLY_CANDIDATE_A_TENANT_GAP_TARGET_ID \
-  -H "Authorization: Bearer $POLY_CANDIDATE_A_TENANT_GAP_API_KEY" \
-  -H "content-type: application/json" \
-  -d '{"sizing_policy_kind":"position_gap",
-       "mirror_filter_percentile":80,
-       "mirror_max_usdc_per_trade":15.00}'</pre>
-
-<p>Then wait 24h, re-run the audit query, compare the <strong>cand-a/GAP</strong> (swisstony / position_gap) row against the <strong>cand-a/VALIDATION</strong> (swisstony / TPS) row. <strong>That</strong> is the proof gate for D2 Phase 2's done-condition.</p>
-
-<p class="small"><strong>Why this beats the "calibrate <code>target_scale</code>" move I proposed earlier:</strong> the calibration argument was built on RN1&rsquo;s p50 target_token_cost (~$1k). Swisstony&rsquo;s p50 is much higher (charter pXX table shows p75 ~$1k, p99 ~$10k). On swisstony with <code>target_scale=1e-4</code>, desired_usdc for a $5k position is $0.50; for $10k it&rsquo;s $1.00 &mdash; clears market floor. On swisstony the algorithm should produce <em>some</em> placements before any retuning. <strong>Run the A/B first, calibrate second, based on what the A/B actually shows.</strong></p>
-
-<h3>Predicted outcome (revised, swisstony-centric)</h3>
-
-<table>
-  <thead><tr><th>Metric (swisstony, p80/$15)</th><th><strong>cand-a/VALIDATION</strong> TPS (control)</th><th><strong>cand-a/GAP</strong> position_gap (predicted)</th></tr></thead>
-  <tbody>
-    <tr><td>decisions / 24h</td><td class="mono">~9,000</td><td class="mono">~9,000 (same fill stream)</td></tr>
-    <tr><td>placed / 24h</td><td class="mono">~138</td><td class="mono">~30&ndash;80 (position-driven, smaller per fill)</td></tr>
-    <tr><td>minority-side placements</td><td class="mono">significant</td><td class="mono">~0 (by design &mdash; collapses below floor)</td></tr>
-    <tr><td>Ruud-style inverted-weighting incident risk</td><td class="mono">HIGH (D2 charter)</td><td class="mono">structurally impossible</td></tr>
-  </tbody>
-</table>
-
-<p class="small">Confidence in this prediction: ~65%. Real data after the PATCH is the only proof.</p>
-
-<hr class="rule" />
-
-<h2>10. Policy knobs &mdash; mapping from the legacy UI to position_gap</h2>
-
-<p>The existing per-target card in the UI exposes three knobs (image: <code>swisstony</code> card with <code>THRESHOLD P80</code> slider, <code>P100 MAX = $15.00</code>, active toggle). The direct mapping to position_gap:</p>
-
-<table>
-  <thead><tr><th>Legacy UI knob</th><th>DB column</th><th>Role under <code>target_percentile_scaled</code> (TPS)</th><th>Role under <code>position_gap</code></th></tr></thead>
-  <tbody>
-    <tr>
-      <td><strong>Active toggle</strong></td>
-      <td><code>disabled_at</code> NULL/timestamp</td>
-      <td>same &mdash; soft-delete</td>
-      <td>same &mdash; soft-delete</td>
-    </tr>
-    <tr>
-      <td><strong>P80 / P100 Threshold slider</strong></td>
-      <td><code>mirror_filter_percentile</code></td>
-      <td><strong>Load-bearing.</strong> Below this target-position percentile, fills skip <code>below_target_percentile</code>. Drives the per-fill conviction filter.</td>
-      <td><strong>Mostly inert.</strong> position_gap has no per-fill percentile filter; the conviction knob is <code>target_scale</code>, not pXX. Still present on the row (the schema didn't drop it) but unread by the gap path.</td>
-    </tr>
-    <tr>
-      <td><strong>P100 MAX = $15</strong></td>
-      <td><code>mirror_max_usdc_per_trade</code></td>
-      <td>Per-fill notional cap. p100 fills map to this; smaller fills scale linearly to market floor.</td>
-      <td><strong>Same field, same name, same role.</strong> Per-leg cap on <code>gap_usdc</code>. Phase 2 keeps this verbatim.</td>
-    </tr>
-    <tr style="background:#fff8e1;">
-      <td><em>(missing)</em></td>
-      <td><code>target_scale</code> <span class="small">(NEW &mdash; not yet a column)</span></td>
-      <td>n/a</td>
-      <td><strong>The conviction knob.</strong> Fraction of target's per-token shares we aim to hold. Today hard-coded to <code>1e-4</code> in <code>DEFAULT_POSITION_GAP_TARGET_SCALE</code> &mdash; same for every target.</td>
-    </tr>
-    <tr>
-      <td><em>(missing)</em></td>
-      <td><code>vwap_tolerance</code> <span class="small">(currently a constant)</span></td>
-      <td>Per-fill <code>vwap_floor_breach</code> tolerance (default <code>0.005</code>)</td>
-      <td>Same default; under position_gap it would become the order's <code>limit_price</code> ceiling once the §6 patch lands.</td>
-    </tr>
-  </tbody>
-</table>
-
-<h3>Conceptual answer</h3>
-
-<div class="qa">
-  <div class="q">We must have pXX understanding + user max bet, right?</div>
-  <div class="a"><strong>Max bet: yes</strong> &mdash; same field (<code>mirror_max_usdc_per_trade</code>), same UI input, same role as the per-leg gap cap. <strong>pXX: no, not for position_gap.</strong> The percentile concept comes from the per-fill view ("only mirror fills above target's pXX position size"). position_gap doesn't decide per-fill &mdash; it decides per-position-state. The analogous conviction knob is <code>target_scale</code>: <em>"what fraction of target's per-token shares do I want to hold?"</em></div>
-</div>
-
-<p>So the user-facing translation is:</p>
-
-<pre class="math"><span style="color:var(--muted)"># Legacy TPS UI:</span>
-"<strong>Mirror fills above swisstony&rsquo;s p80 token positions, up to $15.</strong>"
-  &rarr; mirror_filter_percentile = 80
-  &rarr; mirror_max_usdc_per_trade = 15
-
-<span style="color:var(--muted)"># Equivalent position_gap UI (proposed):</span>
-"<strong>Hold 0.5% of swisstony&rsquo;s per-token shares, up to $15 per leg.</strong>"
-  &rarr; target_scale              = 0.005
-  &rarr; mirror_max_usdc_per_trade = 15</pre>
-
-<p>Same shape of intent. Different shape of math. The pXX slider in the existing card has no meaningful semantic under position_gap and could be hidden / repurposed as a target_scale slider when this policy is selected. Until the schema column for <code>target_scale</code> lands (proposed Phase 2 cleanup PR), the only way to tune it is editing <code>DEFAULT_POSITION_GAP_TARGET_SCALE</code> in the bootstrap.</p>
-
-<hr class="rule" />
-
-<h2>11. Turning it on</h2>
-
-<pre class="math">curl -X PATCH https://poly.cognidao.org/api/v1/poly/copy-trade/targets/&lt;id&gt; \
-     -H "Authorization: Bearer $KEY" -H "content-type: application/json" \
-     -d '{"sizing_policy_kind":"position_gap",
-          "mirror_filter_percentile":80,
-          "mirror_max_usdc_per_trade":15}'</pre>
-
-<p class="small">Per-target opt-in. Legacy targets keep <code>target_percentile_scaled</code> by construction. <code>target_scale</code> currently lives behind a bootstrap constant (<code>1e-4</code>) &mdash; per-target tunability via the API is a follow-up.</p>
-
-<p class="footer">
-Code: <code>nodes/poly/app/src/features/copy-trade/plan-mirror.ts</code> (<code>applyPositionGapSizing</code>, <code>decideMirrorBranch</code>) ·
-spec: <code>docs/spec/poly-copy-trade-position-mirror.md</code> ·
-charter: <code>work/charters/POLY_COPY_DELTA.md</code> (D2) ·
-PR: <a href="https://github.com/Cogni-DAO/cogni-poly/pull/92">#92</a>
+<p class="pointers">
+<strong>For more:</strong>
+<a href="./2026-05-18-position-gap-cost-of-skip-scorecard.md">2026-05-18 cost-of-skip scorecard (the data)</a> &middot;
+<a href="../../spec/poly-copy-trade-position-mirror.md">design spec</a> &middot;
+<a href="../../../work/charters/POLY_ALGO_TENANT_MATRIX.md">tenant-matrix charter</a> &middot;
+<a href="../../../work/charters/POLY_COPY_DELTA.md">delta-class charter (D2)</a>
 </p>
 
 </main>
