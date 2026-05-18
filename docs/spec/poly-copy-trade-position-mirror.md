@@ -214,7 +214,7 @@ Each phase is a separate PR. Phase 1's switch means each later phase ships ahead
 
 ## Open questions
 
-- Where does `capital_alloc_fraction` live per target? Today it's `mirror_max_usdc_per_trade` (per-trade ceiling). Position-mirror needs a per-target capital allocation. Probably new column on `poly_copy_trade_targets`.
+- ~~Where does `capital_alloc_fraction` live per target?~~ **Answered 2026-05-18 (locked).** Per-target capital allocation lives on `poly_copy_trade_targets.mirror_capital_alloc_usdc` (nullable; CHECK-required when `sizing_policy_kind = 'position_gap'`). Semantics are **per-target-total** (proportional book copy), NOT per-condition: `scale = alloc / Σ target_total_open_book_cost_usdc` applied uniformly across every token target holds. Requires a per-target whole-book hydration capability (`getTargetTotalBookCost`, 30s TTL cache, reuses `listAllUserPositions`). Cross-target safety stays at `poly_wallet_grants`. See locked-design status note below.
 - `vwap_ceiling` slippage budget `ε`: 0 means we never pay above target's VWAP at all — strict, but never executes when target is in a winning trend. 0.005 (50 bps) is the current `vwap_tolerance` default — keep it as the v1 starting point.
 - SELL path: target reduces a position → our `desired_shares` drops → gap turns negative → executor places SELL. The current `NO_SELL_IN_MIRROR` invariant (we close via redeem only) needs revisiting. Likely deleted under position-mirror, replaced by a managed SELL with the same VWAP discipline.
 - Multi-target capital share: if target A has 100 sh Hon and target B has 200 sh Hon, what's our desired? `sum(scale(each))` or `max(scale(each))` or some mean? Affects how independent the per-target loops are.
@@ -264,12 +264,12 @@ Severity: **F**(ail — blocking for steady-state mirroring) · **C**(oncern —
 
 ### 5. Multi-target reality
 
-| Gap                                                                                                                                                                                                                                                                              | Sev          | Resolved by                                                                            |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------- |
-| `target_scale` is a global bootstrap constant (`DEFAULT_POSITION_GAP_TARGET_SCALE = 1e-4` in `copy-trade-mirror.job.ts`). Every target gets the same fraction; per-target tunability is in the policy _type_ but no API path or DB column writes it.                             | C            | Phase 2 follow-up: `target_scale` column on `poly_copy_trade_targets` + PATCH surface. |
-| Two targets mirrored by one tenant into the same market → each target computes its gap independently against the same `our_qty_shares`. First-evaluated target sets our exposure; later targets see "we already hold it" and shrink. **Evaluation order determines allocation.** | F (at scale) | Phase 3+ (cross-target reconciler — see open question §"Multi-target capital share")   |
-| No portfolio-level capital allocation. `mirror_max_usdc_per_trade` is per-target. No "total mirror book ≤ $X" cap.                                                                                                                                                               | C            | Phase 3+ design — open question above                                                  |
-| `poly_copy_trade_attribution` exists in the schema but isn't read by the planner. We can't size-by-target-performance.                                                                                                                                                           | C            | Phase 3+ (size from attribution → `target_scale`)                                      |
+| Gap                                                                                                                                                                                                                                                                                                                                                                                                        | Sev                     | Resolved by                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~`target_scale` is a global bootstrap constant~~ **Resolved 2026-05-18 (locked).** PR #102 added `target_scale numeric(8,7)`; design review concluded the entire abstraction was wrong (opaque fraction, per-condition framing breaks proportional book copy, per-trade cap is anti-tracking). Superseded by `mirror_capital_alloc_usdc` (per-target whole-book) per the locked-design status note below. | 🟢 SHIPPED (redesigned) | follow-up PR — `target_scale` dropped, `mirror_capital_alloc_usdc` added, whole-book Σ derivation in `applyPositionGapSizing`, `mirror_max_usdc_per_trade` ignored under `position_gap` |
+| Two targets mirrored by one tenant into the same market → each target computes its gap independently against the same `our_qty_shares`. First-evaluated target sets our exposure; later targets see "we already hold it" and shrink. **Evaluation order determines allocation.**                                                                                                                           | F (at scale)            | Phase 3+ (cross-target reconciler — see open question §"Multi-target capital share")                                                                                                    |
+| No portfolio-level capital allocation. `mirror_max_usdc_per_trade` is per-target. No "total mirror book ≤ $X" cap.                                                                                                                                                                                                                                                                                         | C                       | Phase 3+ design — open question above                                                                                                                                                   |
+| `poly_copy_trade_attribution` exists in the schema but isn't read by the planner. We can't size-by-target-performance.                                                                                                                                                                                                                                                                                     | C                       | Phase 3+ (size from attribution → `target_scale`)                                                                                                                                       |
 
 ## Invariants
 
@@ -295,3 +295,45 @@ Binding when this spec ships. None are enforced today (status: draft).
 - **2026-05-17 (later same day):** Phase 2 (`position_gap` SizingPolicy variant) ships in PR #92 (task.5001). Single PR — schema CHECK enum + contract enum + discriminated-union variant + `applyPositionGapSizing` planner branch + bootstrap `DEFAULT_POSITION_GAP_TARGET_SCALE=1e-4` + Sinner/Ruud unit replay. Per-target opt-in via PATCH from Phase 1; legacy targets untouched. Done condition (candidate-a A/B vs `target_percentile_scaled`) is the next gate.
 - **2026-05-17 (post-merge review, task.5002):** added §"Intelligent-monitoring gaps" — five-lens catalogue (position truth, hedge awareness, VWAP semantics, neg-risk, multi-target) of what still has to harden between Phase 2 wire integration and Phase 5 full cutover. Surfaces the Phase 2 opposite-leg blind spot (`GAP_CONSULTS_BOTH_LEGS`) as a one-line fix in the existing planner, and flags neg-risk basket awareness + multi-target portfolio cap as scope additions not yet in the Phase 3/4 design.
 - **2026-05-17:** Revised migration after the swisstony ATP Sinner/Ruud incident ([report](../../nodes/poly/research/delta-minimizing/atp-sinner-ruud-2026-05-17-2026-05-17T17-30-01/report.html)). Composability-first: Phase 1 is now the per-target sizing-policy-kind switch (no table, no module, no behavior change at deploy), Phase 2 is the `position_gap` `SizingPolicy` variant (uses inputs the planner already has — no new infrastructure), and the original "table + updater + executor + idempotency redesign" is deferred to Phase 3+ pending A/B evidence from Phase 2. Rationale: leverages the `SIZING_POLICY_IS_DISCRIMINATED` invariant in `features/copy-trade/types.ts` so legacy targets stay on the legacy planner by construction. Phase 1 ships as the work item this revision was filed under.
+
+- **2026-05-18 (Phase 2 conviction-knob redesign — LOCKED):** PR #102 shipped `target_scale numeric(8,7) NOT NULL DEFAULT 0.0005`. Three iterations of design review (this branch) found that knob shape AND a follow-up `mirror_alloc_per_condition_usdc` shape both miss the north star. **Locked design follows.**
+
+  **North star (one sentence):** _hold a miniature of target's BOOK; as target grows / shrinks / rotates, our positions track theirs in proportion, scaled to our budget._ Sizing must be derived from target's **whole open book**, not per-condition (else a target with N conditions gets N× our money — per-market flat-betting, not proportional copy).
+
+  **One knob:** `mirror_capital_alloc_usdc numeric(10,2) NULL` — total dollars I'm betting tracks this target's whole book. CHECK-required when `sizing_policy_kind = 'position_gap'`; nullable otherwise. **No default.**
+
+  **Math (per fill, inline in `applyPositionGapSizing`):**
+
+  ```
+  scale          = capital_alloc_usdc / Σ target_total_open_book_cost_usdc
+  desired_shares = target_shares × scale            (per token target holds)
+  gap_shares     = desired_shares − our_shares
+  intent_usdc    = gap_shares × fill.price          → clamp to market_min only → PLACE or SKIP
+  ```
+
+  **Derived conviction threshold (no explicit knob):** `target_position_threshold = market_min × target_book / alloc`. Floats with target's book size and our alloc. Replaces both the legacy pXX statistical filter (different conviction model — kept side-by-side under `target_percentile_scaled` until A/B picks a winner) and any hand-set `min_target_position_usdc`.
+
+  **What's dropped / not added:**
+  - `target_scale` column — wrong abstraction, dropped.
+  - `mirror_max_usdc_per_trade` — `position_gap` does NOT read it. Per-trade caps under book matching are anti-tracking (they throttle the proportional copy mechanism). Column stays on the row for legacy policies (`target_percentile_scaled`, `min_bet`); deferred-drop is Phase 5 cutover. Wire-level safety moves entirely to `poly_wallet_grants`.
+  - `mirror_filter_percentile` — legacy only; `position_gap` ignores.
+  - No `min_target_position_usdc` / `max_target_position_usdc` knobs — derived threshold + market_min handle the lower bound; proportional book copy IS the upper bound.
+  - No percentage-of-balance representation in v0 — filed as v1 follow-up (`mirror_capital_alloc_pct` of wallet equity; needs wallet-equity read path; fractional-Kelly framing).
+
+  **Cap responsibility table (under `position_gap`):**
+  | Concern | Owner |
+  | --- | --- |
+  | Per-target total exposure | `mirror_capital_alloc_usdc` (implicit ceiling) |
+  | Cross-target tenant total | `poly_wallet_grants.total_at_risk_usdc` |
+  | Cross-target daily velocity | `poly_wallet_grants.daily_cap_usdc` |
+  | Per-fill economic floor | `market.min_usdc_notional` |
+  | Σ ≤ 0 / math-glitch | planner skip `target_position_below_threshold` |
+  | Account balance < alloc | executor wire `INSUFFICIENT_BALANCE` (planner stays naive) |
+
+  **Operational details for the implementation PR:**
+  1. **Target whole-book hydration (NEW dep).** Bootstrap must wire a cached `getTargetTotalBookCost(targetWallet) → Σ cost_usdc across all open conditions`. v0: reuse `dataApiClient.listAllUserPositions(targetWallet, { sizeThreshold: 0 })` with a 30s TTL cache shared across tick callers (target's book doesn't move > minor % in 30s). Hydration error → fail-closed skip via Σ=0 guard.
+  2. **Migration ordering.** Single transaction: `DROP target_scale` → `ADD mirror_capital_alloc_usdc NULL` → `UPDATE poly_copy_trade_targets SET mirror_capital_alloc_usdc = 5.00 WHERE sizing_policy_kind = 'position_gap'` → add CHECK constraint. Three in-flight `position_gap` tenants (cand-a/RN1-GAP, cand-a/GAP, preview/swiss-gap) get `$5.00` as the migration-time value; operator PATCHes per-tenant afterward.
+  3. **Σ = 0 guard.** `applyPositionGapSizing` short-circuits when `target_total_open_book_cost_usdc ≤ 0` (target closed all positions, live read failed, etc.). Reuse `target_position_below_threshold` skip reason.
+  4. **Drop `PositionGapSizingPolicySchema.max_usdc_per_condition`.** Drop the cumulative-intent cap check from `applyPositionGapSizing`. Drop `FALLBACK_POSITION_GAP_TARGET_SCALE` bootstrap constant. Drop the two-step "compute scale then apply" indirection — single inline derivation.
+  5. **Cross-condition / cross-target reconciler (still missing).** Two targets, same market, both long different sides → each computes its scale independently against the same `our_shares`. Evaluation order determines allocation. Deferred to Phase 3+ design.
+  6. **VWAP gate stays per-fill for v0.** `vwap_floor_breach` still fires per-fill against target's residual cost-basis. Phase 4 `GapExecutor` promotes to `limit_price = min(fill.price, target_vwap + ε)` order property and dissolves the per-fill gate.
