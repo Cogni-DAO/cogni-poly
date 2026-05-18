@@ -677,9 +677,14 @@ function createContainer(): Container {
 
   // Memoized OrderLedger singleton — routes use container.orderLedger instead
   // of building per-request. createOrderLedger is stateless so this is safe.
+  // MODE_STAMPED_AT_LEDGER_FROM_ENV: pass the resolved `PAPER_ENFORCE_MODE` so
+  // the ledger stamps every fill/decision row with the actual execution mode
+  // (env is the single source of truth — see `PAPER_DISPATCH_IS_ENV_ONLY` in
+  // poly-trade-executor.ts).
   const orderLedger = createOrderLedger({
     db: serviceDb as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
     logger: log,
+    paperEnforceMode: env.PAPER_ENFORCE_MODE,
   });
 
   const paymentAttemptServiceRepository =

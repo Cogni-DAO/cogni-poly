@@ -171,11 +171,15 @@ export const polyCopyTradeFills = pgTable(
      */
     syncedAt: timestamp("synced_at", { withTimezone: true }),
     /**
-     * Execution mode of the order that produced this fill. Inherited from
-     * `poly_copy_trade_targets.mode` at decision time and stamped on the
-     * `OrderIntent.attributes.mode` discriminator. Paper rows participate in
-     * cap accounting (CAP_COUNTS_REALIZED_ON_CANCEL) identically to live
-     * rows; the paper sidecar populates `filled_size_usdc` correctly.
+     * Execution mode of the order that produced this fill. Stamped at write
+     * time by `order-ledger.ts::insertPending` from the ledger's
+     * `paperEnforceMode` dep, which the bootstrap resolves once from
+     * `PAPER_ENFORCE_MODE` env. Answers exactly one question correctly:
+     * "where did this order execute?" Paper rows participate in cap
+     * accounting (CAP_COUNTS_REALIZED_ON_CANCEL) identically to live rows;
+     * the paper sidecar populates `filled_size_usdc` correctly.
+     * See MODE_STAMPED_AT_LEDGER_FROM_ENV (order-ledger.ts) + pair invariant
+     * PAPER_DISPATCH_IS_ENV_ONLY (poly-trade-executor.ts).
      */
     mode: text("mode").notNull().default("live"),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -268,9 +272,14 @@ export const polyCopyTradeDecisions = pgTable(
     receipt: jsonb("receipt").$type<Record<string, unknown>>(),
     decidedAt: timestamp("decided_at", { withTimezone: true }).notNull(),
     /**
-     * Execution mode of the decision. `live` rows hit the CLOB; `paper` rows
-     * route to the OSS sidecar (see `proj.poly-paper-trading`). Defaulted to
-     * `'live'` so existing rows remain semantically correct without backfill.
+     * Execution mode of the decision. Stamped at write time by
+     * `order-ledger.ts::recordDecision` from the ledger's `paperEnforceMode`
+     * dep (resolved once from `PAPER_ENFORCE_MODE` env at bootstrap).
+     * MODE_STAMPED_AT_LEDGER_FROM_ENV — replaces the legacy advisory chain
+     * `targets.mode → intent.attributes.mode → JSONB blob` which never
+     * reached this column. Defaulted to `'live'` for legacy pre-cutover
+     * rows; migration 0053 self-heals cand-a/preview rows from the stored
+     * `intent->>'mode'` blob.
      */
     mode: text("mode").notNull().default("live"),
   },
