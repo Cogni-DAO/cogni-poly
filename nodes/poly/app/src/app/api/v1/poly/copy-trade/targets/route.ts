@@ -71,6 +71,7 @@ function buildTargetView(params: {
     | "min_bet"
     | "target_percentile_scaled"
     | "position_gap";
+  targetScale: number;
   source: "env" | "db";
 }): PolyCopyTradeTarget {
   const config = buildMirrorTargetConfig({
@@ -80,6 +81,7 @@ function buildTargetView(params: {
     mirrorFilterPercentile: params.mirrorFilterPercentile,
     mirrorMaxUsdcPerTrade: params.mirrorMaxUsdcPerTrade,
     sizingPolicyKind: params.sizingPolicyKind,
+    targetScale: params.targetScale,
   });
   return {
     target_id: params.id,
@@ -91,6 +93,7 @@ function buildTargetView(params: {
       params.targetWallet,
       params.sizingPolicyKind
     ),
+    target_scale: params.targetScale,
     source: params.source,
   };
 }
@@ -131,6 +134,7 @@ export const GET = wrapRouteHandlerWithLogging(
         mirrorFilterPercentile: row.mirrorFilterPercentile,
         mirrorMaxUsdcPerTrade: row.mirrorMaxUsdcPerTrade,
         sizingPolicyKind: row.sizingPolicyKind,
+        targetScale: row.targetScale,
         source: "db",
       })
     );
@@ -168,6 +172,7 @@ export const POST = wrapRouteHandlerWithLogging(
     }
     const targetWallet = parsed.data.target_wallet as `0x${string}`;
     const sizingPolicyKindInput = parsed.data.sizing_policy_kind ?? "auto";
+    const targetScaleInput = parsed.data.target_scale;
 
     const container = getContainer();
     const account = await container
@@ -190,6 +195,9 @@ export const POST = wrapRouteHandlerWithLogging(
           createdByUserId: sessionUser.id,
           targetWallet,
           sizingPolicyKind: sizingPolicyKindInput,
+          ...(targetScaleInput !== undefined
+            ? { targetScale: targetScaleInput.toString() }
+            : {}),
         })
         // Conflict resolves against the partial unique index
         // `poly_copy_trade_targets_billing_wallet_active_idx` (WHERE disabled_at IS NULL).
@@ -201,6 +209,7 @@ export const POST = wrapRouteHandlerWithLogging(
           mirror_filter_percentile: polyCopyTradeTargets.mirrorFilterPercentile,
           mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
           sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
+          target_scale: polyCopyTradeTargets.targetScale,
         })
     );
 
@@ -218,6 +227,7 @@ export const POST = wrapRouteHandlerWithLogging(
             mirror_max_usdc_per_trade:
               polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
             sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
+            target_scale: polyCopyTradeTargets.targetScale,
           })
           .from(polyCopyTradeTargets)
           .where(
@@ -263,6 +273,7 @@ export const POST = wrapRouteHandlerWithLogging(
       sizingPolicyKind: coerceStoredSizingPolicyKind(
         inserted.sizing_policy_kind
       ),
+      targetScale: Number(inserted.target_scale),
       source: "db",
     });
 

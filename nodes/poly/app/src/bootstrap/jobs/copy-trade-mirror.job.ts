@@ -106,16 +106,13 @@ type SizingPolicyKindInput =
   | "position_gap";
 
 /**
- * Default per-target share allocation for `position_gap`. Justified by the
- * swisstony ATP Sinner/Ruud math (2026-05-17): target's final position was
- * 88,931 sh Sinner / 14,925 sh Ruud. At `1e-4`, desired = 8.89 sh / 1.49 sh —
- * a $0.85 Sinner fill maps to ~$7.55 of intent (sits cleanly inside the v0
- * $5–$15 per-trade caps), while a $0.16 Ruud fill maps to ~$0.24 and skips
- * `below_market_min`. Lower scales (1e-5) collapse both legs below the market
- * floor; higher scales (1e-3) blow past the per-leg cap on a typical target
- * position. Per-target override lives on the `position_gap` policy itself.
+ * Fallback `target_scale` for `position_gap` when no per-target value is
+ * supplied (env target source). The DB target source always supplies a value
+ * from the `target_scale` column (NOT NULL DEFAULT `0.0005` in the schema),
+ * so this constant only governs env-mode tests + the system-tenant boot
+ * path. Production tenants override per-target via the PATCH API.
  */
-const DEFAULT_POSITION_GAP_TARGET_SCALE = 1e-4;
+const FALLBACK_POSITION_GAP_TARGET_SCALE = 0.0005;
 
 function minBetPolicy(maxUsdcPerCondition: number): SizingPolicy {
   return {
@@ -134,6 +131,8 @@ function buildSizingPolicy(params: {
   mirrorMaxUsdcPerTrade: number;
   /** Per-target opt-in; `'auto'` (default) preserves snapshot-derived behavior. */
   sizingPolicyKind: SizingPolicyKindInput;
+  /** Per-target conviction knob for `position_gap`; falls back to `FALLBACK_POSITION_GAP_TARGET_SCALE`. */
+  targetScale?: number;
 }): SizingPolicy {
   const snapshot = snapshotForTargetWallet(params.targetWallet);
   const resolvedKind: Exclude<SizingPolicyKindInput, "auto"> =
@@ -149,7 +148,7 @@ function buildSizingPolicy(params: {
     return {
       kind: "position_gap",
       max_usdc_per_condition: params.mirrorMaxUsdcPerTrade,
-      target_scale: DEFAULT_POSITION_GAP_TARGET_SCALE,
+      target_scale: params.targetScale ?? FALLBACK_POSITION_GAP_TARGET_SCALE,
     };
   }
   // `target_percentile_scaled` requires a snapshot. If the user explicitly
@@ -206,6 +205,12 @@ export function buildMirrorTargetConfig(params: {
    * to `'auto'` (snapshot-derived) for back-compat.
    */
   sizingPolicyKind?: SizingPolicyKindInput;
+  /**
+   * Per-target `target_scale` for `position_gap`. Read from
+   * `poly_copy_trade_targets.target_scale` by the enumerator. Defaults to
+   * `FALLBACK_POSITION_GAP_TARGET_SCALE` when omitted (env-source path).
+   */
+  targetScale?: number;
 }): MirrorTargetConfig {
   const mirrorFilterPercentile =
     params.mirrorFilterPercentile ?? DEFAULT_CONVICTION_FILTER_PERCENTILE;
@@ -221,6 +226,9 @@ export function buildMirrorTargetConfig(params: {
       mirrorFilterPercentile,
       mirrorMaxUsdcPerTrade,
       sizingPolicyKind: params.sizingPolicyKind ?? "auto",
+      ...(params.targetScale !== undefined
+        ? { targetScale: params.targetScale }
+        : {}),
     }),
     // task.5001 — default to mirror_limit (resting GTC at target's entry).
     // Persistence to a per-target column is deferred to task.0347.
