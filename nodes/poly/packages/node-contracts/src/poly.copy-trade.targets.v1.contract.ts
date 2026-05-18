@@ -52,21 +52,24 @@ const sizingPolicyKindSchema = z.enum([
 ]);
 
 /**
- * Per-target conviction knob for `position_gap` sizing. Bounded `(0, 1]`,
- * matching the DB CHECK + the `PositionGapSizingPolicySchema` field in
- * `features/copy-trade/types.ts`. Populated on every row for schema symmetry
- * but only read by the planner when `sizing_policy_kind` resolves to
- * `position_gap`.
+ * Per-target whole-book proportional alloc for `position_gap` — "$C of my
+ * book follows this target's whole book." Drives
+ * `scale = capital_alloc_usdc / Σ target_total_open_book_cost_usdc` in
+ * `applyPositionGapSizing`. NULLable on the row; required (DB CHECK) when
+ * `sizing_policy_kind = 'position_gap'`. Same shape as
+ * `mirror_max_usdc_per_trade` (positive USDC, ≤ 2 decimals).
+ *
+ * Locked design 2026-05-18; see docs/spec/poly-copy-trade-position-mirror.md.
  */
-const targetScaleSchema = z.number().positive().max(1).finite();
+const capitalAllocUsdcSchema = mirrorMaxUsdcPerTradeSchema;
 
 const targetPolicySchema = z.object({
   mirror_filter_percentile: z.number().int().min(50).max(99),
   mirror_max_usdc_per_trade: mirrorMaxUsdcPerTradeSchema,
   /** Optional override; omit (or `'auto'`) to keep legacy snapshot inference. */
   sizing_policy_kind: sizingPolicyKindSchema.optional(),
-  /** Optional `position_gap` conviction knob. Omit to keep current value (PATCH) or default (POST). */
-  target_scale: targetScaleSchema.optional(),
+  /** Per-target whole-book alloc for `position_gap`. Required when policy resolves to `position_gap` (server-side CHECK). Omit to keep current value (PATCH) or leave NULL (POST for non-position_gap rows). */
+  mirror_capital_alloc_usdc: capitalAllocUsdcSchema.optional(),
 });
 
 const targetSchema = z.object({
@@ -93,8 +96,8 @@ const targetSchema = z.object({
    * of snapshot availability.
    */
   sizing_policy_kind: sizingPolicyKindSchema,
-  /** Per-target conviction knob for `position_gap` (fraction of target's per-token shares to mirror). Populated on every row, read only when policy resolves to `position_gap`. */
-  target_scale: targetScaleSchema,
+  /** Per-target whole-book alloc for `position_gap`. Null on rows where the policy isn't `position_gap`; required (DB CHECK) when it is. */
+  mirror_capital_alloc_usdc: capitalAllocUsdcSchema.nullable(),
   /** Provenance: `"env"` for the local-dev fallback; `"db"` once `dbTargetSource` is wired. */
   source: z.enum(["env", "db"]),
 });
@@ -118,11 +121,11 @@ const targetCreateInputSchema = z.object({
    */
   sizing_policy_kind: sizingPolicyKindSchema.optional(),
   /**
-   * Optional initial `position_gap` conviction knob. Defaults to the DB
-   * column default (`0.0005`) if omitted. Only consulted when the resolved
-   * planner policy is `position_gap`.
+   * Initial whole-book alloc for `position_gap`. Required when
+   * `sizing_policy_kind === 'position_gap'` (server-side CHECK rejects
+   * otherwise). NULLable for other kinds.
    */
-  target_scale: targetScaleSchema.optional(),
+  mirror_capital_alloc_usdc: capitalAllocUsdcSchema.optional(),
 });
 
 export const polyCopyTradeTargetCreateOperation = {

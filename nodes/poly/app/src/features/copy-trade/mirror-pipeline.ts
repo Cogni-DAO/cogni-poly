@@ -56,9 +56,16 @@ type PlacementWire = "limit" | "market_fok";
 /**
  * Representative per-intent USDC ceiling for a sizing policy. Used by SELL-close
  * caps and audit-log skip blobs. Per-fill size is computed in `plan-mirror`.
+ *
+ * `position_gap` deliberately has no per-trade cap — the per-target whole-book
+ * alloc IS the implicit ceiling. Return it here so SELL-close + audit log
+ * carry a sane "what's the most this target could intend per fill" number
+ * without re-introducing a per-trade throttle.
  */
 function nominalSizeUsdc(sizing: SizingPolicy): number {
-  return sizing.max_usdc_per_condition;
+  return sizing.kind === "position_gap"
+    ? sizing.capital_alloc_usdc
+    : sizing.max_usdc_per_condition;
 }
 
 /**
@@ -183,6 +190,21 @@ export interface MirrorPipelineDeps {
         targetWallet: string;
         conditionId: string;
       }) => Promise<TargetConditionPositionView | undefined>)
+    | undefined;
+  /**
+   * Optional whole-book cost-basis read seam — sum of `cost_usdc` across ALL
+   * of target's currently-open positions (every condition). Required by
+   * `position_gap` proportional sizing (`scale = capital_alloc_usdc / Σ`).
+   * v0 production wiring uses Polymarket Data API
+   * `/positions?user=<target>&sizeThreshold=0` paginated via
+   * `listAllUserPositions`, cached ~30s per target.
+   *
+   * Returns `undefined` on hydration failure → planner's Σ-guard skips with
+   * `target_position_below_threshold` (fail-closed). Never read by `min_bet`
+   * or `target_percentile_scaled`.
+   */
+  getTargetTotalBookCost?:
+    | ((params: { targetWallet: string }) => Promise<number | undefined>)
     | undefined;
   /** Per-target config. */
   target: MirrorTargetConfig;
@@ -377,6 +399,11 @@ async function processFill(
     fill,
     log,
   });
+  const targetTotalBookCost = await fetchTargetTotalBookCost({
+    deps,
+    fill,
+    log,
+  });
 
   const fillEndDate = fill.attributes?.end_date;
   if (typeof fillEndDate !== "string" || fillEndDate.length === 0) {
@@ -402,6 +429,9 @@ async function processFill(
       position,
       ...(targetPosition !== undefined
         ? { target_position: targetPosition }
+        : {}),
+      ...(targetTotalBookCost !== undefined
+        ? { target_total_open_book_cost_usdc: targetTotalBookCost }
         : {}),
     },
     client_order_id,
@@ -614,6 +644,40 @@ async function fetchTargetConditionPosition(args: {
   }
 }
 
+/**
+ * Whole-book cost hydration for `position_gap` proportional sizing.
+ * Returns `undefined` on miss or hydration error — the planner's Σ-guard
+ * then skips the fill with `target_position_below_threshold`. Only fires
+ * for BUY fills under `position_gap`; other policies short-circuit at the
+ * `needsTotalBookCost` gate.
+ */
+async function fetchTargetTotalBookCost(args: {
+  deps: MirrorPipelineDeps;
+  fill: import("@cogni/poly-market-provider").Fill;
+  log: LoggerPort;
+}): Promise<number | undefined> {
+  const { deps, fill, log } = args;
+  if (deps.target.sizing.kind !== "position_gap") return undefined;
+  if (!deps.getTargetTotalBookCost) return undefined;
+  if (fill.side !== "BUY") return undefined;
+  try {
+    return await deps.getTargetTotalBookCost({
+      targetWallet: deps.target.target_wallet,
+    });
+  } catch (err) {
+    log.warn(
+      {
+        event: "poly.mirror.target_book_cost.fetch_error",
+        fill_id: fill.fill_id,
+        market_id: fill.market_id,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "mirror pipeline: target whole-book cost hydration failed; position_gap will fail closed"
+    );
+    return undefined;
+  }
+}
+
 function needsTargetPosition(target: MirrorTargetConfig): boolean {
   return (
     target.position_followup?.enabled === true ||
@@ -669,8 +733,10 @@ function buildDecisionLogFields(args: {
     wrong_side_holding_detected: wrongSideHoldingDetected ?? false,
     sizing_policy_kind: target.sizing.kind,
     // Field name retained for external observability (Grafana / Loki dashboards);
-    // internal type is `max_usdc_per_condition` (bug.5054).
-    mirror_max_usdc_per_trade: target.sizing.max_usdc_per_condition,
+    // internal type is `max_usdc_per_condition` for legacy policies; for
+    // `position_gap` we surface `capital_alloc_usdc` (the per-target whole-
+    // book ceiling) under the same observability label.
+    mirror_max_usdc_per_trade: nominalSizeUsdc(target.sizing),
     sizing_percentile:
       "statistic" in target.sizing ? target.sizing.statistic.percentile : null,
     sizing_min_target_usdc:
@@ -1057,7 +1123,7 @@ async function executeMirrorOrder(
       observed_at: new Date(fill.observed_at),
       intent,
       ...(intent.side === "BUY"
-        ? { max_market_intent_usdc: deps.target.sizing.max_usdc_per_condition }
+        ? { max_market_intent_usdc: nominalSizeUsdc(deps.target.sizing) }
         : {}),
     });
   } catch (err: unknown) {

@@ -895,6 +895,71 @@ function createContainer(): Container {
           "@/bootstrap/copy-trade-reconciler"
         );
         const dataApiClient = new PolymarketDataApiClient();
+
+        // Whole-book cost-basis cache for `position_gap` proportional sizing.
+        // One Σ per target wallet, shared across all tenants mirroring the
+        // same target. 30s TTL — target's open-book cost doesn't move > minor
+        // % in 30s, and a cache miss falls through to `listAllUserPositions`
+        // (paginated, all sub-dollar positions included via `sizeThreshold: 0`).
+        // Returns `undefined` on fetch error → planner's Σ-guard skips
+        // `target_position_below_threshold` (fail-closed).
+        const TARGET_BOOK_COST_TTL_MS = 30_000;
+        const targetBookCostCache = new Map<
+          string,
+          {
+            value: number;
+            expiresAt: number;
+            inFlight?: Promise<number | undefined>;
+          }
+        >();
+        async function getTargetTotalBookCostCached(
+          targetWallet: string
+        ): Promise<number | undefined> {
+          const key = targetWallet.toLowerCase();
+          const now = Date.now();
+          const cached = targetBookCostCache.get(key);
+          if (cached && cached.expiresAt > now) return cached.value;
+          if (cached?.inFlight) return cached.inFlight;
+          const inFlight = (async (): Promise<number | undefined> => {
+            try {
+              const positions = await dataApiClient.listAllUserPositions(
+                targetWallet,
+                { sizeThreshold: 0 }
+              );
+              let totalCost = 0;
+              for (const p of positions) {
+                const cost =
+                  Number.isFinite(p.initialValue) && p.initialValue > 0
+                    ? p.initialValue
+                    : Number.isFinite(p.size) && Number.isFinite(p.avgPrice)
+                      ? Math.max(0, p.size * p.avgPrice)
+                      : 0;
+                totalCost += cost;
+              }
+              targetBookCostCache.set(key, {
+                value: totalCost,
+                expiresAt: Date.now() + TARGET_BOOK_COST_TTL_MS,
+              });
+              return totalCost;
+            } catch (err) {
+              log.warn(
+                {
+                  event: "poly.mirror.target_book_cost.cache_miss",
+                  target_wallet: targetWallet,
+                  err: err instanceof Error ? err.message : String(err),
+                },
+                "target whole-book hydration failed; position_gap will fail closed for this tick"
+              );
+              return undefined;
+            }
+          })();
+          targetBookCostCache.set(key, {
+            value: cached?.value ?? 0,
+            expiresAt: cached?.expiresAt ?? 0,
+            inFlight,
+          });
+          return inFlight;
+        }
         // pino's Logger is structurally compatible with LoggerPort's subset
         // (debug/info/warn/error/child with object + optional msg).
         const mirrorLogger =
@@ -946,7 +1011,9 @@ function createContainer(): Container {
               mirrorFilterPercentile: enumeratedTarget.mirrorFilterPercentile,
               mirrorMaxUsdcPerTrade: enumeratedTarget.mirrorMaxUsdcPerTrade,
               sizingPolicyKind: enumeratedTarget.sizingPolicyKind,
-              targetScale: enumeratedTarget.targetScale,
+              ...(enumeratedTarget.capitalAllocUsdc !== null
+                ? { capitalAllocUsdc: enumeratedTarget.capitalAllocUsdc }
+                : {}),
             });
             const source = createPolymarketChainActivitySource({
               publicClient: chainPublicClient,
@@ -998,6 +1065,8 @@ function createContainer(): Container {
                     positions
                   );
                 },
+                getTargetTotalBookCost: async (params) =>
+                  getTargetTotalBookCostCached(params.targetWallet),
                 closePosition: async (params) => {
                   const executor = await getExecutor();
                   return executor.closePosition(params);

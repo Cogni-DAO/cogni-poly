@@ -386,6 +386,13 @@
       "when": 1779127591867,
       "tag": "0054_poly_copy_trade_target_scale",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1779135527377,
+      "tag": "0055_position_gap_capital_alloc",
+      "breakpoints": true
     }
   ]
 }

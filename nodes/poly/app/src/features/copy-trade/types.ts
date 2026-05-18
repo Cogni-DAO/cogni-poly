@@ -110,30 +110,45 @@ export type TargetPercentileScaledSizingPolicy = z.infer<
 >;
 
 /**
- * Position-gap sizing (D2 phase 2). Sizes from gaps instead of fills:
- * `desired_shares = target_shares × target_scale`, `gap_shares = desired − ours`.
- * Each fill is just a re-evaluation trigger; sizing is independent of the
- * incoming fill's size. Asymmetric target positions no longer invert the
- * mirror's per-side weighting (cf. swisstony ATP Sinner/Ruud 2026-05-17,
- * target 99.5/0.5 → legacy mirror 28/72; position_gap collapses the minority
- * side to `below_market_min` before placement).
+ * Position-gap sizing (D2 phase 2, 2026-05-18 redesign locked).
  *
- * `target_scale` is the per-target fraction of target's per-token share count
- * the mirror aims to hold (e.g. `1e-4` = 0.01% of target's shares). Lives on
- * the policy so individual targets can A/B different allocations without
- * changing the bootstrap default.
+ * **North star** — hold a miniature of target's BOOK. As target grows /
+ * shrinks / rotates, our positions track theirs in proportion, scaled to
+ * `capital_alloc_usdc`. Per-fill recompute.
+ *
+ * **Math:**
+ *   scale          = capital_alloc_usdc / Σ target_total_open_book_cost_usdc
+ *   desired_shares = target_shares × scale            (per token target holds)
+ *   gap_shares     = desired_shares − our_shares
+ *   intent_usdc    = gap_shares × fill.price          → clamp to market_min only
+ *
+ * **One knob (`capital_alloc_usdc`).** Asymmetric target positions no longer
+ * invert the mirror's per-side weighting (cf. swisstony ATP Sinner/Ruud
+ * 2026-05-17, target 99.5/0.5 → legacy mirror 28/72; position_gap collapses
+ * the minority side to `below_market_min` before placement). Implicit
+ * threshold derived for free: `market_min × target_book / alloc`.
+ *
+ * **No per-trade cap.** `mirror_max_usdc_per_trade` would throttle the
+ * proportional copy mechanism (anti-tracking). Wire-level safety lives in
+ * `poly_wallet_grants` (`CAPS_LIVE_IN_GRANT`). This schema deliberately omits
+ * `max_usdc_per_condition` that other variants carry.
  *
  * Phase-2 scope: gap math is computed only for the new_entry path
  * (`decideMirrorBranch` short-circuits layer/hedge routing when this kind is
  * active — gap math naturally produces layering via `desired − ours`). Phase 4
  * dissolves the layer/hedge branches entirely under `GapExecutor`.
+ *
+ * See docs/spec/poly-copy-trade-position-mirror.md (locked design status note).
  */
 export const PositionGapSizingPolicySchema = z.object({
   kind: z.literal("position_gap"),
-  /** Per-(conditionId, token_id) cumulative-intent ceiling. Same semantics as the other variants. */
-  max_usdc_per_condition: z.number().positive(),
-  /** Per-target fraction of target's per-token shares we aim to hold. Bounded (0,1]. */
-  target_scale: z.number().positive().max(1),
+  /**
+   * Per-target dollar budget for the whole-book proportional copy. "I'm
+   * betting $C of my book tracking this target's whole book." Drives
+   * `scale = capital_alloc_usdc / Σ target_total_open_book_cost_usdc`.
+   * Persisted on `poly_copy_trade_targets.mirror_capital_alloc_usdc`.
+   */
+  capital_alloc_usdc: z.number().positive(),
 });
 export type PositionGapSizingPolicy = z.infer<
   typeof PositionGapSizingPolicySchema
@@ -406,6 +421,20 @@ export const RuntimeStateSchema = z.object({
    * Data-API read; vNext should hydrate from persisted target activity.
    */
   target_position: TargetConditionPositionViewSchema.optional(),
+  /**
+   * Total cost-basis (sum of `cost_usdc`) across ALL of target's currently-
+   * open positions, every condition. Hydrated by the pipeline per fill
+   * (cached ~30s in bootstrap). Drives `position_gap` proportional scale
+   * derivation: `scale = policy.capital_alloc_usdc / target_total_open_book_cost_usdc`.
+   *
+   * Optional / fail-open: when omitted or ≤ 0, the `position_gap` planner
+   * branch skips with `target_position_below_threshold` rather than dividing
+   * by zero. Other sizing policies (`min_bet`, `target_percentile_scaled`)
+   * never read this field.
+   *
+   * Locked design 2026-05-18; see docs/spec/poly-copy-trade-position-mirror.md.
+   */
+  target_total_open_book_cost_usdc: z.number().nonnegative().optional(),
 });
 export type RuntimeState = z.infer<typeof RuntimeStateSchema>;
 
