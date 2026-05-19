@@ -38,9 +38,13 @@
 #                             callers with no promotions must skip the step,
 #                             not silent-pass it (Axiom 11).
 #
-# Adds: extend the case statement below when a new in-cluster deployment
-# needs gating. Promotion to a `k8s_deployment` field on infra/catalog/*.yaml
-# (CATALOG_IS_SSOT, axiom 16) is the right home if/when a fifth node lands.
+# Deployment-name derivation (CATALOG_IS_SSOT, axiom 16): the k8s Deployment
+# name follows directly from the catalog `type` field. `type: node` overlays
+# carry `namePrefix: <name>-` over `base/node-app/deployment.yaml` (name:
+# node-app), yielding `<name>-node-app`. `type: service` overlays carry no
+# prefix and the base Deployment name matches the catalog name. Adding a
+# new deploy unit therefore requires zero edits to this script — drop a new
+# `infra/catalog/<name>.yaml` and the gating maps automatically.
 
 set -euo pipefail
 
@@ -58,14 +62,24 @@ SSH_OPTS=(
   -o ServerAliveCountMax=6
 )
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./lib/image-tags.sh
+. "${SCRIPT_DIR}/lib/image-tags.sh"
+
 IFS=',' read -ra _NODES <<< "${PROMOTED_APPS:?PROMOTED_APPS required (CSV of node names)}"
 SERVICES=()
 for node in "${_NODES[@]}"; do
-  case "$node" in
-    operator | poly | resy) SERVICES+=("${node}-node-app") ;;
-    scheduler-worker | poly-test-worker) SERVICES+=("${node}") ;;
+  catalog_file="${_image_tags_catalog_root}/${node}.yaml"
+  if [ ! -f "$catalog_file" ]; then
+    echo "::error::wait-for-in-cluster-services: no catalog entry for deploy unit '$node' (expected $catalog_file)"
+    exit 1
+  fi
+  unit_type=$(yq -N '.type' "$catalog_file")
+  case "$unit_type" in
+    node)    SERVICES+=("${node}-node-app") ;;
+    service) SERVICES+=("${node}") ;;
     *)
-      echo "::error::wait-for-in-cluster-services: unknown node '$node' in PROMOTED_APPS"
+      echo "::error::wait-for-in-cluster-services: catalog ${catalog_file} has unsupported type='${unit_type}' (must be 'node' or 'service')"
       exit 1
       ;;
   esac
