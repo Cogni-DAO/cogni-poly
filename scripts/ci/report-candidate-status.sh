@@ -21,6 +21,10 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
+if [ "${#DESCRIPTION}" -gt 140 ]; then
+  DESCRIPTION="${DESCRIPTION:0:137}..."
+fi
+
 args=(
   "repos/${REPOSITORY}/statuses/${SHA}"
   -f "state=${STATE}"
