@@ -276,16 +276,8 @@ export const polyCopyTradeFills = pgTable(
       table.billingAccountId,
       table.positionLifecycle
     ),
-    // bug.5018 — PnL/VWAP aggregation covering index. Mode is in the key
-    // so paper vs live rows don't interleave on the scan; price/shares/
-    // fees_usdc are INCLUDE columns so `SUM(price*shares)/SUM(shares)` is an
-    // index-only scan. Drizzle-orm's index DSL doesn't express INCLUDE, and
-    // the SQL must be `CREATE INDEX CONCURRENTLY` (the table is populated in
-    // prod; a plain CREATE INDEX takes ACCESS EXCLUSIVE on the table and
-    // stalls the mirror-pipeline write path). Both constraints are
-    // hand-authored in the migration SQL. The schema entry below tracks the
-    // keys for drizzle-kit's snapshot; the hand-authored migration carries
-    // CONCURRENTLY + INCLUDE.
+    // bug.5018 — PnL/VWAP aggregation key. Mode is included so paper vs
+    // live rows don't interleave on the scan.
     index("poly_copy_trade_fills_pnl_idx").on(
       table.billingAccountId,
       table.targetId,
