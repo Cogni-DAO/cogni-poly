@@ -69,17 +69,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IFS=',' read -ra _NODES <<< "${PROMOTED_APPS:?PROMOTED_APPS required (CSV of node names)}"
 SERVICES=()
 for node in "${_NODES[@]}"; do
-  catalog_file="${_image_tags_catalog_root}/${node}.yaml"
-  if [ ! -f "$catalog_file" ]; then
-    echo "::error::wait-for-in-cluster-services: no catalog entry for deploy unit '$node' (expected $catalog_file)"
+  if ! unit_type=$(type_for_deploy_unit "$node"); then
+    echo "::error::wait-for-in-cluster-services: no catalog entry for deploy unit '$node' (check infra/catalog/${node}.yaml)"
     exit 1
   fi
-  unit_type=$(yq -N '.type' "$catalog_file")
   case "$unit_type" in
     node)    SERVICES+=("${node}-node-app") ;;
     service) SERVICES+=("${node}") ;;
     *)
-      echo "::error::wait-for-in-cluster-services: catalog ${catalog_file} has unsupported type='${unit_type}' (must be 'node' or 'service')"
+      echo "::error::wait-for-in-cluster-services: catalog infra/catalog/${node}.yaml has unsupported type='${unit_type}' (must be 'node' or 'service')"
       exit 1
       ;;
   esac
