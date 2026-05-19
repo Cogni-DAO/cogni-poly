@@ -38,8 +38,6 @@
 #     The legacy `only-when-placeholder` mode (which let main's stale digests
 #     override the snapshot) was removed in bug.5013 after live evidence that
 #     main's digest pins regress unaffected sidecars on every promote.
-#   OVERLAY_DIGEST_LIB (optional) path to lib/overlay-digest.sh (default:
-#       resolved from PROMOTE_SCRIPT or SCRIPT_DIR siblings).
 #   PROMOTE_SCRIPT  (optional) path to promote-k8s-image.sh
 #
 # cwd: deploy-branch checkout root (so promote-k8s-image resolves
@@ -74,13 +72,6 @@ fi
 if [ ! -x "$PROMOTE_SCRIPT" ] && [ -f "../ci-src/scripts/ci/promote-k8s-image.sh" ]; then
   PROMOTE_SCRIPT="../ci-src/scripts/ci/promote-k8s-image.sh"
 fi
-
-OVERLAY_DIGEST_LIB=${OVERLAY_DIGEST_LIB:-"$(dirname "$PROMOTE_SCRIPT")/lib/overlay-digest.sh"}
-if [ ! -f "$OVERLAY_DIGEST_LIB" ] && [ -f "${SCRIPT_DIR}/lib/overlay-digest.sh" ]; then
-  OVERLAY_DIGEST_LIB="${SCRIPT_DIR}/lib/overlay-digest.sh"
-fi
-# shellcheck source=./lib/overlay-digest.sh disable=SC1090
-. "$OVERLAY_DIGEST_LIB"
 
 if [ ! -s "$SNAPSHOT_FILE" ]; then
   echo "ℹ️  No snapshot rows (cold-start) — nothing to restore"
