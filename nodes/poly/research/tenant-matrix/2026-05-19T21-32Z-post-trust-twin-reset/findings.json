@@ -1,0 +1,15 @@
+{
+  "report_path": "nodes/poly/research/tenant-matrix/2026-05-19T21-32Z-post-trust-twin-reset/report.html",
+  "primary_class": null,
+  "primary_confidence": 0.9,
+  "primary_one_liner": "Fresh preview matrix is live and column-backed, but sample is too small for policy claims.",
+  "secondary_class": null,
+  "secondary_confidence": null,
+  "secondary_one_liner": null,
+  "pareto_next_fix": "Re-run after 24h of post-reset preview activity before comparing policies.",
+  "evidence": {
+    "code_path": "nodes/poly/packages/db-schema/src/copy-trade.ts:217",
+    "notes": "Post-reset preview tenants have realized fill rows with price/shares columns and zero missing-column realized rows."
+  },
+  "authored_at": "2026-05-19T21:36:00Z"
+}

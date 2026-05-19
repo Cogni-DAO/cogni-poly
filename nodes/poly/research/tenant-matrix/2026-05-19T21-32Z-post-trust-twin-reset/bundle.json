@@ -1,0 +1,689 @@
+{
+  "captured_at": "2026-05-19T21:36:00.750Z",
+  "input": {
+    "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+    "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+    "control_env_key_prefix": "POLY_PREVIEW_TENANT_TRUST_TWIN"
+  },
+  "window": {
+    "since": "2026-05-19T21:32:42Z",
+    "until": "2026-05-19T21:35:33.212Z"
+  },
+  "tenants": [
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP",
+      "envSlug": "candidate-a",
+      "role": "GAP",
+      "billingAccountId": "d66032aa-e6d7-4c60-9b41-aea3b0de1692",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION",
+      "envSlug": "candidate-a",
+      "role": "VALIDATION",
+      "billingAccountId": "1890787d-7680-440b-ab1e-519c529bfc6c",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP",
+      "envSlug": "preview",
+      "role": "GAP",
+      "billingAccountId": "0e16cf1a-33ba-488a-9c11-177f87e32513",
+      "dsUid": "cogni-preview-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+      "envSlug": "preview",
+      "role": "SWISSTONY_TRUST_TWIN",
+      "billingAccountId": "b0ca1bce-58f7-453d-a18c-f76c29b66c4d",
+      "dsUid": "cogni-preview-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+      "envSlug": "preview",
+      "role": "TRUST_TWIN",
+      "billingAccountId": "eae447b1-b88d-45a3-a39f-f50a87b0ba2f",
+      "dsUid": "cogni-preview-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PROD_TENANT_LIVE",
+      "envSlug": "production",
+      "role": "LIVE",
+      "billingAccountId": "207795de-891c-4791-9f8b-aa0f0bcc4911",
+      "dsUid": "cogni-production-poly-postgres"
+    }
+  ],
+  "control": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+  "prod_live": "POLY_PROD_TENANT_LIVE",
+  "metrics": [
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "GAP",
+        "envSlug": "candidate-a",
+        "billingAccountId": "d66032aa-e6d7-4c60-9b41-aea3b0de1692",
+        "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP"
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-19T21:32:42Z",
+        "until": "2026-05-19T21:35:33.212Z"
+      },
+      "decisions": {
+        "decisions": 31,
+        "placed": 0,
+        "skipped": 31,
+        "errored": 0,
+        "skip_reasons": {
+          "below_market_min": 13,
+          "followup_not_needed": 11,
+          "vwap_floor_breach": 6,
+          "target_dominant_other_side": 1
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": null,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "VALIDATION",
+        "envSlug": "candidate-a",
+        "billingAccountId": "1890787d-7680-440b-ab1e-519c529bfc6c",
+        "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION"
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-19T21:32:42Z",
+        "until": "2026-05-19T21:35:33.212Z"
+      },
+      "decisions": {
+        "decisions": 31,
+        "placed": 0,
+        "skipped": 31,
+        "errored": 0,
+        "skip_reasons": {
+          "below_target_percentile": 13,
+          "position_cap_reached": 9,
+          "vwap_floor_breach": 6,
+          "followup_position_too_small": 2,
+          "target_dominant_other_side": 1
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": null,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": [
+        "pnl_query_failed: grafana pg query → 400 Bad Request: {\"results\":{\"A\":{\"error\":\"db query error: failed to acquire connection: failed to connect to `user=app_readonly database=cogni_poly`: postgres:5432 (postgres): failed SASL auth: FATAL: password authentication failed for user \\\"app_readonly\\\" (SQLSTATE 28P01)\",\"errorSource\":\"downstream\",\"status\":500,\"frames\":[{\"schema\":{\"refId\":\"A\",\"meta\":{\"typeVersion\":[0,0],\"executedQueryString\":\"\\n    SELECT\\n      COALESCE(SUM(\\n        CASE\\n          WHEN o.outcome = 'winner'\\n          THEN f.shares * COALESCE(o.payout, 1.0)::numeric\\n               - f.shares * f.price\\n          WHEN o.outcome = 'loser'\\n          THEN -(f.shares * f.price)\\n          ELSE 0\\n        END\\n      ), 0)::float8 AS realized_pnl_usdc,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome IN ('winner','loser'))::int AS resolved_markets,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome = 'winner')::int AS markets_won,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome = 'loser')::int AS markets_lost\\n    FROM poly_copy_trade_fills f\\n    LEFT JOIN poly_market_outcomes o\\n      ON o.condition_id = f.attributes-\\u003e\\u003e'condition_id'\\n     AND o.token_id     = f.attributes-\\u003e\\u003e'token_id'\\n    WHERE f.billing_account_id = '1890787d-7680-440b-ab1e-519c529bfc6c'\\n      AND f.target_id = '473e0467-8257-583e-ac93-dea278662cb2'\\n      AND f.observed_at \\u003e= '2026-05-19T21:32:42Z'::timestamptz\\n      AND f.observed_at \\u003c  '2026-05-19T21:35:33.212Z'::timestamptz\\n      AND f.status IN ('filled','partial')\\n      AND f.price IS NOT NULL\\n      AND f.shares IS NOT NULL\\n  \"},\"fields\":[]},\"data\":{\"values\":[]}}]}}}\n"
+      ]
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "GAP",
+        "envSlug": "preview",
+        "billingAccountId": "0e16cf1a-33ba-488a-9c11-177f87e32513",
+        "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP"
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-19T21:32:42Z",
+        "until": "2026-05-19T21:35:33.212Z"
+      },
+      "decisions": {
+        "decisions": 18,
+        "placed": 0,
+        "skipped": 18,
+        "errored": 0,
+        "skip_reasons": {
+          "followup_not_needed": 11,
+          "vwap_floor_breach": 5,
+          "below_market_min": 1,
+          "target_dominant_other_side": 1
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": null,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "SWISSTONY_TRUST_TWIN",
+        "envSlug": "preview",
+        "billingAccountId": "b0ca1bce-58f7-453d-a18c-f76c29b66c4d",
+        "envKeyPrefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN"
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-19T21:32:42Z",
+        "until": "2026-05-19T21:35:33.212Z"
+      },
+      "decisions": {
+        "decisions": 18,
+        "placed": 6,
+        "skipped": 12,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 5,
+          "already_resting": 4,
+          "followup_not_needed": 2,
+          "target_dominant_other_side": 1
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.3333333333333333,
+      "fills": {
+        "fills_count": 6,
+        "filled_count": 4,
+        "open_count": 2,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 6,
+        "markets_with_open_position": 6,
+        "intent_usdc": 1115.2401322239923,
+        "realized_size_usdc": 139.82588578480002,
+        "first_fill_at": "2026-05-19T21:33:18.000Z",
+        "last_fill_at": "2026-05-19T21:35:04.000Z"
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x106ce2eea79ce80825bd86ad9401233645df291c423b2636d9fb03175a7d6823",
+        "0x639eed1478eed4ecfdbb525f466e0eec82e4682b2b7a2a68260b97052729755d",
+        "0x959c09e0e02f16f31b89beaba84c353a28efeac0c32365265ea69f1f33210841",
+        "0xe0d185e06afd19818af76ef64a4cbf2751ed7ee830b2a7a500a81171f7fd86db"
+      ],
+      "market_coverage_pct": null,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-19T21:00:00.000Z",
+            "value": 1115.2401322239923
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-19T21:00:00.000Z",
+            "value": 139.8258857848
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-19T21:00:00.000Z",
+            "value": 6
+          }
+        ]
+      },
+      "low_sample": true,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "TRUST_TWIN",
+        "envSlug": "preview",
+        "billingAccountId": "eae447b1-b88d-45a3-a39f-f50a87b0ba2f",
+        "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN"
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-19T21:32:42Z",
+        "until": "2026-05-19T21:35:33.212Z"
+      },
+      "decisions": {
+        "decisions": 18,
+        "placed": 1,
+        "skipped": 17,
+        "errored": 0,
+        "skip_reasons": {
+          "target_position_below_threshold": 7,
+          "vwap_floor_breach": 5,
+          "already_resting": 3,
+          "below_target_percentile": 1,
+          "target_dominant_other_side": 1
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.05555555555555555,
+      "fills": {
+        "fills_count": 1,
+        "filled_count": 1,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 1,
+        "markets_with_open_position": 1,
+        "intent_usdc": 3.4000000000000004,
+        "realized_size_usdc": 3.4,
+        "first_fill_at": "2026-05-19T21:33:18.000Z",
+        "last_fill_at": "2026-05-19T21:33:18.000Z"
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x106ce2eea79ce80825bd86ad9401233645df291c423b2636d9fb03175a7d6823"
+      ],
+      "market_coverage_pct": null,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-19T21:00:00.000Z",
+            "value": 3.4000000000000004
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-19T21:00:00.000Z",
+            "value": 3.4
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-19T21:00:00.000Z",
+            "value": 1
+          }
+        ]
+      },
+      "low_sample": true,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PROD",
+        "role": "LIVE",
+        "envSlug": "production",
+        "billingAccountId": "207795de-891c-4791-9f8b-aa0f0bcc4911",
+        "envKeyPrefix": "POLY_PROD_TENANT_LIVE"
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-19T21:32:42Z",
+        "until": "2026-05-19T21:35:33.212Z"
+      },
+      "decisions": {
+        "decisions": 6,
+        "placed": 0,
+        "skipped": 6,
+        "errored": 0,
+        "skip_reasons": {
+          "below_target_percentile": 4,
+          "vwap_floor_breach": 2
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": null,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": [
+        "fills_agg_failed: grafana pg query → 400 Bad Request: {\"results\":{\"A\":{\"error\":\"db query error: ERROR: column \\\"price\\\" does not exist (SQLSTATE 42703)\",\"errorSource\":\"downstream\",\"status\":500,\"frames\":[{\"schema\":{\"refId\":\"A\",\"meta\":{\"typeVersion\":[0,0],\"executedQueryString\":\"\\n    WITH rolled AS (\\n      SELECT\\n        market_id,\\n        COUNT(*)::int AS fills_count,\\n        COUNT(*) FILTER (WHERE status = 'filled')::int AS filled_count,\\n        COUNT(*) FILTER (WHERE status = 'open')::int AS open_count,\\n        COUNT(*) FILTER (WHERE status IN ('canceled','partial'))::int AS canceled_count,\\n        COUNT(*) FILTER (WHERE status = 'error')::int AS error_count,\\n        COALESCE(SUM(\\n          CASE WHEN attributes-\\u003e\\u003e'size_usdc' ~ '^[0-9]+(\\\\.[0-9]+)?$'\\n               THEN (attributes-\\u003e\\u003e'size_usdc')::numeric\\n               ELSE 0 END\\n        ), 0)::float8 AS intent_usdc,\\n        COALESCE(SUM(\\n          \\n          \\n          \\n          \\n          \\n          \\n          \\n          \\n          CASE WHEN status IN ('filled','partial')\\n                AND price IS NOT NULL\\n                AND shares IS NOT NULL\\n               THEN price * shares\\n               ELSE 0 END\\n        ), 0)::float8 AS realized_usdc,\\n        BOOL_OR(\\n          (position_lifecycle IS NULL OR position_lifecycle IN ('unresolved','open','closing'))\\n          AND attributes-\\u003e\\u003e'closed_at' IS NULL\\n          AND status IN ('pending','open','partial','filled')\\n        ) AS has_open_position,\\n        MIN(observed_at) AS first_fill_at,\\n        MAX(observed_at) AS last_fill_at\\n      FROM poly_copy_trade_fills\\n      WHERE billing_account_id = '207795de-891c-4791-9f8b-aa0f0bcc4911'\\n        AND target_id = '473e0467-8257-583e-ac93-dea278662cb2'\\n        AND observed_at \\u003e= '2026-05-19T21:32:42Z'::timestamptz\\n        AND observed_at \\u003c  '2026-05-19T21:35:33.212Z'::timestamptz\\n      GROUP BY market_id\\n    )\\n    SELECT\\n      COALESCE(SUM(fills_count), 0)::int AS fills_count,\\n      COALESCE(SUM(filled_count), 0)::int AS filled_count,\\n      COALESCE(SUM(open_count), 0)::int AS open_count,\\n      COALESCE(SUM(canceled_count), 0)::int AS canceled_count,\\n      COALESCE(SUM(error_count), 0)::int AS error_count,\\n      COUNT(*)::int AS markets_count,\\n      COUNT(*) FILTER (WHERE has_open_position)::int AS markets_with_open_position,\\n      COALESCE(SUM(intent_usdc), 0)::float8 AS intent_usdc,\\n      COALESCE(SUM(realized_usdc), 0)::float8 AS realized_size_usdc,\\n      MIN(first_fill_at) AS first_fill_at,\\n      MAX(last_fill_at) AS last_fill_at\\n    FROM rolled\\n  \"},\"fields\":[]},\"data\":{\"values\":[]}}]}}}\n",
+        "buckets_query_failed: grafana pg query → 400 Bad Request: {\"results\":{\"A\":{\"error\":\"db query error: ERROR: column \\\"price\\\" does not exist (SQLSTATE 42703)\",\"errorSource\":\"downstream\",\"status\":500,\"frames\":[{\"schema\":{\"refId\":\"A\",\"meta\":{\"typeVersion\":[0,0],\"executedQueryString\":\"\\n    SELECT\\n      date_trunc('hour', observed_at) AS bucket,\\n      COUNT(*)::int AS fills_in_bucket,\\n      COALESCE(SUM(\\n        CASE WHEN attributes-\\u003e\\u003e'size_usdc' ~ '^[0-9]+(\\\\.[0-9]+)?$'\\n             THEN (attributes-\\u003e\\u003e'size_usdc')::numeric\\n             ELSE 0 END\\n      ), 0)::float8 AS intent_in_bucket,\\n      COALESCE(SUM(\\n        \\n        CASE WHEN status IN ('filled','partial')\\n              AND price IS NOT NULL\\n              AND shares IS NOT NULL\\n             THEN price * shares\\n             ELSE 0 END\\n      ), 0)::float8 AS realized_in_bucket\\n    FROM poly_copy_trade_fills\\n    WHERE billing_account_id = '207795de-891c-4791-9f8b-aa0f0bcc4911'\\n      AND target_id = '473e0467-8257-583e-ac93-dea278662cb2'\\n      AND observed_at \\u003e= '2026-05-19T21:32:42Z'::timestamptz\\n      AND observed_at \\u003c  '2026-05-19T21:35:33.212Z'::timestamptz\\n    GROUP BY 1\\n    ORDER BY 1\\n  \"},\"fields\":[]},\"data\":{\"values\":[]}}]}}}\n",
+        "pnl_query_failed: grafana pg query → 400 Bad Request: {\"results\":{\"A\":{\"error\":\"db query error: ERROR: column f.shares does not exist (SQLSTATE 42703)\",\"errorSource\":\"downstream\",\"status\":500,\"frames\":[{\"schema\":{\"refId\":\"A\",\"meta\":{\"typeVersion\":[0,0],\"executedQueryString\":\"\\n    SELECT\\n      COALESCE(SUM(\\n        CASE\\n          WHEN o.outcome = 'winner'\\n          THEN f.shares * COALESCE(o.payout, 1.0)::numeric\\n               - f.shares * f.price\\n          WHEN o.outcome = 'loser'\\n          THEN -(f.shares * f.price)\\n          ELSE 0\\n        END\\n      ), 0)::float8 AS realized_pnl_usdc,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome IN ('winner','loser'))::int AS resolved_markets,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome = 'winner')::int AS markets_won,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome = 'loser')::int AS markets_lost\\n    FROM poly_copy_trade_fills f\\n    LEFT JOIN poly_market_outcomes o\\n      ON o.condition_id = f.attributes-\\u003e\\u003e'condition_id'\\n     AND o.token_id     = f.attributes-\\u003e\\u003e'token_id'\\n    WHERE f.billing_account_id = '207795de-891c-4791-9f8b-aa0f0bcc4911'\\n      AND f.target_id = '473e0467-8257-583e-ac93-dea278662cb2'\\n      AND f.observed_at \\u003e= '2026-05-19T21:32:42Z'::timestamptz\\n      AND f.observed_at \\u003c  '2026-05-19T21:35:33.212Z'::timestamptz\\n      AND f.status IN ('filled','partial')\\n      AND f.price IS NOT NULL\\n      AND f.shares IS NOT NULL\\n  \"},\"fields\":[]},\"data\":{\"values\":[]}}]}}}\n"
+      ]
+    }
+  ],
+  "target": {
+    "wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+    "cumulative_usdc": [],
+    "market_set": []
+  },
+  "ab": {
+    "POLY_CANDIDATE_A_TENANT_GAP": [
+      {
+        "axis": "decisions",
+        "control": 18,
+        "treatment": 31,
+        "delta": 13,
+        "delta_pct": 0.7222222222222222
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.05555555555555555,
+        "treatment": 0,
+        "delta": -0.05555555555555555,
+        "delta_pct": -1
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.4000000000000004,
+        "treatment": 0,
+        "delta": -3.4000000000000004,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.4,
+        "treatment": 0,
+        "delta": -3.4,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      }
+    ],
+    "POLY_CANDIDATE_A_TENANT_VALIDATION": [
+      {
+        "axis": "decisions",
+        "control": 18,
+        "treatment": 31,
+        "delta": 13,
+        "delta_pct": 0.7222222222222222
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.05555555555555555,
+        "treatment": 0,
+        "delta": -0.05555555555555555,
+        "delta_pct": -1
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.4000000000000004,
+        "treatment": 0,
+        "delta": -3.4000000000000004,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.4,
+        "treatment": 0,
+        "delta": -3.4,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      }
+    ],
+    "POLY_PREVIEW_TENANT_GAP": [
+      {
+        "axis": "decisions",
+        "control": 18,
+        "treatment": 18,
+        "delta": 0,
+        "delta_pct": 0
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.05555555555555555,
+        "treatment": 0,
+        "delta": -0.05555555555555555,
+        "delta_pct": -1
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.4000000000000004,
+        "treatment": 0,
+        "delta": -3.4000000000000004,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.4,
+        "treatment": 0,
+        "delta": -3.4,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      }
+    ],
+    "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN": [
+      {
+        "axis": "decisions",
+        "control": 18,
+        "treatment": 18,
+        "delta": 0,
+        "delta_pct": 0
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 6,
+        "delta": 5,
+        "delta_pct": 5
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.05555555555555555,
+        "treatment": 0.3333333333333333,
+        "delta": 0.2777777777777778,
+        "delta_pct": 5.000000000000001
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.4000000000000004,
+        "treatment": 1115.2401322239923,
+        "delta": 1111.8401322239922,
+        "delta_pct": 327.0118035952918
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.4,
+        "treatment": 139.82588578480002,
+        "delta": 136.42588578480002,
+        "delta_pct": 40.12526052494118
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 6,
+        "delta": 5,
+        "delta_pct": 5
+      }
+    ],
+    "POLY_PROD_TENANT_LIVE": [
+      {
+        "axis": "decisions",
+        "control": 18,
+        "treatment": 6,
+        "delta": -12,
+        "delta_pct": -0.6666666666666666
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.05555555555555555,
+        "treatment": 0,
+        "delta": -0.05555555555555555,
+        "delta_pct": -1
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.4000000000000004,
+        "treatment": 0,
+        "delta": -3.4000000000000004,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.4,
+        "treatment": 0,
+        "delta": -3.4,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      }
+    ]
+  },
+  "fidelity": {
+    "shared_fills": 5,
+    "exact_match": 3,
+    "outcome_match_reason_diff": 2,
+    "outcome_disagree": 0,
+    "twin_only_fills": 13,
+    "live_only_fills": 1,
+    "top_mismatches": [
+      {
+        "twin_outcome": "skipped",
+        "twin_reason": "target_position_below_threshold",
+        "live_outcome": "skipped",
+        "live_reason": "below_target_percentile",
+        "count": 2
+      }
+    ]
+  }
+}
