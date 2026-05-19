@@ -63,11 +63,7 @@ table.ab.algo tr.ref td.role { color: #34d399 !important; font-style: italic; }
 <!-- TAKEAWAY:START -->
 <div class="takeaway">
   <h2>↗ Takeaway</h2>
-  <p><strong>Primary finding (95% confidence).</strong> TRUST_TWIN does not track LIVE — paper places 2.8× more often than live (71 vs 25 placements; $101 vs $43 realized) over the same 4h53m window on the same policy and target. This is NOT a paper-sidecar fill bug: <code>twin_only_fills=0</code> and <code>live_only_fills=0</code> in <code>bundle.json</code>, so the sidecar sees every fill the CLOB sees. The divergence comes from per-tenant position state: the planner's gates <code>followup_position_too_small</code>, <code>position_cap_reached</code>, <code>already_resting</code>, and <code>below_market_min</code> all read the calling tenant's positions (<code>plan-mirror.ts:218-247</code>), so identical fills + different state ⇒ different decisions. The top mismatches in <code>fidelity.top_mismatches</code> confirm: 43 of the 46-placement gap are <em>twin placed (layer_scale_in) where live skipped (followup_position_too_small or below_market_min)</em>. LIVE's wallet carries months of accumulated derek-trading history that paper TRUST_TWIN never replays.</p>
-  <p><strong>Charter class:</strong> <code>null</code>. D1–D8 govern target→mirror delta; this is a paper-tenant→live-tenant artifact of running parallel independent instances. The "trust twin" framing oversold what a parallel paper run can deliver.</p>
-  <p><strong>Secondary (90% confidence):</strong> bug.5060's underfill direction IS fixed at the fill-capture layer (twin sees 100% of live's fills; placement_failed=0 across all 6 tenants). But the bug's stated symptom ("paper twin doesn't track prod") is only half resolved — the fill-capture half is green; the position-state half is structural.</p>
-  <p><strong>Pareto next-fix.</strong> Stop calling TRUST_TWIN a "trust twin." Either (a) reframe the matrix metric as "paper instance ran on this policy for N hours, here are its independent outcomes" (current reality), or (b) build a position-trajectory replay tool that feeds LIVE's actual fill history through the paper sidecar to get a faithful counterfactual — that's the <code>/paper-trade-diff-analysis</code> direction <code>paper-twin-diff.ts</code> was meant to enable. Until (b) ships, the matrix cannot answer "does paper match reality" — only "does paper run on its own state."</p>
-  <p><strong>SWISSTONY_TRUST_TWIN observation (not a finding):</strong> The new tenant placed 317 trades for $182,910 realized in ~3h, vs LIVE's $43. This reflects the legacy $15-per-trade cap on LIVE (target_percentile_scaled with mirror_max_usdc_per_trade=15) — not a position_gap "win." A like-for-like comparison requires the position-replay tool above; the matrix as configured today cannot adjudicate position_gap vs target_percentile_scaled.</p>
+  <p><strong>Paper places 2.8× more than live (71 vs 25) on same policy. Trust-twin worked — paper is not trustworthy yet.</strong> <span class="muted">95% · cause: per-tenant position state · next: paper-twin-diff replay · see appendix.</span></p>
 </div>
 <!-- TAKEAWAY:END -->
 
@@ -86,6 +82,19 @@ table.ab.algo tr.ref td.role { color: #34d399 !important; font-style: italic; }
 </div>
 
 <a id="appendix"></a>
+
+<details>
+  <summary>🔎 Finding detail — why paper diverges from live</summary>
+  <div class="details-body">
+    <p><strong>What happened:</strong> TRUST_TWIN and LIVE both ran <code>target_percentile_scaled</code> p80/$15 on swisstony for the same 4h53m window. Paper placed 71 / $101; live placed 25 / $43. 2.8× over-placement.</p>
+    <p><strong>What is NOT the cause:</strong> not a paper-sidecar fill bug. <code>twin_only_fills=0</code> and <code>live_only_fills=0</code> — the sidecar sees every fill the CLOB sees. bug.5060's fill-capture direction is fixed. <code>placement_failed=0</code> across all 6 tenants.</p>
+    <p><strong>Actual cause:</strong> per-tenant position state. Planner gates <code>followup_position_too_small</code>, <code>position_cap_reached</code>, <code>already_resting</code>, and <code>below_market_min</code> all read the calling tenant's positions (<code>plan-mirror.ts:218-247</code>). LIVE's wallet carries months of derek-trading history; paper TRUST_TWIN's positions only reflect what it has placed since registration. Identical fills + different state ⇒ different decisions. 43 of the 46-placement gap = <em>twin placed (layer_scale_in) where live skipped (followup_position_too_small or below_market_min)</em>.</p>
+    <p><strong>The "trust twin" earned its keep:</strong> the instrument's job is to falsify the assumption that paper tracks live. It did exactly that. Don't rename it — heed it.</p>
+    <p><strong>Pareto next-fix:</strong> ship position-trajectory replay via <code>paper-twin-diff.ts</code> (the <code>/paper-trade-diff-analysis</code> direction) — feed LIVE's actual fill history through the paper sidecar to get a faithful counterfactual. Until then, the matrix measures "paper running independently on its own state," not "does paper match reality."</p>
+    <p><strong>SWISSTONY_TRUST_TWIN (observation, not finding):</strong> 317 placements / $182,910 realized in ~3h vs LIVE's $43. NOT a <code>position_gap</code> win — it inherits the same position-state divergence problem AND benefits from the absence of the legacy $15 per-trade cap. A real adjudication of position_gap vs target_percentile_scaled requires the replay tool above.</p>
+    <p class="muted">Charter class: <code>null</code> (D1–D8 govern target→mirror delta; this is a paper-tenant→live-tenant cross-instance artifact). 95% confidence.</p>
+  </div>
+</details>
 
 <details>
   <summary>📊 Q1 detail — top decision mismatches (twin vs live)</summary>

@@ -21,9 +21,10 @@ A run is complete when ALL of these are true:
 1. `report.html` rendered with one bar chart per axis (decisions, placed, placement-rate, intent $, realized $, open positions, markets touched) and an A/B Δ-table.
 2. `bundle.json` covers every controllable tenant in `.env.cogni` (no `half-block detected` errors at startup).
 3. Low-sample rows (decisions < 50) are flagged 🟡 in the report.
-4. The `<!-- TAKEAWAY:START -->` block carries ONE primary finding (max two) with `% confidence` + a single Pareto next-fix line.
-5. `findings.json` mirrors the TAKEAWAY: `primary_class`, `primary_confidence` (0–1), `primary_one_liner`, `authored_at`.
+4. The `<!-- TAKEAWAY:START -->` block carries **ONE sentence, ≤20 words**, in **bold**, of the most decision-changing signal. Hard cap. Optional muted-text postfix: `% confidence · cause · next-fix · see appendix`. NO paragraphs, NO multi-claim findings, NO code blocks, NO inline reasoning. **All supporting reasoning goes in an `<details>` appendix block** below the chart area. The takeaway is for humans who don't read; the appendix is for humans who do.
+5. `findings.json` mirrors the TAKEAWAY: `primary_class` (D1–D8 or `null`+reason), `primary_confidence` (0–1), `primary_one_liner` (≤20 words, machine-readable mirror of the bold sentence), `pareto_next_fix` (≤20 words), `evidence.code_path` (file:line), `authored_at`.
 6. Zero `POST/PATCH/DELETE` lines against `poly-*.cognidao.org` in stderr — the tool is GET-only by construction; if anything else appears, that's a regression to file.
+7. **Final-step human handoff (MANDATORY).** The agent's last message MUST contain exactly two lines: (a) the absolute file path to `report.html` so the human can `open` it, (b) the bold one-liner takeaway verbatim. Anything else the human wants they can pull from the report. Do NOT re-narrate the bundle in chat.
 
 ## Workflow
 
@@ -40,8 +41,10 @@ Default control: `POLY_PREVIEW_TENANT_TRUST_TWIN`. Default window: last 24h. Out
 1. **Run the tool.** It auto-discovers tenants from `POLY_<ENV>_TENANT_<ROLE>_*` env vars; fails fast on half-blocks.
 2. **Read the bars first.** Each chart is one axis across all tenants; control is amber. If sample size is too small to claim anything, that IS the finding — say so.
 3. **Cross-reference code BEFORE claiming.** Skip-reason or sizing claim → cite `nodes/poly/app/src/features/copy-trade/plan-mirror.ts:<line>`. Volume / mode mismatch claim → cite `nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts` or `target-source.ts`. No file:line = not done.
-4. **Fill the TAKEAWAY + findings.json.** One primary finding, % confidence, charter D-class (or `null` with one-line reason), Pareto next-fix.
-5. **Commit the timestamped dir.** History matters.
+4. **Author the TAKEAWAY + appendix + findings.json.** One bold ≤20-word sentence in the TAKEAWAY block. Full reasoning in a `<details><summary>🔎 Finding detail</summary>…</details>` appendix above the existing chart appendices. `findings.json` mirrors with `primary_one_liner` (≤20 words), `primary_confidence`, `primary_class` (D1–D8 or `null`+reason), `pareto_next_fix` (≤20 words), `evidence.code_path`.
+5. **Reframe instruments, don't rename them.** If a matrix row falsifies its own assumption (e.g. a "trust twin" reveals paper isn't trustworthy), that's the instrument working — the right call is to heed it, not to rename it. Take care to distinguish "the experiment failed" from "the question was wrong."
+6. **Commit the timestamped dir.** History matters.
+7. **Hand off to the human.** Two-line final message: `open <abs-path-to-report.html>` and the bold one-liner verbatim. Stop there.
 
 ## What the tool does (so you don't redo it)
 
