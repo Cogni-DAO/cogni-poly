@@ -1,10 +1,28 @@
 {
   "report_path": "nodes/poly/research/tenant-matrix/2026-05-19T04-46Z-post-fix-5h/report.html",
-  "primary_class": "matrix-ab",
-  "primary_confidence": null,
-  "primary_one_liner": null,
+  "primary_class": null,
+  "primary_class_reason": "D1-D8 govern target->mirror delta; this finding is paper-tenant->live-tenant cross-instance divergence, which the charter does not classify",
+  "primary_confidence": 0.95,
+  "primary_one_liner": "TRUST_TWIN does not track LIVE (2.8x more placements; 71 vs 25; $101 vs $43 in same 4h53m window) because per-tenant position state differs — fill-capture parity is 100% (twin_only=0, live_only=0), but plan-mirror.ts gates read tenant-local positions, so identical fills + different state produce different decisions; LIVE's wallet carries months of derek-trading history paper never replays",
   "secondary_class": null,
-  "secondary_confidence": null,
-  "secondary_one_liner": null,
-  "authored_at": null
+  "secondary_class_reason": "bug.5060 closeout note, not a delta class",
+  "secondary_confidence": 0.9,
+  "secondary_one_liner": "bug.5060 paper-sidecar underfill is fixed at the fill-capture layer (twin sees 100% of live's fills; placement_failed=0/6 tenants) but the bug's broader 'paper twin doesn't track prod' framing is only half resolved — the position-state half is structural, not a sidecar bug",
+  "pareto_next_fix": "Reframe the matrix metric (paper instance runs independently, not as a trust-twin of live) AND/OR build position-trajectory replay via paper-twin-diff.ts that feeds LIVE's fill history through the paper sidecar for a true counterfactual",
+  "authored_at": "2026-05-19T04:55:00Z",
+  "evidence": {
+    "bundle": "nodes/poly/research/tenant-matrix/2026-05-19T04-46Z-post-fix-5h/bundle.json",
+    "key_metrics": {
+      "twin_placements": 71,
+      "live_placements": 25,
+      "twin_realized_usdc": 100.72,
+      "live_realized_usdc": 42.66,
+      "fill_capture_parity_twin_only": 0,
+      "fill_capture_parity_live_only": 0,
+      "outcome_disagree": 62,
+      "twin_placed_live_skipped_followup_position_too_small": 32,
+      "twin_placed_live_skipped_below_market_min": 11
+    },
+    "code_path": "nodes/poly/app/src/features/copy-trade/plan-mirror.ts:218-247 — per-tenant position state read by gates"
+  }
 }
