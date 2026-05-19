@@ -14,20 +14,26 @@
 #   - Writes overlay digest fields under infra/k8s/overlays/{OVERLAY_ENV}/.
 #     One promote-k8s-image call per image of the deploy unit.
 #   - Emits $GITHUB_OUTPUT.promoted_apps = CSV. Contains the DEPLOY-UNIT
-#     name (not per-image names) so downstream verify-buildsha + release-slot
-#     gates keep their existing deploy-unit semantics. Empty when no overlay
+#     name (not per-image names) so downstream release-slot + status gates
+#     keep their existing deploy-unit semantics. Empty when no overlay
 #     write actually happened for any image of this unit (legitimate skip).
-#   - Merges {deploy-unit → source_sha} into .promote-state/source-sha-by-app.json
-#     (one entry per unit; source_sha is the payload's top-level build SHA).
+#   - Merges {image → source_sha} into .promote-state/source-sha-by-app.json
+#     — ONE ENTRY PER IMAGE (catalog short-name), not per deploy unit
+#     (task.5006). verify-buildsha.sh reads this map to assert each image's
+#     baked org.opencontainers.image.revision label matches the SHA that
+#     promoted its overlay digest. Per-image keying is required to verify
+#     migrators + sidecars + workers under the same role-agnostic gate.
 #
 # Per-image exit codes from promote-k8s-image.sh:
-#   0 → digest written → image counted as promoted
+#   0 → digest written → image counted as promoted AND map entry written
 #   2 → no matching images[] entry in overlay (e.g. paper-sidecar not in
-#       production) → legitimate skip, NOT counted
+#       production) → legitimate skip, NOT counted, NO map write
 #   1 → error → script fails
 #
-# An overlay write for any image of the unit means the unit's source_sha map
-# entry advances. Empty promoted-image set → unit is treated as a no-op.
+# Atomicity (ATOMIC_OVERLAY_AND_MAP, task.5006): every overlay write for an
+# image is paired with the same image's source-sha map write in the same
+# script execution. The caller's `git add -A && git commit` packs both into
+# one deploy-branch commit — no partial provenance states.
 #
 # Env:
 #   PAYLOAD_FILE    (required) path to resolved-pr-images.json (v2 shape)
@@ -128,8 +134,12 @@ unit_images=$(images_for_deploy_unit "$NODE") || {
   exit 1
 }
 
-# Per-image promotion loop.
+# Per-image promotion loop. Overlay write + map write are paired per image
+# (ATOMIC_OVERLAY_AND_MAP, task.5006): every successful promote-k8s-image
+# call is immediately followed by a source-sha map entry for that image.
+# Both land in the same git commit upstream.
 promoted_images=()
+MAP_FAILURE=0
 for image in $unit_images; do
   entry=$(extract_image_entry "$image")
   image_name=$(printf '%s' "$entry" | cut -f1)
@@ -160,6 +170,18 @@ for image in $unit_images; do
       promoted_images+=("$image")
       PROMOTED_ANY=1
       emit_promoted_apps
+
+      # Per-image source-sha map write (task.5006). Key is the catalog image
+      # short-name (e.g. `poly`, `poly-paper-sidecar`), NOT the deploy-unit
+      # name — verify-buildsha iterates images and reads the baked
+      # org.opencontainers.image.revision label per digest.
+      if [ -z "$source_sha" ]; then
+        echo "::warning::source_sha missing from payload — skipping map write for image=${image}"
+        MAP_FAILURE=1
+      elif ! APP="$image" SOURCE_SHA="$source_sha" MAP_FILE="$MAP_FILE" bash "$MAP_SCRIPT"; then
+        echo "::warning::source-sha-map write failed for image=${image} — overlay already promoted, provenance side-car not updated"
+        MAP_FAILURE=1
+      fi
       ;;
     2)
       echo "::notice::Overlay ${OVERLAY_ENV}/${NODE} has no images[] entry for ${image_name} — intentional skip (e.g. sidecar absent from production)"
@@ -171,20 +193,6 @@ for image in $unit_images; do
   esac
 done
 
-# Source-sha-map pass: one entry per DEPLOY UNIT (not per image). Map key is
-# the deploy-unit name so verify-buildsha (which probes /version on the
-# unit's public_url) reads back the right SHA.
-MAP_FAILURE=0
-if [ "$PROMOTED_ANY" -eq 1 ]; then
-  if [ -z "$source_sha" ]; then
-    echo "::warning::source_sha missing from payload — skipping map update for ${NODE}"
-    MAP_FAILURE=1
-  elif ! APP="$NODE" SOURCE_SHA="$source_sha" MAP_FILE="$MAP_FILE" bash "$MAP_SCRIPT"; then
-    echo "::warning::source-sha-map write failed for ${NODE} — overlay already promoted, provenance side-car not updated"
-    MAP_FAILURE=1
-  fi
-fi
-
 emit_promoted_apps
 if [ "$PROMOTED_ANY" -eq 0 ]; then
   echo "Promoted images: none (deploy unit ${NODE} had nothing to write)"
@@ -192,9 +200,9 @@ else
   echo "Promoted images for ${NODE}: $(IFS=,; echo "${promoted_images[*]}")"
 fi
 
-# Hard break: source-sha map dead → fail loudly so humans investigate rather
-# than letting provenance decay silently.
+# Hard break: any source-sha map write failed for a promoted image → fail
+# loudly so humans investigate rather than letting provenance decay silently.
 if [ "$PROMOTED_ANY" -eq 1 ] && [ "$MAP_FAILURE" -eq 1 ]; then
-  echo "::error::source-sha-map write failed for ${NODE} — provenance side-car is dead (check MAP_SCRIPT=${MAP_SCRIPT} and payload source_sha)"
+  echo "::error::source-sha-map write failed for at least one promoted image of ${NODE} — provenance side-car is dead (check MAP_SCRIPT=${MAP_SCRIPT} and payload source_sha)"
   exit 1
 fi

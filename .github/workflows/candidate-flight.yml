@@ -435,13 +435,28 @@ jobs:
           PROMOTED_APPS: ${{ matrix.node }}
         run: bash ci-src/scripts/ci/smoke-candidate.sh
 
-      - name: Verify buildSha on endpoint (per-node)
+      # task.5006 — verify-buildsha now reads org.opencontainers.image.revision
+      # off the overlay-pinned digest via `crane config`. GHCR is private for
+      # cogni-dao packages, so we need a docker-login-compatible auth blob
+      # before crane runs; setup-crane installs the binary on PATH.
+      - name: Login to GHCR (for crane label reads)
+        if: steps.ssh-setup.outputs.has_vm == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Install crane
+        if: steps.ssh-setup.outputs.has_vm == 'true'
+        uses: imjasonh/setup-crane@v0.4
+
+      - name: Verify buildSha via image revision label (per-node)
         if: steps.ssh-setup.outputs.has_vm == 'true'
         env:
-          DOMAIN: ${{ vars.DOMAIN }}
-          DEPLOY_ENVIRONMENT: candidate-a
+          OVERLAY_ENV: candidate-a
+          OVERLAY_DIR: deploy-branch
           SOURCE_SHA_MAP: deploy-branch/.promote-state/source-sha-by-app.json
-          EXPECTED_BUILDSHA: ${{ needs.decide.outputs.head_sha }}
           NODES: ${{ matrix.node }}
         run: bash ci-src/scripts/ci/verify-buildsha.sh
 

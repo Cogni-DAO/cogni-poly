@@ -2,33 +2,26 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
-# scripts/ci/tests/verify-buildsha.test.sh
+# scripts/ci/tests/verify-buildsha.test.sh — task.5006 image-native witness.
 #
-# Regression harness for task.0341 + task.0345 + task.0349. Covers the polling
-# loop that replaces the single-shot curl-per-node (task.0341, false-failed
-# during rollout cutover) AND the pivot from `/readyz.version` →
-# `/version.buildSha` as the authoritative build-identity probe (task.0345 /
-# PR #978) AND map-mode NODES restriction (task.0349 / affected-only verify).
+# Verifies the post-task.5006 verify-buildsha.sh contract:
+#   - reads org.opencontainers.image.revision via crane config off the
+#     overlay-pinned digest
+#   - label == map[image]            → pass
+#   - label-missing on a digest      → TRANSITION_SAFE warn-skip (pass)
+#   - map-entry-missing for image    → TRANSITION_SAFE warn-skip (pass)
+#   - label-mismatch                 → hard fail (the PR #121 lying-overlay case)
+#   - unknown node / missing overlay → warn-skip, pass
+#   - MARKER_DIR receives verified-<node>.txt for non-failing nodes
 #
-# Cases:
-#   1. Converges after N failed attempts  → exits 0 (polling succeeds).
-#   2. Never converges within timeout     → exits 1 (fails loudly, no masking).
-#   3. Expected SHA matches on first try  → exits 0 fast (no regression on happy path).
-#   4. Response carries `.version` (pkg ver) but no `.buildSha` → fails (we do
-#      NOT silently accept the pkg-version field; only `.buildSha` is the SHA).
-#   5. Map lists multiple apps but NODES restricts verify to one → only that
-#      app is probed (poly-only path; operator map entry must not force a curl).
-#   6. NODES lists an app missing from the map → exits 1 with a clear error.
-#
-# The verify-buildsha.sh under test is shelled via a CURL_CMD injection
-# pointing to a fixture script under /tmp, so no real HTTPS endpoint is needed.
-#
-# Run: bash scripts/ci/tests/verify-buildsha.test.sh
+# Crane is faked via a script on PATH that reads stub configs out of a fixture
+# dir keyed by the requested image ref. No network, no docker.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CI_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${CI_DIR}/../.." && pwd)"
 VERIFY_SCRIPT="${CI_DIR}/verify-buildsha.sh"
 
 if [ ! -f "$VERIFY_SCRIPT" ]; then
@@ -36,136 +29,232 @@ if [ ! -f "$VERIFY_SCRIPT" ]; then
   exit 1
 fi
 
-TMPROOT=$(mktemp -d)
-trap 'rm -rf "$TMPROOT"' EXIT
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT
 
 EXPECTED="abcdef0123456789abcdef0123456789abcdef01"
-STALE="0000000000000000000000000000000000000000"
+WRONG="0000000000000000000000000000000000000000"
 
-# Build a fake curl that returns body based on an attempt counter file.
-# Usage: fake_curl <fixture-dir> — on each invocation reads/advances counter,
-# returns $fixture/<n>.json (or last available file).
-make_fake_curl() {
-  local dir="$1"
-  local script="${TMPROOT}/curl-${RANDOM}.sh"
-  cat >"$script" <<EOF
-#!/usr/bin/env bash
-counter_file="${dir}/.counter"
-if [ ! -f "\$counter_file" ]; then echo 0 > "\$counter_file"; fi
-n=\$(cat "\$counter_file")
-n=\$((n + 1))
-echo "\$n" > "\$counter_file"
-fixture="${dir}/\${n}.json"
-if [ ! -f "\$fixture" ]; then
-  # Fall back to the last available fixture
-  fixture=\$(ls "${dir}"/*.json 2>/dev/null | sort -V | tail -n 1)
-fi
-if [ -n "\$fixture" ] && [ -f "\$fixture" ]; then
-  cat "\$fixture"
-fi
-EOF
-  chmod +x "$script"
-  echo "$script"
+# Real overlay digests in candidate-a/poly/kustomization.yaml as of task.5006.
+POLY_REF="ghcr.io/cogni-dao/cogni-poly@sha256:bae514810c27ce38d0602a560fe798f4037f0b033fb2362d4a53eabefc6e793d"
+SIDECAR_REF="ghcr.io/cogni-dao/poly-paper-sidecar@sha256:e96106e8aae2478a8ee506d3f837024ac2e7a415b0cc6491bee6f4d9f541d014"
+
+stage_overlay() {
+  local case_dir="$1"
+  mkdir -p "$case_dir/infra/k8s/overlays/candidate-a/poly"
+  cp "${REPO_ROOT}/infra/k8s/overlays/candidate-a/poly/kustomization.yaml" \
+    "$case_dir/infra/k8s/overlays/candidate-a/poly/"
 }
 
-run_case() {
-  local label="$1" fixture_dir="$2" expected_exit="$3" timeout="${4:-10}" sleep_sec="${5:-1}"
-  local fake_curl
-  fake_curl=$(make_fake_curl "$fixture_dir")
+write_map() {
+  local path="$1"; shift
+  mkdir -p "$(dirname "$path")"
+  python3 - "$path" "$@" <<'PY'
+import json, sys
+path = sys.argv[1]
+pairs = sys.argv[2:]
+data = {pairs[i]: pairs[i+1] for i in range(0, len(pairs), 2)}
+with open(path, "w") as h:
+    json.dump(data, h)
+PY
+}
 
-  local map_file="${TMPROOT}/map-${RANDOM}.json"
-  cat >"$map_file" <<EOF
-{ "poly": "${EXPECTED}" }
+# Fake crane on PATH. `crane config <ref>` resolves fixtures keyed by ref.
+# <ref>.json    → emit that as the image config.
+# <ref>.missing → emit an empty `{"config":{}}` (label-absent).
+# neither       → exit non-zero (simulates network/auth failure).
+make_fake_crane() {
+  local fixture_dir="$1"
+  local bin_dir="${WORKDIR}/bin-${RANDOM}"
+  mkdir -p "$bin_dir"
+  cat >"${bin_dir}/crane" <<EOF
+#!/usr/bin/env bash
+if [ "\$1" != "config" ]; then
+  echo "fake-crane: unsupported subcommand: \$1" >&2
+  exit 2
+fi
+ref="\$2"
+safe=\$(printf '%s' "\$ref" | tr '/:@' '___')
+fixture="${fixture_dir}/\${safe}.json"
+missing_marker="${fixture_dir}/\${safe}.missing"
+if [ -f "\$missing_marker" ]; then
+  printf '{"config":{}}'
+  exit 0
+fi
+if [ -f "\$fixture" ]; then
+  cat "\$fixture"
+  exit 0
+fi
+echo "fake-crane: no fixture for ref=\$ref" >&2
+exit 1
 EOF
+  chmod +x "${bin_dir}/crane"
+  printf '%s' "$bin_dir"
+}
+
+make_crane_fixture() {
+  local fixture_dir="$1" ref="$2" sha="${3:-}"
+  mkdir -p "$fixture_dir"
+  local safe
+  safe=$(printf '%s' "$ref" | tr '/:@' '___')
+  if [ -z "$sha" ]; then
+    : >"${fixture_dir}/${safe}.missing"
+    return
+  fi
+  python3 - "${fixture_dir}/${safe}.json" "$sha" <<'PY'
+import json, sys
+path, sha = sys.argv[1], sys.argv[2]
+with open(path, "w") as h:
+    json.dump({"config": {"Labels": {"org.opencontainers.image.revision": sha}}}, h)
+PY
+}
+
+FAILED=0
+
+run_case() {
+  local label="$1" expected_exit="$2" case_dir="$3" map_path="$4" fixture_dir="$5" marker_dir="${6:-}"
+  local bin_dir
+  bin_dir=$(make_fake_crane "$fixture_dir")
 
   set +e
-  CURL_CMD="$fake_curl" \
-    CUTOVER_TIMEOUT="$timeout" CUTOVER_SLEEP="$sleep_sec" \
-    DOMAIN="example.test" SOURCE_SHA_MAP="$map_file" \
-    bash "$VERIFY_SCRIPT" >"${TMPROOT}/out-${label}.log" 2>&1
+  ( cd "$case_dir" && \
+    PATH="${bin_dir}:${PATH}" \
+    OVERLAY_ENV="candidate-a" \
+    NODES="poly" \
+    SOURCE_SHA_MAP="$map_path" \
+    MARKER_DIR="$marker_dir" \
+    bash "$VERIFY_SCRIPT" ) >"${WORKDIR}/out-${label}.log" 2>&1
   local actual_exit=$?
   set -e
 
   if [ "$actual_exit" -ne "$expected_exit" ]; then
     echo "[FAIL] ${label}: expected exit ${expected_exit}, got ${actual_exit}"
     echo "--- output ---"
-    cat "${TMPROOT}/out-${label}.log"
+    cat "${WORKDIR}/out-${label}.log"
+    FAILED=$((FAILED + 1))
     return 1
   fi
   echo "[PASS] ${label}"
 }
 
-# --- Case 1: converges on 3rd attempt ---
-DIR1=$(mktemp -d --tmpdir="$TMPROOT" case1.XXXX)
-printf '{"version":"0.1.0","buildSha":"%s","buildTime":"t"}' "$STALE"    >"${DIR1}/1.json"
-printf '{"version":"0.1.0","buildSha":"%s","buildTime":"t"}' "$STALE"    >"${DIR1}/2.json"
-printf '{"version":"0.1.0","buildSha":"%s","buildTime":"t"}' "$EXPECTED" >"${DIR1}/3.json"
-run_case "converges-on-3rd" "$DIR1" 0 10 1 || exit 1
+# --- Case 1: both images labeled, both match map → pass ---
+C1="${WORKDIR}/case1"; stage_overlay "$C1"
+write_map "${C1}/map.json" poly "$EXPECTED" poly-paper-sidecar "$EXPECTED"
+F1="${WORKDIR}/fix1"
+make_crane_fixture "$F1" "$POLY_REF" "$EXPECTED"
+make_crane_fixture "$F1" "$SIDECAR_REF" "$EXPECTED"
+run_case "both-images-match" 0 "$C1" "${C1}/map.json" "$F1"
+grep -q "poly/poly: revision=" "${WORKDIR}/out-both-images-match.log" || { echo "[FAIL] expected poly revision line"; FAILED=$((FAILED+1)); }
+grep -q "poly/poly-paper-sidecar: revision=" "${WORKDIR}/out-both-images-match.log" || { echo "[FAIL] expected sidecar revision line"; FAILED=$((FAILED+1)); }
 
-# --- Case 2: never converges → fails loudly ---
-DIR2=$(mktemp -d --tmpdir="$TMPROOT" case2.XXXX)
-printf '{"version":"0.1.0","buildSha":"%s","buildTime":"t"}' "$STALE" >"${DIR2}/1.json"
-run_case "timeout-fails-loudly" "$DIR2" 1 3 1 || exit 1
+# --- Case 2: sidecar label mismatches map → hard fail ---
+C2="${WORKDIR}/case2"; stage_overlay "$C2"
+write_map "${C2}/map.json" poly "$EXPECTED" poly-paper-sidecar "$EXPECTED"
+F2="${WORKDIR}/fix2"
+make_crane_fixture "$F2" "$POLY_REF" "$EXPECTED"
+make_crane_fixture "$F2" "$SIDECAR_REF" "$WRONG"
+run_case "sidecar-mismatch-hard-fails" 1 "$C2" "${C2}/map.json" "$F2"
+grep -q "revision-label mismatch" "${WORKDIR}/out-sidecar-mismatch-hard-fails.log" || { echo "[FAIL] expected mismatch error text"; FAILED=$((FAILED+1)); }
 
-# --- Case 3: matches on first attempt (happy path, no regression) ---
-DIR3=$(mktemp -d --tmpdir="$TMPROOT" case3.XXXX)
-printf '{"version":"0.1.0","buildSha":"%s","buildTime":"t"}' "$EXPECTED" >"${DIR3}/1.json"
-run_case "matches-first-try" "$DIR3" 0 10 1 || exit 1
+# --- Case 3: sidecar label MISSING → TRANSITION_SAFE warn-skip (pass) ---
+C3="${WORKDIR}/case3"; stage_overlay "$C3"
+write_map "${C3}/map.json" poly "$EXPECTED" poly-paper-sidecar "$EXPECTED"
+F3="${WORKDIR}/fix3"
+make_crane_fixture "$F3" "$POLY_REF" "$EXPECTED"
+make_crane_fixture "$F3" "$SIDECAR_REF" ""
+run_case "label-missing-warn-skip" 0 "$C3" "${C3}/map.json" "$F3"
+grep -q "no org.opencontainers.image.revision label" "${WORKDIR}/out-label-missing-warn-skip.log" || { echo "[FAIL] expected label-missing warn"; FAILED=$((FAILED+1)); }
 
-# --- Case 4: response has pkg-version but no buildSha → fails (do NOT
-# fall back to `.version`, which carries npm package version on /version). ---
-DIR4=$(mktemp -d --tmpdir="$TMPROOT" case4.XXXX)
-printf '{"version":"%s","buildTime":"t"}' "$EXPECTED" >"${DIR4}/1.json"
-run_case "no-buildSha-field-fails" "$DIR4" 1 3 1 || exit 1
+# --- Case 4: map-entry MISSING for sidecar → TRANSITION_SAFE warn-skip (pass) ---
+C4="${WORKDIR}/case4"; stage_overlay "$C4"
+write_map "${C4}/map.json" poly "$EXPECTED"
+F4="${WORKDIR}/fix4"
+make_crane_fixture "$F4" "$POLY_REF" "$EXPECTED"
+make_crane_fixture "$F4" "$SIDECAR_REF" "$EXPECTED"
+run_case "map-entry-missing-warn-skip" 0 "$C4" "${C4}/map.json" "$F4"
+grep -q "source-sha-map has no entry" "${WORKDIR}/out-map-entry-missing-warn-skip.log" || { echo "[FAIL] expected map-missing warn"; FAILED=$((FAILED+1)); }
 
-# --- Case 5: map has operator + poly; NODES=poly → operator must not be probed ---
-# If verify ignored NODES, it would expect operator=STALE while fake curl always
-# returns EXPECTED → timeout failure.
-DIR5=$(mktemp -d --tmpdir="$TMPROOT" case5.XXXX)
-printf '{"version":"0.1.0","buildSha":"%s","buildTime":"t"}' "$EXPECTED" >"${DIR5}/1.json"
-fake5=$(make_fake_curl "$DIR5")
-map5="${TMPROOT}/map5.json"
-cat >"$map5" <<EOF
-{ "operator": "${STALE}", "poly": "${EXPECTED}" }
-EOF
+# --- Case 5: SOURCE_SHA_MAP file missing entirely → warn + pass (first-deploy) ---
+C5="${WORKDIR}/case5"; stage_overlay "$C5"
+F5="${WORKDIR}/fix5"
+make_crane_fixture "$F5" "$POLY_REF" "$EXPECTED"
+run_case "map-file-missing-warns-passes" 0 "$C5" "${C5}/does-not-exist.json" "$F5"
+
+# --- Case 6: MARKER_DIR receives verified-poly.txt on a clean pass ---
+C6="${WORKDIR}/case6"; stage_overlay "$C6"
+write_map "${C6}/map.json" poly "$EXPECTED" poly-paper-sidecar "$EXPECTED"
+F6="${WORKDIR}/fix6"
+make_crane_fixture "$F6" "$POLY_REF" "$EXPECTED"
+make_crane_fixture "$F6" "$SIDECAR_REF" "$EXPECTED"
+M6="${C6}/markers"
+run_case "marker-dir-written" 0 "$C6" "${C6}/map.json" "$F6" "$M6"
+if [ ! -f "${M6}/verified-poly.txt" ]; then
+  echo "[FAIL] marker-dir-written: expected ${M6}/verified-poly.txt"
+  FAILED=$((FAILED + 1))
+fi
+
+# --- Case 7: MARKER_DIR NOT written when an image hard-fails ---
+C7="${WORKDIR}/case7"; stage_overlay "$C7"
+write_map "${C7}/map.json" poly "$EXPECTED" poly-paper-sidecar "$EXPECTED"
+F7="${WORKDIR}/fix7"
+make_crane_fixture "$F7" "$POLY_REF" "$WRONG"
+make_crane_fixture "$F7" "$SIDECAR_REF" "$EXPECTED"
+M7="${C7}/markers"
+run_case "marker-not-written-on-failure" 1 "$C7" "${C7}/map.json" "$F7" "$M7"
+if [ -f "${M7}/verified-poly.txt" ]; then
+  echo "[FAIL] marker-not-written-on-failure: marker should NOT exist after hard fail"
+  FAILED=$((FAILED + 1))
+fi
+
+# --- Case 8: NODES includes unknown deploy unit → warn-skip, pass ---
+C8="${WORKDIR}/case8"; stage_overlay "$C8"
+write_map "${C8}/map.json" poly "$EXPECTED"
+F8="${WORKDIR}/fix8"
+make_crane_fixture "$F8" "$POLY_REF" "$EXPECTED"
 set +e
-CURL_CMD="$fake5" CUTOVER_TIMEOUT=10 CUTOVER_SLEEP=1 \
-  DOMAIN="example.test" SOURCE_SHA_MAP="$map5" NODES="poly" \
-  bash "$VERIFY_SCRIPT" >"${TMPROOT}/out-case5.log" 2>&1
-ex5=$?
+( cd "$C8" && \
+  PATH="$(make_fake_crane "$F8"):${PATH}" \
+  OVERLAY_ENV="candidate-a" \
+  NODES="poly,ghostnode" \
+  SOURCE_SHA_MAP="${C8}/map.json" \
+  bash "$VERIFY_SCRIPT" ) >"${WORKDIR}/out-unknown-node.log" 2>&1
+ex8=$?
 set -e
-if [ "$ex5" -ne 0 ]; then
-  echo "[FAIL] map+NODES=poly: expected exit 0, got ${ex5}"
-  cat "${TMPROOT}/out-case5.log"
-  exit 1
+if [ "$ex8" -ne 0 ]; then
+  echo "[FAIL] unknown-node: expected exit 0, got ${ex8}"
+  cat "${WORKDIR}/out-unknown-node.log"
+  FAILED=$((FAILED + 1))
+else
+  grep -q "unknown deploy unit 'ghostnode'" "${WORKDIR}/out-unknown-node.log" || {
+    echo "[FAIL] unknown-node: missing warn text"
+    FAILED=$((FAILED + 1))
+  }
+  echo "[PASS] unknown-node-warns-and-passes"
 fi
-echo "[PASS] map-restricted-to-NODES-poly-only"
 
-# --- Case 6: NODES lists app absent from map → fail fast ---
-DIR6=$(mktemp -d --tmpdir="$TMPROOT" case6.XXXX)
-printf '{"version":"0.1.0","buildSha":"%s","buildTime":"t"}' "$EXPECTED" >"${DIR6}/1.json"
-fake6=$(make_fake_curl "$DIR6")
-map6="${TMPROOT}/map6.json"
-cat >"$map6" <<EOF
-{ "poly": "${EXPECTED}" }
-EOF
+# --- Case 9: empty NODES → no-op, pass ---
+C9="${WORKDIR}/case9"; stage_overlay "$C9"
+write_map "${C9}/map.json" poly "$EXPECTED"
 set +e
-CURL_CMD="$fake6" CUTOVER_TIMEOUT=3 CUTOVER_SLEEP=1 \
-  DOMAIN="example.test" SOURCE_SHA_MAP="$map6" NODES="ghostapp" \
-  bash "$VERIFY_SCRIPT" >"${TMPROOT}/out-case6.log" 2>&1
-ex6=$?
+( cd "$C9" && \
+  PATH="$(make_fake_crane "${WORKDIR}/fix-empty"):${PATH}" \
+  OVERLAY_ENV="candidate-a" \
+  NODES="" \
+  SOURCE_SHA_MAP="${C9}/map.json" \
+  bash "$VERIFY_SCRIPT" ) >"${WORKDIR}/out-empty-nodes.log" 2>&1
+ex9=$?
 set -e
-if [ "$ex6" -eq 0 ]; then
-  echo "[FAIL] NODES-not-in-map: expected non-zero exit"
-  cat "${TMPROOT}/out-case6.log"
-  exit 1
+if [ "$ex9" -ne 0 ]; then
+  echo "[FAIL] empty-NODES: expected exit 0, got ${ex9}"
+  cat "${WORKDIR}/out-empty-nodes.log"
+  FAILED=$((FAILED + 1))
+else
+  echo "[PASS] empty-NODES-noop"
 fi
-if ! grep -q 'SOURCE_SHA_MAP has no entry' "${TMPROOT}/out-case6.log"; then
-  echo "[FAIL] NODES-not-in-map: expected error text about map entry"
-  cat "${TMPROOT}/out-case6.log"
-  exit 1
-fi
-echo "[PASS] NODES-missing-from-map-fails"
 
 echo ""
+if [ "$FAILED" -gt 0 ]; then
+  echo "$FAILED case(s) failed"
+  exit 1
+fi
 echo "✅ verify-buildsha.test.sh — all cases passed"

@@ -100,6 +100,10 @@ build_push() {
   local target_args=()
   [ -n "$target" ] && target_args+=(--target "$target")
 
+  # task.5006 — `image.revision` is the load-bearing label: verify-buildsha.sh
+  # reads it back via `crane config` to assert the deployed digest carries the
+  # SHA the pipeline promoted. `.source` + `.title` + `.created` are operator-
+  # facing metadata (clickable provenance from ghcr).
   docker buildx build \
     --platform "$PLATFORM" \
     --file "$dockerfile" \
@@ -108,6 +112,7 @@ build_push() {
     --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY:-cogni-dao/cogni-poly}" \
     --label "org.opencontainers.image.revision=${git_sha}" \
     --label "org.opencontainers.image.created=${build_timestamp}" \
+    --label "org.opencontainers.image.title=${image}" \
     --cache-from "type=gha,scope=${cache_scope}" \
     --cache-to "type=gha,mode=max,scope=${cache_scope}" \
     --tag "$full_tag" \
