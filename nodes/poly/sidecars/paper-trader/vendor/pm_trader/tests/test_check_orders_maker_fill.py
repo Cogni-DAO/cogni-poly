@@ -708,6 +708,30 @@ class TestFillPriceAtLimit:
         assert trade["shares"] == pytest.approx(10.0)
         assert trade["amount_usd"] == pytest.approx(5.0)
 
+    def test_buy_snapshot_multi_level_crossing_still_fills_at_limit(
+        self, engine: Engine
+    ):
+        """Multi-level snapshot book where every crossing level is well below
+        the limit. crossing_size sums correctly; avg_price still clears at
+        the limit (the resting-maker queue-priority assumption)."""
+        _make_buy(engine, amount=30.0, limit=0.60)  # intent ≈ 50 shares
+        _mock_api(
+            engine,
+            book=_book(asks=[(0.50, 100), (0.55, 50), (0.70, 1000)]),
+            trades=[],
+        )
+
+        results = engine.check_orders()
+
+        assert len(results) == 1
+        assert results[0]["action"] == "filled"
+        trade = _latest_trade_row(engine)
+        # Filled at limit, not at any of the cheaper crossing levels.
+        assert trade["avg_price"] == pytest.approx(0.60)
+        # Intent caps qty (50 shares ≤ crossing_size=150).
+        assert trade["shares"] == pytest.approx(50.0)
+        assert trade["amount_usd"] == pytest.approx(30.0)
+
     def test_no_double_fill_when_both_paths_match_under_5016(
         self, engine: Engine
     ):
