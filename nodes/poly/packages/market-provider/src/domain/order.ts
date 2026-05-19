@@ -11,8 +11,13 @@
  *   - FILL_ID_COMPOSITE: Fill.fill_id is `"<source>:<native_id>"` per P0.2 (task.0315 Phase 0 Findings).
  *   - GETORDER_NEVER_NULL: `getOrder` callers receive a discriminated `GetOrderResult`; null is
  *     never a valid return. Callers MUST branch on the discriminant. (task.0328 CP1)
+ *   - RECEIPT_FILL_FIELDS_UNDEFINED_WHEN_UNFILLED (bug.5018): `fill_price` / `total_shares` /
+ *     `fees_usdc` are populated ONLY for realized fills (status ∈ filled | partial). Open /
+ *     pending / canceled / error receipts leave them `undefined` — distinct from "the adapter
+ *     dropped them". Adapter symmetry is CI-gated by `tests/adapter-equivalence.test.ts`.
  * Side-effects: none
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 — First live order)
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 — First live order),
+ *   docs/spec/poly-paper-trading-shortcomings.md (S3/S4 — closed by bug.5018)
  * @public
  */
 

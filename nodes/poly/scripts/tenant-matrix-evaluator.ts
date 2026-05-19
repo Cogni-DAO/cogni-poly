@@ -20,6 +20,12 @@
  *   - EVALUATOR_IS_READ_ONLY: every SQL must start SELECT/WITH; no network writes.
  *   - BUNDLE_IS_SOURCE_OF_TRUTH: every cell the report shows is derivable from bundle.json.
  *   - FINDING_IS_LLM_AUTHORED: script writes stubs; the running agent fills the TAKEAWAY + findings.json.
+ *   - REALIZED_FROM_COLUMNS (bug.5018): `realized_size_usdc` aggregates `price * shares`
+ *     from the first-class columns on `poly_copy_trade_fills`, NOT
+ *     `attributes->>'filled_size_usdc'`. Rows lacking columns (pre-bug.5018 paper rows
+ *     with intent-padded JSONB, or live pre-deploy rows) contribute 0 — forward-only
+ *     discontinuity. PnL math (`shares * (payout − price)` for winners) reads columns
+ *     directly and is gated by `WHERE f.price IS NOT NULL AND f.shares IS NOT NULL`.
  * Side-effects: IO (Grafana DS query POSTs; filesystem writes under
  *   `nodes/poly/research/tenant-matrix/<iso>/`).
  * Links: docs/spec/poly-tenant-matrix-evaluator.md · work/charters/POLY_ALGO_TENANT_MATRIX.md

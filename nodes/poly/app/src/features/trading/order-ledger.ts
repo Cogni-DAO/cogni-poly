@@ -13,8 +13,9 @@
  *   - CAPS_COUNT_INTENTS — `today_spent_usdc` + `fills_last_hour` count every row whose `observed_at` falls in the window, regardless of terminal status. Matches `decide.ts::INTENT_BASED_CAPS`.
  *   - CAP_IS_PER_TOKEN_ID (bug.5004) — `cumulativeIntentForMarketToken` and the atomic SELECT inside `insertPending` both filter by `attributes->>'token_id'`. YES + NO outcome tokens of the same conditionId have independent budgets. The advisory lock key includes token_id so concurrent placements on different tokens do not serialize unnecessarily.
  *   - SYNCED_AT_WRITTEN_ON_EVERY_SYNC — `markSynced` sets `synced_at = now()` for every row for which the reconciler received a typed CLOB response (found OR not_found). Rows never checked show `synced_at IS NULL`. (task.0328 CP3)
+ *   - REALIZED_COLUMNS_WRITTEN_ON_MARK (bug.5018) — `markOrderId` writes `price` / `shares` / `fees_usdc` directly into first-class columns (NOT JSONB) when the receipt carries them. Fields are skipped (column left NULL) when the upstream did not surface a realized value — distinct from "wrote 0". JSONB `attributes` carries only adapter-specific metadata (rawStatus, transactionsHashes, sidecar diagnostics) — no double-write.
  * Side-effects: IO (Postgres reads + writes).
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md, docs/spec/poly-copy-trade-execution.md
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md, docs/spec/poly-copy-trade-execution.md, docs/spec/poly-paper-trading-shortcomings.md (bug.5018)
  * @public
  */
 

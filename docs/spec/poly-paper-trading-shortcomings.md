@@ -10,7 +10,7 @@ read_when: Reading any paper-trading scorecard (matrix-evaluator, paper-trade-di
 implements: proj.poly-paper-trading
 owner: derekg1729
 created: 2026-05-19
-verified: 2026-05-19
+verified: 2026-05-20
 tags: [poly, polymarket, paper-trading, sidecar, fidelity, trust-contract]
 ---
 
@@ -34,7 +34,7 @@ These propositions are load-bearing for any conclusion drawn from paper data:
 
 - **PAPER_INHERITS_AT_LEAST_ONE_BIAS** — every paper-side number in the matrix-evaluator output (`realized_size_usdc`, `pnl_usdc`, fill rate, decision counts, VWAP) inherits at least one of S1–S9 below. A conclusion that ignores all of them is unsupported.
 - **RELATIVE_BEATS_ABSOLUTE** — two paper tenants on the same simulator path admit relative comparison (biases approximately cancel for ranking). Absolute comparison paper-vs-LIVE composes biases and does not.
-- **PNL_REQUIRES_FILL_PRICE** — until [bug.5018](https://poly.cognidao.org/api/v1/work/items/bug.5018) lands, paper PnL is uncomputable from the cogni ledger. Any "paper $X profit" claim is unsupported.
+- **PNL_REQUIRES_FILL_PRICE** — paper PnL is computable post-[bug.5018](https://poly.cognidao.org/api/v1/work/items/bug.5018) from the cogni ledger via `poly_copy_trade_fills.{price, shares, fees_usdc}`. Pre-bug.5018 rows leave those columns NULL; the tenant-matrix-evaluator filters them by `WHERE price IS NOT NULL` (forward-only discontinuity, no backfill). "Paper $X profit" claims that read JSONB `attributes.filled_size_usdc` instead of the columns are still unsupported (legacy intent-padded values).
 - **POSITION_STATE_IS_PORTED_VIA_FILLS** — paper and live share one position-of-truth: `MirrorPositionView` is derived from `poly_copy_trade_fills` aggregated, mode-discriminated (`order-ledger.types.ts:95-110`, intent-based). There is no separate paper-position table and introducing one would be an anti-pattern. Bug.5015 divergence is in the ROW CONTENT (intent-vs-realized USDC, cancel rates) — fixable upstream — not in a table-of-truth split.
 - **SHORTCOMINGS_ARE_GATEKEEPERS** — promoting an algo from paper to live-$ allocation requires satisfying the trust gate in §"Trust gate" below. No paper signal alone justifies scaling live-$.
 
@@ -82,50 +82,44 @@ Each row carries: what's wrong, code evidence, real-CLOB behavior, measured impa
 
 **Residual concern**: the maker pre-pass does not model price-time priority WITHIN a price level. If multiple makers sit at our limit, real CLOB fills them in time order; paper attributes the entire crossing trade volume to us. ~Inflates our fill rate at busy price levels. **Magnitude unmeasured.**
 
-### S3 — `filled_size_usdc = intent_size_usdc` on partial fills (CRITICAL, OPEN — bug.5018)
+### S3 — `filled_size_usdc = intent_size_usdc` on partial fills (CLOSED — bug.5018)
 
-**Evidence**: `nodes/poly/sidecars/paper-trader/server.py:29-32` (v0 invariant docstring):
+**Status**: closed post-bug.5018. Paper sidecar `OrderReceipt.filled_size_usdc` now carries the engine's `Trade.amount_usd` (REALIZED notional). The place path no longer echoes `intent.size_usdc`; the fill loop reads `amount_usd` off the `check_orders` result entry that engine.py attaches on `action="filled"`.
 
-> v0 fill-amount approximation: full fill is assumed when upstream reports `status="filled"`. `filled_size_usdc = intent.size_usdc`. Partial fills aren't surfaced separately.
-
-The engine's `mark_filled` is called on both full AND partial fills (`engine.py:545-555`: `if not fill.filled and not fill.is_partial: continue` — both branches proceed to mark_filled). So a partial fill of $100 on a $290 intent is reported to the cogni TS adapter as `filled_size_usdc=290`.
+**Pre-fix evidence (preserved for historical context)**: `nodes/poly/sidecars/paper-trader/server.py:29-32` carried a v0 invariant that mapped `filled_size_usdc = intent.size_usdc`. The engine's `mark_filled` is called on both full AND partial fills, so a partial fill of $100 on a $290 intent was reported to the cogni TS adapter as `filled_size_usdc=290`.
 
 **Real CLOB behavior**: trade prints carry exact share counts; partials are visible.
 
-**Impact**:
+**Forward-only discontinuity**: `poly_copy_trade_fills` rows written pre-bug.5018 still carry intent USDC in `attributes.filled_size_usdc`. The matrix-evaluator (`realized_size_usdc` rollup) now reads `price * shares` from first-class columns instead of JSONB; pre-fix paper rows contribute 0. See PNL_REQUIRES_FILL_PRICE.
 
-- `poly_copy_trade_fills.attributes.filled_size_usdc` on paper rows is INTENT, not REALIZED.
-- The matrix-evaluator's `realized_size_usdc` aggregates intent USDC for filled-status rows, not actual share×price notional.
-- **Any consumer using `realized_size_usdc` to compare $ volumes between paper and LIVE is reading INTENT on the paper side.**
+### S4 — No `fill_price`, `total_shares`, `fees_usdc` on the wire (CLOSED — bug.5018)
 
-**Filed**: see S6 — same fix.
+**Status**: closed post-bug.5018. `OrderReceiptSchema` carries optional `fill_price`, `total_shares`, `fees_usdc` (populated for status ∈ filled | partial; undefined otherwise). Both `PaperAdapter` and `PolymarketClobAdapter.mapOrderResponseToReceipt` populate them symmetrically; adapter parity is CI-gated by `nodes/poly/packages/market-provider/tests/adapter-equivalence.test.ts`.
 
-### S4 — No `fill_price`, `total_shares`, `fees_usdc` on the wire (CRITICAL, OPEN — bug.5018)
-
-**Evidence**: `OrderReceipt` schema at `server.py:244-253`:
+**Wire shape**:
 
 ```python
 class OrderReceipt(BaseModel):
     order_id: str
     client_order_id: str
     status: str
-    filled_size_usdc: float    # = intent (see S3)
+    filled_size_usdc: float            # realized USDC notional (engine's Trade.amount_usd)
+    fill_price: Optional[float] = None # VWAP (USDC / shares)
+    total_shares: Optional[float] = None
+    fees_usdc: Optional[float] = None  # engine's Trade.fee
     submitted_at: str
     attributes: Optional[dict[str, Any]] = None
 ```
 
-No `fill_price`. No `total_shares`. No `fees_usdc`. The engine's internal `db.insert_trade()` records all of these (`avg_price`, `shares`, `amount_usd`, `fee`, `slippage_bps`, `levels_filled`, `is_partial`) but **only the order-state is returned over the HTTP wire**.
+**Ledger persistence**: `order-ledger.markOrderId` writes the three values into first-class columns `poly_copy_trade_fills.{price, shares, fees_usdc}` (numeric precision matches `poly_trader_fills`). NO double-write into JSONB. `attributes` carries only adapter-specific metadata (rawStatus, transactionsHashes, sidecar diagnostics). See [`poly-copy-trade-execution.md` §schema](./poly-copy-trade-execution.md).
 
-`GET /history` exposes the engine trade rows, but is in-pod-only (localhost:9100). The TS adapter doesn't call it.
+**Downstream impact (resolved)**:
 
-**Downstream impact**:
+- PnL is computable from `f.shares * (payout − f.price)` (winner) / `-f.shares * f.price` (loser).
+- VWAP per position = `SUM(price * shares) / SUM(shares)`.
+- bug.5016 fill-at-limit semantics are observable at the cogni layer via `f.price` (no `/history` round-trip needed).
 
-- **PnL is uncomputable from the cogni ledger for any paper tenant.** Matrix-evaluator's `pnl_usdc` field is `0` for every paper row across every bundle since the tool shipped (2026-05-18, [task.5048](#)).
-- **VWAP per paper position is uncomputable.**
-- **Fill-quality metrics** (slippage, price improvement vs. target VWAP, fee-adjusted realized) are uncomputable on paper.
-- **bug.5016 (S1/S2 above) is INVISIBLE at the cogni layer.** The engine's corrected behavior is provable only via unit tests, not via the running ledger. Verifying the fix on preview requires hitting in-pod `/history` (no current path) OR trusting unit-test parity.
-
-**Filed**: [bug.5018](https://poly.cognidao.org/api/v1/work/items/bug.5018). Acceptance: extend `OrderReceipt` + TS adapter + ledger `attributes` to carry `fill_price`, `total_shares`, `fees_usdc`.
+**Discontinuity**: forward-only. Pre-bug.5018 rows leave columns NULL; tenant-matrix-evaluator filters paper PnL/VWAP queries by `WHERE price IS NOT NULL AND shares IS NOT NULL`.
 
 ### S5 — Snapshot-pass `crossing_size` is a loose upper bound (OPEN)
 
@@ -194,16 +188,16 @@ Re-measure after each step. The "introduce a new table" path is **not** a candid
 
 ## What numbers can I trust?
 
-| Metric                                               | Paper trustworthiness                  | Notes                                                                                                           |
-| ---------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `decisions` (planner outputs)                        | High (~99%)                            | Planner is pure; not affected by sidecar shortcomings.                                                          |
-| `placement_rate` (placed / decisions)                | Medium                                 | Inflated by S8 (planner-state divergence); same on twin vs. LIVE only when twin's position state has converged. |
-| `filled_count`                                       | Medium                                 | S1+S2 are fixed (post-bug.5016); S3 means partial-vs-full is unclear; S5/S7 inflate count at busy price levels. |
-| `realized_size_usdc` (sum of fills' intent USDC)     | Medium-Low                             | S3 INTENT not REALIZED. Bias is upward when partials are common.                                                |
-| `pnl_usdc`                                           | **Not computable on paper today** (S4) | Bundle returns `0` for every paper row. Filed bug.5018.                                                         |
-| VWAP per position (paper)                            | **Not computable today** (S4)          | Same.                                                                                                           |
-| Relative ranking of two paper tenants on same config | High                                   | Both run through same biased simulator; biases approximately cancel for ranking.                                |
-| Absolute paper $ vs. LIVE $                          | **Don't trust without caveat**         | Compose of S3 + S4 + S5 + S7 + S8 biases.                                                                       |
+| Metric                                               | Paper trustworthiness                                                                 | Notes                                                                                                           |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `decisions` (planner outputs)                        | High (~99%)                                                                           | Planner is pure; not affected by sidecar shortcomings.                                                          |
+| `placement_rate` (placed / decisions)                | Medium                                                                                | Inflated by S8 (planner-state divergence); same on twin vs. LIVE only when twin's position state has converged. |
+| `filled_count`                                       | Medium                                                                                | S1+S2 are fixed (post-bug.5016); S3 means partial-vs-full is unclear; S5/S7 inflate count at busy price levels. |
+| `realized_size_usdc` (sum of fills' intent USDC)     | Medium-Low                                                                            | S3 INTENT not REALIZED. Bias is upward when partials are common.                                                |
+| `pnl_usdc`                                           | **Not computable on paper today** (S4)                                                | Bundle returns `0` for every paper row. Filed bug.5018.                                                         |
+| VWAP per position (paper)                            | Computable post-bug.5018 from `poly_copy_trade_fills.{price, shares}` (forward-only). | Same.                                                                                                           |
+| Relative ranking of two paper tenants on same config | High                                                                                  | Both run through same biased simulator; biases approximately cancel for ranking.                                |
+| Absolute paper $ vs. LIVE $                          | **Don't trust without caveat**                                                        | Compose of S5 + S7 + S8 biases (S3/S4 closed by bug.5018).                                                      |
 
 ## Trust gate for promoting an algo from paper to live
 
@@ -211,10 +205,10 @@ A paper signal is sufficient to scale live-$ allocation only when:
 
 1. The signal is a RELATIVE ranking across paper tenants (not an absolute $ projection).
 2. The competing tenants run the same simulator path (e.g., both `position_gap`, or both `tps`).
-3. S4 (no fill_price) is resolved enough to compute paper PnL via fill-price × outcome lookup. Until bug.5018 lands, PnL claims are unsupported.
+3. PnL reads first-class columns (`poly_copy_trade_fills.{price, shares, fees_usdc}`) and filters `WHERE price IS NOT NULL`. Claims that read `attributes.filled_size_usdc` are reading the legacy intent-padded snapshot and are unsupported.
 4. S8 (planner-state divergence) is acknowledged in the conclusion. A paper-twin outperforming LIVE on the same config is suspect — most likely the divergence, not signal.
 
-**Specifically**: any claim that "policy X realized $Y in paper" should explicitly note "Y is intent USDC on filled rows, not realized notional, until bug.5018 lands."
+**Specifically**: any claim that "policy X realized $Y in paper" should be derived from `SUM(price * shares)` on post-bug.5018 rows, NOT from JSONB `filled_size_usdc`.
 
 ## References
 
@@ -223,6 +217,6 @@ A paper signal is sufficient to scale live-$ allocation only when:
 - Failure taxonomy: [`work/charters/POLY_COPY_DELTA.md`](../../work/charters/POLY_COPY_DELTA.md)
 - Engine source: `nodes/poly/sidecars/paper-trader/vendor/pm_trader/pm_trader/engine.py`
 - Wire schemas + v0 invariant docstring: `nodes/poly/sidecars/paper-trader/server.py`
-- Maker-fill pre-pass: bug.5005 (Phase 2, PR #79); price-correction: bug.5016 (PR #121)
+- Maker-fill pre-pass: bug.5005 (Phase 2, PR #79); price-correction: bug.5016 (PR #121); fill-data contract symmetry: bug.5018
 - Tooling: [`tenant-matrix-evaluator` skill](../../.claude/skills/tenant-matrix-evaluator/SKILL.md) + [`paper-trade-diff-analysis` skill](../../.claude/skills/paper-trade-diff-analysis/SKILL.md)
 - Spec: [`poly-copy-trade-execution.md`](./poly-copy-trade-execution.md) — copy-trade lifecycle; section 13 references this doc for paper-specific fidelity caveats

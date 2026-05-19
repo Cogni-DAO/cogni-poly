@@ -17,8 +17,14 @@
  *     active wallet connection + active grant is the gate; explicit user opt-in (POST a target) is the
  *     only signal. Target rows own the mirror filter percentile and per-target max bet; grants still
  *     enforce downstream tenant authorization/caps.
+ *   - FILLS_HAVE_REALIZED_COLUMNS (bug.5018): `poly_copy_trade_fills` carries first-class
+ *     `price` / `shares` / `fees_usdc` columns alongside `mode`, populated on post-place
+ *     UPDATE by `order-ledger.markOrderId`. NULL pre-fill or for legacy paper rows that
+ *     pre-date bug.5018 (forward-only — no backfill). `WHERE price IS NOT NULL` discriminates
+ *     post-fix rows; PnL/VWAP aggregations read column data, not JSONB.
  * Side-effects: none (schema definitions only)
- * Links: docs/spec/poly-tenant-and-collateral.md, work/items/task.0318
+ * Links: docs/spec/poly-tenant-and-collateral.md, work/items/task.0318,
+ *   docs/spec/poly-paper-trading-shortcomings.md (bug.5018 — S3/S4 closed)
  * @public
  */
 

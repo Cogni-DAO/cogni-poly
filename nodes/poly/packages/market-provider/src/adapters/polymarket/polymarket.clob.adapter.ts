@@ -9,8 +9,9 @@
  *   - PACKAGES_NO_ENV — all config via constructor.
  *   - SIGNER_VIA_LOCAL_ACCOUNT — caller passes a viem `LocalAccount` wrapped in a `WalletClient`. No custom signer port.
  *   - EOA_PATH_ONLY — signatureType defaults to `SignatureType.EOA`. Safe-proxy accounts are out of scope (see task.0315 Phase 1 "Custody model").
+ *   - REALIZED_FROM_AMOUNTS (bug.5018) — `mapOrderResponseToReceipt` surfaces `fill_price` (USDC/shares VWAP) and `total_shares` from CLOB `makingAmount`/`takingAmount`; `mapOpenOrderToReceipt` does the same when `size_matched > 0`. Both leave the fields `undefined` when no real match occurred (status open / canceled with 0 fills). `fees_usdc` is undefined on real prod responses today (CLOB does not surface fees on OrderResponse); the schema accepts a `fee` field for forward-compat + the equivalence-test stub.
  * Side-effects: IO (HTTPS to the Polymarket CLOB).
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 CP3.2)
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 CP3.2), docs/spec/poly-paper-trading-shortcomings.md (bug.5018 — adapter symmetry)
  * @public
  */
 
