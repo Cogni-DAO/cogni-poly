@@ -271,10 +271,13 @@ jobs:
         env:
           SNAPSHOT_FILE: ${{ runner.temp }}/candidate-a-overlay-snapshot.tsv
           OVERLAY_ENV: candidate-a
-          # RESTORE_MODE is required (no default) — candidate-flight's
-          # rsync source is the PR branch (advisory per task.0373), so
-          # snapshot always wins on restore. Preview/production set
-          # `only-when-placeholder` instead (main is canonical per Axiom 17).
+          # RESTORE_MODE is required (no default) — single valid value is
+          # `always` (bug.5013 removed the only-when-placeholder mode after
+          # it regressed unaffected sidecars by honoring stale main pins).
+          # The deploy branch is authoritative for digests in both lanes;
+          # the rsync source (PR branch here, main for promote-and-deploy)
+          # is advisory. See Axiom 17 + the bug.5012/5013 self-heal bullet
+          # in docs/spec/ci-cd.md.
           RESTORE_MODE: always
         run: bash ../ci-src/scripts/ci/restore-overlay-from-snapshot.sh
 

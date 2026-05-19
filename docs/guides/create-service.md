@@ -8,8 +8,9 @@ summary: Catalog v2 playbook for adding a new image to the deployed stack (new d
 read_when: Adding any new service, sidecar, MCP server, cron job, or Compose process to the deployed stack.
 owner: derekg1729
 created: 2026-02-06
-verified: 2026-05-16
+verified: 2026-05-18
 revisions:
+  - 2026-05-18: Shape B gains digest-authority + bootId + sidecar-buildSha-parity invariants (bug.5013 fallout — preview's paper-sidecar was silently regressing to v0 on every non-sidecar PR's promote for ~5 days).
   - 2026-05-16: Shape A re-exercised post catalog v2 via `poly-test-worker` (canonical minimal living reference). Bootstrap canonicalized on `scripts/ops/bootstrap-per-node-deploy-branches.sh`. Validate section split by Ingress vs non-Ingress probe semantics.
   - 2026-05-16: Shape B rewritten — sidecar container shape lives in kustomize Component co-located with source; host overlays use `components:` line + `images:` placeholder only. Zero inline container patches.
 tags: [deployment, infra, k8s, argo]
@@ -257,6 +258,25 @@ Anything that could run independently → Shape A instead.
 ### Production overlay decision
 
 Decide explicitly whether the image runs in production. The paper-trading sidecar deliberately does **not** ship to prod — its overlay simply omits the `images:` entry for the sidecar. `promote-build-payload.sh` exits-2 (legitimate skip, not error) when there's no matching `images:` entry; the deploy unit's `promoted_apps` still reflects the apps that actually wrote.
+
+### Digest authority (bug.5013 — read this before merging your first Shape B PR)
+
+For multi-image deploy units, the **deploy branch's prior digest pin is authoritative** for every image not rebuilt by the current PR. The promote workflow snapshots the deploy branch's overlay before rsyncing from main, then replays the snapshot, then layers PR-affected digests on top (`RESTORE_MODE=always` for both candidate-flight and promote-and-deploy since bug.5013). This means:
+
+- An unaffected sidecar **cannot** silently regress to whatever digest `main:infra/k8s/overlays/<env>/<host>/kustomization.yaml` happens to carry. This was the live bug class (bug.5013) where `poly-paper-sidecar` was frozen at v0 on preview for five sidecar PRs in a row.
+- `main`'s overlay digest pin for your new sidecar **only matters for cold-start** — the first time the image lands on a fresh `deploy/<env>-<host>` branch. After that, the deploy branch is the source of truth.
+- The [`task.0349` digest-seed loop](../../.github/workflows/promote-preview-digest-seed.yml) tries to keep main's overlay current, but it is best-effort and not load-bearing for live deploys.
+
+### `bootId` invariant (for sidecars with externally-visible state)
+
+If your sidecar returns IDs or refs that callers persist (order IDs, job IDs, transaction IDs), **namespace them by a per-process `BOOT_ID`** (uuid4().hex[:12] is fine) so they don't collide across pod restarts. Bug.5005 cost two days when the paper-trading sidecar's SQLite-backed `order_id` autoincrement reset on every pod boot and collided with persisted Postgres rows from prior boots (PR #69 fix). Also include `bootId` as a structured-log field so Loki queries can correlate a request to a specific pod incarnation.
+
+### Sidecar buildSha parity (TODO — currently missing)
+
+Shape A units get [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) gating every promote against `/version.buildSha`. Sidecars currently have **no equivalent**: a sidecar can be promoted, rolled, and observed Ready while running code that doesn't match the PR head SHA, and the pipeline won't notice — only a behavioral symptom downstream (collisions, wrong output, missing log lines) surfaces the mismatch. Two ways to close this for your new sidecar:
+
+- **Preferred**: expose `/version.buildSha` on the sidecar (port + endpoint), then teach `verify-buildsha.sh` to probe it. Brings sidecars to first-class parity with Shape A.
+- **Fallback**: emit a `bootId`-tagged log line at startup with the build SHA, and add a Loki check to your `/validate-candidate` scorecard that asserts the deployed pod logged the PR head SHA. Cheaper but indirect.
 
 ### Validate
 
