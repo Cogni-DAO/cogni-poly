@@ -25,11 +25,13 @@ Design (see work/projects/proj.poly-paper-trading.md § "Design — PR 3"):
   back to the cogni `OrderReceipt` shape (including the client_order_id we
   need to echo back). Pod restart wipes this — by design for v0; the cogni
   reconciler treats orphan pending rows the same as a CLOB outage would.
-- bug.5018 — `filled_size_usdc` is the REALIZED USDC notional pulled from
-  the engine's `Trade.amount_usd`. `fill_price` / `total_shares` / `fees_usdc`
-  are populated from the same Trade row. They are populated ONLY for
-  fills (status=`filled`) — open and canceled receipts leave them `None`.
-  This replaces the v0 intent-padded approximation.
+- bug.5018 — `filled_size_usdc` is the REALIZED USDC notional from the
+  engine's `Trade.amount_usd`. `fill_price` / `total_shares` / `fees_usdc`
+  carry the matching realized values. Populated ONLY on `status="filled"`.
+  Receipts for non-filled statuses leave them unset; the FastAPI routes
+  serialize with `response_model_exclude_none=True` so the wire OMITS those
+  keys (the cogni TS `OrderReceiptSchema` accepts missing/undefined, not
+  `null`). NEVER echo `intent.size_usdc` as realized.
 
 This file deliberately writes NO fill logic. All matching, fee math, and
 book-walk happens inside `pm_trader.Engine`. If upstream is wrong, file
@@ -437,25 +439,11 @@ class Sidecar:
                     # `action="filled"` entries. amount_usd is realized
                     # notional (not intent), avg_price is VWAP across
                     # matched levels, fee is realized fee in USDC.
-                    fill = d.get("fill") or {}
-                    realized_usd = fill.get("amount_usd")
-                    if isinstance(realized_usd, (int, float)):
-                        st.filled_size_usdc = float(realized_usd)
-                    else:
-                        # Defensive fallback for older engine result entries
-                        # that may lack the `fill` block. Should not occur
-                        # post-bug.5018 — log a dropped-fill warning instead
-                        # of silently masquerading intent as realized.
-                        st.filled_size_usdc = st.intent_size_usdc
-                    avg_price = fill.get("avg_price")
-                    total_shares = fill.get("total_shares")
-                    fee = fill.get("fee")
-                    if isinstance(avg_price, (int, float)) and avg_price > 0:
-                        st.fill_price = float(avg_price)
-                    if isinstance(total_shares, (int, float)) and total_shares > 0:
-                        st.total_shares = float(total_shares)
-                    if isinstance(fee, (int, float)) and fee >= 0:
-                        st.fees_usdc = float(fee)
+                    fill = d["fill"]
+                    st.filled_size_usdc = float(fill["amount_usd"])
+                    st.fill_price = float(fill["avg_price"])
+                    st.total_shares = float(fill["total_shares"])
+                    st.fees_usdc = float(fill["fee"])
                     st.extra.update(d)
                     filled_count += 1
                     log.info(
@@ -688,7 +676,12 @@ def version() -> dict[str, str]:
     }
 
 
-@app.post("/place-order")
+# bug.5018 — response_model_exclude_none=True: pydantic serializes None as
+# JSON null by default, but the cogni TS OrderReceiptSchema's optional fields
+# only accept undefined/missing (Zod v3 .optional() rejects null). Omit None
+# fields from the wire so the TS adapter's Zod.parse() doesn't reject every
+# pending-state receipt with `fill_price`/`total_shares`/`fees_usdc` = null.
+@app.post("/place-order", response_model_exclude_none=True)
 def place_order(req: PlaceOrderRequest) -> OrderReceipt:
     return sidecar.place(req)
 
@@ -699,7 +692,7 @@ def cancel_order(order_id: str) -> Response:
     return Response(status_code=204)
 
 
-@app.get("/orders/{order_id}")
+@app.get("/orders/{order_id}", response_model_exclude_none=True)
 def get_order(order_id: str) -> OrderReceipt:
     return sidecar.get(order_id)
 

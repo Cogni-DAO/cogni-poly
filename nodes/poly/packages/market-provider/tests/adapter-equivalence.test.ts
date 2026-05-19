@@ -189,3 +189,41 @@ describe("adapter-equivalence (bug.5018) — canceled / unfilled", () => {
     expect(receipt.fees_usdc).toBeUndefined();
   });
 });
+
+describe("adapter-equivalence (bug.5018) — wire-shape contract", () => {
+  // Regression pin (live incident 2026-05-19): pydantic serializes
+  // `Optional[float] = None` as JSON `null` by default. Zod v3 `.optional()`
+  // accepts undefined/missing only — NOT null. Every paper-mode placement on
+  // candidate-a failed `placement_failed` until the sidecar route was switched
+  // to `response_model_exclude_none=True`. Pin the contract: nulls are illegal
+  // on the wire; the Python side MUST omit absent fields.
+  it("OrderReceiptSchema rejects JSON null for fill_price / total_shares / fees_usdc", () => {
+    const pendingWithNulls = {
+      order_id: "paper-pending-1",
+      client_order_id: CLIENT_ORDER_ID,
+      status: "pending",
+      filled_size_usdc: 0,
+      fill_price: null,
+      total_shares: null,
+      fees_usdc: null,
+      submitted_at: "2026-05-19T12:00:00Z",
+    };
+    const result = OrderReceiptSchema.safeParse(pendingWithNulls);
+    expect(result.success).toBe(false);
+  });
+
+  it("OrderReceiptSchema accepts pending receipt with absent fill fields (the Python-omit shape)", () => {
+    const pendingOmitted = {
+      order_id: "paper-pending-2",
+      client_order_id: CLIENT_ORDER_ID,
+      status: "pending",
+      filled_size_usdc: 0,
+      submitted_at: "2026-05-19T12:00:00Z",
+    };
+    const parsed = OrderReceiptSchema.parse(pendingOmitted);
+    expect(parsed.status).toBe("pending");
+    expect(parsed.fill_price).toBeUndefined();
+    expect(parsed.total_shares).toBeUndefined();
+    expect(parsed.fees_usdc).toBeUndefined();
+  });
+});
