@@ -65,7 +65,7 @@ esac
 
 # When invoked from candidate-flight.yml / promote-and-deploy.yml the script
 # lives in the app-src checkout while cwd is deploy-branch — accept either
-# layout for both PROMOTE_SCRIPT and the overlay-digest lib.
+# checkout-path layout for PROMOTE_SCRIPT.
 if [ ! -x "$PROMOTE_SCRIPT" ] && [ -f "../app-src/scripts/ci/promote-k8s-image.sh" ]; then
   PROMOTE_SCRIPT="../app-src/scripts/ci/promote-k8s-image.sh"
 fi
