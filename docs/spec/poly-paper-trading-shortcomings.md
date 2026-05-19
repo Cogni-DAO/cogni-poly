@@ -111,7 +111,7 @@ class OrderReceipt(BaseModel):
     attributes: Optional[dict[str, Any]] = None
 ```
 
-**Ledger persistence**: `order-ledger.markOrderId` writes the three values into first-class columns `poly_copy_trade_fills.{price, shares, fees_usdc}` (numeric precision matches `poly_trader_fills`). NO double-write into JSONB. `attributes` carries only adapter-specific metadata (rawStatus, transactionsHashes, sidecar diagnostics). See [`poly-copy-trade-execution.md` §schema](./poly-copy-trade-execution.md).
+**Ledger persistence**: `order-ledger.markOrderId` writes the three values into first-class columns `poly_copy_trade_fills.{price, shares, fees_usdc}` for immediately-filled receipts; `order-ledger.updateStatus` writes the same columns for deferred fills observed by the reconciler. Numeric precision matches `poly_trader_fills`. NO double-write into JSONB. `attributes` carries only adapter-specific metadata (rawStatus, transactionsHashes, sidecar diagnostics). See [`poly-copy-trade-execution.md` §schema](./poly-copy-trade-execution.md).
 
 **Downstream impact (resolved)**:
 

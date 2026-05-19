@@ -23,6 +23,7 @@ import {
   runReconcileOnce,
 } from "@/bootstrap/jobs/order-reconciler.job";
 import type { LedgerRow } from "@/features/trading";
+import { EVENT_NAMES } from "@/shared/observability/events";
 import { makeNoopLogger } from "@/shared/observability/server";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,6 +48,7 @@ function makeRow(overrides: Partial<LedgerRow> = {}): LedgerRow {
     created_at: now,
     updated_at: now,
     billing_account_id: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
+    mode: "live",
     ...overrides,
   };
 }
@@ -96,6 +98,18 @@ function makeTrackingMetrics() {
     },
     counts,
   };
+}
+
+function makeTrackingLogger() {
+  const info = vi.fn();
+  const logger = {
+    child: () => logger,
+    debug: vi.fn(),
+    error: vi.fn(),
+    info,
+    warn: vi.fn(),
+  };
+  return { logger: logger as unknown as typeof LOGGER, info };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -270,6 +284,57 @@ describe("runReconcileOnce", () => {
       (ledger.rows[0]?.attributes as Record<string, unknown> | null)
         ?.filled_size_usdc
     ).toBe(2.5);
+  });
+
+  it("deferred filled receipt propagates realized fill columns through updateStatus", async () => {
+    const ledger = new FakeOrderLedger({
+      initial: [
+        makeRow({
+          status: "open",
+          order_id: "order-abc",
+          attributes: { filled_size_usdc: 0 },
+        }),
+      ],
+    });
+    const updateSpy = vi.spyOn(ledger, "updateStatus");
+    const { logger, info } = makeTrackingLogger();
+    const getOrder = vi.fn().mockResolvedValue(
+      found(
+        makeReceipt({
+          status: "filled",
+          filled_size_usdc: 31.936,
+          fill_price: 0.32,
+          total_shares: 100,
+          fees_usdc: 0.064,
+        })
+      )
+    );
+
+    await runReconcileOnce({
+      ledger,
+      getOrderForTenant: perTenant(getOrder),
+      logger,
+      metrics: noopMetrics,
+      notFoundGraceMs: 900_000,
+    });
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        client_order_id: "coid-1",
+        status: "filled",
+        filled_size_usdc: 31.936,
+        fill_price: 0.32,
+        total_shares: 100,
+        fees_usdc: 0.064,
+      })
+    );
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: EVENT_NAMES.POLY_RECONCILER_STATUS_UPDATED,
+        realized_fill_fields_observed: true,
+      }),
+      "reconciler: status updated"
+    );
   });
 
   it("ticks total counter is incremented once per tick", async () => {
