@@ -110,7 +110,22 @@ class FakeEngine:
             d["status"] = "filled"
             d["filled_at"] = "2026-05-16T18:00:30+00:00"
             d["fill_price"] = d["limit_price"]
-            filled.append({"order": dict(d), "action": "filled"})
+            # bug.5018 — engine attaches realized fill data on filled entries.
+            # Fake: model a full fill at limit_price for the requested USDC
+            # amount, so realized notional == intent for the test assertions.
+            limit_price = float(d["limit_price"])
+            amount_usd = float(d["amount"])
+            total_shares = amount_usd / limit_price
+            filled.append({
+                "order": dict(d),
+                "action": "filled",
+                "fill": {
+                    "avg_price": limit_price,
+                    "total_shares": total_shares,
+                    "fee": 0.0,
+                    "amount_usd": amount_usd,
+                },
+            })
             self.fill_on_next_check.discard(oid)
         return filled
 

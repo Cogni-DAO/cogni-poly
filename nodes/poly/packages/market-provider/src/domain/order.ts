@@ -11,8 +11,13 @@
  *   - FILL_ID_COMPOSITE: Fill.fill_id is `"<source>:<native_id>"` per P0.2 (task.0315 Phase 0 Findings).
  *   - GETORDER_NEVER_NULL: `getOrder` callers receive a discriminated `GetOrderResult`; null is
  *     never a valid return. Callers MUST branch on the discriminant. (task.0328 CP1)
+ *   - RECEIPT_FILL_FIELDS_UNDEFINED_WHEN_UNFILLED (bug.5018): `fill_price` / `total_shares` /
+ *     `fees_usdc` are populated ONLY for realized fills (status ∈ filled | partial). Open /
+ *     pending / canceled / error receipts leave them `undefined` — distinct from "the adapter
+ *     dropped them". Adapter symmetry is CI-gated by `tests/adapter-equivalence.test.ts`.
  * Side-effects: none
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 — First live order)
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 — First live order),
+ *   docs/spec/poly-paper-trading-shortcomings.md (S3/S4 — closed by bug.5018)
  * @public
  */
 
@@ -130,6 +135,20 @@ export function normalizeLimitPriceToTick(
  * Platform receipt after order submission. `order_id` is the platform-assigned
  * identifier (distinct from `client_order_id`). `filled_size_usdc` tracks
  * realized fills for status polling; `status` is the canonical mapping.
+ *
+ * Contract note (bug.5018 — NOT a Zod-enforceable invariant; Zod cannot encode
+ * realized-vs-intent semantics):
+ *   - `filled_size_usdc` is REALIZED USDC notional on matched volume, never the
+ *     intent's submitted size. Adapters that have no realized fill data MUST
+ *     emit 0 (canceled before any match) — never echo back `intent.size_usdc`.
+ *   - `fill_price`, `total_shares`, `fees_usdc` are populated ONLY when the
+ *     receipt represents a realized fill (status ∈ {filled, partial}). They
+ *     MUST be `undefined` for open / pending / canceled / error receipts —
+ *     distinct from "the adapter dropped the field".
+ *   - `fill_price` is VWAP across all matched levels (cumulative USDC / cumulative shares).
+ *   - Both PaperAdapter and PolymarketClobAdapter MUST produce structurally
+ *     identical values for these fields on a canonical fill (CI-gated by
+ *     `tests/adapter-equivalence.test.ts`).
  */
 export const OrderReceiptSchema = z.object({
   /** Platform-assigned order id — used for cancel / status lookup. */
@@ -139,6 +158,12 @@ export const OrderReceiptSchema = z.object({
   status: OrderStatusSchema,
   /** Cumulative filled size in USDC dollars at time of receipt. */
   filled_size_usdc: z.number().min(0),
+  /** Realized fill VWAP (outcome-share price). Undefined when no fill yet. */
+  fill_price: z.number().positive().optional(),
+  /** Realized shares filled (cumulative across matched levels). Undefined when no fill yet. */
+  total_shares: z.number().positive().optional(),
+  /** Realized fees in USDC. Often 0 on prod Polymarket. Undefined when no fill yet. */
+  fees_usdc: z.number().min(0).optional(),
   /** ISO-8601 — platform-reported submission time (falls back to adapter clock). */
   submitted_at: z.string().min(1),
   /** Platform-specific receipt fields (rawStatus, maker/taker flag, etc.). */

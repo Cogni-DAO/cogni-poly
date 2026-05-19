@@ -55,6 +55,8 @@ export const EVENT_NAMES = {
   // `component` label disambiguates ws vs chain in the line body.
   POLY_WALLET_WATCH_CHAIN_STARTED: "poly.wallet_watch.chain.started",
   POLY_WALLET_WATCH_CHAIN_STOPPED: "poly.wallet_watch.chain.stopped",
+
+  POLY_RECONCILER_STATUS_UPDATED: "poly.reconciler.status_updated",
 } as const;
 
 export type EventName = (typeof EVENT_NAMES)[keyof typeof EVENT_NAMES];

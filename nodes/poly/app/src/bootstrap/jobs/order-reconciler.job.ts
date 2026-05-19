@@ -43,7 +43,6 @@
  * @internal
  */
 
-import { EVENT_NAMES } from "@cogni/node-shared";
 // TODO(task.0329): redemption-sync will add `getOperatorPositions` back.
 import type {
   GetOrderResult,
@@ -58,6 +57,7 @@ import {
   ledgerExecutedUsdc,
   type OrderLedger,
 } from "@/features/trading";
+import { EVENT_NAMES } from "@/shared/observability/events";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Metric names
@@ -245,6 +245,15 @@ export async function runReconcileOnce(
         client_order_id: row.client_order_id,
         status: newStatus,
         filled_size_usdc: receipt.filled_size_usdc ?? undefined,
+        ...(receipt.fill_price !== undefined
+          ? { fill_price: receipt.fill_price }
+          : {}),
+        ...(receipt.total_shares !== undefined
+          ? { total_shares: receipt.total_shares }
+          : {}),
+        ...(receipt.fees_usdc !== undefined
+          ? { fees_usdc: receipt.fees_usdc }
+          : {}),
       });
 
       deps.metrics.incr(ORDER_RECONCILER_METRICS.updatesTotal, {
@@ -254,10 +263,14 @@ export async function runReconcileOnce(
 
       log.info(
         {
+          event: EVENT_NAMES.POLY_RECONCILER_STATUS_UPDATED,
           client_order_id: row.client_order_id,
           order_id: row.order_id,
           from: row.status,
           to: newStatus,
+          realized_fill_fields_observed:
+            typeof receipt.fill_price === "number" &&
+            typeof receipt.total_shares === "number",
         },
         "reconciler: status updated"
       );

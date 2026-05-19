@@ -25,11 +25,13 @@ Design (see work/projects/proj.poly-paper-trading.md § "Design — PR 3"):
   back to the cogni `OrderReceipt` shape (including the client_order_id we
   need to echo back). Pod restart wipes this — by design for v0; the cogni
   reconciler treats orphan pending rows the same as a CLOB outage would.
-- v0 fill-amount approximation: full fill is assumed when upstream reports
-  `status="filled"`. `filled_size_usdc = intent.size_usdc`. Partial fills
-  aren't surfaced separately (rare under copy-trade cap sizes). Documented
-  invariant; future PR can lift exact realized cost/fee from the upstream
-  dict if the upstream stabilizes those keys.
+- bug.5018 — `filled_size_usdc` is the REALIZED USDC notional from the
+  engine's `Trade.amount_usd`. `fill_price` / `total_shares` / `fees_usdc`
+  carry the matching realized values. Populated ONLY on `status="filled"`.
+  Receipts for non-filled statuses leave them unset; the FastAPI routes
+  serialize with `response_model_exclude_none=True` so the wire OMITS those
+  keys (the cogni TS `OrderReceiptSchema` accepts missing/undefined, not
+  `null`). NEVER echo `intent.size_usdc` as realized.
 
 This file deliberately writes NO fill logic. All matching, fee math, and
 book-walk happens inside `pm_trader.Engine`. If upstream is wrong, file
@@ -243,12 +245,16 @@ class PlaceOrderRequest(BaseModel):
 
 class OrderReceipt(BaseModel):
     """Mirrors `OrderReceiptSchema` in nodes/poly/packages/market-provider/
-    src/domain/order.ts:134."""
+    src/domain/order.ts:134. fill_price / total_shares / fees_usdc are
+    populated only on realized fills (status=filled) per bug.5018."""
 
     order_id: str
     client_order_id: str
     status: str
     filled_size_usdc: float
+    fill_price: Optional[float] = None
+    total_shares: Optional[float] = None
+    fees_usdc: Optional[float] = None
     submitted_at: str
     attributes: Optional[dict[str, Any]] = None
 
@@ -270,6 +276,9 @@ class OrderState:
         "intent_size_usdc",
         "status",
         "filled_size_usdc",
+        "fill_price",
+        "total_shares",
+        "fees_usdc",
         "submitted_at",
         "extra",
     )
@@ -284,12 +293,18 @@ class OrderState:
         filled_size_usdc: float,
         submitted_at: str,
         extra: dict[str, Any],
+        fill_price: Optional[float] = None,
+        total_shares: Optional[float] = None,
+        fees_usdc: Optional[float] = None,
     ) -> None:
         self.upstream_id = upstream_id
         self.client_order_id = client_order_id
         self.intent_size_usdc = intent_size_usdc
         self.status = status
         self.filled_size_usdc = filled_size_usdc
+        self.fill_price = fill_price
+        self.total_shares = total_shares
+        self.fees_usdc = fees_usdc
         self.submitted_at = submitted_at
         self.extra = extra
 
@@ -300,6 +315,9 @@ def _to_receipt(st: OrderState) -> OrderReceipt:
         client_order_id=st.client_order_id,
         status=st.status,
         filled_size_usdc=st.filled_size_usdc,
+        fill_price=st.fill_price,
+        total_shares=st.total_shares,
+        fees_usdc=st.fees_usdc,
         submitted_at=st.submitted_at,
         attributes={
             "upstream_status": st.extra.get("status"),
@@ -417,10 +435,15 @@ class Sidecar:
                         )
                         continue
                     st.status = "filled"
-                    # v0 full-fill assumption: realized notional = intended.
-                    # Partial-fill fidelity lifts in a later PR if upstream
-                    # stabilizes realized-cost/fee keys on the check_orders dict.
-                    st.filled_size_usdc = st.intent_size_usdc
+                    # bug.5018 — engine attaches realized fill data on
+                    # `action="filled"` entries. amount_usd is realized
+                    # notional (not intent), avg_price is VWAP across
+                    # matched levels, fee is realized fee in USDC.
+                    fill = d["fill"]
+                    st.filled_size_usdc = float(fill["amount_usd"])
+                    st.fill_price = float(fill["avg_price"])
+                    st.total_shares = float(fill["total_shares"])
+                    st.fees_usdc = float(fill["fee"])
                     st.extra.update(d)
                     filled_count += 1
                     log.info(
@@ -430,6 +453,9 @@ class Sidecar:
                             "order_id": oid,
                             "client_order_id": st.client_order_id,
                             "filled_size_usdc": st.filled_size_usdc,
+                            "fill_price": st.fill_price,
+                            "total_shares": st.total_shares,
+                            "fees_usdc": st.fees_usdc,
                         },
                     )
                 # Heartbeat — emit every tick so an absence alert in Loki can
@@ -509,12 +535,17 @@ class Sidecar:
             or datetime.now(timezone.utc).isoformat(timespec="seconds")
         )
 
+        # bug.5018 — at place time the upstream engine returns pending (GTC)
+        # with no realized fill yet. filled_size_usdc / fill_price /
+        # total_shares / fees_usdc all stay 0 / None until the fill loop
+        # observes a real match via `check_orders()` and populates from
+        # `Trade.amount_usd` etc. NEVER echo intent.size_usdc here.
         st = OrderState(
             upstream_id=oid,
             client_order_id=req.client_order_id,
             intent_size_usdc=req.size_usdc,
             status=cogni_status,
-            filled_size_usdc=req.size_usdc if cogni_status == "filled" else 0.0,
+            filled_size_usdc=0.0,
             submitted_at=str(submitted_at),
             extra=d,
         )
@@ -645,7 +676,12 @@ def version() -> dict[str, str]:
     }
 
 
-@app.post("/place-order")
+# bug.5018 — response_model_exclude_none=True: pydantic serializes None as
+# JSON null by default, but the cogni TS OrderReceiptSchema's optional fields
+# only accept undefined/missing (Zod v3 .optional() rejects null). Omit None
+# fields from the wire so the TS adapter's Zod.parse() doesn't reject every
+# pending-state receipt with `fill_price`/`total_shares`/`fees_usdc` = null.
+@app.post("/place-order", response_model_exclude_none=True)
 def place_order(req: PlaceOrderRequest) -> OrderReceipt:
     return sidecar.place(req)
 
@@ -656,7 +692,7 @@ def cancel_order(order_id: str) -> Response:
     return Response(status_code=204)
 
 
-@app.get("/orders/{order_id}")
+@app.get("/orders/{order_id}", response_model_exclude_none=True)
 def get_order(order_id: str) -> OrderReceipt:
     return sidecar.get(order_id)
 

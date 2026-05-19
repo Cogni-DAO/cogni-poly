@@ -17,8 +17,14 @@
  *     active wallet connection + active grant is the gate; explicit user opt-in (POST a target) is the
  *     only signal. Target rows own the mirror filter percentile and per-target max bet; grants still
  *     enforce downstream tenant authorization/caps.
+ *   - FILLS_HAVE_REALIZED_COLUMNS (bug.5018): `poly_copy_trade_fills` carries first-class
+ *     `price` / `shares` / `fees_usdc` columns alongside `mode`, populated on post-place
+ *     UPDATE by `order-ledger.markOrderId`. NULL pre-fill or for legacy paper rows that
+ *     pre-date bug.5018 (forward-only — no backfill). `WHERE price IS NOT NULL` discriminates
+ *     post-fix rows; PnL/VWAP aggregations read column data, not JSONB.
  * Side-effects: none (schema definitions only)
- * Links: docs/spec/poly-tenant-and-collateral.md, work/items/task.0318
+ * Links: docs/spec/poly-tenant-and-collateral.md, work/items/task.0318,
+ *   docs/spec/poly-paper-trading-shortcomings.md (bug.5018 — S3/S4 closed)
  * @public
  */
 
@@ -205,6 +211,25 @@ export const polyCopyTradeFills = pgTable(
      * PAPER_DISPATCH_IS_ENV_ONLY (poly-trade-executor.ts).
      */
     mode: text("mode").notNull().default("live"),
+    /**
+     * Realized fill VWAP (USDC / shares). Populated on post-place UPDATE
+     * once a fill is observed; NULL for pre-fill rows. Same precision as
+     * `poly_trader_fills.price`. Post-fix paper rows are discriminated by
+     * `price IS NOT NULL` — see bug.5018 discontinuity note (forward-only,
+     * no backfill of legacy paper rows that pre-date the realized-fill wire).
+     */
+    price: numeric("price", { precision: 18, scale: 8 }),
+    /**
+     * Realized shares filled (cumulative across matched levels). Same
+     * precision as `poly_trader_fills.shares`. NULL until fill observed.
+     */
+    shares: numeric("shares", { precision: 20, scale: 8 }),
+    /**
+     * Realized fees in USDC at fill time. Often 0 on prod Polymarket; the
+     * paper-trader sidecar populates this from its fee model. NULL until
+     * fill observed.
+     */
+    feesUsdc: numeric("fees_usdc", { precision: 20, scale: 8 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -250,6 +275,15 @@ export const polyCopyTradeFills = pgTable(
     index("poly_copy_trade_fills_position_lifecycle_idx").on(
       table.billingAccountId,
       table.positionLifecycle
+    ),
+    // bug.5018 — PnL/VWAP aggregation key. Mode is included so paper vs
+    // live rows don't interleave on the scan.
+    index("poly_copy_trade_fills_pnl_idx").on(
+      table.billingAccountId,
+      table.targetId,
+      table.marketId,
+      table.mode,
+      table.status
     ),
     // fill_id format is owned by per-source helpers in @cogni/poly-market-provider.
     // Dedupe is enforced by the partial unique index on (target_id, fill_id).

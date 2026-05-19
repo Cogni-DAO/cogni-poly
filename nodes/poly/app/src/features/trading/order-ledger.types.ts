@@ -7,7 +7,7 @@
  * Scope: Pure type surface. No drizzle imports, no I/O.
  * Invariants: LEDGER_PORT_SHAPE_IS_STABLE — adding fields is a breaking change. INSERT_BEFORE_PLACE is a caller invariant, not a ledger one.
  * Side-effects: none
- * Public types: `LedgerRow` (includes `synced_at`, `position_lifecycle`, `mode`), `LedgerStatus`, `LedgerMode`, `LedgerPositionLifecycle`, `StateSnapshot`, `TenantBinding`, `InsertPendingInput` (extends TenantBinding; carries `intent.attributes.token_id` for the per-token atomic cap-check), `RecordDecisionInput` (extends TenantBinding), `ListRecentOptions` (tenant-required), `ListOpenOrPendingOptions`, `UpdateStatusInput` (includes `reason?`), `SyncHealthSummary`, `OrderLedger` (snapshotState takes `(target_id, billing_account_id)`; `cumulativeIntentForMarketToken` takes `(billing_account_id, market_id, token_id)` per bug.5004 `CAP_IS_PER_TOKEN_ID`).
+ * Public types: `LedgerRow` (includes `synced_at`, `position_lifecycle`, `mode`), `LedgerStatus`, `LedgerMode`, `LedgerPositionLifecycle`, `StateSnapshot`, `TenantBinding`, `InsertPendingInput` (extends TenantBinding; carries `intent.attributes.token_id` for the per-token atomic cap-check), `RecordDecisionInput` (extends TenantBinding), `ListRecentOptions` (tenant-required), `ListOpenOrPendingOptions`, `UpdateStatusInput`, `SyncHealthSummary`, `OrderLedger` (snapshotState takes `(target_id, billing_account_id)`; `cumulativeIntentForMarketToken` takes `(billing_account_id, market_id, token_id)` per bug.5004 `CAP_IS_PER_TOKEN_ID`).
  * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md, docs/spec/poly-tenant-and-collateral.md
  * @public
  */
@@ -305,6 +305,10 @@ export interface UpdateStatusInput {
   filled_size_usdc?: number;
   /** Stamp order_id if the adapter returns it on a late acknowledgement. */
   order_id?: string;
+  /** Realized fill data observed by the reconciler. Undefined skips the column update. */
+  fill_price?: number;
+  total_shares?: number;
+  fees_usdc?: number;
   /**
    * Machine-readable promotion reason stored in `attributes.reason`.
    * Used by the reconciler to distinguish "clob_not_found" cancelations from
