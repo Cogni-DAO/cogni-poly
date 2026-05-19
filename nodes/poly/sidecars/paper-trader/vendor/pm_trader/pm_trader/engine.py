@@ -545,9 +545,11 @@ class Engine:
                             price=order.limit_price, size=crossing_size,
                         )],
                     )
+                    # max_price/min_price dropped: syn_book has a single level
+                    # already at limit_price, so the simulator's price guard
+                    # could never trip.
                     fill = simulate_buy_fill(
                         syn_book, order.amount, fee_rate_bps, "fak",
-                        max_price=order.limit_price,
                     )
                 else:
                     crossing_size = sum(
@@ -563,7 +565,6 @@ class Engine:
                     )
                     fill = simulate_sell_fill(
                         syn_book, order.amount, fee_rate_bps, "fak",
-                        min_price=order.limit_price,
                     )
 
                 if not fill.filled and not fill.is_partial:
