@@ -12,4 +12,4 @@ resources:
 images:
   - name: ghcr.io/cogni-dao/poly-test-worker
     newName: ghcr.io/cogni-dao/poly-test-worker
-    digest: "sha256:af4d5ca6e30b441f0076e99c024f00448632a5784841fc1fa85dd4af7ed712c1"
+    digest: "sha256:8eb4e42e49235a3ab3fc33c3f839b2207399f911712279a230c58877692ccd79"
