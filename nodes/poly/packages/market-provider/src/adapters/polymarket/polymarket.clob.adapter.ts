@@ -1145,6 +1145,15 @@ interface ClobOrderResponseLike {
   message?: string;
   makingAmount?: string;
   takingAmount?: string;
+  /**
+   * Realized fee in USDC (bug.5018). Prod Polymarket OrderResponse does NOT
+   * surface this today — it's a settlement-time concept, often 0 on prod.
+   * Typed optional so the adapter passes it through if the upstream ever
+   * surfaces it (and so the equivalence-test stub can populate it). The
+   * adapter does NOT default this to 0 — undefined means "not surfaced",
+   * distinct from "zero fee".
+   */
+  fee?: string | number;
   transactionsHashes?: string[];
 }
 
@@ -1395,15 +1404,37 @@ export function mapOrderResponseToReceipt(
   // DECIMAL USDC strings (e.g. "4.98473"), not atomic 1e6 units. An earlier
   // revision divided by 1,000,000 and produced filled_size_usdc off by a
   // factor of ~1M (observed live on 2026-04-17 fill 0x61f7ae0d…b58a).
-  // For BUY, makingAmount is USDC paid; for SELL, takingAmount is USDC received.
-  const filledUsdcRaw = intent.side === "BUY" ? r.makingAmount : r.takingAmount;
-  const filled_size_usdc = filledUsdcRaw ? Number(filledUsdcRaw) : 0;
+  // For BUY, makingAmount is USDC paid; takingAmount is shares received.
+  // For SELL, makingAmount is shares given; takingAmount is USDC received.
+  const usdcRaw = intent.side === "BUY" ? r.makingAmount : r.takingAmount;
+  const sharesRaw = intent.side === "BUY" ? r.takingAmount : r.makingAmount;
+  const filled_size_usdc = usdcRaw ? Number(usdcRaw) : 0;
+
+  // bug.5018 — surface realized fill data on the wire (was: dropped).
+  // fill_price is VWAP (USDC / shares); only populated when a real match
+  // occurred. Otherwise (status pending / no fill yet) leave undefined.
+  const sharesNum = sharesRaw ? Number(sharesRaw) : 0;
+  const isRealizedFill =
+    filled_size_usdc > 0 &&
+    Number.isFinite(sharesNum) &&
+    sharesNum > 0;
+  const fill_price = isRealizedFill ? filled_size_usdc / sharesNum : undefined;
+  const total_shares = isRealizedFill ? sharesNum : undefined;
+  // Prod CLOB OrderResponse does not surface fees today — undefined when
+  // absent. Stub fixtures (adapter-equivalence test) may inject `fee`.
+  const fees_usdc =
+    r.fee != null && Number.isFinite(Number(r.fee))
+      ? Number(r.fee)
+      : undefined;
 
   return {
     order_id: placedOrderId,
     client_order_id: intent.client_order_id,
     status,
     filled_size_usdc,
+    ...(fill_price !== undefined ? { fill_price } : {}),
+    ...(total_shares !== undefined ? { total_shares } : {}),
+    ...(fees_usdc !== undefined ? { fees_usdc } : {}),
     submitted_at: new Date().toISOString(),
     attributes: {
       rawStatus,
@@ -1439,6 +1470,17 @@ export function mapOpenOrderToReceipt(open: ClobOpenOrderLike): OrderReceipt {
     ? priceNum * matchedShares
     : 0;
 
+  // bug.5018 — only populate realized-fill fields when there's an actual
+  // match (size_matched > 0). For open-status orders with no fills these
+  // stay `undefined` — distinct from "adapter dropped them". CLOB
+  // OrderBook doesn't surface fees here; fees_usdc remains undefined.
+  const isRealizedFill =
+    Number.isFinite(priceNum) &&
+    Number.isFinite(matchedShares) &&
+    matchedShares > 0;
+  const fill_price = isRealizedFill ? priceNum : undefined;
+  const total_shares = isRealizedFill ? matchedShares : undefined;
+
   const submitted_at =
     typeof open.created_at === "number" && open.created_at > 0
       ? new Date(open.created_at * 1000).toISOString()
@@ -1449,6 +1491,8 @@ export function mapOpenOrderToReceipt(open: ClobOpenOrderLike): OrderReceipt {
     client_order_id: open.id, // no separate client_order_id on the platform receipt
     status,
     filled_size_usdc,
+    ...(fill_price !== undefined ? { fill_price } : {}),
+    ...(total_shares !== undefined ? { total_shares } : {}),
     submitted_at,
     attributes: {
       rawStatus: open.status,

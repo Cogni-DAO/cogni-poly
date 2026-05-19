@@ -572,14 +572,23 @@ class Engine:
 
                 # Execute the fill through normal trade recording
                 if order.side == "buy":
-                    self._execute_limit_buy(market, order, fill, fee_rate_bps)
+                    trade = self._execute_limit_buy(market, order, fill, fee_rate_bps)
                 else:
-                    self._execute_limit_sell(market, order, fill, fee_rate_bps)
+                    trade = self._execute_limit_sell(market, order, fill, fee_rate_bps)
 
                 updated = mark_filled(self.db.conn, order.id)
+                # bug.5018 — surface realized fill data on the result entry so
+                # the sidecar's fill loop can populate OrderReceipt.fill_price
+                # / total_shares / fees_usdc without a follow-up history lookup.
                 results.append({
                     "order": _order_to_dict(updated),
                     "action": "filled",
+                    "fill": {
+                        "avg_price": trade.avg_price,
+                        "total_shares": trade.shares,
+                        "fee": trade.fee,
+                        "amount_usd": trade.amount_usd,
+                    },
                 })
             except _PERMANENT_ORDER_ERRORS as e:
                 # Permanent failure — mark rejected so it's not retried
@@ -813,18 +822,25 @@ class Engine:
                     # accounting are identical in shape.
                     try:
                         if order.side == "buy":
-                            self._execute_limit_buy(
+                            trade = self._execute_limit_buy(
                                 market, order, fill, fee_rate_bps
                             )
                         else:
-                            self._execute_limit_sell(
+                            trade = self._execute_limit_sell(
                                 market, order, fill, fee_rate_bps
                             )
                         updated = mark_filled(self.db.conn, order.id)
                         filled_ids.add(order.id)
+                        # bug.5018 — see snapshot pass above; same shape.
                         results.append({
                             "order": _order_to_dict(updated),
                             "action": "filled",
+                            "fill": {
+                                "avg_price": trade.avg_price,
+                                "total_shares": trade.shares,
+                                "fee": trade.fee,
+                                "amount_usd": trade.amount_usd,
+                            },
                         })
                     except _PERMANENT_ORDER_ERRORS as e:
                         updated = reject_order(self.db.conn, order.id)
@@ -874,8 +890,12 @@ class Engine:
                 oldest = ts
         return oldest if oldest is not None else 0.0
 
-    def _execute_limit_buy(self, market, order, fill, fee_rate_bps: int) -> None:
-        """Record a limit buy fill using a pre-computed FillResult."""
+    def _execute_limit_buy(self, market, order, fill, fee_rate_bps: int):
+        """Record a limit buy fill using a pre-computed FillResult.
+
+        Returns the inserted Trade so callers (`check_orders` result entries,
+        bug.5018) can surface realized fill data on the wire.
+        """
         account = self._require_account()
         total_outflow = fill.total_cost + fill.fee
         if total_outflow > account.cash:
@@ -883,7 +903,7 @@ class Engine:
                 required=total_outflow, available=account.cash,
             )
         self.db.update_cash(account.cash - total_outflow)
-        self.db.insert_trade(
+        trade = self.db.insert_trade(
             market_condition_id=market.condition_id,
             market_slug=market.slug,
             market_question=market.question,
@@ -906,9 +926,14 @@ class Engine:
             cost=fill.total_cost + fill.fee,
             avg_fill_price=fill.avg_price,
         )
+        return trade
 
-    def _execute_limit_sell(self, market, order, fill, fee_rate_bps: int) -> None:
-        """Record a limit sell fill using a pre-computed FillResult."""
+    def _execute_limit_sell(self, market, order, fill, fee_rate_bps: int):
+        """Record a limit sell fill using a pre-computed FillResult.
+
+        Returns the inserted Trade so callers (`check_orders` result entries,
+        bug.5018) can surface realized fill data on the wire.
+        """
         account = self._require_account()
         position = self.db.get_position(market.condition_id, order.outcome)
         if position is None or position.shares <= 0:
@@ -920,7 +945,7 @@ class Engine:
             )
         net_proceeds = fill.total_cost - fill.fee
         self.db.update_cash(account.cash + net_proceeds)
-        self.db.insert_trade(
+        trade = self.db.insert_trade(
             market_condition_id=market.condition_id,
             market_slug=market.slug,
             market_question=market.question,
@@ -942,6 +967,7 @@ class Engine:
             sold_shares=fill.total_shares,
             proceeds=net_proceeds,
         )
+        return trade
 
     def watch_prices(
         self, slugs_or_ids: list[str], outcomes: list[str] | None = None,

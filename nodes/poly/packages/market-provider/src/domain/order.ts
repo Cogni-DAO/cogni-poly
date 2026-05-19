@@ -130,6 +130,20 @@ export function normalizeLimitPriceToTick(
  * Platform receipt after order submission. `order_id` is the platform-assigned
  * identifier (distinct from `client_order_id`). `filled_size_usdc` tracks
  * realized fills for status polling; `status` is the canonical mapping.
+ *
+ * Contract note (bug.5018 — NOT a Zod-enforceable invariant; Zod cannot encode
+ * realized-vs-intent semantics):
+ *   - `filled_size_usdc` is REALIZED USDC notional on matched volume, never the
+ *     intent's submitted size. Adapters that have no realized fill data MUST
+ *     emit 0 (canceled before any match) — never echo back `intent.size_usdc`.
+ *   - `fill_price`, `total_shares`, `fees_usdc` are populated ONLY when the
+ *     receipt represents a realized fill (status ∈ {filled, partial}). They
+ *     MUST be `undefined` for open / pending / canceled / error receipts —
+ *     distinct from "the adapter dropped the field".
+ *   - `fill_price` is VWAP across all matched levels (cumulative USDC / cumulative shares).
+ *   - Both PaperAdapter and PolymarketClobAdapter MUST produce structurally
+ *     identical values for these fields on a canonical fill (CI-gated by
+ *     `tests/adapter-equivalence.test.ts`).
  */
 export const OrderReceiptSchema = z.object({
   /** Platform-assigned order id — used for cancel / status lookup. */
@@ -139,6 +153,12 @@ export const OrderReceiptSchema = z.object({
   status: OrderStatusSchema,
   /** Cumulative filled size in USDC dollars at time of receipt. */
   filled_size_usdc: z.number().min(0),
+  /** Realized fill VWAP (outcome-share price). Undefined when no fill yet. */
+  fill_price: z.number().positive().optional(),
+  /** Realized shares filled (cumulative across matched levels). Undefined when no fill yet. */
+  total_shares: z.number().positive().optional(),
+  /** Realized fees in USDC. Often 0 on prod Polymarket. Undefined when no fill yet. */
+  fees_usdc: z.number().min(0).optional(),
   /** ISO-8601 — platform-reported submission time (falls back to adapter clock). */
   submitted_at: z.string().min(1),
   /** Platform-specific receipt fields (rawStatus, maker/taker flag, etc.). */

@@ -393,6 +393,13 @@
       "when": 1779135527377,
       "tag": "0055_position_gap_capital_alloc",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1779213247907,
+      "tag": "0056_optimal_killmonger",
+      "breakpoints": true
     }
   ]
 }

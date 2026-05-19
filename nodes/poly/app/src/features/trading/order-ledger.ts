@@ -569,6 +569,22 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         status,
         params.receipt.filled_size_usdc
       );
+      // bug.5018 — realized fill data lands as first-class columns (NOT
+      // duplicated into attributes JSONB). Both adapters surface fill_price /
+      // total_shares / fees_usdc symmetrically per OrderReceiptSchema. numeric
+      // columns accept strings (drizzle pg-core); stringify so precision
+      // matches `poly_trader_fills` shape without going through JS float
+      // round-trip in the driver. Undefined fields skip the column update.
+      const fillColumns: Record<string, string> = {};
+      if (typeof params.receipt.fill_price === "number") {
+        fillColumns.price = params.receipt.fill_price.toString();
+      }
+      if (typeof params.receipt.total_shares === "number") {
+        fillColumns.shares = params.receipt.total_shares.toString();
+      }
+      if (typeof params.receipt.fees_usdc === "number") {
+        fillColumns.feesUsdc = params.receipt.fees_usdc.toString();
+      }
       await deps.db
         .update(polyCopyTradeFills)
         .set({
@@ -579,6 +595,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
                 positionLifecycle: preserveTerminalLifecycle(positionLifecycle),
               }
             : {}),
+          ...fillColumns,
           updatedAt: new Date(),
           attributes: sql`COALESCE(${polyCopyTradeFills.attributes}, '{}'::jsonb) || ${JSON.stringify(
             {

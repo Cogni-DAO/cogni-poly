@@ -364,9 +364,18 @@ async function fetchTenantFillsAgg(
                ELSE 0 END
         ), 0)::float8 AS intent_usdc,
         COALESCE(SUM(
+          -- bug.5018 — prefer the realized notional from first-class
+          -- columns (price * shares). Pre-bug.5018 paper rows have NULL
+          -- columns and intent-padded filled_size_usdc in JSONB; those
+          -- rows fall through to 0 here so the legacy phantom realized
+          -- notional does not pollute the rollup. Live pre-deploy rows
+          -- had correct attributes-based realized via the makingAmount
+          -- path but lack columns; they contribute 0 here, a known
+          -- forward-only discontinuity (Stage 5 of bug.5018).
           CASE WHEN status IN ('filled','partial')
-                AND attributes->>'filled_size_usdc' ~ '^[0-9]+(\\.[0-9]+)?$'
-               THEN (attributes->>'filled_size_usdc')::numeric
+                AND price IS NOT NULL
+                AND shares IS NOT NULL
+               THEN price * shares
                ELSE 0 END
         ), 0)::float8 AS realized_usdc,
         BOOL_OR(
@@ -447,9 +456,11 @@ async function fetchTenantHourlyBuckets(
              ELSE 0 END
       ), 0)::float8 AS intent_in_bucket,
       COALESCE(SUM(
+        -- bug.5018 — see fetchTenantWindow above; columns-only realized.
         CASE WHEN status IN ('filled','partial')
-              AND attributes->>'filled_size_usdc' ~ '^[0-9]+(\\.[0-9]+)?$'
-             THEN (attributes->>'filled_size_usdc')::numeric
+              AND price IS NOT NULL
+              AND shares IS NOT NULL
+             THEN price * shares
              ELSE 0 END
       ), 0)::float8 AS realized_in_bucket
     FROM poly_copy_trade_fills
@@ -482,20 +493,25 @@ async function fetchTenantRealizedPnl(
 ): Promise<PnlAgg> {
   // Realized PnL only — open positions are NOT priced.
   // Resolved markets: outcome ∈ {winner, loser}; payout defaults to $1 for winners.
-  // For paper rows v0 stamps filled_size_usdc = intent.size_usdc, so PnL math
-  // uses (filled_size_usdc / limit_price) as shares.
+  //
+  // bug.5018 — read realized fill data from first-class columns
+  // (`f.price` / `f.shares`) instead of `attributes->>'filled_size_usdc' / 'limit_price'`.
+  // Pre-bug.5018 paper rows stamped filled_size_usdc = intent.size_usdc, which
+  // inflated paper PnL by a 3x+ factor (matrix evaluator reported 182k
+  // realized in an hour on swisstony-trust-twin while live was $43). The
+  // `WHERE f.price IS NOT NULL` filter discriminates post-fix rows from the
+  // legacy intent-padded snapshot — forward-only, no backfill.
+  // Cost basis = shares × price (realized notional); winner payout defaults
+  // to $1.
   const sql = `
     SELECT
       COALESCE(SUM(
         CASE
           WHEN o.outcome = 'winner'
-            AND f.attributes->>'limit_price' ~ '^[0-9]+(\\.[0-9]+)?$'
-            AND (f.attributes->>'limit_price')::numeric > 0
-          THEN ((f.attributes->>'filled_size_usdc')::numeric / (f.attributes->>'limit_price')::numeric)
-               * COALESCE(o.payout, 1.0)::numeric
-               - (f.attributes->>'filled_size_usdc')::numeric
+          THEN f.shares * COALESCE(o.payout, 1.0)::numeric
+               - f.shares * f.price
           WHEN o.outcome = 'loser'
-          THEN -(f.attributes->>'filled_size_usdc')::numeric
+          THEN -(f.shares * f.price)
           ELSE 0
         END
       ), 0)::float8 AS realized_pnl_usdc,
@@ -511,7 +527,8 @@ async function fetchTenantRealizedPnl(
       AND f.observed_at >= '${window.since}'::timestamptz
       AND f.observed_at <  '${window.until}'::timestamptz
       AND f.status IN ('filled','partial')
-      AND f.attributes->>'filled_size_usdc' ~ '^[0-9]+(\\.[0-9]+)?$'
+      AND f.price IS NOT NULL
+      AND f.shares IS NOT NULL
   `;
   const rows = await grafanaPgQuery(grafana.url, grafana.saToken, tenant.dsUid, sql);
   const r = rows[0] ?? {};

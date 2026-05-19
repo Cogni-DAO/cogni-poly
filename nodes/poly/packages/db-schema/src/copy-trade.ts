@@ -205,6 +205,25 @@ export const polyCopyTradeFills = pgTable(
      * PAPER_DISPATCH_IS_ENV_ONLY (poly-trade-executor.ts).
      */
     mode: text("mode").notNull().default("live"),
+    /**
+     * Realized fill VWAP (USDC / shares). Populated on post-place UPDATE
+     * once a fill is observed; NULL for pre-fill rows. Same precision as
+     * `poly_trader_fills.price`. Post-fix paper rows are discriminated by
+     * `price IS NOT NULL` — see bug.5018 discontinuity note (forward-only,
+     * no backfill of legacy paper rows that pre-date the realized-fill wire).
+     */
+    price: numeric("price", { precision: 18, scale: 8 }),
+    /**
+     * Realized shares filled (cumulative across matched levels). Same
+     * precision as `poly_trader_fills.shares`. NULL until fill observed.
+     */
+    shares: numeric("shares", { precision: 20, scale: 8 }),
+    /**
+     * Realized fees in USDC at fill time. Often 0 on prod Polymarket; the
+     * paper-trader sidecar populates this from its fee model. NULL until
+     * fill observed.
+     */
+    feesUsdc: numeric("fees_usdc", { precision: 20, scale: 8 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -250,6 +269,23 @@ export const polyCopyTradeFills = pgTable(
     index("poly_copy_trade_fills_position_lifecycle_idx").on(
       table.billingAccountId,
       table.positionLifecycle
+    ),
+    // bug.5018 — PnL/VWAP aggregation covering index. Mode is in the key
+    // so paper vs live rows don't interleave on the scan; price/shares/
+    // fees_usdc are INCLUDE columns so `SUM(price*shares)/SUM(shares)` is an
+    // index-only scan. Drizzle-orm's index DSL doesn't express INCLUDE, and
+    // the SQL must be `CREATE INDEX CONCURRENTLY` (the table is populated in
+    // prod; a plain CREATE INDEX takes ACCESS EXCLUSIVE on the table and
+    // stalls the mirror-pipeline write path). Both constraints are
+    // hand-authored in the migration SQL. The schema entry below tracks the
+    // keys for drizzle-kit's snapshot; the hand-authored migration carries
+    // CONCURRENTLY + INCLUDE.
+    index("poly_copy_trade_fills_pnl_idx").on(
+      table.billingAccountId,
+      table.targetId,
+      table.marketId,
+      table.mode,
+      table.status
     ),
     // fill_id format is owned by per-source helpers in @cogni/poly-market-provider.
     // Dedupe is enforced by the partial unique index on (target_id, fill_id).
