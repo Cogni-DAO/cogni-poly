@@ -150,7 +150,7 @@ The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile
 
 ### Flight phase 3 → 5 mechanics
 
-- **Flight to candidate-a**: [`candidate-flight.yml`](../../.github/workflows/candidate-flight.yml) resolves digests via [`resolve-pr-build-images.sh`](../../scripts/ci/resolve-pr-build-images.sh), writes them into `deploy/candidate-a-<name>` via [`promote-build-payload.sh`](../../scripts/ci/promote-build-payload.sh) (per-image, iterating `images_for_deploy_unit`), then [`wait-for-argocd.sh`](../../scripts/ci/wait-for-argocd.sh) + [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) block until Argo + rollout + `/version.buildSha` agree.
+- **Flight to candidate-a**: [`candidate-flight.yml`](../../.github/workflows/candidate-flight.yml) resolves digests via [`resolve-pr-build-images.sh`](../../scripts/ci/resolve-pr-build-images.sh), writes them into `deploy/candidate-a-<name>` via [`promote-build-payload.sh`](../../scripts/ci/promote-build-payload.sh) (per-image, iterating `images_for_deploy_unit`), then [`wait-for-argocd.sh`](../../scripts/ci/wait-for-argocd.sh) + [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) block until Argo + rollout agree and every promoted image's `org.opencontainers.image.revision` label matches the per-image source-sha map (task.5006).
 - **Auto-preview on merge**: [`flight-preview.yml`](../../.github/workflows/flight-preview.yml) re-tags `pr-{N}-{sha}` → `preview-{sha}` per image and dispatches `promote-and-deploy.yml`.
 - **Manual prod**: see Phase 5 in the pipeline table above.
 
@@ -162,10 +162,7 @@ The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile
 - `/version.buildSha` matches PR head SHA
 - One real request observed in Loki at the deployed SHA
 
-**Ingress vs non-Ingress probe semantics:**
-
-- **With `deploy.public_url.<env>` in catalog**: `verify-buildsha.sh` curls `<public_url>/version` from outside the cluster on every promote. `/livez` + `/readyz` 200 from outside the cluster.
-- **Without `public_url`** (workers, internal services — `poly-test-worker` is the canonical example): `verify-buildsha.sh` filters the unit as "non-Ingress" and writes a `verified-<name>.txt` marker based on rollout-status alone. Manual `/version.buildSha` proof = SSH read-only to the VM and `curl http://<name>.<namespace>.svc.cluster.local:<port>/version`.
+**Ingress vs non-Ingress probe semantics:** uniform under task.5006. `verify-buildsha.sh` reads `org.opencontainers.image.revision` off the overlay-pinned digest via `crane config` — no HTTP, no Ingress, no `kubectl exec`. Ingress-only signals stay live elsewhere: `/livez` + `/readyz` 200 from outside the cluster for `deploy.public_url.<env>` units (`scripts/ci/smoke-candidate.sh`); for non-Ingress deploy units (workers, internal services — `poly-test-worker` is the canonical example) `kubectl rollout status` covers the rollout side. The build-SHA witness itself is identical across both: same label, same `crane` read, same per-image map.
 
 ---
 
@@ -271,12 +268,9 @@ For multi-image deploy units, the **deploy branch's prior digest pin is authorit
 
 If your sidecar returns IDs or refs that callers persist (order IDs, job IDs, transaction IDs), **namespace them by a per-process `BOOT_ID`** (uuid4().hex[:12] is fine) so they don't collide across pod restarts. Bug.5005 cost two days when the paper-trading sidecar's SQLite-backed `order_id` autoincrement reset on every pod boot and collided with persisted Postgres rows from prior boots (PR #69 fix). Also include `bootId` as a structured-log field so Loki queries can correlate a request to a specific pod incarnation.
 
-### Sidecar buildSha parity (TODO — currently missing)
+### Sidecar buildSha parity (closed by task.5006)
 
-Shape A units get [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) gating every promote against `/version.buildSha`. Sidecars currently have **no equivalent**: a sidecar can be promoted, rolled, and observed Ready while running code that doesn't match the PR head SHA, and the pipeline won't notice — only a behavioral symptom downstream (collisions, wrong output, missing log lines) surfaces the mismatch. Two ways to close this for your new sidecar:
-
-- **Preferred**: expose `/version.buildSha` on the sidecar (port + endpoint), then teach `verify-buildsha.sh` to probe it. Brings sidecars to first-class parity with Shape A.
-- **Fallback**: emit a `bootId`-tagged log line at startup with the build SHA, and add a Loki check to your `/validate-candidate` scorecard that asserts the deployed pod logged the PR head SHA. Cheaper but indirect.
+Sidecars and Shape A units share the same verify gate. Every image baked by `scripts/ci/build-and-push-images.sh` carries `org.opencontainers.image.revision=<build SHA>` at the OCI manifest level; [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) reads the label back via `crane config` off the overlay-pinned digest and asserts it matches the per-image entry in `.promote-state/source-sha-by-app.json`. No `/version` endpoint on the sidecar is required — the witness travels with the digest. Adding a new sidecar gets buildSha parity automatically as long as it builds through the catalog.
 
 ### Validate
 
@@ -329,11 +323,11 @@ These apply across shapes. Failures here cause silent deploy issues that the pip
 
 ### Health probes
 
-| Endpoint   | Purpose                       | k8s probe                                                                                    |
-| ---------- | ----------------------------- | -------------------------------------------------------------------------------------------- |
-| `/livez`   | Process alive, not deadlocked | `livenessProbe` (cheap, no DB)                                                               |
-| `/readyz`  | Ready to accept work          | `readinessProbe` (set false during drain)                                                    |
-| `/version` | `{ buildSha, builtAt }`       | — required for Shape A; [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) reads it |
+| Endpoint   | Purpose                       | k8s probe                                                                                                                                                             |
+| ---------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/livez`   | Process alive, not deadlocked | `livenessProbe` (cheap, no DB)                                                                                                                                        |
+| `/readyz`  | Ready to accept work          | `readinessProbe` (set false during drain)                                                                                                                             |
+| `/version` | `{ buildSha, builtAt }`       | — Shape A operator/debugging convenience; [`verify-buildsha.sh`](../../scripts/ci/verify-buildsha.sh) no longer reads it (task.5006 uses the baked OCI label instead) |
 
 **Health probes belong in k8s manifests, NOT in the Dockerfile.** No `HEALTHCHECK` instruction — it bakes probe logic into the image and prevents orchestrator-specific tuning.
 
