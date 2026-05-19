@@ -42,7 +42,8 @@ When upstream releases a new version we want to track:
 
 Track every patch applied locally so port-forward is auditable.
 
-| When       | What                                                 | Why                                             | Commit / bug ref |
-| ---------- | ---------------------------------------------------- | ----------------------------------------------- | ---------------- |
-| 2026-05-17 | Vendor relocation (no behavior change)               | Substrate for the maker-fill fix                | bug.5005 Phase 1 |
-| 2026-05-17 | `pyproject.toml`: comment out `readme = "README.md"` | README.md not vendored; pip install still works | bug.5005 Phase 1 |
+| When       | What                                                                                                                                  | Why                                                                                                   | Commit / bug ref |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------- |
+| 2026-05-17 | Vendor relocation (no behavior change)                                                                                                | Substrate for the maker-fill fix                                                                      | bug.5005 Phase 1 |
+| 2026-05-17 | `pyproject.toml`: comment out `readme = "README.md"`                                                                                  | README.md not vendored; pip install still works                                                       | bug.5005 Phase 1 |
+| 2026-05-19 | `engine.py`: maker-fill pre-pass + snapshot pass synthesize 1-level book at `order.limit_price` (was `t_price` / observed best level) | Paper must clear at the resting limit, not at the taker's price; eliminates phantom price improvement | bug.5016         |
