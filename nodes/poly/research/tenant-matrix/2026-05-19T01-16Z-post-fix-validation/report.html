@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Tenant Matrix · 0x204f72f3</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0 auto; padding: 22px; max-width: 1100px; line-height: 1.45; }
+h1 { font-size: 20px; font-weight: 600; margin: 0 0 2px; }
+.header-sub { color: #6b7280; font-size: 11px; margin-bottom: 16px; }
+.header-sub code { background: #131826; padding: 1px 5px; border-radius: 3px; }
+.header-sub a { color: #60a5fa; }
+.q { background: linear-gradient(180deg, #0f172a 0%, #131826 100%); border: 2px solid #475569; border-radius: 10px; padding: 22px 26px; margin: 0 0 16px; }
+.q.pos { border-color: #22c55e; }
+.q.neg { border-color: #ef4444; }
+.q.gated { border-color: #6b7280; border-style: dashed; opacity: 0.85; }
+.q-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; }
+.q-number { font-size: 56px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.0; margin: 6px 0 0; color: #e5e7eb; }
+.q.pos .q-number { color: #22c55e; }
+.q.neg .q-number { color: #ef4444; }
+.q.gated .q-number { color: #94a3b8; font-size: 36px; letter-spacing: 0.04em; }
+.q-verdict { font-size: 15px; font-weight: 600; color: #e5e7eb; margin: 4px 0 8px; }
+.q-cause { font-size: 12px; color: #cbd5e1; }
+.q-cause code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 11px; }
+.q-ref { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+.q-ref code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; color: #cbd5e1; }
+.takeaway { background: linear-gradient(180deg, #1f1410 0%, #131826 100%); border: 1px solid #f59e0b; border-radius: 8px; padding: 14px 18px; margin: 0 0 16px; }
+.takeaway h2 { margin: 0 0 8px; font-size: 11px; color: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.takeaway .placeholder { color: #64748b; font-style: italic; font-size: 11px; }
+details { background: #0e1422; border: 1px solid #1f2937; border-radius: 6px; padding: 0; margin: 10px 0; }
+details > summary { cursor: pointer; padding: 12px 16px; font-size: 12px; color: #cbd5e1; font-weight: 600; user-select: none; }
+details > summary:hover { background: #131826; }
+details[open] > summary { border-bottom: 1px solid #1f2937; color: #fbbf24; }
+details > .details-body { padding: 14px 16px; }
+.muted { color: #6b7280; font-size: 11px; }
+.muted code { background: #131826; padding: 1px 4px; border-radius: 3px; color: #cbd5e1; }
+table.ab { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+table.ab th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: 7px 9px; background: #131826; border-bottom: 1px solid #1f2937; }
+table.ab td { padding: 7px 9px; border-bottom: 1px solid #1f2937; font-variant-numeric: tabular-nums; }
+table.ab td.num { text-align: right; font-family: 'SF Mono', Menlo, monospace; }
+table.ab td.role { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; }
+table.ab td.skips { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: #94a3b8; max-width: 380px; }
+table.ab.algo tr.rank-1 td { background: rgba(251,191,36,0.08); }
+table.ab.algo tr.rank-1 td.role { color: #fbbf24 !important; font-weight: 600; }
+table.ab.algo tr.ref td { background: rgba(16,185,129,0.05); border-top: 2px solid #1f2937; }
+table.ab.algo tr.ref td.role { color: #34d399 !important; font-style: italic; }
+.pos { color: #22c55e; } .neg { color: #ef4444; }
+.chart { background: #0e1422; border: 1px solid #1f2937; border-radius: 6px; padding: 6px; margin: 10px 0; }
+.chart svg { display: block; width: 100%; height: auto; }
+.line-chart .chart-title { fill: #cbd5e1; font-size: 13px; font-weight: 600; }
+.line-chart .axis { fill: #94a3b8; font-size: 10px; font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, monospace; }
+.line-chart .legend { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
+.footer-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid #1f2937; font-size: 10px; color: #6b7280; }
+.footer-note a { color: #60a5fa; }</style>
+</head>
+<body>
+<h1>Tenant Matrix Evaluator</h1>
+<div class="header-sub">
+  Target: <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code> · Window: <code>2026-05-18T23:53:00Z</code> → <code>2026-05-19T01:17:18.389Z</code> · 5 tenants · <a href="#appendix">↓ jump to appendix</a>
+</div>
+
+<!-- TAKEAWAY:START -->
+<div class="takeaway">
+  <h2>↗ Post-fix validation of bug.5060 (paper sidecar under-fill)</h2>
+  <p><strong>Primary finding · 85% confidence · class: matrix-ab</strong></p>
+  <p>Post-fix TRUST_TWIN matches PROD LIVE at <strong>99.18%</strong> decision fidelity (1332/1343 exact, 0 twin-only, 0 live-only) with <strong>$9.57 vs $10.67</strong> realized (89.7%, within ±10pp) over a ~1h24m window starting at the 23:53Z pod-roll. Decision and fill axes are clean — <strong>bug.5060 is verified-fixed</strong> on those axes.</p>
+  <p><strong>Residual concern:</strong> 5 of 10 placement attempts on TRUST_TWIN errored as <code>placement_failed</code> (50% of attempts, 0.37% of decisions). 3 of those 5 are <em>real</em> divergences — LIVE successfully placed the same fills. Means the new sidecar digest (bootId externalization fix, PR #69) is rejecting some orders LIVE accepts. Tiny n (10 attempts); cannot tell apart "noise / pod-restart warm-up" from "regression". <strong>Pareto next-fix:</strong> let the window grow to 4-6h, re-run /tenant-matrix-evaluator, and if placement_failed/attempt still &gt;5%, pull paper-sidecar logs for the 3 mismatched fills and file a new bug.</p>
+  <p><strong>Secondary finding · 90% confidence:</strong> Both GAP tenants (candidate-a + preview) produced 0 placements via <em>real</em> planner skip reasons (market_past_end_date 53%, below_market_min ~20%, vwap_floor_breach ~12%, target_dominant_other_side ~10%, followup_not_needed) — not a wiring problem. The position-gap policy correctly rejects this target's current activity profile per <code>nodes/poly/app/src/features/copy-trade/plan-mirror.ts</code>.</p>
+</div>
+<!-- TAKEAWAY:END -->
+
+<div class="q pos">
+  <div class="q-label">Q1 · Does paper twin match prod live?</div>
+  <div class="q-number">99.2%</div>
+  <div class="q-verdict">YES — paper twin matches prod</div>
+  <div class="q-cause">Biggest mismatch: <code>3</code> fills where TWIN said <code>error(placement_failed)</code> but LIVE said <code>placed(ok)</code>.</div>
+</div>
+
+<div class="q ">
+  <div class="q-label">Q2 · Best paper algo (PnL on resolved markets)</div>
+  <div class="q-number">LOW SAMPLE</div>
+  <div class="q-verdict">VALIDATION · candidate-a leads but only 0 resolved markets</div>
+  <div class="q-ref">prod LIVE reference: <code>$0.00</code> over <code>0</code> resolved markets</div>
+</div>
+
+<a id="appendix"></a>
+
+<details>
+  <summary>📊 Q1 detail — top decision mismatches (twin vs live)</summary>
+  <div class="details-body">
+    <p class="muted">shared fills: <code>1343</code> · exact match: <code>1332</code> · outcome match but reason differs: <code>1</code> · outcome disagree: <code>10</code> · twin-only: <code>0</code> · live-only: <code>0</code></p>
+    <table class="ab"><thead><tr><th>twin said</th><th>live said</th><th class="num">count</th></tr></thead><tbody><tr><td>error <span class="muted">(placement_failed)</span></td><td>placed <span class="muted">(ok)</span></td><td class="num"><strong>3</strong></td></tr><tr><td>placed <span class="muted">(ok)</span></td><td>skipped <span class="muted">(followup_position_too_small)</span></td><td class="num"><strong>3</strong></td></tr><tr><td>error <span class="muted">(placement_failed)</span></td><td>skipped <span class="muted">(followup_position_too_small)</span></td><td class="num"><strong>2</strong></td></tr><tr><td>placed <span class="muted">(ok)</span></td><td>error <span class="muted">(pending_insert_failed)</span></td><td class="num"><strong>1</strong></td></tr><tr><td>skipped <span class="muted">(followup_position_too_small)</span></td><td>placed <span class="muted">(ok)</span></td><td class="num"><strong>1</strong></td></tr></tbody></table>
+    <p class="muted" style="margin-top: 12px">Visual sanity check — cumulative <code>$ filled</code> by tenant. Visual diverges from numbers when one tenant filled mostly outside the window; trust the table above.</p>
+    <div class="chart"><svg viewBox="0 0 1100 260" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="line-chart">
+  <defs><linearGradient id="grad-0" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-1" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0.0"/>
+    </linearGradient></defs>
+  <text x="12" y="20" class="chart-title">$ filled — twin vs live</text>
+  <g transform="translate(76, 22)">
+        <rect width="10" height="10" rx="2" fill="#fbbf24"/>
+        <text x="16" y="9" class="legend">TWIN · paper</text>
+      </g><g transform="translate(244, 22)">
+        <rect width="10" height="10" rx="2" fill="#34d399"/>
+        <text x="16" y="9" class="legend">LIVE · real</text>
+      </g>
+  <line x1="76" y1="224" x2="1076" y2="224" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="179" x2="1076" y2="179" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="134" x2="1076" y2="134" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="89" x2="1076" y2="89" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="44" x2="1076" y2="44" stroke="#1f2937" stroke-width="0.5"/>
+  <line x1="76" y1="224" x2="1076" y2="224" stroke="#475569" stroke-width="1"/>
+  <path d="M -552.6586500168335,224 L -552.6586500168335,224 L 159.03038773807233,107.57917442321788 L 870.7194254929782,62.52403778342651 L 870.7194254929782,224 Z" fill="url(#grad-0)" /><polyline points="-552.6586500168335,224 159.03038773807233,107.57917442321788 870.7194254929782,62.52403778342651" fill="none" stroke="#fbbf24" stroke-width="1.75" stroke-linejoin="round"/><path d="M -552.6586500168335,224 L -552.6586500168335,152.82747759571038 L 159.03038773807233,44 L 159.03038773807233,224 Z" fill="url(#grad-1)" /><polyline points="-552.6586500168335,152.82747759571038 159.03038773807233,44" fill="none" stroke="#34d399" stroke-width="1.75" stroke-linejoin="round"/>
+  <text x="68" y="228" text-anchor="end" class="axis">$0.00</text><text x="68" y="183" text-anchor="end" class="axis">$2.67</text><text x="68" y="138" text-anchor="end" class="axis">$5.33</text><text x="68" y="93" text-anchor="end" class="axis">$8.00</text><text x="68" y="48" text-anchor="end" class="axis">$11</text>
+  <text x="76" y="244" text-anchor="middle" class="axis">May 18 23:00</text><text x="326" y="244" text-anchor="middle" class="axis">May 19 00:00</text><text x="576" y="244" text-anchor="middle" class="axis">May 19 00:00</text><text x="826" y="244" text-anchor="middle" class="axis">May 19 00:00</text><text x="1076" y="244" text-anchor="middle" class="axis">May 19 01:00</text>
+</svg></div>
+  </div>
+</details>
+
+<details>
+  <summary>📊 Q2 detail — full ranking (all paper tenants + prod reference)</summary>
+  <div class="details-body">
+    <p class="muted">swisstony traded <code>173</code> markets totaling <code>$150734.33</code>. <code>PnL $</code> = realized gain/loss on markets resolved in window. <code>Δ vs swisstony</code> = 100% − (our markets ∩ swisstony's markets) ÷ swisstony's markets.</p>
+    <table class="ab algo"><thead><tr><th>tenant</th><th class="num">PnL $</th><th class="num">resolved</th><th class="num">W/L</th><th class="num">Δ vs swisstony</th><th class="num">$ filled</th><th class="num">capture %</th></tr></thead><tbody><tr class="rank-1"><td class="role" style="color:#34d399">VALIDATION · candidate-a 🏆</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">98.3%</td><td class="num">$12.52</td><td class="num">0.008%</td></tr><tr class=""><td class="role" style="color:#fbbf24">TRUST_TWIN · preview (control)</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">98.3%</td><td class="num">$9.57</td><td class="num">0.006%</td></tr><tr class=""><td class="role" style="color:#60a5fa">GAP · candidate-a</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">100.0%</td><td class="num">$0.00</td><td class="num">0.000%</td></tr><tr class=""><td class="role" style="color:#f472b6">GAP · preview</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">100.0%</td><td class="num">$0.00</td><td class="num">0.000%</td></tr><tr class="ref"><td class="role" style="color:#a78bfa">LIVE · production (prod ref)</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">98.3%</td><td class="num">$10.67</td><td class="num">0.007%</td></tr></tbody></table>
+    <div class="chart"><svg viewBox="0 0 1100 280" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="line-chart">
+  <defs><linearGradient id="grad-1" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-3" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-4" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.0"/>
+    </linearGradient></defs>
+  <text x="12" y="20" class="chart-title">$ filled — all paper tenants</text>
+  <g transform="translate(76, 22)">
+        <rect width="10" height="10" rx="2" fill="#60a5fa"/>
+        <text x="16" y="9" class="legend">GAP · candidate-a</text>
+      </g><g transform="translate(244, 22)">
+        <rect width="10" height="10" rx="2" fill="#34d399"/>
+        <text x="16" y="9" class="legend">VALIDATION · candidate-a</text>
+      </g><g transform="translate(412, 22)">
+        <rect width="10" height="10" rx="2" fill="#f472b6"/>
+        <text x="16" y="9" class="legend">GAP · preview</text>
+      </g><g transform="translate(580, 22)">
+        <rect width="10" height="10" rx="2" fill="#fbbf24"/>
+        <text x="16" y="9" class="legend">TRUST_TWIN · preview</text>
+      </g><g transform="translate(748, 22)">
+        <rect width="10" height="10" rx="2" fill="#a78bfa"/>
+        <text x="16" y="9" class="legend">LIVE · production</text>
+      </g>
+  <line x1="76" y1="244" x2="1076" y2="244" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="194" x2="1076" y2="194" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="144" x2="1076" y2="144" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="94" x2="1076" y2="94" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="44" x2="1076" y2="44" stroke="#1f2937" stroke-width="0.5"/>
+  <line x1="76" y1="244" x2="1076" y2="244" stroke="#475569" stroke-width="1"/>
+  <path d="M -552.6586500168335,244 L -552.6586500168335,176.57570050814883 L 159.03038773807233,81.53649351736746 L 870.7194254929782,44 L 870.7194254929782,244 Z" fill="url(#grad-1)" /><polyline points="-552.6586500168335,176.57570050814883 159.03038773807233,81.53649351736746 870.7194254929782,44" fill="none" stroke="#34d399" stroke-width="1.75" stroke-linejoin="round"/><path d="M -552.6586500168335,244 L -552.6586500168335,244 L 159.03038773807233,133.7926066600764 L 870.7194254929782,91.14208308712082 L 870.7194254929782,244 Z" fill="url(#grad-3)" /><polyline points="-552.6586500168335,244 159.03038773807233,133.7926066600764 870.7194254929782,91.14208308712082" fill="none" stroke="#fbbf24" stroke-width="1.75" stroke-linejoin="round"/><path d="M -552.6586500168335,244 L -552.6586500168335,176.62598738031664 L 159.03038773807233,73.60668159750256 L 159.03038773807233,244 Z" fill="url(#grad-4)" /><polyline points="-552.6586500168335,176.62598738031664 159.03038773807233,73.60668159750256" fill="none" stroke="#a78bfa" stroke-width="1.75" stroke-linejoin="round"/>
+  <text x="68" y="248" text-anchor="end" class="axis">$0.00</text><text x="68" y="198" text-anchor="end" class="axis">$3.13</text><text x="68" y="148" text-anchor="end" class="axis">$6.26</text><text x="68" y="98" text-anchor="end" class="axis">$9.39</text><text x="68" y="48" text-anchor="end" class="axis">$13</text>
+  <text x="76" y="264" text-anchor="middle" class="axis">May 18 23:00</text><text x="326" y="264" text-anchor="middle" class="axis">May 19 00:00</text><text x="576" y="264" text-anchor="middle" class="axis">May 19 00:00</text><text x="826" y="264" text-anchor="middle" class="axis">May 19 00:00</text><text x="1076" y="264" text-anchor="middle" class="axis">May 19 01:00</text>
+</svg></div>
+  </div>
+</details>
+
+<details>
+  <summary>🔍 Decisions reference — skip-reason breakdown per tenant</summary>
+  <div class="details-body">
+    <p class="muted">Why did orders not place? Decision-side counts and top 3 skip reasons per tenant. Explanatory only — NOT a ranking surface.</p>
+    <table class="ab">
+      <thead><tr><th>tenant</th><th class="num">decisions</th><th class="num">placed</th><th class="num">placement rate</th><th class="num">Δ rate vs control</th><th>top skip reasons</th></tr></thead>
+      <tbody><tr><td class="role" style="color:#fbbf24">TRUST_TWIN · preview</td><td class="num">1344</td><td class="num">5</td><td class="num">0.37%</td><td class="num">—</td><td class="skips">market_past_end_date=712 · below_target_percentile=289 · vwap_floor_breach=167</td></tr><tr><td class="role" style="color:#60a5fa">GAP · candidate-a</td><td class="num">1343</td><td class="num">0</td><td class="num">0.00%</td><td class="num">-100.0%</td><td class="skips">market_past_end_date=711 · below_market_min=255 · vwap_floor_breach=166</td></tr><tr><td class="role" style="color:#34d399">VALIDATION · candidate-a</td><td class="num">1343</td><td class="num">13</td><td class="num">0.97%</td><td class="num">160.2%</td><td class="skips">market_past_end_date=711 · below_target_percentile=251 · vwap_floor_breach=166</td></tr><tr><td class="role" style="color:#f472b6">GAP · preview</td><td class="num">1344</td><td class="num">0</td><td class="num">0.00%</td><td class="num">-100.0%</td><td class="skips">market_past_end_date=712 · below_market_min=302 · vwap_floor_breach=167</td></tr><tr><td class="role" style="color:#a78bfa">LIVE · production</td><td class="num">1343</td><td class="num">5</td><td class="num">0.37%</td><td class="num">0.1%</td><td class="skips">market_past_end_date=711 · below_target_percentile=290 · vwap_floor_breach=166</td></tr></tbody>
+    </table>
+  </div>
+</details>
+
+<details>
+  <summary>🤖 AI agent appendix — what to investigate next</summary>
+  <div class="details-body">
+    <p class="muted">If <strong>Q1 &lt; 99%</strong>: paper sidecar is missing planner gates. Top mismatch reason names the gate (e.g. <code>followup_position_too_small</code> means the paper sidecar's planner is letting through orders the live planner correctly skips). Cite <code>nodes/poly/sidecars/paper-trader/server.py</code> or the planner gate in <code>nodes/poly/app/src/features/copy-trade/plan-mirror.ts</code> in the LLM finding.</p>
+    <p class="muted">If <strong>Q2 is GATED</strong>: do NOT promote any paper policy. Fix Q1 first. If Q2 is ungated and a paper tenant beats prod ref with ≥3 resolved markets, that's the promotion candidate.</p>
+    <p class="muted">Many <strong>live-only fills</strong> (in mismatch summary) = twin's wallet-watch missed entire chunks of target activity. Check poll cadence + websocket health.</p>
+    <p class="muted">Full structured data: <a href="bundle.json">bundle.json</a> · LLM stub: <a href="findings.json">findings.json</a>.</p>
+  </div>
+</details>
+
+<div class="footer-note">
+  Tool: <code>nodes/poly/scripts/tenant-matrix-evaluator.ts</code> · Skill: <code>/tenant-matrix-evaluator</code> · Captured: <code>2026-05-19T01:17:41.805Z</code>
+</div>
+
+</body>
+</html>

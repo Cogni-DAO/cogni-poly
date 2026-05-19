@@ -1,0 +1,10 @@
+{
+  "report_path": "nodes/poly/research/tenant-matrix/2026-05-19T01-16Z-post-fix-validation/report.html",
+  "primary_class": "matrix-ab",
+  "primary_confidence": 0.85,
+  "primary_one_liner": "Post-fix TRUST_TWIN matches PROD LIVE at 99.18% decision fidelity (1332/1343) with $9.57 vs $10.67 realized (89.7%, within ±10pp) — bug.5060 (paper sidecar under-fill) is verified-fixed on the decision and fill axes. Remaining concern: 5 of 10 placement attempts on TRUST_TWIN errored as placement_failed (50% of attempts, 0.37% of decisions); 3 of those 5 were real divergences where LIVE successfully placed, so the new sidecar digest is rejecting some orders LIVE accepts. Sample tiny (n=10 attempts) — re-evaluate after 4-6h of post-rollout data accumulates.",
+  "secondary_class": null,
+  "secondary_confidence": 0.9,
+  "secondary_one_liner": "Both GAP tenants (candidate-a + preview) legitimately produced 0 placements via real planner skip reasons (market_past_end_date 53%, below_market_min ~20%, vwap_floor_breach ~12%, target_dominant_other_side ~10%, followup_not_needed) — not a wiring problem; the position-gap policy correctly rejects this target's recent activity in the current window.",
+  "authored_at": "2026-05-19T01:20:00Z"
+}
