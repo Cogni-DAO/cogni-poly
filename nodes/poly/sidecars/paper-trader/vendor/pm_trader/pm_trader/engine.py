@@ -483,14 +483,16 @@ class Engine:
            pending order, scan Polymarket trade prints on its tokenId since
            the last poll. Any trade that crosses our limit (BUY: SELL-taker
            trade at price ≤ limit; SELL: BUY-taker trade at price ≥ limit)
-           fills the order at the trade's price for ``min(remaining_intent,
-           trade.size)``. This is what catches resting-maker fills that the
-           snapshot path misses.
+           fills the order at ``order.limit_price`` for ``min(remaining_intent,
+           trade.size)`` (bug.5016 — paper must not pocket free price
+           improvement past its own quote).
 
-        2. **Snapshot taker pass** (upstream behavior). For orders not filled
-           by the pre-pass, check the current orderbook: BUY orders only fill
-           when current best_ask ≤ limit, SELL orders only fill when best_bid
-           ≥ limit. Guarantees no "price-through" fills.
+        2. **Snapshot taker pass** (upstream behavior, Cogni-poly patched).
+           For orders not filled by the pre-pass, check the current orderbook:
+           BUY orders fill when current best_ask ≤ limit, SELL orders fill when
+           best_bid ≥ limit. Fills clear at ``order.limit_price`` for the total
+           size at crossing levels (bug.5016). Guarantees no "price-through"
+           fills.
         """
         self._require_account()
         results = []
@@ -524,22 +526,43 @@ class Engine:
                 book = self.api.get_order_book(token_id)
                 fee_rate_bps = self.api.get_fee_rate(token_id)
 
+                # Cogni-poly local patch (bug.5016). When the snapshot crosses
+                # our limit, fill at ``order.limit_price``, not at the observed
+                # best-ask/best-bid. As the resting maker, our quote would have
+                # been hit at the limit — paper must not pocket free price
+                # improvement no real CLOB would have granted. Fill size is
+                # bounded by the total liquidity at crossing levels: at least
+                # that much taker flow must have crossed us during the poll.
                 if order.side == "buy":
-                    # Only fill at ask levels <= limit_price
-                    best_ask = min((l.price for l in book.asks), default=None)
-                    if best_ask is None or best_ask > order.limit_price:
+                    crossing_size = sum(
+                        l.size for l in book.asks if l.price <= order.limit_price
+                    )
+                    if crossing_size <= 0:
                         continue
+                    syn_book = OrderBook(
+                        bids=[],
+                        asks=[OrderBookLevel(
+                            price=order.limit_price, size=crossing_size,
+                        )],
+                    )
                     fill = simulate_buy_fill(
-                        book, order.amount, fee_rate_bps, "fak",
+                        syn_book, order.amount, fee_rate_bps, "fak",
                         max_price=order.limit_price,
                     )
                 else:
-                    # Only fill at bid levels >= limit_price
-                    best_bid = max((l.price for l in book.bids), default=None)
-                    if best_bid is None or best_bid < order.limit_price:
+                    crossing_size = sum(
+                        l.size for l in book.bids if l.price >= order.limit_price
+                    )
+                    if crossing_size <= 0:
                         continue
+                    syn_book = OrderBook(
+                        bids=[OrderBookLevel(
+                            price=order.limit_price, size=crossing_size,
+                        )],
+                        asks=[],
+                    )
                     fill = simulate_sell_fill(
-                        book, order.amount, fee_rate_bps, "fak",
+                        syn_book, order.amount, fee_rate_bps, "fak",
                         min_price=order.limit_price,
                     )
 
@@ -734,6 +757,14 @@ class Engine:
 
                     # Side semantics: taker side opposite of resting limit.
                     # See `api.get_trades_since` docstring.
+                    #
+                    # Cogni-poly local patch (bug.5016). The synthesized 1-level
+                    # book is built at ``order.limit_price``, NOT ``t_price``.
+                    # As the resting maker, our quote held queue priority at the
+                    # limit and would have been hit at the limit — the taker
+                    # never sees a price improvement past our quote. Sizing the
+                    # synthesized level at ``remaining_trade_size`` still caps
+                    # fills to the taker volume that actually crossed.
                     if order.side == "buy":
                         if t_side != "SELL" or t_price > order.limit_price:
                             continue
@@ -741,7 +772,7 @@ class Engine:
                             bids=[],
                             asks=[
                                 OrderBookLevel(
-                                    price=t_price,
+                                    price=order.limit_price,
                                     size=remaining_trade_size,
                                 )
                             ],
@@ -759,7 +790,7 @@ class Engine:
                         syn_book = OrderBook(
                             bids=[
                                 OrderBookLevel(
-                                    price=t_price,
+                                    price=order.limit_price,
                                     size=remaining_trade_size,
                                 )
                             ],

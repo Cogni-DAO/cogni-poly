@@ -581,3 +581,147 @@ class TestScanDetailDiagnostic:
         # Sample fields present (anonymous, public market data)
         assert "sample_order_side=buy" in msg
         assert "sample_trade_side=SELL" in msg
+
+
+# ---------------------------------------------------------------------------
+# Fill-price pinning (Cogni-poly local patch, bug.5016)
+#
+# Both fill paths must clear at the order's ``limit_price`` — never at a
+# better price observed in the trade print or the live book. As the resting
+# maker we'd have held queue priority at our limit; paper must not pocket a
+# price improvement that the real CLOB would have given the taker, not us.
+# ---------------------------------------------------------------------------
+
+
+def _latest_trade_row(engine: Engine) -> dict:
+    """Return the most recent trade row written by the engine."""
+    cur = engine.db.conn.execute(
+        "SELECT outcome, side, avg_price, shares, amount_usd "
+        "FROM trades ORDER BY id DESC LIMIT 1"
+    )
+    row = cur.fetchone()
+    assert row is not None, "expected a trade row to be inserted"
+    keys = ("outcome", "side", "avg_price", "shares", "amount_usd")
+    return dict(zip(keys, row))
+
+
+class TestFillPriceAtLimit:
+    def test_buy_maker_fill_records_at_limit_not_trade_price(
+        self, engine: Engine
+    ):
+        """BUY @0.32 + SELL-taker print at 0.20 → fill at 0.32, not 0.20.
+
+        Worked example from bug.5016: in real CLOB our 0.32 bid has queue
+        priority and gets hit at 0.32. Paper must not pocket the 12c/share
+        of phantom improvement.
+        """
+        _make_buy(engine, amount=32.0, limit=0.32)  # intent ≈ 100 shares @ limit
+        _mock_api(engine, trades=[_trade(price=0.20, size=500, side="SELL")])
+
+        results = engine.check_orders()
+
+        assert len(results) == 1
+        assert results[0]["action"] == "filled"
+        trade = _latest_trade_row(engine)
+        assert trade["side"] == "buy"
+        assert trade["avg_price"] == pytest.approx(0.32)
+        # qty = min(intent_at_limit=100, trade.size=500) = 100; cost = 32.0
+        assert trade["shares"] == pytest.approx(100.0)
+        assert trade["amount_usd"] == pytest.approx(32.0)
+
+    def test_sell_maker_fill_records_at_limit_not_trade_price(
+        self, engine: Engine
+    ):
+        """SELL @0.50 + BUY-taker print at 0.60 → fill at 0.50, not 0.60."""
+        _make_sell(engine, shares=10, limit=0.50)
+        _mock_api(engine, trades=[_trade(price=0.60, size=500, side="BUY")])
+
+        results = engine.check_orders()
+
+        assert len(results) == 1
+        assert results[0]["action"] == "filled"
+        trade = _latest_trade_row(engine)
+        assert trade["side"] == "sell"
+        assert trade["avg_price"] == pytest.approx(0.50)
+        # qty = min(intent=10, trade.size=500) = 10; proceeds = 5.0
+        assert trade["shares"] == pytest.approx(10.0)
+        assert trade["amount_usd"] == pytest.approx(5.0)
+
+    def test_buy_maker_fill_partial_when_trade_smaller_than_intent(
+        self, engine: Engine
+    ):
+        """qty = min(intent_at_limit, trade.size). Trade is smaller → partial,
+        and price still records at limit."""
+        _make_buy(engine, amount=32.0, limit=0.32)  # intent ≈ 100 shares
+        _mock_api(engine, trades=[_trade(price=0.20, size=40, side="SELL")])
+
+        results = engine.check_orders()
+
+        assert len(results) == 1
+        assert results[0]["action"] == "filled"
+        trade = _latest_trade_row(engine)
+        assert trade["avg_price"] == pytest.approx(0.32)
+        # qty = min(100, 40) = 40; cost = 40 * 0.32 = 12.80
+        assert trade["shares"] == pytest.approx(40.0)
+        assert trade["amount_usd"] == pytest.approx(12.80)
+
+    def test_buy_snapshot_fill_records_at_limit_not_best_ask(
+        self, engine: Engine
+    ):
+        """Snapshot pass with best_ask=0.55 well below limit=0.59 → fill at
+        0.59 (our queue-priority quote), not 0.55. Regression for the
+        'transient book move' branch of bug.5016."""
+        _make_buy(engine, amount=59.0, limit=0.59)  # intent ≈ 100 shares
+        _mock_api(
+            engine,
+            book=_book(asks=[(0.55, 500)]),
+            trades=[],
+        )
+
+        results = engine.check_orders()
+
+        assert len(results) == 1
+        assert results[0]["action"] == "filled"
+        trade = _latest_trade_row(engine)
+        assert trade["avg_price"] == pytest.approx(0.59)
+        assert trade["shares"] == pytest.approx(100.0)
+        assert trade["amount_usd"] == pytest.approx(59.0)
+
+    def test_sell_snapshot_fill_records_at_limit_not_best_bid(
+        self, engine: Engine
+    ):
+        """Snapshot pass with best_bid=0.70 well above limit=0.50 → fill at
+        0.50, not 0.70."""
+        _make_sell(engine, shares=10, limit=0.50)
+        _mock_api(
+            engine,
+            book=_book(bids=[(0.70, 500)]),
+            trades=[],
+        )
+
+        results = engine.check_orders()
+
+        assert len(results) == 1
+        assert results[0]["action"] == "filled"
+        trade = _latest_trade_row(engine)
+        assert trade["avg_price"] == pytest.approx(0.50)
+        assert trade["shares"] == pytest.approx(10.0)
+        assert trade["amount_usd"] == pytest.approx(5.0)
+
+    def test_no_double_fill_when_both_paths_match_under_5016(
+        self, engine: Engine
+    ):
+        """NO_DOUBLE_FILL invariant (bug.5005) still holds after bug.5016:
+        maker path fills at limit, snapshot path must skip the same order."""
+        _make_buy(engine, amount=10.0, limit=0.50)
+        _mock_api(
+            engine,
+            book=_book(asks=[(0.40, 500)]),
+            trades=[_trade(price=0.30, size=200, side="SELL")],
+        )
+
+        results = engine.check_orders()
+
+        assert len(results) == 1
+        trade = _latest_trade_row(engine)
+        assert trade["avg_price"] == pytest.approx(0.50)
