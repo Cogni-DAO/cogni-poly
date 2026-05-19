@@ -19,13 +19,13 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    digest: "sha256:3bc8eb43bd3c13e1e5d50fb3bff0b7e9e972ada3cc0d4166c9d7ee09ac572d57"
+    digest: "sha256:1e81290e01df1d735b0b87790fdc5b2a0a0be5e9e278c1a896ec53dbd55205b9"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    digest: "sha256:4826f40863aaa3aa7d195244b42cb9d88f7fb1a3afd698034936696869a06ff4"
+    digest: "sha256:b4007e7a37a3f2a309934da34bba7e4c3e0adea616df1cc9e57db7258135d83c"
   - name: ghcr.io/cogni-dao/poly-echo-sidecar
     newName: ghcr.io/cogni-dao/poly-echo-sidecar
-    digest: "sha256:22c6fa46433748ba25737207bde0efdf1b469ef76ce99e2785e5234aa8e4e902"
+    digest: "sha256:910e7dcc244c20963cff156fb9d8a1e3bfd5ec5a5c63c56325e04c067fab322d"
   # Sidecar digests are written by promote-build-payload + image-name-aware
   # promote-k8s-image (catalog v2). The poly-echo-sidecar placeholder newTag is
   # overwritten on first promote. Container shape lives in each sidecar's
