@@ -22,7 +22,7 @@ images:
     digest: "sha256:7e5ca27f8e942df5afbae9bc5fdcb4482c1c086f0e25866409803d5041bcf4de"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    digest: "sha256:a506eea075eb1eebcfd65936cef5d8bb7b94f2eea9efb2e8830625d4d72101d3"
+    digest: "sha256:59353b8cdb8e8d729f48132e3d0b7353a7d8b80d41bc4abeae0fd07e74bc33b8"
   - name: ghcr.io/cogni-dao/poly-echo-sidecar
     newName: ghcr.io/cogni-dao/poly-echo-sidecar
     digest: "sha256:6fba7bd0dfc161cb4b41d1cb5ed74d04811765f025d5a9f8632842b165507688"
