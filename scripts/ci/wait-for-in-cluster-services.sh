@@ -40,7 +40,7 @@
 #
 # Adds: extend the case statement below when a new in-cluster deployment
 # needs gating. Promotion to a `k8s_deployment` field on infra/catalog/*.yaml
-# (CATALOG_IS_SSOT, axiom 16) is the right home if/when a fifth node lands.
+# (CATALOG_IS_SSOT, axiom 16) is the right home when this allowlist grows.
 
 set -euo pipefail
 
@@ -63,7 +63,7 @@ SERVICES=()
 for node in "${_NODES[@]}"; do
   case "$node" in
     operator | poly | resy) SERVICES+=("${node}-node-app") ;;
-    scheduler-worker | poly-test-worker) SERVICES+=("${node}") ;;
+    scheduler-worker | poly-test-worker | infratest-shape-a) SERVICES+=("${node}") ;;
     *)
       echo "::error::wait-for-in-cluster-services: unknown node '$node' in PROMOTED_APPS"
       exit 1

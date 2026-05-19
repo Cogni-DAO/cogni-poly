@@ -138,6 +138,7 @@ A pod with its own Deployment, Service, optional Ingress, and per-env deploy bra
       files:
         - path: "infra/catalog/<name>.yaml"
   ```
+- [ ] **[`scripts/ci/wait-for-in-cluster-services.sh`](../../scripts/ci/wait-for-in-cluster-services.sh)** — add the deploy unit to the `PROMOTED_APPS` → Kubernetes Deployment mapping. Internal Shape A services usually map `<name>` → `<name>`; node apps map `<node>` → `<node>-node-app`.
 - [ ] **`biome/base.json`** — if you add `tsup.config.ts` and/or `vitest.config.ts` (both use `export default`), append their paths to the `noDefaultExport: off` overrides allowlist. Known Shape A friction; tracked as a follow-up to fold config-file globbing into the rule.
 
 ### Deploy branch bootstrap (chicken-and-egg)
