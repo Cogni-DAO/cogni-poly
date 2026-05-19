@@ -35,7 +35,7 @@ These propositions are load-bearing for any conclusion drawn from paper data:
 - **PAPER_INHERITS_AT_LEAST_ONE_BIAS** — every paper-side number in the matrix-evaluator output (`realized_size_usdc`, `pnl_usdc`, fill rate, decision counts, VWAP) inherits at least one of S1–S9 below. A conclusion that ignores all of them is unsupported.
 - **RELATIVE_BEATS_ABSOLUTE** — two paper tenants on the same simulator path admit relative comparison (biases approximately cancel for ranking). Absolute comparison paper-vs-LIVE composes biases and does not.
 - **PNL_REQUIRES_FILL_PRICE** — until [bug.5018](https://poly.cognidao.org/api/v1/work/items/bug.5018) lands, paper PnL is uncomputable from the cogni ledger. Any "paper $X profit" claim is unsupported.
-- **POSITION_STATE_IS_NOT_PORTED** — paper and live track positions in different stores (sidecar SQLite vs. chain-derived `poly_trader_position_snapshots`). Planner branches gated on position state DIVERGE between paper and live ([bug.5015](https://poly.cognidao.org/api/v1/work/items/bug.5015)).
+- **POSITION_STATE_IS_PORTED_VIA_FILLS** — paper and live share one position-of-truth: `MirrorPositionView` is derived from `poly_copy_trade_fills` aggregated, mode-discriminated (`order-ledger.types.ts:95-110`, intent-based). There is no separate paper-position table and introducing one would be an anti-pattern. Bug.5015 divergence is in the ROW CONTENT (intent-vs-realized USDC, cancel rates) — fixable upstream — not in a table-of-truth split.
 - **SHORTCOMINGS_ARE_GATEKEEPERS** — promoting an algo from paper to live-$ allocation requires satisfying the trust gate in §"Trust gate" below. No paper signal alone justifies scaling live-$.
 
 ## Motivation (read first)
@@ -170,11 +170,19 @@ No `fill_price`. No `total_shares`. No `fees_usdc`. The engine's internal `db.in
 - LIVE (prod, tps): 25 placed, 16 filled
 - 2.84× placement gap; 84.1% EXACT decision match (not the 98.4% headline — see [bug.5015](https://poly.cognidao.org/api/v1/work/items/bug.5015))
 
-**Root**: the planner's branches (`layer_scale_in`, `followup_position_too_small`, `target_position_below_threshold`, `position_cap_reached`, `already_resting`) are gated on the mirror's CURRENT POSITION STATE. LIVE has months of accumulated real positions; TRUST_TWIN paper account is newer with thinner state. Same target fill triggers different branches.
+**Architectural note (CORRECTED)**: paper and live do NOT read different position-state stores. `MirrorPositionView` is derived from `poly_copy_trade_fills` aggregated (see `order-ledger.types.ts:95-110` — quantities are intent-based, computed from `attributes.size_usdc / attributes.limit_price`, including rows in `pending | open | filled | partial`). Both modes write to the same mode-discriminated table and the planner aggregates over both. **There is no separate paper-position table; introducing one would be an anti-pattern given the existing `mode` discriminator.**
+
+**Root (revised)**: the divergence is in the ROWS, not the table. Paper places more orders, cancels more, fills differently (due to upstream simulator biases S1–S7 + bug.5018's intent-vs-realized USDC issue). When the planner aggregates those rows for the position view, paper sees a different intent-based position than live for the same target — even though both reach into the same table. Same gate (`target_position_below_threshold`, `position_cap_reached`, etc.) returns different verdicts because the inputs differ.
 
 **Impact**: TRUST_TWIN as a faithful prediction of LIVE behavior is broken even on identical config. Comparing paper tenants RELATIVE to each other (both running the same biased simulator) is more trustworthy than absolute comparison to LIVE.
 
-**Filed**: [bug.5015](https://poly.cognidao.org/api/v1/work/items/bug.5015). Candidate fixes: bootstrap paper from LIVE position snapshot at tenant creation; periodic reset; or document and accept the fidelity ceiling.
+**Filed**: [bug.5015](https://poly.cognidao.org/api/v1/work/items/bug.5015). Candidate fixes:
+
+1. **Land [bug.5018](https://poly.cognidao.org/api/v1/work/items/bug.5018) first** — once paper fills carry realized notional + fill_price (not intent), the intent-based MirrorPositionView for paper will diverge less from live's. Expected to absorb a chunk of the gap.
+2. **Bootstrap paper from LIVE fills at tenant creation** — seed `poly_copy_trade_fills (mode='paper', billing_account_id=<twin>)` from existing live rows so the aggregated position starts at parity. Configurable per tenant.
+3. **Periodic reset** of paper position by re-seeding from live. Crude but works.
+
+Re-measure after each step. The "introduce a new table" path is **not** a candidate — it would multiply rather than reduce drift.
 
 ### S9 — Cross-tick fill aggregation (OPEN, low priority)
 
