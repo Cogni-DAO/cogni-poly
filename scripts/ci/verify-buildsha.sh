@@ -42,13 +42,10 @@
 #                                       Tests inject a fake on $PATH; CI runners
 #                                       use imjasonh/setup-crane@v0.4.
 #
-# Compatibility shims:
-#   DEPLOY_ENVIRONMENT  → if set and OVERLAY_ENV unset, used as OVERLAY_ENV
-#                         (callers in candidate-flight / promote-and-deploy
-#                         still export the legacy var).
-#   DOMAIN, EXPECTED_BUILDSHA, CUTOVER_TIMEOUT, CUTOVER_SLEEP — accepted but
-#   ignored. Retained so workflow YAML can land in a separate PR; the new
-#   verifier has no HTTP / polling concept.
+# Compatibility shim:
+#   DEPLOY_ENVIRONMENT  → if set and OVERLAY_ENV unset, used as OVERLAY_ENV.
+#                         Both workflow callers set OVERLAY_ENV explicitly;
+#                         this shim only protects laptop CLI runs.
 
 set -euo pipefail
 
@@ -100,16 +97,25 @@ for k, v in sorted(data.items()):
 PY
 )
 
-# Crane-readable label off a digest-pinned image ref. Empty stdout when the
-# label is absent OR crane errored (network / auth / digest gone). The caller
-# disambiguates label-missing vs digest-not-resolvable by checking whether
-# crane exited non-zero — but for verify purposes both are TRANSITION_SAFE
-# warn-skips (we have no recourse from CI; treat as "no contrary evidence").
+# Read the revision label off a digest-pinned image ref via two distinct
+# steps so the caller can distinguish three states:
+#   - crane succeeds + label present      → label echoed to stdout
+#   - crane succeeds + label absent       → empty stdout, exit 0 (TRANSITION_SAFE)
+#   - crane fails (auth, network, 404)    → empty stdout, exit non-zero (HARD FAIL —
+#                                           an unreadable registry is an infra fault,
+#                                           NOT a green skip; without this, a runner
+#                                           that lost its docker-login would silently
+#                                           pass every image.)
+# CRANE_CMD is intentionally word-split so tests can inject `bash /path/fake.sh`.
 read_revision_label() {
-  local ref="$1"
-  ${CRANE_CMD} config "$ref" 2>/dev/null \
-    | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("config",{}).get("Labels") or {}).get("org.opencontainers.image.revision",""))' \
-    2>/dev/null || true
+  local ref="$1" config rc
+  config=$(${CRANE_CMD} config "$ref" 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    printf '%s' "$config" >&2
+    return "$rc"
+  fi
+  printf '%s' "$config" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("config",{}).get("Labels") or {}).get("org.opencontainers.image.revision",""))'
 }
 
 FAILED=0
@@ -132,6 +138,9 @@ for node in "${NODE_ARR[@]}"; do
   fi
 
   # image_name → "image_name@sha256:..." (or tag form if not yet digest-pinned).
+  # `unset` first: `declare -A var=()` reset semantics are bash-version-
+  # fragile; explicit unset guarantees no carryover when NODES is a CSV.
+  unset OVERLAY_REF_BY_IMAGE_NAME
   declare -A OVERLAY_REF_BY_IMAGE_NAME=()
   while IFS=$'\t' read -r image_name ref; do
     [ -z "$image_name" ] && continue
@@ -165,11 +174,24 @@ for node in "${NODE_ARR[@]}"; do
     fi
 
     node_checks=$((node_checks + 1))
-    label=$(read_revision_label "$overlay_ref")
+    set +e
+    label=$(read_revision_label "$overlay_ref" 2>/dev/null)
+    crane_rc=$?
+    set -e
     label=$(printf '%s' "$label" | tr '[:upper:]' '[:lower:]')
 
+    if [ "$crane_rc" -ne 0 ]; then
+      # Registry unreachable for this digest — auth, network, 404, GHCR
+      # outage. NOT TRANSITION_SAFE; an unreadable witness is fail-closed
+      # so a docker-login regression cannot silently green the pipeline.
+      echo "  ❌ ${node}/${image}: ${overlay_ref} — crane could not read image config (rc=${crane_rc}); check GHCR auth + network"
+      node_failed=1
+      FAILED=1
+      continue
+    fi
+
     if [ -z "$label" ]; then
-      echo "::warning::${node}/${image}: ${overlay_ref} has no org.opencontainers.image.revision label (or crane could not read it) — TRANSITION_SAFE skip"
+      echo "::warning::${node}/${image}: ${overlay_ref} has no org.opencontainers.image.revision label (image built pre-task.5006) — TRANSITION_SAFE skip"
       continue
     fi
 

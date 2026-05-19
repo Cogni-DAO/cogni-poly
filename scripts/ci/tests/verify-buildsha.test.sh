@@ -232,8 +232,65 @@ else
   echo "[PASS] unknown-node-warns-and-passes"
 fi
 
-# --- Case 9: empty NODES → no-op, pass ---
-C9="${WORKDIR}/case9"; stage_overlay "$C9"
+# --- Case 9: crane FAILS to read a digest → hard fail (NOT warn-skip) ---
+# Simulates a docker-login regression or GHCR outage. The verifier must NOT
+# silently green: an unreadable witness is fail-closed.
+C9b="${WORKDIR}/case9b"; stage_overlay "$C9b"
+write_map "${C9b}/map.json" poly "$EXPECTED" poly-paper-sidecar "$EXPECTED"
+F9b="${WORKDIR}/fix9b"
+make_crane_fixture "$F9b" "$POLY_REF" "$EXPECTED"
+# No fixture written for SIDECAR_REF → fake-crane exits 1 (simulates auth/network/404).
+M9b="${C9b}/markers"
+run_case "crane-failure-hard-fails" 1 "$C9b" "${C9b}/map.json" "$F9b" "$M9b"
+grep -q "crane could not read image config" "${WORKDIR}/out-crane-failure-hard-fails.log" || { echo "[FAIL] expected crane-failure error text"; FAILED=$((FAILED+1)); }
+if [ -f "${M9b}/verified-poly.txt" ]; then
+  echo "[FAIL] crane-failure-hard-fails: marker should NOT exist after hard fail"
+  FAILED=$((FAILED + 1))
+fi
+
+# --- Case 10: multi-node NODES — each node verified independently, no
+# cross-node leakage of overlay-ref state across loop iterations. Stage two
+# real overlays (poly + scheduler-worker) and assert both nodes pass cleanly.
+C10="${WORKDIR}/case10"
+mkdir -p "${C10}/infra/k8s/overlays/candidate-a/poly" "${C10}/infra/k8s/overlays/candidate-a/scheduler-worker"
+cp "${REPO_ROOT}/infra/k8s/overlays/candidate-a/poly/kustomization.yaml" "${C10}/infra/k8s/overlays/candidate-a/poly/"
+cp "${REPO_ROOT}/infra/k8s/overlays/candidate-a/scheduler-worker/kustomization.yaml" "${C10}/infra/k8s/overlays/candidate-a/scheduler-worker/"
+# Read scheduler-worker's current overlay digest dynamically — overlay can drift.
+SW_REF=$(python3 -c '
+import re,sys
+text=open(sys.argv[1]).read()
+m=re.search(r"name:\s*(ghcr\.io/cogni-dao/cogni-poly).*?digest:\s*\"(sha256:[0-9a-f]+)\"",text,re.S)
+if m: print(f"{m.group(1)}@{m.group(2)}")
+' "${C10}/infra/k8s/overlays/candidate-a/scheduler-worker/kustomization.yaml")
+write_map "${C10}/map.json" poly "$EXPECTED" poly-paper-sidecar "$EXPECTED" scheduler-worker "$EXPECTED"
+F10="${WORKDIR}/fix10"
+make_crane_fixture "$F10" "$POLY_REF" "$EXPECTED"
+make_crane_fixture "$F10" "$SIDECAR_REF" "$EXPECTED"
+[ -n "$SW_REF" ] && make_crane_fixture "$F10" "$SW_REF" "$EXPECTED"
+M10="${C10}/markers"
+set +e
+( cd "$C10" && \
+  PATH="$(make_fake_crane "$F10"):${PATH}" \
+  OVERLAY_ENV="candidate-a" \
+  NODES="poly,scheduler-worker" \
+  SOURCE_SHA_MAP="${C10}/map.json" \
+  MARKER_DIR="$M10" \
+  bash "$VERIFY_SCRIPT" ) >"${WORKDIR}/out-multi-node.log" 2>&1
+ex10=$?
+set -e
+if [ "$ex10" -ne 0 ]; then
+  echo "[FAIL] multi-node: expected exit 0, got ${ex10}"
+  cat "${WORKDIR}/out-multi-node.log"
+  FAILED=$((FAILED + 1))
+elif [ ! -f "${M10}/verified-poly.txt" ] || [ ! -f "${M10}/verified-scheduler-worker.txt" ]; then
+  echo "[FAIL] multi-node: missing per-node markers"
+  ls "$M10" 2>&1
+  FAILED=$((FAILED + 1))
+else
+  echo "[PASS] multi-node-csv-each-verified-independently"
+fi
+
+C9="${WORKDIR}/case11-empty"; stage_overlay "$C9"
 write_map "${C9}/map.json" poly "$EXPECTED"
 set +e
 ( cd "$C9" && \
