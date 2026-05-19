@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+apiVersion: v1
+kind: Service
+metadata:
+  name: infratest-shape-a
+  labels:
+    app.kubernetes.io/name: infratest-shape-a
+    app.kubernetes.io/part-of: cogni
+spec:
+  selector:
+    app.kubernetes.io/name: infratest-shape-a
+  ports:
+    - port: 9000
+      targetPort: health
+      protocol: TCP
+      name: health
