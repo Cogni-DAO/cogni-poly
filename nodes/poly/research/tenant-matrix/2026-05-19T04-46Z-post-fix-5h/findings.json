@@ -1,0 +1,27 @@
+{
+  "report_path": "nodes/poly/research/tenant-matrix/2026-05-19T04-46Z-post-fix-5h/report.html",
+  "primary_one_liner": "Paper places 2.8x more than live (71 vs 25) on same policy. Trust-twin worked — paper is not trustworthy yet.",
+  "primary_confidence": 0.95,
+  "primary_class": null,
+  "primary_class_reason": "D1-D8 govern target->mirror delta; this is paper-tenant->live-tenant cross-instance divergence the charter doesn't classify",
+  "secondary_one_liner": "bug.5060 fill-capture half is fixed (twin_only=0, live_only=0, placement_failed=0/6); position-state half is structural, not a sidecar bug",
+  "secondary_confidence": 0.9,
+  "secondary_class": null,
+  "pareto_next_fix": "Ship position-trajectory replay (paper-twin-diff.ts) so paper sidecar runs LIVE's actual fill history — the only faithful counterfactual",
+  "authored_at": "2026-05-19T05:05:00Z",
+  "evidence": {
+    "bundle": "nodes/poly/research/tenant-matrix/2026-05-19T04-46Z-post-fix-5h/bundle.json",
+    "key_metrics": {
+      "twin_placements": 71,
+      "live_placements": 25,
+      "twin_realized_usdc": 100.72,
+      "live_realized_usdc": 42.66,
+      "fill_capture_parity_twin_only": 0,
+      "fill_capture_parity_live_only": 0,
+      "outcome_disagree": 62,
+      "twin_placed_live_skipped_followup_position_too_small": 32,
+      "twin_placed_live_skipped_below_market_min": 11
+    },
+    "code_path": "nodes/poly/app/src/features/copy-trade/plan-mirror.ts:218-247"
+  }
+}

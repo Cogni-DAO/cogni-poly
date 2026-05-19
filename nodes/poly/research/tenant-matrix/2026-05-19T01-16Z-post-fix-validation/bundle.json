@@ -1,0 +1,884 @@
+{
+  "captured_at": "2026-05-19T01:17:41.805Z",
+  "input": {
+    "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+    "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+    "control_env_key_prefix": "POLY_PREVIEW_TENANT_TRUST_TWIN"
+  },
+  "window": {
+    "since": "2026-05-18T23:53:00Z",
+    "until": "2026-05-19T01:17:18.389Z"
+  },
+  "tenants": [
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP",
+      "envSlug": "candidate-a",
+      "role": "GAP",
+      "billingAccountId": "d66032aa-e6d7-4c60-9b41-aea3b0de1692",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION",
+      "envSlug": "candidate-a",
+      "role": "VALIDATION",
+      "billingAccountId": "1890787d-7680-440b-ab1e-519c529bfc6c",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP",
+      "envSlug": "preview",
+      "role": "GAP",
+      "billingAccountId": "376c594c-e6e1-44b2-aafb-366382032461",
+      "dsUid": "cogni-preview-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+      "envSlug": "preview",
+      "role": "TRUST_TWIN",
+      "billingAccountId": "fb8f65d5-29e4-446a-8753-280d5328b2a2",
+      "dsUid": "cogni-preview-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PROD_TENANT_LIVE",
+      "envSlug": "production",
+      "role": "LIVE",
+      "billingAccountId": "207795de-891c-4791-9f8b-aa0f0bcc4911",
+      "dsUid": "cogni-production-poly-postgres"
+    }
+  ],
+  "control": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+  "prod_live": "POLY_PROD_TENANT_LIVE",
+  "metrics": [
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "GAP",
+        "envSlug": "candidate-a",
+        "billingAccountId": "d66032aa-e6d7-4c60-9b41-aea3b0de1692",
+        "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP"
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-18T23:53:00Z",
+        "until": "2026-05-19T01:17:18.389Z"
+      },
+      "decisions": {
+        "decisions": 1343,
+        "placed": 0,
+        "skipped": 1343,
+        "errored": 0,
+        "skip_reasons": {
+          "market_past_end_date": 711,
+          "below_market_min": 255,
+          "vwap_floor_breach": 166,
+          "target_dominant_other_side": 140,
+          "followup_not_needed": 71
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": 0,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "VALIDATION",
+        "envSlug": "candidate-a",
+        "billingAccountId": "1890787d-7680-440b-ab1e-519c529bfc6c",
+        "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION"
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-18T23:53:00Z",
+        "until": "2026-05-19T01:17:18.389Z"
+      },
+      "decisions": {
+        "decisions": 1343,
+        "placed": 13,
+        "skipped": 1330,
+        "errored": 0,
+        "skip_reasons": {
+          "market_past_end_date": 711,
+          "below_target_percentile": 251,
+          "vwap_floor_breach": 166,
+          "target_dominant_other_side": 140,
+          "target_position_below_threshold": 39,
+          "followup_position_too_small": 11,
+          "already_resting": 8,
+          "below_market_min": 4
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.00967982129560685,
+      "fills": {
+        "fills_count": 13,
+        "filled_count": 5,
+        "open_count": 0,
+        "canceled_count": 8,
+        "error_count": 0,
+        "markets_count": 5,
+        "markets_with_open_position": 3,
+        "intent_usdc": 32.57432068285572,
+        "realized_size_usdc": 12.521148246906431,
+        "first_fill_at": "2026-05-18T23:57:09.000Z",
+        "last_fill_at": "2026-05-19T01:12:12.000Z"
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x1881a88db600659958d19f3cb2636da029e320893f764f5626bce884de543cae",
+        "0x5051cd19dd62f98f96f03c635c8d2667511f6e387c457ef0f86d32b874e72868",
+        "0xf454970aea4aaeca5cae6f029adcb07f06134635cf317bb897bb618dfe875a0b"
+      ],
+      "market_coverage_pct": 0.017341040462427744,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-18T23:00:00.000Z",
+            "value": 4.221148246906431
+          },
+          {
+            "ts": "2026-05-19T00:00:00.000Z",
+            "value": 29.22432068285572
+          },
+          {
+            "ts": "2026-05-19T01:00:00.000Z",
+            "value": 32.57432068285572
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-18T23:00:00.000Z",
+            "value": 4.221148246906431
+          },
+          {
+            "ts": "2026-05-19T00:00:00.000Z",
+            "value": 10.17114824690643
+          },
+          {
+            "ts": "2026-05-19T01:00:00.000Z",
+            "value": 12.52114824690643
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-18T23:00:00.000Z",
+            "value": 1
+          },
+          {
+            "ts": "2026-05-19T00:00:00.000Z",
+            "value": 11
+          },
+          {
+            "ts": "2026-05-19T01:00:00.000Z",
+            "value": 13
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "GAP",
+        "envSlug": "preview",
+        "billingAccountId": "376c594c-e6e1-44b2-aafb-366382032461",
+        "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP"
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-18T23:53:00Z",
+        "until": "2026-05-19T01:17:18.389Z"
+      },
+      "decisions": {
+        "decisions": 1344,
+        "placed": 0,
+        "skipped": 1344,
+        "errored": 0,
+        "skip_reasons": {
+          "market_past_end_date": 712,
+          "below_market_min": 302,
+          "vwap_floor_breach": 167,
+          "target_dominant_other_side": 140,
+          "followup_not_needed": 23
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": 0,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "TRUST_TWIN",
+        "envSlug": "preview",
+        "billingAccountId": "fb8f65d5-29e4-446a-8753-280d5328b2a2",
+        "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN"
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-18T23:53:00Z",
+        "until": "2026-05-19T01:17:18.389Z"
+      },
+      "decisions": {
+        "decisions": 1344,
+        "placed": 5,
+        "skipped": 1334,
+        "errored": 5,
+        "skip_reasons": {
+          "market_past_end_date": 712,
+          "below_target_percentile": 289,
+          "vwap_floor_breach": 167,
+          "target_dominant_other_side": 140,
+          "followup_position_too_small": 24,
+          "below_market_min": 2
+        },
+        "error_reasons": {
+          "placement_failed": 5
+        }
+      },
+      "placement_rate": 0.003720238095238095,
+      "fills": {
+        "fills_count": 10,
+        "filled_count": 3,
+        "open_count": 0,
+        "canceled_count": 2,
+        "error_count": 5,
+        "markets_count": 4,
+        "markets_with_open_position": 3,
+        "intent_usdc": 30.80847992139816,
+        "realized_size_usdc": 9.56978319189733,
+        "first_fill_at": "2026-05-18T23:57:09.000Z",
+        "last_fill_at": "2026-05-19T01:00:57.000Z"
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x5051cd19dd62f98f96f03c635c8d2667511f6e387c457ef0f86d32b874e72868",
+        "0xf454970aea4aaeca5cae6f029adcb07f06134635cf317bb897bb618dfe875a0b",
+        "0xf5e9bb41c09a04d4aa2f9632d47429f549fe786ca1a84f9a273894cdf0a9bab9"
+      ],
+      "market_coverage_pct": 0.017341040462427744,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-18T23:00:00.000Z",
+            "value": 4.221148246906431
+          },
+          {
+            "ts": "2026-05-19T00:00:00.000Z",
+            "value": 28.13831227907239
+          },
+          {
+            "ts": "2026-05-19T01:00:00.000Z",
+            "value": 30.80847992139816
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-18T23:00:00.000Z",
+            "value": 0
+          },
+          {
+            "ts": "2026-05-19T00:00:00.000Z",
+            "value": 6.8996155495715605
+          },
+          {
+            "ts": "2026-05-19T01:00:00.000Z",
+            "value": 9.56978319189733
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-18T23:00:00.000Z",
+            "value": 1
+          },
+          {
+            "ts": "2026-05-19T00:00:00.000Z",
+            "value": 9
+          },
+          {
+            "ts": "2026-05-19T01:00:00.000Z",
+            "value": 10
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PROD",
+        "role": "LIVE",
+        "envSlug": "production",
+        "billingAccountId": "207795de-891c-4791-9f8b-aa0f0bcc4911",
+        "envKeyPrefix": "POLY_PROD_TENANT_LIVE"
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-18T23:53:00Z",
+        "until": "2026-05-19T01:17:18.389Z"
+      },
+      "decisions": {
+        "decisions": 1343,
+        "placed": 5,
+        "skipped": 1337,
+        "errored": 1,
+        "skip_reasons": {
+          "market_past_end_date": 711,
+          "below_target_percentile": 290,
+          "vwap_floor_breach": 166,
+          "target_dominant_other_side": 140,
+          "followup_position_too_small": 28,
+          "below_market_min": 2
+        },
+        "error_reasons": {
+          "pending_insert_failed": 1
+        }
+      },
+      "placement_rate": 0.0037230081906180195,
+      "fills": {
+        "fills_count": 5,
+        "filled_count": 3,
+        "open_count": 0,
+        "canceled_count": 2,
+        "error_count": 0,
+        "markets_count": 3,
+        "markets_with_open_position": 3,
+        "intent_usdc": 18.339451129737792,
+        "realized_size_usdc": 10.6676,
+        "first_fill_at": "2026-05-18T23:57:09.000Z",
+        "last_fill_at": "2026-05-19T00:12:19.000Z"
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x1881a88db600659958d19f3cb2636da029e320893f764f5626bce884de543cae",
+        "0x5051cd19dd62f98f96f03c635c8d2667511f6e387c457ef0f86d32b874e72868",
+        "0xf5e9bb41c09a04d4aa2f9632d47429f549fe786ca1a84f9a273894cdf0a9bab9"
+      ],
+      "market_coverage_pct": 0.017341040462427744,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-18T23:00:00.000Z",
+            "value": 4.221148246906431
+          },
+          {
+            "ts": "2026-05-19T00:00:00.000Z",
+            "value": 18.339451129737792
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-18T23:00:00.000Z",
+            "value": 4.218
+          },
+          {
+            "ts": "2026-05-19T00:00:00.000Z",
+            "value": 10.6676
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-18T23:00:00.000Z",
+            "value": 1
+          },
+          {
+            "ts": "2026-05-19T00:00:00.000Z",
+            "value": 5
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    }
+  ],
+  "target": {
+    "wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+    "cumulative_usdc": [
+      {
+        "ts": "2026-05-18T23:00:00.000Z",
+        "value": 7379.567337
+      },
+      {
+        "ts": "2026-05-19T00:00:00.000Z",
+        "value": 129373.886769
+      },
+      {
+        "ts": "2026-05-19T01:00:00.000Z",
+        "value": 150734.334165
+      }
+    ],
+    "market_set": [
+      "0x0269af2c804a10167d2a62406d01fb131ff67e13d76c0af790271705e3707054",
+      "0x0290d4a06d6bb892ddccbe5e2613bbe1c530245bc726027a9cdae5ef65816df8",
+      "0x043825e6775d658e5b92f04c6bd573f95b2ccc8ccdb739e966d87bdc5670f90a",
+      "0x054e65848ccce1a749318a069717b01c8dd267c7da1d23b1856b7ebf36ac9a0b",
+      "0x063ce4c8926789ff8326cc7ad3a1dd47bf7dae3fa8d906ccaf124b4ad829de10",
+      "0x082abcdc5c890d13aa6937c059033730a9ec4b59d4aa2aead8febbcd7c784a32",
+      "0x0890435aa3fbe555270da6373673f2ea1daa34d6ef6723da8131f6d42ec064d7",
+      "0x09a8ac030b5a81d5a6489a7f89d2604ed5e05dc84617dc29acbf5935d50cf6ad",
+      "0x0be587b10683b0e9840b28fc4ef412f895a019f08acda3d5dedf4f7a0269766b",
+      "0x0f02000b536d39c6bc7041dd31778db003e8019ee6c242797b319561ff564136",
+      "0x0f62beedfdf32e9f056f0e20cf7fb1ec743fdda96adabc5b814e94288283b76a",
+      "0x105e93c01134d7d8877675ae623d5c1198b05ac5501a51b51bc5533c91bfd58e",
+      "0x111d7c5ef6609482f263d24854b9a898841e92bba94440b10a567188dc24bc24",
+      "0x11eddb7883ac2b2591258fb2331224d04b15869e4acc45dccdbc89bc957faafd",
+      "0x14ba4e30f048848b0e6f109d69ae211f6f379d894a31eb468a060d8d57fd53f2",
+      "0x14d65d7f639335696eb125a02bea3dd8f45a92e1b9fc5226eb4e90fdf7e8af8f",
+      "0x1541473992118f299e9b367ada6490d981d6cc96ac71559ac5dc01145d1b05fd",
+      "0x159dc30fbb820ffdcd7a74fe67b317aebeeb0826c742ed3f4e2b4c049f6047a5",
+      "0x187efc5c4f94b488b7ed7526467b08084b9fce5d21f6bb604b1e9c960741187b",
+      "0x1881a88db600659958d19f3cb2636da029e320893f764f5626bce884de543cae",
+      "0x18af14fe46a70f7476ee913ac29b72598eb7c127b98e206768d3682babfa50c5",
+      "0x195ea26aa296adaa92b07fbbf799e31d3e5f7a121c560171136452534c39e268",
+      "0x1cbd8ce663df7ac071afa0ab6fa285824844cb520b4f23765d976ef610e81154",
+      "0x20bdffce42533cbda92f4ddf064069350f234469d5b15b46b8367566eb9a2469",
+      "0x213e0a970501ee4db1bc28b62a2a18879da4b7808c98613c4ccaddb2e261e09e",
+      "0x23974992d01e5eb5f02e6dbe0ce19f0479073d91578afe0e1b4cb0f45e96a95b",
+      "0x25534ace67f4925739241b39a879d3cf9ec13e6f2929b74de52d11c47e508c30",
+      "0x27f51fc8a731f9de12d18506f41eb08ba8fc798c48344b1473142809af77ab04",
+      "0x2828ab522aad3127f1d8214c07086cf6d4bfca92daea9f9e468a0cbf1e37ce03",
+      "0x284606e503a4b105f6ac09400935f32244a99a36528b073e23f4b04ad973c558",
+      "0x291336502429993b1e5fe82db238d942e39bf520969a31386930b7abc3a9f9dd",
+      "0x296f2e3b9fbb807a07bce43fa6400f4dec0001fc147e696b51a82a7eeac26698",
+      "0x2a7a6ab8f4984f1ae82eacd7fb408832a50e63162ac6b98fff1fe094b8e9d3b5",
+      "0x2d00a110a1ccf127a836d958fe44e7648619247d05fe629ba6ba1a6f805586d7",
+      "0x2fc6c2f02cea9a80e5f0a6e9dcd499c35c6de95b433020e95137e533661a8056",
+      "0x30957a07c0414147169288e3e8c02ce275bde20fd657b2eabd778867160d94c5",
+      "0x36252716d8d7a3e5611eddd61e69ce6b0d6f8112a0ea8984fe4a32a4f217aaf1",
+      "0x38e4d8e4339fc4cbeab6284d7424bd070d8dd6ccf7e093f3fed3964b42a367f6",
+      "0x3a8963c4d3341446a50dd6d5e1102e69b41d60371aa135150b89299458716082",
+      "0x3e1f5f4031eafd619bc553c23250b0071b46396c3fdf92197f3b8a6cd98ffd6d",
+      "0x4435d57c325f205d59e78d12aab6a15163bdc0d4c756dba129fba075f9bb3e32",
+      "0x468b26a4ff3974e8afa7ea6fcf63d1e0734fd68c17cbbed692b62c3a32272d2b",
+      "0x47ac7dbce98c57e4fa7e3114950205118a5a203cc733440a4dd91ec8591cb7ca",
+      "0x497a21a2a992d883d3d4586aab04998030a686cca8fb739ec3b8260cf555d2dd",
+      "0x4b5e1f1ebf9c6c395054b82e22094bf05b0916bb8f443f8088f176de20cec2ce",
+      "0x4c51f4c6af56de8480a35463c52b08a6a724c8b9b979e6edcb9283d63e53eea6",
+      "0x4c7bbe479131406c0b43243220be8fe7b5d9e397e019dc94c87c99f5e770eeee",
+      "0x4cedc66528066eb6bb55534a4011cee12ccc75ec9e6240237bf8feacb94a15b6",
+      "0x4ea0ebb5f6de0271d09d896a00e0ecb9b5a8e3a7e63a940dbbd778e65d227715",
+      "0x4ff261c7f865eed9377aabbc7f13b84f82d50792baddf145b08aed2dd3d0b039",
+      "0x502fab14d2a45c8a4a37260764b90d8bd7f8b6b65391007238ffdf19e3c112c3",
+      "0x504044ab2eeaa25415430ff52558c04eb56eedc231bd642a58050a9848c10a65",
+      "0x5051cd19dd62f98f96f03c635c8d2667511f6e387c457ef0f86d32b874e72868",
+      "0x5095d06852b3b2cc471dac3fd0530ca51979ba32a9f170754d357d07903b2b10",
+      "0x540cb70cf8e27987a18b5711370d7c6136c89c73836a93abb6d369c2c156a429",
+      "0x54e465704c12a3639313c97f6bcc66482252ede37755a74f1811e5472c66435d",
+      "0x5520d37d25c924a0b26690c5829ac6b999919ad6045adfee8028bc6e66223efb",
+      "0x56059000e4f9decae193fe74c437563a70e410ed09ad812f1885486b70832f11",
+      "0x573cced1308f76a3e472e980898db7449ab845d2f960a208a95005444ba21313",
+      "0x586c1dbc9cdfc1ed115b86b9bc5610eb82969eeee4fadc1f7f46b5390cd471a0",
+      "0x58ffde90738b4cbbd037c67a931accad915f66d083e854454f677c3dc77040c3",
+      "0x593dd712df5bd075c1454916715928f750ca2ed8b317116df1fd1d0f68d67957",
+      "0x5c6f5a94bfb2fae1cdb4c918fc278aed3bd7bc14629b427577b17a6714fae25f",
+      "0x623498c1ca3cd26ea07badc32ebe3397d03a982c22fec08737003326af6e5f1a",
+      "0x6390ccc50e225bda35a48a2e361223f24d95ad53534423db57d31e4d2e033e92",
+      "0x654da75497aa7ba99801f784d0aaba5b6866b1ce64b05fe76eea9c41500c34c2",
+      "0x65bf3a246c11556694331c07d474f11b6130add913c5f701bbe4dfba52d7d861",
+      "0x663d3d358b31ae9cdb2ec3a9459f0dcfbadb17c92faf954644683e9fcd799570",
+      "0x67431ee7c51a178986b79712dd59f5bd5484c069b62809bd233ce4ee5ff9604f",
+      "0x689a887626f2dc3321b7dbe97539327afa06d5e940ad4ff53a490333c034a8df",
+      "0x68e1ef745c1c053fb82627f032ab1425827ba5413b7e2eadb3dfe3cdfdfcd373",
+      "0x6918cb07247acd25d8c1905f854fe24943ce9b8d7e6895f1ee75acd3a1b00467",
+      "0x69a32e40dd5abf8d0abac5909ca4917e9d13eadbdb361e80b240f358e162c1d7",
+      "0x6a6a128591e79d54dc6b44ff1025533dbc0227353fd26a3ef419bcf0c0206ee9",
+      "0x6ac0dda028d32ebc84f94f3e84792330481ee902d1811989391c75d7c076261f",
+      "0x6b9423a5f37cddc9196660426f9f95152cf5ab22cfd832f65674555c107bbe9c",
+      "0x6cb7405ceb99fa88b11795f030efc6400b9cf67744d3cc664b82f38404cd68f7",
+      "0x6dd11939aa72bf26d0eef91ed43681bee4b8a2cf3138a81f7eaec0f1e60248b7",
+      "0x6eaa111998d31b635ad9d8eaccab24db72b35bb420d25f17f88f87aa0eb165e4",
+      "0x739104616008723199943a1691b985dc02087ba8aeb1e5ba7783ffb6d88fc2c6",
+      "0x7612c30dbafd30136b02cf910bbf35dfaafd184ca568a3a1ac8f15eae112390e",
+      "0x768af86896b94da9f0999cadf451b837602edbe311a91c7a6fb285eff7ded068",
+      "0x77571c5d9479c5578dd3e45c872458f17e6ed1f9da678b1c452b9bf4918a13e1",
+      "0x792cea0a5090d8c66fafd8b9ea9280e5d9b8294cc100191fabafaa66f1930f4d",
+      "0x7a48155b471fdec57d180c4debf95afd8acd43c947839b977d636be5077b4c75",
+      "0x7be4ec5f5dce2f67cfc32d0e86d23b323179a61eeb30018e9344405e9a1efd69",
+      "0x7d4a866eddb0732d45db013a5455bbcc120c7ee5a341df6e7448d24496e130d9",
+      "0x8130b35080a4d85f91f9687b5580a03ba8f9a1b61a69440621e8806990dcf467",
+      "0x815089c531ae5b204de17f3f927bbd458312d67c305b2e5133d3bbd112e008cd",
+      "0x816161577f951d0d7992b6c6325a95b7fb49ba3bffd56a7e133f669ded28579e",
+      "0x81dd110b1f647b5bc3969abcc0841f4cf17a490fb961e576440e579f60f1319c",
+      "0x81ea749d12f846ad3265cd268eb2d5ecc5aaeb51611a83eb9c5bf50dee14c82b",
+      "0x8246b715242536356d2938f90df8b50271fcf6d7586495249e2e9f75a1101981",
+      "0x85a37c6cb54495bcd8dca16efa5ec61da186d9e22bdcfda6bbf15dda8b90adf3",
+      "0x895fe9fca580f28523cba7b2f823176bb52e7d6279368c12f19819706a1efe86",
+      "0x8a54cec07969b63576ff3b54530294d354d35c87abe35aa3efa878dd92273ac3",
+      "0x8b1bff9411f3b5d05d8f8281169abf619e00abef5ec54f9b7877c8af621092f0",
+      "0x8ce3f9f0fc60b901cffab9803794ff789941b89a62cb6bddb3526dcf944588be",
+      "0x8e5bc94035178287af2944074c3fba12d0e1239bbef7e303169ef9238b112c51",
+      "0x8e645fc8091bce32a93fce7b611fe19fdff142568b40106f3df5fe11d262ba05",
+      "0x9437b5df230067a3f152130a54db8a4288d5f8fbb89ceac88caeb191367b8055",
+      "0x94605e3e0b981e7e77444a236cc7e78951e4aa066fd2a6a04e74ce5a05fc14aa",
+      "0x94f33c5b9958ccbdc5762e2c4599697f821b2990f11edf5913774314df9b540d",
+      "0x954130d9854d3977109fef1e86dbecbf9bb2d4ce65cd90dfc2bc95be9f46e11a",
+      "0x956c43654aee9b3dcafe05fe7788d4f3d5b9e505c638c329e633e18b8e485d90",
+      "0x983fd53b2278ae8327d8e453dc2dfbfa390a3d0cb151218a2d0eefde3de5836b",
+      "0x98d154f4c4bb7c2b66182dc2f3d72bc7c8379303b0f982d9eaf8c58fcac6b08e",
+      "0x9902278a70837e245f44ebe883db82caef4c927a3185846ac4cfa68b33749896",
+      "0x9985006635faf5b5408491a573a28d6bb221b63744b33ef4e1d3d8962711b148",
+      "0x99923a95ff7fb54bb11ad02297325703bb3e237c60c1701984682f4ffc945d1e",
+      "0x9f90b0c5f30a1921dbf3cc1d550e2a9b210ce15ebc9d63b7220ed0505193c22f",
+      "0x9fa0255848826ef05a1c457ef563009970618474728d29d8cd80dc695fce7959",
+      "0x9ffb570e56831a3ca2bc0e103e10d1754aeb4956c51622faf42c0c8cbad5dbcc",
+      "0xa0c1e53adfbd7ca98058371cddd4abe9ce22e4f93fd473bca4a3c2f022acb869",
+      "0xa4781f5d97b6fe28ca7a69353b89e3401a9483a4c7bfc2f493c6cca138bd9c82",
+      "0xa9843dc662a7a17b0b2c2587a5558185fb0bda7676c6bb918d4cf6a096cac064",
+      "0xaa25ac1523883b77c069dbff2da5e564ac1d701cd9ed5129c3541bf805964601",
+      "0xaaaadacbbb6436f4865f4d6fed01d3a5989bf367bfeaf80a65c053eecff5d678",
+      "0xafde16ccf068baa3eb91cc920a1af11443781ae7210af68c16cbcf3d188aabd1",
+      "0xb1830a0616a04697f19a1ec2f5f29a4e4d4a57020e48db3bfbf7466d240a38d2",
+      "0xb1bfd8e7a2295c416943730d7517038fd5e6f8ed8fe40cdc2c8ed830dc5c4bf6",
+      "0xb66cca50309ed1b8aaa798f125326e07f1cdc60f081682b08ba84d5eb96abb76",
+      "0xb6ab789b8918a8b2654a584914778f80d170c1ad86a343f46ff6ae1f1a58dc5e",
+      "0xb6b5e7eefad94f425d0bb4618ce472632926b85085650a7c5461f44039073d22",
+      "0xb969dde05cd85bc86404c54a4fb44b7644bdd0eef81a69d7c47559438d755c5a",
+      "0xb991c615f14158b8a0e3804bf7869f09c732542445d25a231a262b46906abbeb",
+      "0xbb84c1b6f025e0a90170c19aa990e4b808140a6ed02282b5b39c77fc893ed242",
+      "0xbdc92702059b0ec673a5946e4c86035b67e7ef996817bf531e1654e7c432eb3b",
+      "0xbffe0f344e8540298fc2fb0830c582f10f928bc83cb48eb9a8e299f8e1112d55",
+      "0xc065d86e188745a997de6b11bd14deb3636e5009400b9ea2c43f306f8a434537",
+      "0xc193654ea761f51fff406205063447096c074a0f2222e9d2b8e5c152bcf01714",
+      "0xc3d5a6d77a9fe5f890bd75bb78a24880424bbc4c745daef3e36c33dac478000b",
+      "0xc4bc6627bb645045992222dad717edda49fe0d1c6aeb13067732b28a736d47f9",
+      "0xc6977f5892fa6cadb7a925aef335ca7da6be02b6c8696c73ffa1c2225ebe6b01",
+      "0xc75cf34edced4f8a73162fafaff0c1f77998b2e173854bda2339ae78c4937e58",
+      "0xc91b911761ce007e6afde69494363c70bb929de762b99b630a200a36862ece0e",
+      "0xc968436fbfd4f02995075e875b36de4fd51a94a34601e36b282999a49e8789e9",
+      "0xc9b62a28ec4063d70a45d72529c02aab79a526050b7523883ff41b1ff47d035a",
+      "0xca8b9963bbed9920fea3e4edb54eee4dda29f438e6216e62c9a99e2d8093aed8",
+      "0xcb4b627bbb56e88bae8994299f898e7aad1173661c69c97dbcfc5b31d1fb0d60",
+      "0xcb948fa0a9d958e5d455b52ffa30852bc244c1a033fe9037fce9dbf3e100265f",
+      "0xccb89f5b54b3a3aa022c2d87f4b1fd6a03dfa45079995b00b06890a1a873ee21",
+      "0xccdefa75345ccb6c72cc638b8742ea0470117b733dd90dd6f3e16a585fcf4d3e",
+      "0xcf507bdd573cc02468db860030931c4b97bfbc2e6f23da2f36edb79c5b6c10a4",
+      "0xd5c3fcf42dc9e61525b7086d25c491b4dc9906b9b508e28f30d04dbaa3386e7c",
+      "0xd792a922247069fb13cb9db4e8e9863f2d50260f9c0e232968567deaf8ab121b",
+      "0xd99d212b9ecc8f1de6eb3dd8da0d74ef6698281fdc0c7a2b2e0a9116037e481b",
+      "0xda8b52656e46d414de5a73f11f4dd669337353a5247a15e7d66b0e6d210d6947",
+      "0xdb8e0f41655870c221054a36e8ef6ef4841e87482475f7a4601da5a3a8b8e9d2",
+      "0xddab87ba655fabaa20b65c405954ef7ee2ded1d4a504efc69419c9a3a36cd944",
+      "0xe0c1d73e0fe6fb9cc92425477e20de451ade4f5bc9539cf5de4e07f9c5e8115d",
+      "0xe219aa5a0761cc87ade41e91fd025942008cd84de8e97deb99f597f0e26fa06d",
+      "0xe2b502a2f23246b860b1caadf4ece1e25b29cdb54ef1afee05c191ebce016da8",
+      "0xe3d259c886f4b2e83661a4384c7bd67987a0814012a5bed3cf1b70d281e04a3d",
+      "0xe8ee9d670bba62aff6ae4a163e70d2c51dab694c2fae0aa7f68b39aa25116c1b",
+      "0xea651920fa0cb7f311036a29e34366e81d1b9acfc7fcbd8cca59bf8900c71fdc",
+      "0xeb069c43ce90a79b90ab912a576b590c0670b0853766bc8f5758788ca786b1f9",
+      "0xec42a79b1a729b65c8279fccd05ad381b46b012265af6401aa71141e6452770d",
+      "0xf0d4bacace8fe22ebcba058fac518f1650e6ee0e776591bfdfacf50f7e1f689e",
+      "0xf1213fc1261b2949c07a94091585abb22834211f08ab837af58fbc8fef552e3b",
+      "0xf15bce151406a0070316a02f05bd1a2d14a760730b63bd380fea4c9fc59d11d5",
+      "0xf3588ddd8f70c34e0ca12bfce14b058badea15ea6cdba8d832e58de73b25b2c6",
+      "0xf3a7089bf9d65075245363dc22d44048c6129de40654db427f77c9eda1d81101",
+      "0xf3f3af54ab7513975460b7bb4c0054dcd30fbb1a7aafe08c9f2c39b2b867d04a",
+      "0xf454970aea4aaeca5cae6f029adcb07f06134635cf317bb897bb618dfe875a0b",
+      "0xf4aa29659bc34d1d43ed87e84b53a280bed0b5576fda7a99c9d1779920798309",
+      "0xf5e9bb41c09a04d4aa2f9632d47429f549fe786ca1a84f9a273894cdf0a9bab9",
+      "0xf6d1f15b382084d08dffed68c3ef8f0aca17b8a65c1eda422ad5d229f5f13786",
+      "0xf6f12a1e21bd386df3009b38b77d2de3af9e9b2e96805336e88f21079055e41e",
+      "0xf7e8de50f7591ce168486cd5dcf1c6d41eaa7482e34ebe25a2e4c05e98703d9f",
+      "0xfa609063b07e3de26b3cf7f5166702dfe10672cdd29016efaa318e45ace8d3c5",
+      "0xfaa2ed8c6b0444290b7f4f9f27e18510912a7704cd249ec3a6b92ea12079fe9e",
+      "0xffb5157e22e9e84c9f7d242c603857a8b06421463327f008f06ed0efc5302fd4"
+    ]
+  },
+  "ab": {
+    "POLY_CANDIDATE_A_TENANT_GAP": [
+      {
+        "axis": "decisions",
+        "control": 1344,
+        "treatment": 1343,
+        "delta": -1,
+        "delta_pct": -0.000744047619047619
+      },
+      {
+        "axis": "placed",
+        "control": 5,
+        "treatment": 0,
+        "delta": -5,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.003720238095238095,
+        "treatment": 0,
+        "delta": -0.003720238095238095,
+        "delta_pct": -1
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 30.80847992139816,
+        "treatment": 0,
+        "delta": -30.80847992139816,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 9.56978319189733,
+        "treatment": 0,
+        "delta": -9.56978319189733,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 3,
+        "treatment": 0,
+        "delta": -3,
+        "delta_pct": -1
+      }
+    ],
+    "POLY_CANDIDATE_A_TENANT_VALIDATION": [
+      {
+        "axis": "decisions",
+        "control": 1344,
+        "treatment": 1343,
+        "delta": -1,
+        "delta_pct": -0.000744047619047619
+      },
+      {
+        "axis": "placed",
+        "control": 5,
+        "treatment": 13,
+        "delta": 8,
+        "delta_pct": 1.6
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.003720238095238095,
+        "treatment": 0.00967982129560685,
+        "delta": 0.005959583200368755,
+        "delta_pct": 1.6019359642591213
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 30.80847992139816,
+        "treatment": 32.57432068285572,
+        "delta": 1.7658407614575609,
+        "delta_pct": 0.05731671169634983
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 9.56978319189733,
+        "treatment": 12.521148246906431,
+        "delta": 2.951365055009102,
+        "delta_pct": 0.3084045893022951
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 3,
+        "treatment": 3,
+        "delta": 0,
+        "delta_pct": 0
+      }
+    ],
+    "POLY_PREVIEW_TENANT_GAP": [
+      {
+        "axis": "decisions",
+        "control": 1344,
+        "treatment": 1344,
+        "delta": 0,
+        "delta_pct": 0
+      },
+      {
+        "axis": "placed",
+        "control": 5,
+        "treatment": 0,
+        "delta": -5,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.003720238095238095,
+        "treatment": 0,
+        "delta": -0.003720238095238095,
+        "delta_pct": -1
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 30.80847992139816,
+        "treatment": 0,
+        "delta": -30.80847992139816,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 9.56978319189733,
+        "treatment": 0,
+        "delta": -9.56978319189733,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 3,
+        "treatment": 0,
+        "delta": -3,
+        "delta_pct": -1
+      }
+    ],
+    "POLY_PROD_TENANT_LIVE": [
+      {
+        "axis": "decisions",
+        "control": 1344,
+        "treatment": 1343,
+        "delta": -1,
+        "delta_pct": -0.000744047619047619
+      },
+      {
+        "axis": "placed",
+        "control": 5,
+        "treatment": 5,
+        "delta": 0,
+        "delta_pct": 0
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.003720238095238095,
+        "treatment": 0.0037230081906180195,
+        "delta": 0.000002770095379924474,
+        "delta_pct": 0.0007446016381236986
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 30.80847992139816,
+        "treatment": 18.339451129737792,
+        "delta": -12.469028791660367,
+        "delta_pct": -0.40472716678890575
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 9.56978319189733,
+        "treatment": 10.6676,
+        "delta": 1.097816808102671,
+        "delta_pct": 0.1147169989213742
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 3,
+        "treatment": 3,
+        "delta": 0,
+        "delta_pct": 0
+      }
+    ]
+  },
+  "fidelity": {
+    "shared_fills": 1343,
+    "exact_match": 1332,
+    "outcome_match_reason_diff": 1,
+    "outcome_disagree": 10,
+    "twin_only_fills": 0,
+    "live_only_fills": 0,
+    "top_mismatches": [
+      {
+        "twin_outcome": "error",
+        "twin_reason": "placement_failed",
+        "live_outcome": "placed",
+        "live_reason": "ok",
+        "count": 3
+      },
+      {
+        "twin_outcome": "placed",
+        "twin_reason": "ok",
+        "live_outcome": "skipped",
+        "live_reason": "followup_position_too_small",
+        "count": 3
+      },
+      {
+        "twin_outcome": "error",
+        "twin_reason": "placement_failed",
+        "live_outcome": "skipped",
+        "live_reason": "followup_position_too_small",
+        "count": 2
+      },
+      {
+        "twin_outcome": "placed",
+        "twin_reason": "ok",
+        "live_outcome": "error",
+        "live_reason": "pending_insert_failed",
+        "count": 1
+      },
+      {
+        "twin_outcome": "skipped",
+        "twin_reason": "followup_position_too_small",
+        "live_outcome": "placed",
+        "live_reason": "ok",
+        "count": 1
+      }
+    ]
+  }
+}
