@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cogni-candidate-a
+
+resources:
+  - ../../../base/infratest-shape-a
+
+# Image digest - overwritten by promote-k8s-image.sh on first promote.
+images:
+  - name: ghcr.io/cogni-dao/infratest-shape-a
+    newName: ghcr.io/cogni-dao/infratest-shape-a
+    newTag: "candidate-a-placeholder-infratest-shape-a"

@@ -25,6 +25,11 @@ spec:
         revision: deploy/preview-poly-test-worker
         files:
           - path: "infra/catalog/poly-test-worker.yaml"
+    - git:
+        repoURL: https://github.com/cogni-dao/cogni-poly.git
+        revision: deploy/preview-infratest-shape-a
+        files:
+          - path: "infra/catalog/infratest-shape-a.yaml"
   template:
     metadata:
       name: "preview-{{.name}}"
