@@ -78,7 +78,7 @@ The full design is the rest of this spec — Interaction Graph (component map), 
 
 ## Roles + Surfaces
 
-PR comments are **notifications**, never state of record. Design decisions live in Dolt `designs`. Status lives in Dolt `work_items`. Deploy state lives in `/version.buildSha`. Coordination state lives in operator Postgres.
+PR comments are **notifications**, never state of record. Design decisions live in Dolt `designs`. Status lives in Dolt `work_items`. Deploy state lives in the image's baked `org.opencontainers.image.revision` OCI label (CI source of truth, task.5006) plus the operator-facing `/version.buildSha` endpoint (diagnostic convenience). Coordination state lives in operator Postgres.
 
 | Surface                                | Carries                                          | Mutated by                                                                            |
 | -------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------- |

@@ -94,7 +94,7 @@ There is no auto-trigger on a `canary` push (canary is dead). You enter the pipe
 - **Validate a PR on candidate-a**: dispatch `candidate-flight.yml` with the PR number. The workflow resolves the `pr-{N}-{sha}` digests, writes them to `deploy/candidate-a-{node}`, and Argo reconciles. See [`candidate-flight-v0.md`](./candidate-flight-v0.md).
 - **Promote to preview / production**: merging to main fires `flight-preview.yml` automatically. Production is **manual only** — a human dispatches `promote-and-deploy.yml` with `environment=production` and the `source_sha` currently green on preview. Use the `/promote` skill.
 
-Watch in the Actions tab. The end-of-deploy gate is `verify-buildsha.sh` curling `/version.buildSha` and asserting it matches the expected SHA. CI conclusions can lie about deploys; `/version.buildSha` is the source of truth.
+Watch in the Actions tab. The end-of-deploy gate is `verify-buildsha.sh` reading `org.opencontainers.image.revision` off each promoted image's overlay-pinned digest via `crane config` and asserting it matches the per-image source-sha map on the deploy branch (task.5006). CI conclusions can lie about deploys; the baked OCI label is the source of truth.
 
 ## 5. Manual deploy-branch surgery (last resort)
 

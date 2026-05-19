@@ -56,7 +56,7 @@ stage_deploy_branch() {
 
 run_case() {
   local name="$1" node="$2" overlay_env="$3" payload_targets="$4"
-  local map_script="$5" expect_promoted="$6" expect_map_exists="$7" expect_rc="${8:-0}"
+  local map_script="$5" expect_promoted="$6" expect_map_keys="$7" expect_rc="${8:-0}"
 
   local case_dir="$WORKDIR/$name"
   mkdir -p "$case_dir"
@@ -79,8 +79,11 @@ run_case() {
   local got
   got="$(grep '^promoted_apps=' "$case_dir/github_output.txt" | tail -1 | sed 's/^promoted_apps=//' || true)"
 
-  local map_exists=no
-  [ -f "$case_dir/deploy-branch/.promote-state/source-sha-by-app.json" ] && map_exists=yes
+  local map_keys=""
+  if [ -f "$case_dir/deploy-branch/.promote-state/source-sha-by-app.json" ]; then
+    map_keys=$(python3 -c 'import json,sys; print(",".join(sorted(json.load(open(sys.argv[1])).keys())))' \
+      "$case_dir/deploy-branch/.promote-state/source-sha-by-app.json")
+  fi
 
   local ok=1
   if [ "$got" != "$expect_promoted" ]; then
@@ -89,8 +92,8 @@ run_case() {
     echo "  stderr: $case_dir/stderr.log"
     ok=0
   fi
-  if [ "$map_exists" != "$expect_map_exists" ]; then
-    echo "[FAIL] case=$name expected map_exists=$expect_map_exists got=$map_exists"
+  if [ "$map_keys" != "$expect_map_keys" ]; then
+    echo "[FAIL] case=$name expected map_keys='$expect_map_keys' got='$map_keys'"
     ok=0
   fi
   if [ "$rc" != "$expect_rc" ]; then
@@ -98,7 +101,7 @@ run_case() {
     ok=0
   fi
   if [ "$ok" = "1" ]; then
-    echo "[PASS] case=$name promoted_apps='$got' map_exists=$map_exists rc=$rc"
+    echo "[PASS] case=$name promoted_apps='$got' map_keys='$map_keys' rc=$rc"
   else
     FAILED=$((FAILED + 1))
   fi
@@ -114,17 +117,20 @@ SW_ONLY='[
   {"target":"scheduler-worker","deploy_unit":"scheduler-worker","image_name":"ghcr.io/cogni-dao/cogni-poly","role":"app","tag":"","digest":"ghcr.io/cogni-dao/cogni-poly@sha256:cc01000000000000000000000000000000000000000000000000000000000000"}
 ]'
 
-# 1. Happy path — NODE=poly, candidate-a overlay, full payload.
-run_case "poly-candidate-a-happy" "poly" "candidate-a" "$POLY_FULL" "$UPDATE_MAP" "poly" "yes" 0
+# 1. Happy path — NODE=poly, candidate-a overlay, full payload. Map keys are
+#    per-image (task.5006): poly + poly-paper-sidecar both promoted.
+run_case "poly-candidate-a-happy" "poly" "candidate-a" "$POLY_FULL" "$UPDATE_MAP" "poly" "poly,poly-paper-sidecar" 0
 
-# 2. Sidecar absent — NODE=poly, production overlay. App promoted, sidecar exit-2.
-run_case "poly-production-sidecar-absent" "poly" "production" "$POLY_FULL" "$UPDATE_MAP" "poly" "yes" 0
+# 2. Sidecar absent — NODE=poly, production overlay. App promoted, sidecar exit-2
+#    skipped → no sidecar map entry written.
+run_case "poly-production-sidecar-absent" "poly" "production" "$POLY_FULL" "$UPDATE_MAP" "poly" "poly" 0
 
 # 3. Affected-only miss — NODE=poly, payload only has scheduler-worker image.
-run_case "poly-affected-only-miss" "poly" "candidate-a" "$SW_ONLY" "$UPDATE_MAP" "" "no" 0
+run_case "poly-affected-only-miss" "poly" "candidate-a" "$SW_ONLY" "$UPDATE_MAP" "" "" 0
 
 # 4. MAP_SCRIPT failing — overlay writes happen, but provenance dead → rc=1.
-run_case "poly-map-failing" "poly" "candidate-a" "$POLY_FULL" "/bin/false" "poly" "no" 1
+#    /bin/false never writes the map file.
+run_case "poly-map-failing" "poly" "candidate-a" "$POLY_FULL" "/bin/false" "poly" "" 1
 
 cd "$REPO_ROOT"
 if [ "$FAILED" -gt 0 ]; then
