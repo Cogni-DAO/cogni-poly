@@ -135,6 +135,8 @@ describe("order-ledger tenant isolation — bug.5022 regression (component)", ()
     tenantB = await seedTenant("B");
     ledger = createOrderLedger({
       db: getSeedDb() as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
+      appDb:
+        getSeedDb() as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase,
       logger: noopLogger,
     });
   });

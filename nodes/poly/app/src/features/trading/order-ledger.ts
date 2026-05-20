@@ -89,8 +89,12 @@ export interface OrderLedgerDeps {
    * (keyed on `current_setting('app.current_user_id', true)`) becomes the
    * runtime DB-layer backstop even if an explicit `eq(billingAccountId, ...)`
    * filter is forgotten. See bug.5022.
+   *
+   * Optional only to keep unit-test setups that don't exercise the
+   * `forTenant(...)` surface from having to wire it; calling `forTenant(ctx)`
+   * without `appDb` throws at runtime with a clear error.
    */
-  appDb: PostgresJsDatabase;
+  appDb?: PostgresJsDatabase;
   /** Pino logger. Bind `component: "order-ledger"` at the caller if desired. */
   logger: Logger;
   /**
@@ -192,18 +196,24 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
   // bug.5022 leak surface; task.5012 migrates them onto withTenantScope too.
   // `root` is referenced lazily; the arrow bodies execute after init.
   const buildTenantSurface = (ctx: TenantContext): TenantOrderLedger => {
+    const appDb = deps.appDb;
+    if (!appDb) {
+      throw new Error(
+        "OrderLedger.forTenant(ctx) requires deps.appDb to be wired (RLS-enforced app_user role). Pass appDb when constructing the ledger — see nodes/poly/app/src/bootstrap/container.ts."
+      );
+    }
     const actor = userActor(toUserId(ctx.created_by_user_id));
     return {
       snapshotState: (target_id) =>
-        withTenantScope(deps.appDb, actor, async (tx) =>
+        withTenantScope(appDb, actor, async (tx) =>
           snapshotStateOnDb(tx, target_id, ctx.billing_account_id)
         ),
       cumulativeIntentForMarketToken: (market_id, token_id) =>
-        withTenantScope(deps.appDb, actor, async (tx) =>
+        withTenantScope(appDb, actor, async (tx) =>
           cumulativeIntentImpl(tx, ctx.billing_account_id, market_id, token_id)
         ),
       hasOpenForMarket: (args) =>
-        withTenantScope(deps.appDb, actor, async (tx) =>
+        withTenantScope(appDb, actor, async (tx) =>
           hasOpenForMarketImpl(tx, {
             billing_account_id: ctx.billing_account_id,
             target_id: args.target_id,
@@ -211,7 +221,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           })
         ),
       findOpenForMarket: (args) =>
-        withTenantScope(deps.appDb, actor, async (tx) =>
+        withTenantScope(appDb, actor, async (tx) =>
           findOpenForMarketImpl(tx, {
             billing_account_id: ctx.billing_account_id,
             target_id: args.target_id,
