@@ -682,7 +682,10 @@ function createContainer(): Container {
   // (env is the single source of truth — see `PAPER_DISPATCH_IS_ENV_ONLY` in
   // poly-trade-executor.ts).
   const orderLedger = createOrderLedger({
-    db: serviceDb as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
+    // Both clients are postgres-js (`Database` from @cogni/db-client) —
+    // historical NodePgDatabase cast on `db` was a TypeScript-only lie that
+    // forced cross-driver widening in the adapter; dropped under bug.5022.
+    db: serviceDb as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase,
     appDb:
       db as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase,
     logger: log,

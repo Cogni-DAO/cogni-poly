@@ -40,7 +40,6 @@ import {
   sql,
   sum,
 } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import type { Logger } from "pino";
 
@@ -87,8 +86,14 @@ export interface OrderLedgerDeps {
    *     the root `OrderLedger` interface (`CROSS_TENANT_OPS_NAMED_EXPLICITLY`).
    * Per-tenant callers MUST use `OrderLedger.forTenant(ctx)` — that path
    * routes through `appDb` + `withTenantScope` for both reads and writes.
+   *
+   * Driver: `PostgresJsDatabase`. The bootstrap container exposes both
+   * `serviceDb` and `appDb` as postgres-js clients (see
+   * `packages/db-client/src/build-client.ts`); the historical
+   * `NodePgDatabase` cast on this field was a TypeScript fiction, not a
+   * real driver split.
    */
-  db: NodePgDatabase;
+  db: PostgresJsDatabase;
   /**
    * Drizzle client wired to the RLS-enforced `app_user` role. Used by every
    * read on the `TenantOrderLedger` returned by `forTenant(ctx)` — wrapped
@@ -263,12 +268,13 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
     };
   };
 
-  // Loose `db` type for shared read helpers — accepts both `deps.db`
-  // (NodePgDatabase, root path) and the `tx` from withTenantScope (forTenant
-  // path). Both expose the same Drizzle query surface; carrying generic
-  // driver-typed signatures through every helper isn't worth it. Internal —
-  // not exposed.
-  // biome-ignore lint/suspicious/noExplicitAny: structural Drizzle widening across two drivers
+  // Loose `db` type for shared impl helpers — accepts both a
+  // `PostgresJsDatabase` (the legacy root path, `deps.db`) and the `tx`
+  // handed to us by `withTenantScope` (forTenant path), which is a
+  // postgres-js `PgTransaction`. Same driver, slightly different generic
+  // shapes; carrying the union through every helper signature isn't worth
+  // it. Internal — not exposed.
+  // biome-ignore lint/suspicious/noExplicitAny: structural widening between PgDatabase + PgTransaction
   type AnyDb = any;
 
   async function snapshotStateOnDb(
@@ -501,29 +507,60 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       market_id: string;
     }
   ): Promise<OpenOrderRow[]> {
-    const rows = await db
-      .select({
-        clientOrderId: polyCopyTradeFills.clientOrderId,
-        orderId: polyCopyTradeFills.orderId,
-        status: polyCopyTradeFills.status,
-        billingAccountId: polyCopyTradeFills.billingAccountId,
-        targetId: polyCopyTradeFills.targetId,
-        marketId: polyCopyTradeFills.marketId,
-        createdAt: polyCopyTradeFills.createdAt,
-        limitPrice: sql<
-          string | null
-        >`${polyCopyTradeFills.attributes}->>'limit_price'`,
-      })
-      .from(polyCopyTradeFills)
-      .where(
-        and(
-          eq(polyCopyTradeFills.billingAccountId, args.billing_account_id),
-          eq(polyCopyTradeFills.targetId, args.target_id),
-          eq(polyCopyTradeFills.marketId, args.market_id),
-          activeRestingPosition,
-          inArray(polyCopyTradeFills.status, ["pending", "open", "partial"])
-        )
+    let rows: Array<{
+      clientOrderId: string;
+      orderId: string | null;
+      status: string;
+      billingAccountId: string;
+      targetId: string;
+      marketId: string;
+      createdAt: Date;
+      limitPrice: string | null;
+    }>;
+    try {
+      rows = await db
+        .select({
+          clientOrderId: polyCopyTradeFills.clientOrderId,
+          orderId: polyCopyTradeFills.orderId,
+          status: polyCopyTradeFills.status,
+          billingAccountId: polyCopyTradeFills.billingAccountId,
+          targetId: polyCopyTradeFills.targetId,
+          marketId: polyCopyTradeFills.marketId,
+          createdAt: polyCopyTradeFills.createdAt,
+          limitPrice: sql<
+            string | null
+          >`${polyCopyTradeFills.attributes}->>'limit_price'`,
+        })
+        .from(polyCopyTradeFills)
+        .where(
+          and(
+            eq(polyCopyTradeFills.billingAccountId, args.billing_account_id),
+            eq(polyCopyTradeFills.targetId, args.target_id),
+            eq(polyCopyTradeFills.marketId, args.market_id),
+            activeRestingPosition,
+            inArray(polyCopyTradeFills.status, ["pending", "open", "partial"])
+          )
+        );
+    } catch (err: unknown) {
+      // Observability sibling to `snapshotStateOnDb` / `hasOpenForMarketImpl`.
+      // Re-throw (don't return `[]`) — the caller would otherwise treat the
+      // empty result as "no resting order" and proceed to place, racing
+      // through the application-level dedup. The DB partial unique index is
+      // the structural backstop, but skipping the tick is the safer mode
+      // when our read of the truth fails.
+      log.warn(
+        {
+          event: EVENT_NAMES.ADAPTER_ORDER_LEDGER_SNAPSHOT_ERROR,
+          errorCode: "find_open_for_market_fail_closed",
+          billing_account_id: args.billing_account_id,
+          target_id: args.target_id,
+          market_id: args.market_id,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "order-ledger findOpenForMarket failed; rethrowing so caller skips this tick"
       );
+      throw err;
+    }
     return rows.map(
       (r: {
         clientOrderId: string;
@@ -1192,9 +1229,20 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         `
       );
 
-      const row = rows.rows[0] as
-        | { oldest_ms: string | null; stale_60s: string; never_synced: string }
-        | undefined;
+      // postgres-js Drizzle returns the rows as an array-like `RowList`
+      // directly (no `.rows` wrapper). The pre-bug.5022 NodePgDatabase
+      // cast made TypeScript think this was a node-postgres `QueryResult`
+      // with a `.rows` field — but the underlying client was always
+      // postgres-js, so `rows.rows[0]` quietly evaluated to `undefined`
+      // at runtime and this method's `oldest_synced_row_age_ms` always
+      // returned `null`. Now indexing the array directly.
+      const row = (
+        rows as unknown as Array<{
+          oldest_ms: string | null;
+          stale_60s: string;
+          never_synced: string;
+        }>
+      )[0];
 
       return {
         oldest_synced_row_age_ms:

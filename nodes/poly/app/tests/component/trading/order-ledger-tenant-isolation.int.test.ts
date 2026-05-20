@@ -41,6 +41,7 @@ import {
 } from "@tests/_fixtures/auth/db-helpers";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getAppDb } from "@/adapters/server/db/client";
 import { createOrderLedger, type OrderLedger } from "@/features/trading";
 
 const MARKET_ID = `prediction-market:polymarket:0xbug5022-${"0".repeat(56)}`;
@@ -133,10 +134,18 @@ describe("order-ledger tenant isolation — bug.5022 regression (component)", ()
   beforeEach(async () => {
     tenantA = await seedTenant("A");
     tenantB = await seedTenant("B");
+    // bug.5022 reviewer catch — `getSeedDb()` uses the BYPASSRLS service
+    // role, which would silently bypass the FORTENANT_RUNS_UNDER_RLS
+    // backstop this test is supposed to prove. Wire `appDb` to the
+    // RLS-enforced `app_user` client (`getAppDb()`) so withTenantScope's
+    // `SET LOCAL app.current_user_id` actually gates row visibility — that
+    // way a future query that drops the explicit `eq(billingAccountId, ...)`
+    // filter still gets stripped by Postgres RLS, and this test would
+    // catch it. The legacy root `db` keeps seedDb (the legacy path is
+    // serviceDb in production too).
     ledger = createOrderLedger({
-      db: getSeedDb() as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
-      appDb:
-        getSeedDb() as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase,
+      db: getSeedDb() as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase,
+      appDb: getAppDb(),
       logger: noopLogger,
     });
   });
