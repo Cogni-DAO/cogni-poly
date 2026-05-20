@@ -12,7 +12,8 @@
  *   - STATUS_ENUM_PINNED — the `status` CHECK in migration 0027 rejects any writer that tries to store an unknown value; that + `LedgerStatus` keep the runtime + schema in sync.
  *   - CAPS_COUNT_INTENTS — `today_spent_usdc` + `fills_last_hour` count every row whose `observed_at` falls in the window, regardless of terminal status. Matches `decide.ts::INTENT_BASED_CAPS`.
  *   - CAP_IS_PER_TOKEN_ID (bug.5004) — `cumulativeIntentForMarketToken` and the atomic SELECT inside `insertPending` both filter by `attributes->>'token_id'`. YES + NO outcome tokens of the same conditionId have independent budgets. The advisory lock key includes token_id so concurrent placements on different tokens do not serialize unnecessarily.
- *   - TENANT_FILTER_IN_EVERY_SNAPSHOT_QUERY (bug.5022) — all four `snapshotState` reads (spend, rate, COID dedup, position aggregates) filter on both `targetId` AND `billingAccountId`. Pre-bug.5022 the billing_account_id arg was accepted but ignored, causing cross-tenant `position_aggregates` pollution under shared targets. Belt: `forTenant(ctx)` wraps every read in `withTenantScope(appDb, ctx.created_by_user_id, ...)` so RLS catches a future missing filter at the DB layer (suspenders: this filter).
+ *   - TENANT_FILTER_IN_EVERY_SNAPSHOT_QUERY (bug.5022) — all four `snapshotState` reads (spend, rate, COID dedup, position aggregates) filter on both `targetId` AND `billingAccountId`. Pre-bug.5022 the billing_account_id arg was accepted but ignored, causing cross-tenant `position_aggregates` pollution under shared targets.
+ *   - FORTENANT_READS_THROUGH_RLS (bug.5022) — `OrderLedger.forTenant(ctx)` routes all four read methods (`snapshotState`, `cumulativeIntentForMarketToken`, `hasOpenForMarket`, `findOpenForMarket`) through `withTenantScope(appDb, ctx.created_by_user_id, ...)`, activating Postgres RLS on `poly_copy_trade_{fills,decisions}`. RLS is the runtime backstop — even if a future query forgets the explicit `billingAccountId` filter, the DB strips rows owned by another user. task.5012 migrates the two remaining root writes (`insertPending`, `recordDecision`) onto the same wrap.
  *   - SYNCED_AT_WRITTEN_ON_EVERY_SYNC — `markSynced` sets `synced_at = now()` for every row for which the reconciler received a typed CLOB response (found OR not_found). Rows never checked show `synced_at IS NULL`. (task.0328 CP3)
  *   - REALIZED_COLUMNS_WRITTEN (bug.5018) — `markOrderId` and `updateStatus` write `price` / `shares` / `fees_usdc` directly into first-class columns (NOT JSONB) when the receipt carries them. Fields are skipped (column left NULL) when the upstream did not surface a realized value — distinct from "wrote 0". JSONB `attributes` carries only adapter-specific metadata (rawStatus, transactionsHashes, sidecar diagnostics) — no double-write.
  * Side-effects: IO (Postgres reads + writes).
@@ -20,6 +21,8 @@
  * @public
  */
 
+import { withTenantScope } from "@cogni/db-client";
+import { toUserId, userActor } from "@cogni/ids";
 import { EVENT_NAMES } from "@cogni/node-shared";
 import {
   polyCopyTradeDecisions,
@@ -38,6 +41,7 @@ import {
   sum,
 } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import type { Logger } from "pino";
 
 import {
@@ -69,16 +73,24 @@ import {
 /** Dependencies injected at the `bootstrap/container.ts` boundary. */
 export interface OrderLedgerDeps {
   /**
-   * Drizzle client — currently `serviceDb` (BYPASSRLS). Per-tenant safety is
-   * enforced application-side: every tenant-scoped query in this adapter
-   * filters explicitly by `billing_account_id` (bug.5022 fix). task.5012
-   * Phase 1 wraps the `forTenant(ctx)` methods in
-   * `withTenantScope(appDb, ctx.created_by_user_id, ...)` so RLS on
-   * `poly_copy_trade_{fills,decisions}` becomes the runtime backstop (DB-layer
-   * defense-in-depth on top of the explicit filter). Bundled with the privy
-   * adapter migration so the role-switch lands once across both surfaces.
+   * Drizzle client used by the legacy root surface — `serviceDb` (BYPASSRLS).
+   * Reads + writes here carry an explicit `billing_account_id` filter
+   * (bug.5022). Per-tenant callers should use `OrderLedger.forTenant(ctx)`
+   * which routes reads through `appDb` + `withTenantScope` (below). The two
+   * remaining root-only writes (`insertPending`, `recordDecision`) still
+   * flow through `serviceDb`; task.5012 migrates them.
    */
   db: NodePgDatabase;
+  /**
+   * Drizzle client wired to the RLS-enforced `app_user` role. Used by every
+   * read on the `TenantOrderLedger` returned by `forTenant(ctx)` — wrapped
+   * in `withTenantScope(appDb, ctx.created_by_user_id, ...)` so the
+   * row-level security policy on `poly_copy_trade_{fills,decisions}`
+   * (keyed on `current_setting('app.current_user_id', true)`) becomes the
+   * runtime DB-layer backstop even if an explicit `eq(billingAccountId, ...)`
+   * filter is forgotten. See bug.5022.
+   */
+  appDb: PostgresJsDatabase;
   /** Pino logger. Bind `component: "order-ledger"` at the caller if desired. */
   logger: Logger;
   /**
@@ -167,228 +179,201 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
   const effectiveMode: "live" | "paper" =
     deps.paperEnforceMode === "paper" ? "paper" : "live";
 
-  // `forTenant(ctx)` is a thin closure that delegates to the root methods
-  // assembled below with `ctx`'s tenant attribution stamped in, so we only
-  // maintain one implementation per query. `root` is referenced lazily — the
-  // arrow bodies execute long after `root` is initialized, so the forward
-  // reference is safe at runtime even though it reads visually backwards.
-  // task.5012 Phase 1 wraps each forTenant() method in `withTenantScope(appDb,
-  // ctx.created_by_user_id, ...)` so RLS becomes the DB-layer backstop.
-  const buildTenantSurface = (ctx: TenantContext): TenantOrderLedger => ({
-    snapshotState: (target_id) =>
-      root.snapshotState(target_id, ctx.billing_account_id),
-    cumulativeIntentForMarketToken: (market_id, token_id) =>
-      root.cumulativeIntentForMarketToken(
-        ctx.billing_account_id,
-        market_id,
-        token_id
-      ),
-    insertPending: (input: TenantScopedInsertPendingInput) =>
-      root.insertPending({
-        ...input,
-        billing_account_id: ctx.billing_account_id,
-        created_by_user_id: ctx.created_by_user_id,
-      }),
-    hasOpenForMarket: (args) =>
-      root.hasOpenForMarket({
-        billing_account_id: ctx.billing_account_id,
-        target_id: args.target_id,
-        market_id: args.market_id,
-      }),
-    findOpenForMarket: (args) =>
-      root.findOpenForMarket({
-        billing_account_id: ctx.billing_account_id,
-        target_id: args.target_id,
-        market_id: args.market_id,
-      }),
-    recordDecision: (input: TenantScopedRecordDecisionInput) =>
-      root.recordDecision({
-        ...input,
-        billing_account_id: ctx.billing_account_id,
-        created_by_user_id: ctx.created_by_user_id,
-      }),
-  });
+  // `forTenant(ctx)` opens a `withTenantScope(appDb, ctx.created_by_user_id, ...)`
+  // transaction around each tenant-scoped read so Postgres RLS on
+  // `poly_copy_trade_{fills,decisions}` (keyed on `current_setting('app.current_user_id',
+  // true)`) becomes the runtime backstop — even if a future query forgets the
+  // explicit `eq(billingAccountId, ...)` filter, RLS will still strip rows
+  // owned by another user. The four read methods (snapshotState,
+  // cumulativeIntentForMarketToken, hasOpenForMarket, findOpenForMarket) all
+  // go through this path. The two writes (insertPending, recordDecision)
+  // continue to use `deps.db` (serviceDb) and stamp `billing_account_id` /
+  // `created_by_user_id` explicitly in the row values — they were never the
+  // bug.5022 leak surface; task.5012 migrates them onto withTenantScope too.
+  // `root` is referenced lazily; the arrow bodies execute after init.
+  const buildTenantSurface = (ctx: TenantContext): TenantOrderLedger => {
+    const actor = userActor(toUserId(ctx.created_by_user_id));
+    return {
+      snapshotState: (target_id) =>
+        withTenantScope(deps.appDb, actor, async (tx) =>
+          snapshotStateOnDb(tx, target_id, ctx.billing_account_id)
+        ),
+      cumulativeIntentForMarketToken: (market_id, token_id) =>
+        withTenantScope(deps.appDb, actor, async (tx) =>
+          cumulativeIntentImpl(tx, ctx.billing_account_id, market_id, token_id)
+        ),
+      hasOpenForMarket: (args) =>
+        withTenantScope(deps.appDb, actor, async (tx) =>
+          hasOpenForMarketImpl(tx, {
+            billing_account_id: ctx.billing_account_id,
+            target_id: args.target_id,
+            market_id: args.market_id,
+          })
+        ),
+      findOpenForMarket: (args) =>
+        withTenantScope(deps.appDb, actor, async (tx) =>
+          findOpenForMarketImpl(tx, {
+            billing_account_id: ctx.billing_account_id,
+            target_id: args.target_id,
+            market_id: args.market_id,
+          })
+        ),
+      // task.5012 — these writes still flow through serviceDb via root.
+      // insertPending's atomic-cap transaction + recordDecision's plain
+      // insert both stamp tenant attribution explicitly; not the leak
+      // surface. Migrate when the surrounding callers can supply ctx.
+      insertPending: (input: TenantScopedInsertPendingInput) =>
+        root.insertPending({
+          ...input,
+          billing_account_id: ctx.billing_account_id,
+          created_by_user_id: ctx.created_by_user_id,
+        }),
+      recordDecision: (input: TenantScopedRecordDecisionInput) =>
+        root.recordDecision({
+          ...input,
+          billing_account_id: ctx.billing_account_id,
+          created_by_user_id: ctx.created_by_user_id,
+        }),
+    };
+  };
 
-  const root: OrderLedger = {
-    forTenant: buildTenantSurface,
+  // Loose `db` type for shared read helpers — accepts both `deps.db`
+  // (NodePgDatabase, root path) and the `tx` from withTenantScope (forTenant
+  // path). Both expose the same Drizzle query surface; carrying generic
+  // driver-typed signatures through every helper isn't worth it. Internal —
+  // not exposed.
+  // biome-ignore lint/suspicious/noExplicitAny: structural Drizzle widening across two drivers
+  type AnyDb = any;
 
-    async snapshotState(
-      target_id: string,
-      billing_account_id: string
-    ): Promise<StateSnapshot> {
-      try {
-        // Four concurrent reads — one round-trip to postgres-js, four statements.
-        // TENANT_FILTER_IN_EVERY_SNAPSHOT_QUERY (bug.5022): every read filters
-        // on BOTH `targetId` AND `billingAccountId`. Pre-fix, only `targetId`
-        // filtered and `position_aggregates` leaked across tenants sharing
-        // a target (e.g. multiple paper twins on swisstony).
-        const [spendRows, rateRows, cidRows, positionRows] = await Promise.all([
-          // Caps are INTENT-based (CAPS_COUNT_INTENTS invariant): filter by
-          // `created_at` (when we inserted the pending row) — NOT by
-          // `observed_at` (the upstream fill time, which can be arbitrarily old
-          // for a target's historical activity). See decide.ts::INTENT_BASED_CAPS.
-          deps.db
-            .select({
-              spent: sum(
-                sql<string>`COALESCE((${polyCopyTradeFills.attributes}->>'size_usdc')::numeric, 0)`
-              ),
-            })
-            .from(polyCopyTradeFills)
-            .where(
-              and(
-                eq(polyCopyTradeFills.billingAccountId, billing_account_id),
-                eq(polyCopyTradeFills.targetId, target_id),
-                gte(
-                  polyCopyTradeFills.createdAt,
-                  sql`date_trunc('day', now() at time zone 'utc') at time zone 'utc'`
-                )
-              )
+  async function snapshotStateOnDb(
+    db: AnyDb,
+    target_id: string,
+    billing_account_id: string
+  ): Promise<StateSnapshot> {
+    try {
+      const [spendRows, rateRows, cidRows, positionRows] = await Promise.all([
+        db
+          .select({
+            spent: sum(
+              sql<string>`COALESCE((${polyCopyTradeFills.attributes}->>'size_usdc')::numeric, 0)`
             ),
-          deps.db
-            .select({ n: count() })
-            .from(polyCopyTradeFills)
-            .where(
-              and(
-                eq(polyCopyTradeFills.billingAccountId, billing_account_id),
-                eq(polyCopyTradeFills.targetId, target_id),
-                gte(
-                  polyCopyTradeFills.createdAt,
-                  sql`now() - interval '1 hour'`
-                )
+          })
+          .from(polyCopyTradeFills)
+          .where(
+            and(
+              eq(polyCopyTradeFills.billingAccountId, billing_account_id),
+              eq(polyCopyTradeFills.targetId, target_id),
+              gte(
+                polyCopyTradeFills.createdAt,
+                sql`date_trunc('day', now() at time zone 'utc') at time zone 'utc'`
               )
-            ),
-          deps.db
-            .select({
-              cid: polyCopyTradeFills.clientOrderId,
-              fill_id: polyCopyTradeFills.fillId,
-            })
-            .from(polyCopyTradeFills)
-            .where(
-              and(
-                eq(polyCopyTradeFills.billingAccountId, billing_account_id),
-                eq(polyCopyTradeFills.targetId, target_id)
-              )
-            ),
-          // Generic per-(market_id, token_id) intent aggregation — net shares
-          // + gross USDC-in / shares-in. Intent-based, includes `pending` so
-          // within-tick fills see prior placements (per-fill snapshotState +
-          // INSERT_BEFORE_PLACE means the prior pending row is committed by
-          // the time the next fill snapshots). Mirror semantics overlay (e.g.
-          // `our_token_id` / `opposite_token_id`) is computed downstream in
-          // `@/features/copy-trade/types::aggregatePositionRows`.
-          deps.db
-            .select({
-              market_id: polyCopyTradeFills.marketId,
-              token_id: sql<
-                string | null
-              >`${polyCopyTradeFills.attributes}->>'token_id'`,
-              net_shares: sql<string>`COALESCE(SUM(
+            )
+          ),
+        db
+          .select({ n: count() })
+          .from(polyCopyTradeFills)
+          .where(
+            and(
+              eq(polyCopyTradeFills.billingAccountId, billing_account_id),
+              eq(polyCopyTradeFills.targetId, target_id),
+              gte(polyCopyTradeFills.createdAt, sql`now() - interval '1 hour'`)
+            )
+          ),
+        db
+          .select({
+            cid: polyCopyTradeFills.clientOrderId,
+            fill_id: polyCopyTradeFills.fillId,
+          })
+          .from(polyCopyTradeFills)
+          .where(
+            and(
+              eq(polyCopyTradeFills.billingAccountId, billing_account_id),
+              eq(polyCopyTradeFills.targetId, target_id)
+            )
+          ),
+        db
+          .select({
+            market_id: polyCopyTradeFills.marketId,
+            token_id: sql<
+              string | null
+            >`${polyCopyTradeFills.attributes}->>'token_id'`,
+            net_shares: sql<string>`COALESCE(SUM(
                 CASE WHEN ${polyCopyTradeFills.attributes}->>'side' = 'BUY'
                        THEN  (${polyCopyTradeFills.attributes}->>'size_usdc')::numeric / NULLIF((${polyCopyTradeFills.attributes}->>'limit_price')::numeric, 0)
                      WHEN ${polyCopyTradeFills.attributes}->>'side' = 'SELL'
                        THEN -((${polyCopyTradeFills.attributes}->>'size_usdc')::numeric / NULLIF((${polyCopyTradeFills.attributes}->>'limit_price')::numeric, 0))
                      ELSE 0 END
               ), 0)`,
-              gross_usdc_in: sql<string>`COALESCE(SUM(
+            gross_usdc_in: sql<string>`COALESCE(SUM(
                 CASE WHEN ${polyCopyTradeFills.attributes}->>'side' = 'BUY'
                        THEN (${polyCopyTradeFills.attributes}->>'size_usdc')::numeric
                      ELSE 0 END
               ), 0)`,
-              gross_shares_in: sql<string>`COALESCE(SUM(
+            gross_shares_in: sql<string>`COALESCE(SUM(
                 CASE WHEN ${polyCopyTradeFills.attributes}->>'side' = 'BUY'
                        THEN (${polyCopyTradeFills.attributes}->>'size_usdc')::numeric / NULLIF((${polyCopyTradeFills.attributes}->>'limit_price')::numeric, 0)
                      ELSE 0 END
               ), 0)`,
-            })
-            .from(polyCopyTradeFills)
-            .where(
-              and(
-                eq(polyCopyTradeFills.billingAccountId, billing_account_id),
-                eq(polyCopyTradeFills.targetId, target_id),
-                inArray(polyCopyTradeFills.status, [
-                  "pending",
-                  "open",
-                  "filled",
-                  "partial",
-                ]),
-                activeRestingPosition
-              )
+          })
+          .from(polyCopyTradeFills)
+          .where(
+            and(
+              eq(polyCopyTradeFills.billingAccountId, billing_account_id),
+              eq(polyCopyTradeFills.targetId, target_id),
+              inArray(polyCopyTradeFills.status, [
+                "pending",
+                "open",
+                "filled",
+                "partial",
+              ]),
+              activeRestingPosition
             )
-            .groupBy(
-              polyCopyTradeFills.marketId,
-              sql`${polyCopyTradeFills.attributes}->>'token_id'`
-            ),
-        ]);
+          )
+          .groupBy(
+            polyCopyTradeFills.marketId,
+            sql`${polyCopyTradeFills.attributes}->>'token_id'`
+          ),
+      ]);
 
-        const today_spent_usdc = Number(spendRows[0]?.spent ?? 0);
-        const fills_last_hour = Number(rateRows[0]?.n ?? 0);
-        const already_placed_ids = cidRows.map((r) => r.cid);
-        const placed_fill_ids = cidRows.map((r) => r.fill_id);
-        const position_aggregates = materializeIntentAggregates(positionRows);
+      return {
+        today_spent_usdc: Number(spendRows[0]?.spent ?? 0),
+        fills_last_hour: Number(rateRows[0]?.n ?? 0),
+        already_placed_ids: cidRows.map((r: { cid: string }) => r.cid),
+        placed_fill_ids: cidRows.map((r: { fill_id: string }) => r.fill_id),
+        position_aggregates: materializeIntentAggregates(positionRows),
+      };
+    } catch (err: unknown) {
+      log.warn(
+        {
+          event: EVENT_NAMES.ADAPTER_ORDER_LEDGER_SNAPSHOT_ERROR,
+          errorCode: "snapshot_fail_closed",
+          target_id,
+          billing_account_id,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "order-ledger snapshot failed; returning zeroes"
+      );
+      return {
+        today_spent_usdc: 0,
+        fills_last_hour: 0,
+        already_placed_ids: [],
+        placed_fill_ids: [],
+        position_aggregates: [],
+      };
+    }
+  }
 
-        return {
-          today_spent_usdc,
-          fills_last_hour,
-          already_placed_ids,
-          placed_fill_ids,
-          position_aggregates,
-        };
-      } catch (err: unknown) {
-        // FAIL_CLOSED — any error returns the fail-closed snapshot.
-        log.warn(
-          {
-            event: EVENT_NAMES.ADAPTER_ORDER_LEDGER_SNAPSHOT_ERROR,
-            errorCode: "snapshot_fail_closed",
-            target_id,
-            billing_account_id,
-            err: err instanceof Error ? err.message : String(err),
-          },
-          "order-ledger snapshot failed; returning zeroes"
-        );
-        return {
-          today_spent_usdc: 0,
-          fills_last_hour: 0,
-          already_placed_ids: [],
-          placed_fill_ids: [],
-          position_aggregates: [],
-        };
-      }
-    },
-
-    async cumulativeIntentForMarketToken(
-      billing_account_id: string,
-      market_id: string,
-      token_id: string
-    ): Promise<number> {
-      try {
-        // CAP_COUNTS_REALIZED_ON_CANCEL (bug.5050) — canceled rows that filled
-        // any portion before cancel leave realized shares in our wallet; the
-        // exposure persists past the order's terminal state. So:
-        //
-        //   pending/open/filled/partial   → full `size_usdc` (intent commits us)
-        //   error AND placement=market_fok → full `size_usdc` (bug.0430 broadcast race)
-        //   canceled                       → `filled_size_usdc` if present,
-        //                                    else `size_usdc` (pessimistic
-        //                                    fallback for legacy rows the
-        //                                    order-reconciler has not yet
-        //                                    polled — better to over-count
-        //                                    than to under-count and leak)
-        //   error AND placement=limit      → 0 (CLOB-rejected at API boundary)
-        //
-        // CAP_IS_PER_TOKEN_ID (bug.5004) — WHERE narrows to a single token of
-        // the conditionId. Opposite-side intent does not count. NULL-token_id
-        // legacy fallback is intentionally NOT included: production audit at
-        // bug.5004-design-time shows 0/29970 rows with NULL attributes.token_id;
-        // the always-stored guarantee in insertPending (`token_id` field) has
-        // held since the table's oldest row.
-        //
-        // The WHERE filter narrows row-scan to the same statuses that the CASE
-        // accepts; the CASE handles per-row weighting. Mirrors
-        // `ledger-lifecycle::ledgerCountedIntentUsdc` (used by FakeOrderLedger).
-        const rows = await deps.db
-          .select({
-            sum: sum(
-              sql<string>`CASE
+  async function cumulativeIntentImpl(
+    db: AnyDb,
+    billing_account_id: string,
+    market_id: string,
+    token_id: string
+  ): Promise<number> {
+    try {
+      const rows = await db
+        .select({
+          sum: sum(
+            sql<string>`CASE
                 WHEN ${polyCopyTradeFills.status} = 'canceled'
                   THEN COALESCE(
                     (${polyCopyTradeFills.attributes}->>'filled_size_usdc')::numeric,
@@ -402,45 +387,168 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
                   THEN COALESCE((${polyCopyTradeFills.attributes}->>'size_usdc')::numeric, 0)
                 ELSE 0
               END`
-            ),
-          })
-          .from(polyCopyTradeFills)
-          .where(
-            and(
-              eq(polyCopyTradeFills.billingAccountId, billing_account_id),
-              eq(polyCopyTradeFills.marketId, market_id),
-              sql`${polyCopyTradeFills.attributes}->>'token_id' = ${token_id}`,
-              activeRestingPosition,
-              or(
-                inArray(polyCopyTradeFills.status, [
-                  "pending",
-                  "open",
-                  "filled",
-                  "partial",
-                  "canceled",
-                ]),
-                and(
-                  eq(polyCopyTradeFills.status, "error"),
-                  sql`${polyCopyTradeFills.attributes}->>'placement' = 'market_fok'`
-                )
+          ),
+        })
+        .from(polyCopyTradeFills)
+        .where(
+          and(
+            eq(polyCopyTradeFills.billingAccountId, billing_account_id),
+            eq(polyCopyTradeFills.marketId, market_id),
+            sql`${polyCopyTradeFills.attributes}->>'token_id' = ${token_id}`,
+            activeRestingPosition,
+            or(
+              inArray(polyCopyTradeFills.status, [
+                "pending",
+                "open",
+                "filled",
+                "partial",
+                "canceled",
+              ]),
+              and(
+                eq(polyCopyTradeFills.status, "error"),
+                sql`${polyCopyTradeFills.attributes}->>'placement' = 'market_fok'`
               )
             )
-          );
-        return Number(rows[0]?.sum ?? 0);
-      } catch (err: unknown) {
-        log.warn(
-          {
-            event: EVENT_NAMES.ADAPTER_ORDER_LEDGER_SNAPSHOT_ERROR,
-            errorCode: "cumulative_intent_fail_closed",
-            billing_account_id,
-            market_id,
-            token_id,
-            err: err instanceof Error ? err.message : String(err),
-          },
-          "order-ledger cumulativeIntentForMarketToken failed; returning Infinity (skip placement)"
+          )
         );
-        return Number.POSITIVE_INFINITY;
-      }
+      return Number(rows[0]?.sum ?? 0);
+    } catch (err: unknown) {
+      log.warn(
+        {
+          event: EVENT_NAMES.ADAPTER_ORDER_LEDGER_SNAPSHOT_ERROR,
+          errorCode: "cumulative_intent_fail_closed",
+          billing_account_id,
+          market_id,
+          token_id,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "order-ledger cumulativeIntentForMarketToken failed; returning Infinity (skip placement)"
+      );
+      return Number.POSITIVE_INFINITY;
+    }
+  }
+
+  async function hasOpenForMarketImpl(
+    db: AnyDb,
+    args: {
+      billing_account_id: string;
+      target_id: string;
+      market_id: string;
+    }
+  ): Promise<boolean> {
+    try {
+      const rows = await db
+        .select({ cid: polyCopyTradeFills.clientOrderId })
+        .from(polyCopyTradeFills)
+        .where(
+          and(
+            eq(polyCopyTradeFills.billingAccountId, args.billing_account_id),
+            eq(polyCopyTradeFills.targetId, args.target_id),
+            eq(polyCopyTradeFills.marketId, args.market_id),
+            activeRestingPosition,
+            inArray(polyCopyTradeFills.status, ["pending", "open", "partial"])
+          )
+        )
+        .limit(1);
+      return rows.length > 0;
+    } catch (err: unknown) {
+      log.warn(
+        {
+          event: EVENT_NAMES.ADAPTER_ORDER_LEDGER_SNAPSHOT_ERROR,
+          errorCode: "has_open_for_market_fail_closed",
+          billing_account_id: args.billing_account_id,
+          target_id: args.target_id,
+          market_id: args.market_id,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "order-ledger hasOpenForMarket failed; returning true (skip placement)"
+      );
+      return true;
+    }
+  }
+
+  async function findOpenForMarketImpl(
+    db: AnyDb,
+    args: {
+      billing_account_id: string;
+      target_id: string;
+      market_id: string;
+    }
+  ): Promise<OpenOrderRow[]> {
+    const rows = await db
+      .select({
+        clientOrderId: polyCopyTradeFills.clientOrderId,
+        orderId: polyCopyTradeFills.orderId,
+        status: polyCopyTradeFills.status,
+        billingAccountId: polyCopyTradeFills.billingAccountId,
+        targetId: polyCopyTradeFills.targetId,
+        marketId: polyCopyTradeFills.marketId,
+        createdAt: polyCopyTradeFills.createdAt,
+        limitPrice: sql<
+          string | null
+        >`${polyCopyTradeFills.attributes}->>'limit_price'`,
+      })
+      .from(polyCopyTradeFills)
+      .where(
+        and(
+          eq(polyCopyTradeFills.billingAccountId, args.billing_account_id),
+          eq(polyCopyTradeFills.targetId, args.target_id),
+          eq(polyCopyTradeFills.marketId, args.market_id),
+          activeRestingPosition,
+          inArray(polyCopyTradeFills.status, ["pending", "open", "partial"])
+        )
+      );
+    return rows.map(
+      (r: {
+        clientOrderId: string;
+        orderId: string | null;
+        status: string;
+        billingAccountId: string;
+        targetId: string;
+        marketId: string;
+        createdAt: Date;
+        limitPrice: string | null;
+      }) => ({
+        client_order_id: r.clientOrderId,
+        order_id: r.orderId,
+        status: r.status as LedgerRow["status"],
+        billing_account_id: r.billingAccountId,
+        target_id: r.targetId,
+        market_id: r.marketId,
+        created_at: r.createdAt,
+        limit_price: parseLimitPrice(r.limitPrice),
+      })
+    );
+  }
+
+  const root: OrderLedger = {
+    forTenant: buildTenantSurface,
+
+    // bug.5022 — legacy root entry point. Delegates to `snapshotStateOnDb`
+    // running on `deps.db` (serviceDb / BYPASSRLS). `forTenant(ctx).snapshotState`
+    // is the RLS-enforced canonical surface. Marked `@deprecated` in the
+    // OrderLedger interface; task.5012 migrates the remaining callers.
+    snapshotState(
+      target_id: string,
+      billing_account_id: string
+    ): Promise<StateSnapshot> {
+      return snapshotStateOnDb(deps.db, target_id, billing_account_id);
+    },
+
+    // bug.5022 — legacy root entry point. Delegates to `cumulativeIntentImpl`
+    // running on `deps.db`. `forTenant(ctx).cumulativeIntentForMarketToken`
+    // is the RLS-enforced canonical surface.
+    cumulativeIntentForMarketToken(
+      billing_account_id: string,
+      market_id: string,
+      token_id: string
+    ): Promise<number> {
+      return cumulativeIntentImpl(
+        deps.db,
+        billing_account_id,
+        market_id,
+        token_id
+      );
     },
 
     async insertPending(input: InsertPendingInput): Promise<void> {
@@ -955,81 +1063,20 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       return rows.length;
     },
 
-    async hasOpenForMarket(args: {
+    hasOpenForMarket(args: {
       billing_account_id: string;
       target_id: string;
       market_id: string;
     }): Promise<boolean> {
-      try {
-        const rows = await deps.db
-          .select({ cid: polyCopyTradeFills.clientOrderId })
-          .from(polyCopyTradeFills)
-          .where(
-            and(
-              eq(polyCopyTradeFills.billingAccountId, args.billing_account_id),
-              eq(polyCopyTradeFills.targetId, args.target_id),
-              eq(polyCopyTradeFills.marketId, args.market_id),
-              activeRestingPosition,
-              inArray(polyCopyTradeFills.status, ["pending", "open", "partial"])
-            )
-          )
-          .limit(1);
-        return rows.length > 0;
-      } catch (err: unknown) {
-        // Fail-closed: prefer skip over double-bet on DB error.
-        log.warn(
-          {
-            event: EVENT_NAMES.ADAPTER_ORDER_LEDGER_SNAPSHOT_ERROR,
-            errorCode: "has_open_for_market_fail_closed",
-            billing_account_id: args.billing_account_id,
-            target_id: args.target_id,
-            market_id: args.market_id,
-            err: err instanceof Error ? err.message : String(err),
-          },
-          "order-ledger hasOpenForMarket failed; returning true (skip placement)"
-        );
-        return true;
-      }
+      return hasOpenForMarketImpl(deps.db, args);
     },
 
-    async findOpenForMarket(args: {
+    findOpenForMarket(args: {
       billing_account_id: string;
       target_id: string;
       market_id: string;
     }): Promise<OpenOrderRow[]> {
-      const rows = await deps.db
-        .select({
-          clientOrderId: polyCopyTradeFills.clientOrderId,
-          orderId: polyCopyTradeFills.orderId,
-          status: polyCopyTradeFills.status,
-          billingAccountId: polyCopyTradeFills.billingAccountId,
-          targetId: polyCopyTradeFills.targetId,
-          marketId: polyCopyTradeFills.marketId,
-          createdAt: polyCopyTradeFills.createdAt,
-          limitPrice: sql<
-            string | null
-          >`${polyCopyTradeFills.attributes}->>'limit_price'`,
-        })
-        .from(polyCopyTradeFills)
-        .where(
-          and(
-            eq(polyCopyTradeFills.billingAccountId, args.billing_account_id),
-            eq(polyCopyTradeFills.targetId, args.target_id),
-            eq(polyCopyTradeFills.marketId, args.market_id),
-            activeRestingPosition,
-            inArray(polyCopyTradeFills.status, ["pending", "open", "partial"])
-          )
-        );
-      return rows.map((r) => ({
-        client_order_id: r.clientOrderId,
-        order_id: r.orderId,
-        status: r.status as LedgerRow["status"],
-        billing_account_id: r.billingAccountId,
-        target_id: r.targetId,
-        market_id: r.marketId,
-        created_at: r.createdAt,
-        limit_price: parseLimitPrice(r.limitPrice),
-      }));
+      return findOpenForMarketImpl(deps.db, args);
     },
 
     async findStaleOpen(args: {

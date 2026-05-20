@@ -683,6 +683,8 @@ function createContainer(): Container {
   // poly-trade-executor.ts).
   const orderLedger = createOrderLedger({
     db: serviceDb as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
+    appDb:
+      db as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase,
     logger: log,
     paperEnforceMode: env.PAPER_ENFORCE_MODE,
   });
