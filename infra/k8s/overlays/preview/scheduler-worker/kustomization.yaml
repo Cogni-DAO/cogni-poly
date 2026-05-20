@@ -12,7 +12,7 @@ resources:
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    digest: "sha256:6467f90bc3895fadbbe708024dd13621fa9259ea55683309657794fad5dfa591"
+    digest: "sha256:c6b78d3418424060d82ce3e0994cab5a7c8c1a0312f4d65c7f2621fd49c8e3d4"
 
 patches:
   - target:
