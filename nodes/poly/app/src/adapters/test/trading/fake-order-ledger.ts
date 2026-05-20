@@ -38,6 +38,10 @@ import {
   type RecordDecisionInput,
   type StateSnapshot,
   type SyncHealthSummary,
+  type TenantContext,
+  type TenantOrderLedger,
+  type TenantScopedInsertPendingInput,
+  type TenantScopedRecordDecisionInput,
   type UpdateStatusInput,
 } from "@/features/trading/order-ledger.types";
 
@@ -172,7 +176,10 @@ export class FakeOrderLedger implements OrderLedger {
       config?.paperEnforceMode === "paper" ? "paper" : "live";
   }
 
-  async snapshotState(target_id: string): Promise<StateSnapshot> {
+  async snapshotState(
+    target_id: string,
+    billing_account_id: string
+  ): Promise<StateSnapshot> {
     if (this.failConfigRead) {
       // Match the real adapter's FAIL_CLOSED contract — no throw into caller.
       return {
@@ -190,7 +197,16 @@ export class FakeOrderLedger implements OrderLedger {
 
     // Caps filter on `created_at` (intent-submission time), not `observed_at`
     // (upstream fill time). Matches the real Drizzle adapter + CAPS_COUNT_INTENTS.
-    const myRows = this.rows.filter((r) => r.target_id === target_id);
+    //
+    // TENANT_FILTER_IN_EVERY_SNAPSHOT_QUERY (bug.5022): filter on BOTH
+    // billing_account_id AND target_id. Pre-fix the fake (matching the real
+    // adapter's bug at the time) filtered only on target_id, which is why
+    // the cross-tenant leak slipped past unit tests — N tenants sharing a
+    // target_id all saw each other's rows as "their own".
+    const myRows = this.rows.filter(
+      (r) =>
+        r.billing_account_id === billing_account_id && r.target_id === target_id
+    );
     const today_spent_usdc = myRows
       .filter((r) => r.created_at >= dayStartUtc)
       .reduce((sum, r) => {
@@ -210,6 +226,50 @@ export class FakeOrderLedger implements OrderLedger {
       already_placed_ids,
       placed_fill_ids,
       position_aggregates,
+    };
+  }
+
+  /**
+   * bug.5022 — tenant-scoped factory matching the real adapter's
+   * `OrderLedger.forTenant(ctx)`. Returns a closure-bound surface whose
+   * methods drop the tenant args (closed over `ctx`). Tests can use either
+   * the root surface (back-compat) or `forTenant(ctx)` (the canonical entry
+   * point).
+   */
+  forTenant(ctx: TenantContext): TenantOrderLedger {
+    return {
+      snapshotState: (target_id) =>
+        this.snapshotState(target_id, ctx.billing_account_id),
+      cumulativeIntentForMarketToken: (market_id, token_id) =>
+        this.cumulativeIntentForMarketToken(
+          ctx.billing_account_id,
+          market_id,
+          token_id
+        ),
+      insertPending: (input: TenantScopedInsertPendingInput) =>
+        this.insertPending({
+          ...input,
+          billing_account_id: ctx.billing_account_id,
+          created_by_user_id: ctx.created_by_user_id,
+        }),
+      hasOpenForMarket: (args) =>
+        this.hasOpenForMarket({
+          billing_account_id: ctx.billing_account_id,
+          target_id: args.target_id,
+          market_id: args.market_id,
+        }),
+      findOpenForMarket: (args) =>
+        this.findOpenForMarket({
+          billing_account_id: ctx.billing_account_id,
+          target_id: args.target_id,
+          market_id: args.market_id,
+        }),
+      recordDecision: (input: TenantScopedRecordDecisionInput) =>
+        this.recordDecision({
+          ...input,
+          billing_account_id: ctx.billing_account_id,
+          created_by_user_id: ctx.created_by_user_id,
+        }),
     };
   }
 

@@ -286,6 +286,23 @@ async function processFill(
   clock: () => Date,
   parentLog: LoggerPort
 ): Promise<void> {
+  // bug.5022 — construct the TenantContext envelope ONCE at the top of
+  // `processFill` and route every per-tenant READ through it
+  // (`snapshotState`, `cumulativeIntentForMarketToken`, `findOpenForMarket`).
+  // Each call is wrapped in `withTenantScope(appDb, ctx.created_by_user_id, ...)`
+  // inside the adapter so Postgres RLS strips any row owned by another user
+  // even if a future query forgets the explicit filter.
+  //
+  // Writes (`insertPending`, `recordDecision`, `markOrderId`, `markError`,
+  // `markCanceled`) still go through the root `deps.ledger.*` surface
+  // (serviceDb) — they stamp tenant attribution explicitly in the row
+  // values and were never the bug.5022 leak surface. task.5012 Phase 1
+  // migrates them onto the same `withTenantScope` wrap.
+  const tenantLedger = deps.ledger.forTenant({
+    billing_account_id: deps.target.billing_account_id,
+    created_by_user_id: deps.target.created_by_user_id,
+  });
+
   const client_order_id = clientOrderIdFor(
     deps.target.billing_account_id,
     deps.target.target_id,
@@ -294,10 +311,7 @@ async function processFill(
   const placement: PlacementWire =
     deps.target.placement.kind === "mirror_limit" ? "limit" : "market_fok";
 
-  const snapshot = await deps.ledger.snapshotState(
-    deps.target.target_id,
-    deps.target.billing_account_id
-  );
+  const snapshot = await tenantLedger.snapshotState(deps.target.target_id);
 
   const source: DecisionSource = fill.source as DecisionSource;
   const decisionBase = {
@@ -384,8 +398,7 @@ async function processFill(
     snapshot.already_placed_ids.includes(client_order_id) ||
     fillTokenId === undefined
       ? undefined
-      : await deps.ledger.cumulativeIntentForMarketToken(
-          deps.target.billing_account_id,
+      : await tenantLedger.cumulativeIntentForMarketToken(
           fill.market_id,
           fillTokenId
         );
@@ -480,7 +493,7 @@ async function processFill(
 
   if (plan.kind === "skip") {
     emitDecisionMetric(deps.metrics, "skipped", plan.reason, source, placement);
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "skipped",
       reason: plan.reason,
@@ -512,8 +525,7 @@ async function processFill(
   // subsequent mirror signal during a target price surge. Inspect the open
   // rows; cancel-then-place when the new intent's limit_price is materially
   // ahead of the resting price, else skip as before.
-  const open = await deps.ledger.findOpenForMarket({
-    billing_account_id: deps.target.billing_account_id,
+  const open = await tenantLedger.findOpenForMarket({
     target_id: deps.target.target_id,
     market_id: fill.market_id,
   });
@@ -527,7 +539,7 @@ async function processFill(
         source,
         placement
       );
-      await deps.ledger.recordDecision({
+      await tenantLedger.recordDecision({
         ...decisionBase,
         outcome: "skipped",
         reason: "already_resting",
@@ -863,6 +875,13 @@ async function processSellFill(args: {
     args;
   const { closePosition, getOperatorPositions } = deps;
 
+  // bug.5022 — tenantLedger for all per-tenant writes (recordDecision +
+  // insertPending). Uses appDb + withTenantScope; RLS active.
+  const tenantLedger = deps.ledger.forTenant({
+    billing_account_id: deps.target.billing_account_id,
+    created_by_user_id: deps.target.created_by_user_id,
+  });
+
   // Cancel resting mirror BUYs before position-close. task.5001.
   await cancelOpenMirrorOrdersForMarket({
     deps,
@@ -879,7 +898,7 @@ async function processSellFill(args: {
       source,
       placement
     );
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "skipped",
       reason: "sell_without_position",
@@ -919,7 +938,7 @@ async function processSellFill(args: {
       source,
       placement
     );
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "skipped",
       reason: "sell_without_position",
@@ -956,7 +975,7 @@ async function processSellFill(args: {
       source,
       placement
     );
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "skipped",
       reason: "sell_without_position",
@@ -1045,8 +1064,11 @@ async function cancelOpenMirrorOrdersForMarket(args: {
   const { deps, fill, log, reason } = args;
   const cancelOrder = deps.cancelOrder;
   if (!cancelOrder) return;
-  const open = await deps.ledger.findOpenForMarket({
+  const tenantLedger = deps.ledger.forTenant({
     billing_account_id: deps.target.billing_account_id,
+    created_by_user_id: deps.target.created_by_user_id,
+  });
+  const open = await tenantLedger.findOpenForMarket({
     target_id: deps.target.target_id,
     market_id: fill.market_id,
   });
@@ -1112,12 +1134,16 @@ async function executeMirrorOrder(
   intentExecutor?: (intent: OrderIntent) => Promise<OrderReceipt>,
   decisionLogFields?: Record<string, unknown>
 ): Promise<void> {
+  // bug.5022 — tenantLedger for all per-tenant writes (insertPending +
+  // recordDecision). Uses appDb + withTenantScope; RLS active.
+  const tenantLedger = deps.ledger.forTenant({
+    billing_account_id: deps.target.billing_account_id,
+    created_by_user_id: deps.target.created_by_user_id,
+  });
   const executor = intentExecutor ?? deps.placeIntent;
 
   try {
-    await deps.ledger.insertPending({
-      billing_account_id: deps.target.billing_account_id,
-      created_by_user_id: deps.target.created_by_user_id,
+    await tenantLedger.insertPending({
       target_id: deps.target.target_id,
       fill_id: fill.fill_id,
       observed_at: new Date(fill.observed_at),
@@ -1136,7 +1162,7 @@ async function executeMirrorOrder(
         source,
         placement
       );
-      await deps.ledger.recordDecision({
+      await tenantLedger.recordDecision({
         ...decisionBase,
         outcome: "skipped",
         reason: "already_resting",
@@ -1170,7 +1196,7 @@ async function executeMirrorOrder(
         source,
         placement
       );
-      await deps.ledger.recordDecision({
+      await tenantLedger.recordDecision({
         ...decisionBase,
         outcome: "skipped",
         reason: "position_cap_reached",
@@ -1209,7 +1235,7 @@ async function executeMirrorOrder(
       source,
       placement
     );
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "error",
       reason: "pending_insert_failed",
@@ -1241,7 +1267,7 @@ async function executeMirrorOrder(
       receipt,
     });
     emitDecisionMetric(deps.metrics, "placed", reason, source, placement);
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "placed",
       reason,
@@ -1310,7 +1336,7 @@ async function executeMirrorOrder(
       source,
       placement
     );
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "error",
       reason: "placement_failed",
