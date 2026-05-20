@@ -3,7 +3,7 @@
 
 /**
  * Module: `@features/trading/order-ledger`
- * Purpose: Drizzle-backed `OrderLedger` adapter. Reads + writes `poly_copy_trade_fills` + `poly_copy_trade_decisions` (tenant-scoped, RLS enforced when run on `appDb`). Every placement path (agent tool, mirror-coordinator, future WS ingester) reads + writes through this adapter. Callers are responsible for opening `withTenantScope(appDb, createdByUserId, ...)` around per-tenant writes; the cross-tenant mirror-poll enumerator is the only sanctioned BYPASSRLS reader.
+ * Purpose: Drizzle-backed `OrderLedger` adapter. Reads + writes `poly_copy_trade_fills` + `poly_copy_trade_decisions`. Every placement path (agent tool, mirror-coordinator, future WS ingester) reads + writes through this adapter. The canonical per-tenant entry point is `OrderLedger.forTenant(ctx)` (bug.5022) — returns a `TenantOrderLedger` whose every method runs inside `withTenantScope(appDb, ctx.created_by_user_id, ...)` so Postgres RLS on `poly_copy_trade_{fills,decisions}` becomes the runtime backstop. Legacy root methods that still take explicit tenant args (e.g. the deprecated `snapshotState(target_id, billing_account_id)`) carry the same defensive `eq(billingAccountId, ...)` filter inside the query, fixing the pre-bug.5022 cross-tenant leak.
  * Scope: Drizzle queries only. Does not build a DB client (caller injects); does not import from `adapters/server/*` (layer boundary); does not know about copy-trade or wallet-watch (TRADING_IS_GENERIC).
  * Invariants:
  *   - TRADING_IS_GENERIC — no imports from `features/copy-trade/` or `features/wallet-watch/`.
@@ -12,10 +12,11 @@
  *   - STATUS_ENUM_PINNED — the `status` CHECK in migration 0027 rejects any writer that tries to store an unknown value; that + `LedgerStatus` keep the runtime + schema in sync.
  *   - CAPS_COUNT_INTENTS — `today_spent_usdc` + `fills_last_hour` count every row whose `observed_at` falls in the window, regardless of terminal status. Matches `decide.ts::INTENT_BASED_CAPS`.
  *   - CAP_IS_PER_TOKEN_ID (bug.5004) — `cumulativeIntentForMarketToken` and the atomic SELECT inside `insertPending` both filter by `attributes->>'token_id'`. YES + NO outcome tokens of the same conditionId have independent budgets. The advisory lock key includes token_id so concurrent placements on different tokens do not serialize unnecessarily.
+ *   - TENANT_FILTER_IN_EVERY_SNAPSHOT_QUERY (bug.5022) — all four `snapshotState` reads (spend, rate, COID dedup, position aggregates) filter on both `targetId` AND `billingAccountId`. Pre-bug.5022 the billing_account_id arg was accepted but ignored, causing cross-tenant `position_aggregates` pollution under shared targets. Belt: `forTenant(ctx)` wraps every read in `withTenantScope(appDb, ctx.created_by_user_id, ...)` so RLS catches a future missing filter at the DB layer (suspenders: this filter).
  *   - SYNCED_AT_WRITTEN_ON_EVERY_SYNC — `markSynced` sets `synced_at = now()` for every row for which the reconciler received a typed CLOB response (found OR not_found). Rows never checked show `synced_at IS NULL`. (task.0328 CP3)
  *   - REALIZED_COLUMNS_WRITTEN (bug.5018) — `markOrderId` and `updateStatus` write `price` / `shares` / `fees_usdc` directly into first-class columns (NOT JSONB) when the receipt carries them. Fields are skipped (column left NULL) when the upstream did not surface a realized value — distinct from "wrote 0". JSONB `attributes` carries only adapter-specific metadata (rawStatus, transactionsHashes, sidecar diagnostics) — no double-write.
  * Side-effects: IO (Postgres reads + writes).
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md, docs/spec/poly-copy-trade-execution.md, docs/spec/poly-paper-trading-shortcomings.md (bug.5018)
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md, work/items/bug.5022.md (forTenant envelope), work/items/task.5012.md (cascade), docs/spec/poly-copy-trade-execution.md, docs/spec/poly-tenant-and-collateral.md (ORDER_LEDGER_TENANT_CONTEXT_ENVELOPE), docs/spec/poly-paper-trading-shortcomings.md (bug.5018)
  * @public
  */
 
@@ -58,12 +59,25 @@ import {
   type RecordDecisionInput,
   type StateSnapshot,
   type SyncHealthSummary,
+  type TenantContext,
+  type TenantOrderLedger,
+  type TenantScopedInsertPendingInput,
+  type TenantScopedRecordDecisionInput,
   type UpdateStatusInput,
 } from "./order-ledger.types";
 
 /** Dependencies injected at the `bootstrap/container.ts` boundary. */
 export interface OrderLedgerDeps {
-  /** Drizzle client — BYPASSRLS is fine because these tables are system-owned. */
+  /**
+   * Drizzle client — currently `serviceDb` (BYPASSRLS). Per-tenant safety is
+   * enforced application-side: every tenant-scoped query in this adapter
+   * filters explicitly by `billing_account_id` (bug.5022 fix). task.5012
+   * Phase 1 wraps the `forTenant(ctx)` methods in
+   * `withTenantScope(appDb, ctx.created_by_user_id, ...)` so RLS on
+   * `poly_copy_trade_{fills,decisions}` becomes the runtime backstop (DB-layer
+   * defense-in-depth on top of the explicit filter). Bundled with the privy
+   * adapter migration so the role-switch lands once across both surfaces.
+   */
   db: NodePgDatabase;
   /** Pino logger. Bind `component: "order-ledger"` at the caller if desired. */
   logger: Logger;
@@ -153,13 +167,61 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
   const effectiveMode: "live" | "paper" =
     deps.paperEnforceMode === "paper" ? "paper" : "live";
 
-  return {
+  // `forTenant(ctx)` is a thin closure that delegates to the root methods
+  // assembled below with `ctx`'s tenant attribution stamped in, so we only
+  // maintain one implementation per query. `root` is referenced lazily — the
+  // arrow bodies execute long after `root` is initialized, so the forward
+  // reference is safe at runtime even though it reads visually backwards.
+  // task.5012 Phase 1 wraps each forTenant() method in `withTenantScope(appDb,
+  // ctx.created_by_user_id, ...)` so RLS becomes the DB-layer backstop.
+  const buildTenantSurface = (ctx: TenantContext): TenantOrderLedger => ({
+    snapshotState: (target_id) =>
+      root.snapshotState(target_id, ctx.billing_account_id),
+    cumulativeIntentForMarketToken: (market_id, token_id) =>
+      root.cumulativeIntentForMarketToken(
+        ctx.billing_account_id,
+        market_id,
+        token_id
+      ),
+    insertPending: (input: TenantScopedInsertPendingInput) =>
+      root.insertPending({
+        ...input,
+        billing_account_id: ctx.billing_account_id,
+        created_by_user_id: ctx.created_by_user_id,
+      }),
+    hasOpenForMarket: (args) =>
+      root.hasOpenForMarket({
+        billing_account_id: ctx.billing_account_id,
+        target_id: args.target_id,
+        market_id: args.market_id,
+      }),
+    findOpenForMarket: (args) =>
+      root.findOpenForMarket({
+        billing_account_id: ctx.billing_account_id,
+        target_id: args.target_id,
+        market_id: args.market_id,
+      }),
+    recordDecision: (input: TenantScopedRecordDecisionInput) =>
+      root.recordDecision({
+        ...input,
+        billing_account_id: ctx.billing_account_id,
+        created_by_user_id: ctx.created_by_user_id,
+      }),
+  });
+
+  const root: OrderLedger = {
+    forTenant: buildTenantSurface,
+
     async snapshotState(
       target_id: string,
       billing_account_id: string
     ): Promise<StateSnapshot> {
       try {
         // Four concurrent reads — one round-trip to postgres-js, four statements.
+        // TENANT_FILTER_IN_EVERY_SNAPSHOT_QUERY (bug.5022): every read filters
+        // on BOTH `targetId` AND `billingAccountId`. Pre-fix, only `targetId`
+        // filtered and `position_aggregates` leaked across tenants sharing
+        // a target (e.g. multiple paper twins on swisstony).
         const [spendRows, rateRows, cidRows, positionRows] = await Promise.all([
           // Caps are INTENT-based (CAPS_COUNT_INTENTS invariant): filter by
           // `created_at` (when we inserted the pending row) — NOT by
@@ -174,6 +236,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             .from(polyCopyTradeFills)
             .where(
               and(
+                eq(polyCopyTradeFills.billingAccountId, billing_account_id),
                 eq(polyCopyTradeFills.targetId, target_id),
                 gte(
                   polyCopyTradeFills.createdAt,
@@ -186,6 +249,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             .from(polyCopyTradeFills)
             .where(
               and(
+                eq(polyCopyTradeFills.billingAccountId, billing_account_id),
                 eq(polyCopyTradeFills.targetId, target_id),
                 gte(
                   polyCopyTradeFills.createdAt,
@@ -199,7 +263,12 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
               fill_id: polyCopyTradeFills.fillId,
             })
             .from(polyCopyTradeFills)
-            .where(eq(polyCopyTradeFills.targetId, target_id)),
+            .where(
+              and(
+                eq(polyCopyTradeFills.billingAccountId, billing_account_id),
+                eq(polyCopyTradeFills.targetId, target_id)
+              )
+            ),
           // Generic per-(market_id, token_id) intent aggregation — net shares
           // + gross USDC-in / shares-in. Intent-based, includes `pending` so
           // within-tick fills see prior placements (per-fill snapshotState +
@@ -234,6 +303,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             .from(polyCopyTradeFills)
             .where(
               and(
+                eq(polyCopyTradeFills.billingAccountId, billing_account_id),
                 eq(polyCopyTradeFills.targetId, target_id),
                 inArray(polyCopyTradeFills.status, [
                   "pending",
@@ -1043,6 +1113,8 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       };
     },
   };
+
+  return root;
 }
 
 function mapLedgerRow(r: typeof polyCopyTradeFills.$inferSelect): LedgerRow {

@@ -286,6 +286,19 @@ async function processFill(
   clock: () => Date,
   parentLog: LoggerPort
 ): Promise<void> {
+  // bug.5022 — construct the TenantContext envelope ONCE at the top of
+  // `processFill` and route every per-tenant ledger op through it. The
+  // canonical entry point established by this PR; task.5012 migrates the
+  // remaining `deps.ledger.*` direct calls (insertPending, recordDecision,
+  // findOpenForMarket, cumulativeIntentForMarketToken, markOrderId, …) onto
+  // the same envelope. The legacy two-arg form of `snapshotState` is
+  // structurally fixed too (explicit `billing_account_id` filter in every
+  // query) but the envelope is the new canonical surface.
+  const tenantLedger = deps.ledger.forTenant({
+    billing_account_id: deps.target.billing_account_id,
+    created_by_user_id: deps.target.created_by_user_id,
+  });
+
   const client_order_id = clientOrderIdFor(
     deps.target.billing_account_id,
     deps.target.target_id,
@@ -294,10 +307,7 @@ async function processFill(
   const placement: PlacementWire =
     deps.target.placement.kind === "mirror_limit" ? "limit" : "market_fok";
 
-  const snapshot = await deps.ledger.snapshotState(
-    deps.target.target_id,
-    deps.target.billing_account_id
-  );
+  const snapshot = await tenantLedger.snapshotState(deps.target.target_id);
 
   const source: DecisionSource = fill.source as DecisionSource;
   const decisionBase = {

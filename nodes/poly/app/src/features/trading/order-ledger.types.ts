@@ -225,6 +225,31 @@ export interface TenantBinding {
   created_by_user_id: string;
 }
 
+/**
+ * Per-tenant context envelope (bug.5022). Construct once per per-tenant inner
+ * loop (mirror-pipeline `processFill`, per-request route handler) and pass to
+ * `OrderLedger.forTenant(ctx)` to obtain a `TenantOrderLedger` whose every
+ * method closes over the tenant. Compile-time guarantee that no caller can
+ * read or write tenant-scoped rows without naming the tenant.
+ *
+ * `created_by_user_id` drives PostgreSQL RLS — the adapter wraps each method
+ * in `withTenantScope(appDb, ctx.created_by_user_id, ...)` so the row-level
+ * security policy on `poly_copy_trade_{fills,decisions}` (keyed on
+ * `current_setting('app.current_user_id', true)`) becomes the runtime
+ * backstop even if SQL drift drops an explicit `.where()` clause.
+ *
+ * Same shape as `TenantBinding`; named separately because `TenantBinding`
+ * lives inside individual write-input types whose `target_id` field is
+ * still required, while `TenantContext` is the standalone envelope passed
+ * to `forTenant()`.
+ *
+ * See docs/spec/poly-tenant-and-collateral.md ORDER_LEDGER_TENANT_CONTEXT_ENVELOPE.
+ */
+export type TenantContext = {
+  billing_account_id: string;
+  created_by_user_id: string;
+};
+
 /** Input to `insertPending` — shape captured at decide-time. */
 export interface InsertPendingInput extends TenantBinding {
   target_id: string;
@@ -362,17 +387,114 @@ export interface SyncHealthSummary {
 }
 
 /**
+ * Tenant-scoped order ledger surface (bug.5022). Obtained via
+ * `OrderLedger.forTenant(ctx)`; methods close over the tenant so callers
+ * cannot accidentally read or write another tenant's rows. Each method is
+ * wrapped in `withTenantScope(appDb, ctx.created_by_user_id, ...)` so
+ * Postgres RLS on `poly_copy_trade_{fills,decisions}` is the runtime
+ * backstop even if SQL drift drops an explicit `.where()` clause.
+ *
+ * v0 carries the mirror-pipeline surface only. task.5012 widens this to
+ * cover the API-route surface (`listRecent`, `listTenantPositions`,
+ * `dailyTradeCounts`, `markPositionLifecycleByAsset`,
+ * `markPositionClosedByAsset`) and migrates `privy-poly-trader-wallet.adapter`
+ * + `wallet-analysis/copy-trade-pnl-service` onto the same envelope.
+ *
+ * @public
+ */
+export interface TenantOrderLedger {
+  /**
+   * Read runtime state for a target under this tenant. Same fail-closed
+   * semantics as the root `snapshotState` (zeroes + warn log on DB error;
+   * never throws). The four queries inside (spend, rate, COID dedup,
+   * position aggregates) all filter on `(billing_account_id, target_id)` —
+   * fixing the pre-bug.5022 leak where only `target_id` filtered and
+   * cross-tenant fills polluted `position_aggregates`.
+   */
+  snapshotState(target_id: string): Promise<StateSnapshot>;
+
+  /**
+   * Per-(tenant, market, token) cap-relevant USDC. Same semantics as the
+   * root method; tenant scope closed over.
+   */
+  cumulativeIntentForMarketToken(
+    market_id: string,
+    token_id: string
+  ): Promise<number>;
+
+  /**
+   * Insert a `pending` row scoped to this tenant. `input` no longer needs
+   * `billing_account_id` or `created_by_user_id` (stamped from `ctx`).
+   */
+  insertPending(input: TenantScopedInsertPendingInput): Promise<void>;
+
+  /**
+   * Partial-unique-index existence check scoped to this tenant.
+   */
+  hasOpenForMarket(args: {
+    target_id: string;
+    market_id: string;
+  }): Promise<boolean>;
+
+  /**
+   * All open rows for this tenant's `(target_id, market_id)` slot.
+   */
+  findOpenForMarket(args: {
+    target_id: string;
+    market_id: string;
+  }): Promise<OpenOrderRow[]>;
+
+  /**
+   * Append a `poly_copy_trade_decisions` row scoped to this tenant. `input`
+   * no longer needs `billing_account_id` or `created_by_user_id` (stamped
+   * from `ctx`).
+   */
+  recordDecision(input: TenantScopedRecordDecisionInput): Promise<void>;
+}
+
+/** Tenant-scoped variant of `InsertPendingInput` (bug.5022). */
+export type TenantScopedInsertPendingInput = Omit<
+  InsertPendingInput,
+  keyof TenantBinding
+>;
+
+/** Tenant-scoped variant of `RecordDecisionInput` (bug.5022). */
+export type TenantScopedRecordDecisionInput = Omit<
+  RecordDecisionInput,
+  keyof TenantBinding
+>;
+
+/**
  * Order ledger port. Production adapter is `createOrderLedger({ db })` in
  * `order-ledger.ts`; tests use `FakeOrderLedger` from
  * `adapters/test/trading/fake-order-ledger`. Every placement path in the poly
  * app reads + writes through this interface.
  *
+ * Tenant-scoped reads + writes go via `forTenant(ctx)` — see bug.5022 +
+ * `docs/spec/poly-tenant-and-collateral.md` ORDER_LEDGER_TENANT_CONTEXT_ENVELOPE.
+ * The unscoped methods kept on this root remain for back-compat; task.5012
+ * migrates each one onto the tenant-scoped surface (or, for explicitly
+ * cross-tenant ops like `findStaleOpen`, names them as such and keeps them
+ * on the root permanently).
+ *
  * @public
  */
 export interface OrderLedger {
   /**
+   * Return a `TenantOrderLedger` whose every method closes over `ctx` and
+   * runs under `withTenantScope(appDb, ctx.created_by_user_id, ...)`. The
+   * canonical entry point for per-tenant reads + writes (bug.5022).
+   */
+  forTenant(ctx: TenantContext): TenantOrderLedger;
+
+  /**
    * Read runtime state for a target. Fail-closed on DB error: returns
    * zeroes/empty arrays plus an error log on the caller's logger — never throws.
+   *
+   * @deprecated Use `forTenant(ctx).snapshotState(target_id)` instead. This
+   * legacy two-arg form filters on `target_id` only and leaks cross-tenant
+   * `position_aggregates` (bug.5022). Kept temporarily for non-mirror-pipeline
+   * callers; tracked for removal in task.5012.
    */
   snapshotState(
     target_id: string,
