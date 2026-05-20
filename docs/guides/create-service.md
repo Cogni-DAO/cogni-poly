@@ -142,11 +142,9 @@ A pod with its own Deployment, Service, optional Ingress, and per-env deploy bra
 
 ### Deploy branch bootstrap (chicken-and-egg)
 
-The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile if the branch doesn't exist.
+The AppSet generator's `revision: deploy/<env>-<name>` errors on first reconcile if the branch doesn't exist. Both flight workflows now auto-bootstrap via [`scripts/ci/checkout-per-node-deploy-branch.sh`](../../scripts/ci/checkout-per-node-deploy-branch.sh): if `deploy/<env>-<name>` is missing on origin they branch from `deploy/<env>` instead of hard-failing. That means a fresh service flowing candidate-a → preview → production needs **no operator command between merge and verify-deploy** (task.5013).
 
-**Canonical path** — run [`scripts/ops/bootstrap-per-node-deploy-branches.sh`](../../scripts/ops/bootstrap-per-node-deploy-branches.sh) **after merge**. It reads the v2 catalog, finds your new deploy unit, and pushes `deploy/{candidate-a,preview,production}-<name>` from the corresponding `deploy/<env>` whole-slot tips (atomic + idempotent + fast-forward-only). Document the post-merge command in the PR body.
-
-**Manual fallback** — `git push origin main:deploy/candidate-a-<name> main:deploy/preview-<name> main:deploy/production-<name>` if the bootstrap script isn't available.
+**Belt-and-suspenders** — [`scripts/ops/bootstrap-per-node-deploy-branches.sh`](../../scripts/ops/bootstrap-per-node-deploy-branches.sh) still seeds all three slots up front and is a safe idempotent fast-forward you can run any time after merge. Use it when you want the branches visible on origin before the first flight rather than created mid-leg.
 
 ### Flight phase 3 → 5 mechanics
 
