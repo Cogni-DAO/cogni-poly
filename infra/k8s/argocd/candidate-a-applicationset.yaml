@@ -25,11 +25,6 @@ spec:
         revision: deploy/candidate-a-poly-test-worker
         files:
           - path: "infra/catalog/poly-test-worker.yaml"
-    - git:
-        repoURL: https://github.com/cogni-dao/cogni-poly.git
-        revision: deploy/candidate-a-infratest-shape-a
-        files:
-          - path: "infra/catalog/infratest-shape-a.yaml"
   template:
     metadata:
       name: "candidate-a-{{.name}}"
