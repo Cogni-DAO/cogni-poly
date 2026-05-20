@@ -493,7 +493,7 @@ async function processFill(
 
   if (plan.kind === "skip") {
     emitDecisionMetric(deps.metrics, "skipped", plan.reason, source, placement);
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "skipped",
       reason: plan.reason,
@@ -539,7 +539,7 @@ async function processFill(
         source,
         placement
       );
-      await deps.ledger.recordDecision({
+      await tenantLedger.recordDecision({
         ...decisionBase,
         outcome: "skipped",
         reason: "already_resting",
@@ -875,6 +875,13 @@ async function processSellFill(args: {
     args;
   const { closePosition, getOperatorPositions } = deps;
 
+  // bug.5022 — tenantLedger for all per-tenant writes (recordDecision +
+  // insertPending). Uses appDb + withTenantScope; RLS active.
+  const tenantLedger = deps.ledger.forTenant({
+    billing_account_id: deps.target.billing_account_id,
+    created_by_user_id: deps.target.created_by_user_id,
+  });
+
   // Cancel resting mirror BUYs before position-close. task.5001.
   await cancelOpenMirrorOrdersForMarket({
     deps,
@@ -891,7 +898,7 @@ async function processSellFill(args: {
       source,
       placement
     );
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "skipped",
       reason: "sell_without_position",
@@ -931,7 +938,7 @@ async function processSellFill(args: {
       source,
       placement
     );
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "skipped",
       reason: "sell_without_position",
@@ -968,7 +975,7 @@ async function processSellFill(args: {
       source,
       placement
     );
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "skipped",
       reason: "sell_without_position",
@@ -1127,12 +1134,16 @@ async function executeMirrorOrder(
   intentExecutor?: (intent: OrderIntent) => Promise<OrderReceipt>,
   decisionLogFields?: Record<string, unknown>
 ): Promise<void> {
+  // bug.5022 — tenantLedger for all per-tenant writes (insertPending +
+  // recordDecision). Uses appDb + withTenantScope; RLS active.
+  const tenantLedger = deps.ledger.forTenant({
+    billing_account_id: deps.target.billing_account_id,
+    created_by_user_id: deps.target.created_by_user_id,
+  });
   const executor = intentExecutor ?? deps.placeIntent;
 
   try {
-    await deps.ledger.insertPending({
-      billing_account_id: deps.target.billing_account_id,
-      created_by_user_id: deps.target.created_by_user_id,
+    await tenantLedger.insertPending({
       target_id: deps.target.target_id,
       fill_id: fill.fill_id,
       observed_at: new Date(fill.observed_at),
@@ -1151,7 +1162,7 @@ async function executeMirrorOrder(
         source,
         placement
       );
-      await deps.ledger.recordDecision({
+      await tenantLedger.recordDecision({
         ...decisionBase,
         outcome: "skipped",
         reason: "already_resting",
@@ -1185,7 +1196,7 @@ async function executeMirrorOrder(
         source,
         placement
       );
-      await deps.ledger.recordDecision({
+      await tenantLedger.recordDecision({
         ...decisionBase,
         outcome: "skipped",
         reason: "position_cap_reached",
@@ -1224,7 +1235,7 @@ async function executeMirrorOrder(
       source,
       placement
     );
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "error",
       reason: "pending_insert_failed",
@@ -1256,7 +1267,7 @@ async function executeMirrorOrder(
       receipt,
     });
     emitDecisionMetric(deps.metrics, "placed", reason, source, placement);
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "placed",
       reason,
@@ -1325,7 +1336,7 @@ async function executeMirrorOrder(
       source,
       placement
     );
-    await deps.ledger.recordDecision({
+    await tenantLedger.recordDecision({
       ...decisionBase,
       outcome: "error",
       reason: "placement_failed",

@@ -13,7 +13,7 @@
  *   - CAPS_COUNT_INTENTS — `today_spent_usdc` + `fills_last_hour` count every row whose `observed_at` falls in the window, regardless of terminal status. Matches `decide.ts::INTENT_BASED_CAPS`.
  *   - CAP_IS_PER_TOKEN_ID (bug.5004) — `cumulativeIntentForMarketToken` and the atomic SELECT inside `insertPending` both filter by `attributes->>'token_id'`. YES + NO outcome tokens of the same conditionId have independent budgets. The advisory lock key includes token_id so concurrent placements on different tokens do not serialize unnecessarily.
  *   - TENANT_FILTER_IN_EVERY_SNAPSHOT_QUERY (bug.5022) — all four `snapshotState` reads (spend, rate, COID dedup, position aggregates) filter on both `targetId` AND `billingAccountId`. Pre-bug.5022 the billing_account_id arg was accepted but ignored, causing cross-tenant `position_aggregates` pollution under shared targets.
- *   - FORTENANT_READS_THROUGH_RLS (bug.5022) — `OrderLedger.forTenant(ctx)` routes all four read methods (`snapshotState`, `cumulativeIntentForMarketToken`, `hasOpenForMarket`, `findOpenForMarket`) through `withTenantScope(appDb, ctx.created_by_user_id, ...)`, activating Postgres RLS on `poly_copy_trade_{fills,decisions}`. RLS is the runtime backstop — even if a future query forgets the explicit `billingAccountId` filter, the DB strips rows owned by another user. task.5012 migrates the two remaining root writes (`insertPending`, `recordDecision`) onto the same wrap.
+ *   - FORTENANT_RUNS_UNDER_RLS (bug.5022) — every method on the `TenantOrderLedger` returned by `OrderLedger.forTenant(ctx)` — both reads (`snapshotState`, `cumulativeIntentForMarketToken`, `hasOpenForMarket`, `findOpenForMarket`) AND writes (`insertPending`, `recordDecision`) — runs inside `withTenantScope(appDb, ctx.created_by_user_id, ...)`. Postgres RLS on `poly_copy_trade_{fills,decisions}` is the runtime backstop: even if a query forgets the explicit `billingAccountId` filter, the DB strips rows owned by another user. The `insertPending` advisory_xact_lock holds for the lifetime of the outer withTenantScope tx (the inner `db.transaction(...)` becomes a SAVEPOINT) — same atomicity as the legacy root path.
  *   - SYNCED_AT_WRITTEN_ON_EVERY_SYNC — `markSynced` sets `synced_at = now()` for every row for which the reconciler received a typed CLOB response (found OR not_found). Rows never checked show `synced_at IS NULL`. (task.0328 CP3)
  *   - REALIZED_COLUMNS_WRITTEN (bug.5018) — `markOrderId` and `updateStatus` write `price` / `shares` / `fees_usdc` directly into first-class columns (NOT JSONB) when the receipt carries them. Fields are skipped (column left NULL) when the upstream did not surface a realized value — distinct from "wrote 0". JSONB `attributes` carries only adapter-specific metadata (rawStatus, transactionsHashes, sidecar diagnostics) — no double-write.
  * Side-effects: IO (Postgres reads + writes).
@@ -73,12 +73,20 @@ import {
 /** Dependencies injected at the `bootstrap/container.ts` boundary. */
 export interface OrderLedgerDeps {
   /**
-   * Drizzle client used by the legacy root surface — `serviceDb` (BYPASSRLS).
-   * Reads + writes here carry an explicit `billing_account_id` filter
-   * (bug.5022). Per-tenant callers should use `OrderLedger.forTenant(ctx)`
-   * which routes reads through `appDb` + `withTenantScope` (below). The two
-   * remaining root-only writes (`insertPending`, `recordDecision`) still
-   * flow through `serviceDb`; task.5012 migrates them.
+   * Drizzle client used by the LEGACY root surface — `serviceDb` (BYPASSRLS).
+   * Every per-tenant op carries an explicit `billing_account_id` filter
+   * inside the query (bug.5022). Used by:
+   *   - the legacy `snapshotState(target_id, billing_account_id)` form
+   *     (back-compat for non-mirror-pipeline callers; task.5012 migrates),
+   *   - the COID-keyed mutations (`markOrderId`, `markError`, `markCanceled`,
+   *     `updateStatus`, `markSynced`) — looked up by client_order_id which
+   *     is tenant-unique by hash; called from cross-tenant contexts
+   *     (the reconciler iterating all rows),
+   *   - the explicitly cross-tenant ops (`findStaleOpen`,
+   *     `listOpenOrPending`, `syncHealthSummary`) — documented as such on
+   *     the root `OrderLedger` interface (`CROSS_TENANT_OPS_NAMED_EXPLICITLY`).
+   * Per-tenant callers MUST use `OrderLedger.forTenant(ctx)` — that path
+   * routes through `appDb` + `withTenantScope` for both reads and writes.
    */
   db: NodePgDatabase;
   /**
@@ -228,22 +236,30 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             market_id: args.market_id,
           })
         ),
-      // task.5012 — these writes still flow through serviceDb via root.
-      // insertPending's atomic-cap transaction + recordDecision's plain
-      // insert both stamp tenant attribution explicitly; not the leak
-      // surface. Migrate when the surrounding callers can supply ctx.
+      // bug.5022 — writes also run inside `withTenantScope(appDb, ...)` so
+      // RLS on `poly_copy_trade_{fills,decisions}` enforces tenant isolation
+      // at the DB layer for inserts too, not just reads. The
+      // advisory_xact_lock inside `insertPendingOnDb`'s cap path holds for
+      // the lifetime of the outer withTenantScope tx (the inner
+      // `db.transaction(...)` becomes a SAVEPOINT under the outer tx) —
+      // serializing concurrent inserts on the same (billing, market, token)
+      // tuple, same semantics as the root path.
       insertPending: (input: TenantScopedInsertPendingInput) =>
-        root.insertPending({
-          ...input,
-          billing_account_id: ctx.billing_account_id,
-          created_by_user_id: ctx.created_by_user_id,
-        }),
+        withTenantScope(appDb, actor, async (tx) =>
+          insertPendingOnDb(tx, {
+            ...input,
+            billing_account_id: ctx.billing_account_id,
+            created_by_user_id: ctx.created_by_user_id,
+          })
+        ),
       recordDecision: (input: TenantScopedRecordDecisionInput) =>
-        root.recordDecision({
-          ...input,
-          billing_account_id: ctx.billing_account_id,
-          created_by_user_id: ctx.created_by_user_id,
-        }),
+        withTenantScope(appDb, actor, async (tx) =>
+          recordDecisionOnDb(tx, {
+            ...input,
+            billing_account_id: ctx.billing_account_id,
+            created_by_user_id: ctx.created_by_user_id,
+          })
+        ),
     };
   };
 
@@ -531,6 +547,209 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
     );
   }
 
+  async function insertPendingOnDb(
+    db: AnyDb,
+    input: InsertPendingInput
+  ): Promise<void> {
+    // Stash placement-display fields in `attributes` so the read API +
+    // dashboard don't need to re-derive from the intent blob.
+    const attrs = {
+      size_usdc: input.intent.size_usdc,
+      limit_price: input.intent.limit_price,
+      market_id: input.intent.market_id,
+      outcome: input.intent.outcome,
+      side: input.intent.side,
+      placement:
+        typeof input.intent.attributes?.placement === "string"
+          ? input.intent.attributes.placement
+          : undefined,
+      token_id:
+        typeof input.intent.attributes?.token_id === "string"
+          ? input.intent.attributes.token_id
+          : undefined,
+      condition_id:
+        typeof input.intent.attributes?.condition_id === "string"
+          ? input.intent.attributes.condition_id
+          : undefined,
+      target_wallet:
+        typeof input.intent.attributes?.target_wallet === "string"
+          ? input.intent.attributes.target_wallet
+          : undefined,
+      source_fill_id:
+        typeof input.intent.attributes?.source_fill_id === "string"
+          ? input.intent.attributes.source_fill_id
+          : undefined,
+      title:
+        typeof input.intent.attributes?.title === "string"
+          ? input.intent.attributes.title
+          : undefined,
+      slug:
+        typeof input.intent.attributes?.slug === "string"
+          ? input.intent.attributes.slug
+          : undefined,
+      event_slug:
+        typeof input.intent.attributes?.event_slug === "string"
+          ? input.intent.attributes.event_slug
+          : undefined,
+      event_title:
+        typeof input.intent.attributes?.event_title === "string"
+          ? input.intent.attributes.event_title
+          : undefined,
+      end_date:
+        typeof input.intent.attributes?.end_date === "string"
+          ? input.intent.attributes.end_date
+          : undefined,
+      game_start_time:
+        typeof input.intent.attributes?.game_start_time === "string"
+          ? input.intent.attributes.game_start_time
+          : undefined,
+      transaction_hash:
+        typeof input.intent.attributes?.transaction_hash === "string"
+          ? input.intent.attributes.transaction_hash
+          : undefined,
+    };
+
+    const values = {
+      billingAccountId: input.billing_account_id,
+      createdByUserId: input.created_by_user_id,
+      targetId: input.target_id,
+      fillId: input.fill_id,
+      marketId: input.intent.market_id,
+      observedAt: input.observed_at,
+      clientOrderId: input.intent.client_order_id,
+      orderId: null,
+      status: "pending" as const,
+      positionLifecycle: null,
+      attributes: attrs,
+      mode: effectiveMode,
+    };
+
+    const insert = async (insertDb: AnyDb) => {
+      await insertDb
+        .insert(polyCopyTradeFills)
+        .values(values)
+        .onConflictDoNothing({
+          target: [
+            polyCopyTradeFills.billingAccountId,
+            polyCopyTradeFills.targetId,
+            polyCopyTradeFills.fillId,
+          ],
+        });
+    };
+
+    try {
+      // CAP_IS_PER_TOKEN_ID (bug.5004): the atomic check requires a real
+      // token_id. `plan-mirror.ts::buildIntent` falls back to `""` when
+      // `fill.attributes.asset` is non-string (defensive); treat that as
+      // "no per-token cap available" rather than scoping to an empty-string
+      // token (which would silently match no rows and bypass the cap).
+      const rawTokenId =
+        typeof input.intent.attributes?.token_id === "string"
+          ? input.intent.attributes.token_id
+          : undefined;
+      const intentTokenId =
+        rawTokenId !== undefined && rawTokenId.length > 0
+          ? rawTokenId
+          : undefined;
+      if (
+        input.max_market_intent_usdc !== undefined &&
+        input.intent.side === "BUY" &&
+        intentTokenId !== undefined
+      ) {
+        const maxMarketIntentUsdc = input.max_market_intent_usdc;
+        const lockToken = intentTokenId;
+        // `db.transaction()` opens a top-level tx when `db` is `deps.db` and
+        // a SAVEPOINT when `db` is already a tx (withTenantScope path). The
+        // advisory_xact_lock holds for the lifetime of the enclosing tx,
+        // which is correct in both cases — under withTenantScope it holds
+        // for the entire RLS-scoped tx, serializing concurrent inserts on
+        // the same (billing, market, token) tuple as intended.
+        await db.transaction(async (tx: AnyDb) => {
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.billing_account_id}:${input.intent.market_id}:${lockToken}`}))`
+          );
+          const rows = await tx
+            .select({
+              sum: sum(
+                sql<string>`COALESCE((${polyCopyTradeFills.attributes}->>'size_usdc')::numeric, 0)`
+              ),
+            })
+            .from(polyCopyTradeFills)
+            .where(
+              and(
+                eq(
+                  polyCopyTradeFills.billingAccountId,
+                  input.billing_account_id
+                ),
+                eq(polyCopyTradeFills.marketId, input.intent.market_id),
+                sql`${polyCopyTradeFills.attributes}->>'token_id' = ${lockToken}`,
+                activeRestingPosition,
+                or(
+                  inArray(polyCopyTradeFills.status, [
+                    "pending",
+                    "open",
+                    "filled",
+                    "partial",
+                  ]),
+                  and(
+                    eq(polyCopyTradeFills.status, "error"),
+                    sql`${polyCopyTradeFills.attributes}->>'placement' = 'market_fok'`
+                  )
+                )
+              )
+            );
+          const currentIntent = Number(rows[0]?.sum ?? 0);
+          if (currentIntent + input.intent.size_usdc > maxMarketIntentUsdc) {
+            throw new PositionCapReachedError(
+              input.billing_account_id,
+              input.intent.market_id,
+              lockToken,
+              currentIntent,
+              input.intent.size_usdc,
+              maxMarketIntentUsdc
+            );
+          }
+          await insert(tx);
+        });
+      } else {
+        await insert(db);
+      }
+    } catch (err: unknown) {
+      // Partial unique index rejection → typed AlreadyRestingError. task.5001.
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code: unknown }).code === PG_UNIQUE_VIOLATION
+      ) {
+        throw new AlreadyRestingError(
+          input.billing_account_id,
+          input.target_id,
+          input.intent.market_id
+        );
+      }
+      throw err;
+    }
+  }
+
+  async function recordDecisionOnDb(
+    db: AnyDb,
+    input: RecordDecisionInput
+  ): Promise<void> {
+    await db.insert(polyCopyTradeDecisions).values({
+      billingAccountId: input.billing_account_id,
+      createdByUserId: input.created_by_user_id,
+      targetId: input.target_id,
+      fillId: input.fill_id,
+      outcome: input.outcome,
+      reason: input.reason,
+      intent: input.intent,
+      receipt: input.receipt,
+      decidedAt: input.decided_at,
+      mode: effectiveMode,
+    });
+  }
+
   const root: OrderLedger = {
     forTenant: buildTenantSurface,
 
@@ -561,188 +780,11 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       );
     },
 
-    async insertPending(input: InsertPendingInput): Promise<void> {
-      // Stash placement-display fields in `attributes` so the read API +
-      // dashboard don't need to re-derive from the intent blob.
-      const attrs = {
-        size_usdc: input.intent.size_usdc,
-        limit_price: input.intent.limit_price,
-        market_id: input.intent.market_id,
-        outcome: input.intent.outcome,
-        side: input.intent.side,
-        // task.5001: persist placement on the row so cumulativeIntentForMarketToken
-        // can distinguish limit-order errors (no CTF risk) from FOK errors
-        // (broadcast race — CTF can mint despite CLOB error). Without this
-        // field the cap-logic fallback assumes worst-case (FOK) for any error.
-        placement:
-          typeof input.intent.attributes?.placement === "string"
-            ? input.intent.attributes.placement
-            : undefined,
-        token_id:
-          typeof input.intent.attributes?.token_id === "string"
-            ? input.intent.attributes.token_id
-            : undefined,
-        condition_id:
-          typeof input.intent.attributes?.condition_id === "string"
-            ? input.intent.attributes.condition_id
-            : undefined,
-        target_wallet:
-          typeof input.intent.attributes?.target_wallet === "string"
-            ? input.intent.attributes.target_wallet
-            : undefined,
-        source_fill_id:
-          typeof input.intent.attributes?.source_fill_id === "string"
-            ? input.intent.attributes.source_fill_id
-            : undefined,
-        title:
-          typeof input.intent.attributes?.title === "string"
-            ? input.intent.attributes.title
-            : undefined,
-        slug:
-          typeof input.intent.attributes?.slug === "string"
-            ? input.intent.attributes.slug
-            : undefined,
-        event_slug:
-          typeof input.intent.attributes?.event_slug === "string"
-            ? input.intent.attributes.event_slug
-            : undefined,
-        event_title:
-          typeof input.intent.attributes?.event_title === "string"
-            ? input.intent.attributes.event_title
-            : undefined,
-        end_date:
-          typeof input.intent.attributes?.end_date === "string"
-            ? input.intent.attributes.end_date
-            : undefined,
-        game_start_time:
-          typeof input.intent.attributes?.game_start_time === "string"
-            ? input.intent.attributes.game_start_time
-            : undefined,
-        transaction_hash:
-          typeof input.intent.attributes?.transaction_hash === "string"
-            ? input.intent.attributes.transaction_hash
-            : undefined,
-      };
-
-      const values = {
-        billingAccountId: input.billing_account_id,
-        createdByUserId: input.created_by_user_id,
-        targetId: input.target_id,
-        fillId: input.fill_id,
-        marketId: input.intent.market_id,
-        observedAt: input.observed_at,
-        clientOrderId: input.intent.client_order_id,
-        orderId: null,
-        status: "pending" as const,
-        positionLifecycle: null,
-        attributes: attrs,
-        mode: effectiveMode,
-      };
-
-      const insert = async (db: Pick<NodePgDatabase, "insert">) => {
-        await db
-          .insert(polyCopyTradeFills)
-          .values(values)
-          .onConflictDoNothing({
-            target: [
-              polyCopyTradeFills.billingAccountId,
-              polyCopyTradeFills.targetId,
-              polyCopyTradeFills.fillId,
-            ],
-          });
-      };
-
-      try {
-        // CAP_IS_PER_TOKEN_ID (bug.5004): the atomic check requires a real
-        // token_id. `plan-mirror.ts::buildIntent` falls back to `""` when
-        // `fill.attributes.asset` is non-string (defensive); treat that as
-        // "no per-token cap available" rather than scoping to an empty-string
-        // token (which would silently match no rows and bypass the cap).
-        const rawTokenId =
-          typeof input.intent.attributes?.token_id === "string"
-            ? input.intent.attributes.token_id
-            : undefined;
-        const intentTokenId =
-          rawTokenId !== undefined && rawTokenId.length > 0
-            ? rawTokenId
-            : undefined;
-        if (
-          input.max_market_intent_usdc !== undefined &&
-          input.intent.side === "BUY" &&
-          intentTokenId !== undefined
-        ) {
-          const maxMarketIntentUsdc = input.max_market_intent_usdc;
-          const lockToken = intentTokenId;
-          await deps.db.transaction(async (tx) => {
-            // CAP_IS_PER_TOKEN_ID (bug.5004): lock key narrows to
-            // (billing, market, token). Concurrent placements on the opposite
-            // token of the same conditionId now run in parallel — they touch
-            // disjoint rows, so serialization buys nothing.
-            await tx.execute(
-              sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.billing_account_id}:${input.intent.market_id}:${lockToken}`}))`
-            );
-            const rows = await tx
-              .select({
-                sum: sum(
-                  sql<string>`COALESCE((${polyCopyTradeFills.attributes}->>'size_usdc')::numeric, 0)`
-                ),
-              })
-              .from(polyCopyTradeFills)
-              .where(
-                and(
-                  eq(
-                    polyCopyTradeFills.billingAccountId,
-                    input.billing_account_id
-                  ),
-                  eq(polyCopyTradeFills.marketId, input.intent.market_id),
-                  sql`${polyCopyTradeFills.attributes}->>'token_id' = ${lockToken}`,
-                  activeRestingPosition,
-                  or(
-                    inArray(polyCopyTradeFills.status, [
-                      "pending",
-                      "open",
-                      "filled",
-                      "partial",
-                    ]),
-                    and(
-                      eq(polyCopyTradeFills.status, "error"),
-                      sql`${polyCopyTradeFills.attributes}->>'placement' = 'market_fok'`
-                    )
-                  )
-                )
-              );
-            const currentIntent = Number(rows[0]?.sum ?? 0);
-            if (currentIntent + input.intent.size_usdc > maxMarketIntentUsdc) {
-              throw new PositionCapReachedError(
-                input.billing_account_id,
-                input.intent.market_id,
-                lockToken,
-                currentIntent,
-                input.intent.size_usdc,
-                maxMarketIntentUsdc
-              );
-            }
-            await insert(tx);
-          });
-        } else {
-          await insert(deps.db);
-        }
-      } catch (err: unknown) {
-        // Partial unique index rejection → typed AlreadyRestingError. task.5001.
-        if (
-          typeof err === "object" &&
-          err !== null &&
-          "code" in err &&
-          (err as { code: unknown }).code === PG_UNIQUE_VIOLATION
-        ) {
-          throw new AlreadyRestingError(
-            input.billing_account_id,
-            input.target_id,
-            input.intent.market_id
-          );
-        }
-        throw err;
-      }
+    // bug.5022 — legacy root entry point. Delegates to `insertPendingOnDb`
+    // running on `deps.db`. `forTenant(ctx).insertPending` is the
+    // RLS-enforced canonical surface; both paths share one implementation.
+    insertPending(input: InsertPendingInput): Promise<void> {
+      return insertPendingOnDb(deps.db, input);
     },
 
     async markOrderId(params: {
@@ -803,19 +845,11 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         .where(eq(polyCopyTradeFills.clientOrderId, params.client_order_id));
     },
 
-    async recordDecision(input: RecordDecisionInput): Promise<void> {
-      await deps.db.insert(polyCopyTradeDecisions).values({
-        billingAccountId: input.billing_account_id,
-        createdByUserId: input.created_by_user_id,
-        targetId: input.target_id,
-        fillId: input.fill_id,
-        outcome: input.outcome,
-        reason: input.reason,
-        intent: input.intent,
-        receipt: input.receipt,
-        decidedAt: input.decided_at,
-        mode: effectiveMode,
-      });
+    // bug.5022 — legacy root entry point. Delegates to `recordDecisionOnDb`
+    // running on `deps.db`. `forTenant(ctx).recordDecision` is the
+    // RLS-enforced canonical surface.
+    recordDecision(input: RecordDecisionInput): Promise<void> {
+      return recordDecisionOnDb(deps.db, input);
     },
 
     async listRecent(opts: ListRecentOptions): Promise<LedgerRow[]> {
