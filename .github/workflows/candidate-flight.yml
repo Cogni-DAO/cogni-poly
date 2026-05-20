@@ -218,21 +218,10 @@ jobs:
       - name: Prepare per-node deploy branch workspace
         env:
           GH_TOKEN: ${{ github.token }}
-          PER_NODE_BRANCH: deploy/${{ matrix.env }}-${{ matrix.node }}
-        run: |
-          set -euo pipefail
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" deploy-branch
-          cd deploy-branch
-          git fetch origin "+refs/heads/deploy/*:refs/remotes/origin/deploy/*"
-          if git rev-parse --verify --quiet "refs/remotes/origin/${PER_NODE_BRANCH}" >/dev/null; then
-            git checkout -B "${PER_NODE_BRANCH}" "origin/${PER_NODE_BRANCH}"
-          else
-            echo "::warning::Per-node branch ${PER_NODE_BRANCH} missing — bootstrapping from deploy/${{ matrix.env }}"
-            git fetch origin "deploy/${{ matrix.env }}"
-            git checkout -B "${PER_NODE_BRANCH}" "origin/deploy/${{ matrix.env }}"
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          GH_REPO: ${{ github.repository }}
+          OVERLAY_ENV: ${{ matrix.env }}
+          NODE: ${{ matrix.node }}
+        run: bash ci-src/scripts/ci/checkout-per-node-deploy-branch.sh
 
       - name: Snapshot deploy-branch overlay digests (pre-rsync)
         id: snapshot

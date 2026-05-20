@@ -208,14 +208,18 @@ jobs:
           OUTPUT_FILE: ${{ runner.temp }}/promote-payload-${{ matrix.node }}.json
         run: bash app-src/scripts/ci/build-promote-payload.sh
 
-      - name: Checkout per-node deploy branch
+      # task.5013 — auto-bootstrap deploy/<env>-<node> from deploy/<env> if a
+      # brand-new service is taking its first leg through this env. Shared with
+      # candidate-flight.yml so the candidate-a → preview → prod chain can't
+      # drift; the post-merge bootstrap script is belt-and-suspenders now.
+      - name: Checkout per-node deploy branch (auto-bootstrap)
         if: steps.payload.outputs.has_payload == 'true'
-        uses: actions/checkout@v6
-        with:
-          ref: deploy/${{ needs.decide.outputs.environment }}-${{ matrix.node }}
-          fetch-depth: 1
-          token: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
-          path: deploy-branch
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
+          GH_REPO: ${{ github.repository }}
+          OVERLAY_ENV: ${{ needs.decide.outputs.environment }}
+          NODE: ${{ matrix.node }}
+        run: bash app-src/scripts/ci/checkout-per-node-deploy-branch.sh
 
       # bug.5012 + bug.5013 — snapshot deploy-branch overlay digest pins
       # BEFORE the main-rsync. Main's overlay digest pins are only ever a
