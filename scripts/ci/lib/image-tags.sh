@@ -85,6 +85,18 @@ deploy_unit_for_image() {
   printf '%s' "${_unit_for_image_cache[$image]}"
 }
 
+# Top-level `type` field of a deploy unit's catalog file. Returns non-zero
+# (no output) when the unit is unknown. Used by gating scripts that branch on
+# `type: node` vs `type: service` rather than hardcoding allowlists
+# (CATALOG_IS_SSOT, axiom 16).
+type_for_deploy_unit() {
+  local unit="$1"
+  if [ -z "${_images_for_unit_cache[$unit]+x}" ]; then
+    return 1
+  fi
+  yq -N '.type' "${_image_tags_catalog_root}/${unit}.yaml"
+}
+
 dockerfile_for_image()     { _yq_image_field "$1" ".dockerfile"; }
 image_name_for_image()     { _yq_image_field "$1" ".image_name"; }
 image_tag_suffix_for_image() { _yq_image_field "$1" ".image_tag_suffix"; }
