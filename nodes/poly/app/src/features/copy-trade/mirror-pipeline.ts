@@ -287,13 +287,17 @@ async function processFill(
   parentLog: LoggerPort
 ): Promise<void> {
   // bug.5022 — construct the TenantContext envelope ONCE at the top of
-  // `processFill` and route every per-tenant ledger op through it. The
-  // canonical entry point established by this PR; task.5012 migrates the
-  // remaining `deps.ledger.*` direct calls (insertPending, recordDecision,
-  // findOpenForMarket, cumulativeIntentForMarketToken, markOrderId, …) onto
-  // the same envelope. The legacy two-arg form of `snapshotState` is
-  // structurally fixed too (explicit `billing_account_id` filter in every
-  // query) but the envelope is the new canonical surface.
+  // `processFill` and route every per-tenant READ through it
+  // (`snapshotState`, `cumulativeIntentForMarketToken`, `findOpenForMarket`).
+  // Each call is wrapped in `withTenantScope(appDb, ctx.created_by_user_id, ...)`
+  // inside the adapter so Postgres RLS strips any row owned by another user
+  // even if a future query forgets the explicit filter.
+  //
+  // Writes (`insertPending`, `recordDecision`, `markOrderId`, `markError`,
+  // `markCanceled`) still go through the root `deps.ledger.*` surface
+  // (serviceDb) — they stamp tenant attribution explicitly in the row
+  // values and were never the bug.5022 leak surface. task.5012 Phase 1
+  // migrates them onto the same `withTenantScope` wrap.
   const tenantLedger = deps.ledger.forTenant({
     billing_account_id: deps.target.billing_account_id,
     created_by_user_id: deps.target.created_by_user_id,
@@ -394,8 +398,7 @@ async function processFill(
     snapshot.already_placed_ids.includes(client_order_id) ||
     fillTokenId === undefined
       ? undefined
-      : await deps.ledger.cumulativeIntentForMarketToken(
-          deps.target.billing_account_id,
+      : await tenantLedger.cumulativeIntentForMarketToken(
           fill.market_id,
           fillTokenId
         );
@@ -522,8 +525,7 @@ async function processFill(
   // subsequent mirror signal during a target price surge. Inspect the open
   // rows; cancel-then-place when the new intent's limit_price is materially
   // ahead of the resting price, else skip as before.
-  const open = await deps.ledger.findOpenForMarket({
-    billing_account_id: deps.target.billing_account_id,
+  const open = await tenantLedger.findOpenForMarket({
     target_id: deps.target.target_id,
     market_id: fill.market_id,
   });
@@ -1055,8 +1057,11 @@ async function cancelOpenMirrorOrdersForMarket(args: {
   const { deps, fill, log, reason } = args;
   const cancelOrder = deps.cancelOrder;
   if (!cancelOrder) return;
-  const open = await deps.ledger.findOpenForMarket({
+  const tenantLedger = deps.ledger.forTenant({
     billing_account_id: deps.target.billing_account_id,
+    created_by_user_id: deps.target.created_by_user_id,
+  });
+  const open = await tenantLedger.findOpenForMarket({
     target_id: deps.target.target_id,
     market_id: fill.market_id,
   });
