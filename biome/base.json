@@ -247,6 +247,8 @@
         "services/scheduler-worker/vitest.config.ts",
         "services/poly-test-worker/tsup.config.ts",
         "services/poly-test-worker/vitest.config.ts",
+        "services/infratest-shape-a/tsup.config.ts",
+        "services/infratest-shape-a/vitest.config.ts",
         "vitest.workspace.ts",
         "nodes/*/app/vitest.component.config.mts",
         "nodes/*/app/vitest.external.config.mts",
