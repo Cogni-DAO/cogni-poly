@@ -774,45 +774,5 @@ module.exports = {
       comment:
         "Poly-only tools live in @cogni/poly-ai-tools. Non-poly nodes must not import them. Add new poly tools under nodes/poly/packages/ai-tools/ only.",
     },
-
-    // bug.5022 — `polyCopyTradeFills` / `polyCopyTradeDecisions` are
-    // tenant-scoped tables. Reads / writes outside the trading slice must go
-    // through `OrderLedger.forTenant(ctx)` so tenant attribution is
-    // structurally enforced (compile-time via TenantOrderLedger, runtime via
-    // explicit `eq(billingAccountId, ctx.billing_account_id)` in every
-    // adapter query; task.5012 Phase 1 adds the RLS withTenantScope wrap).
-    //
-    // Two temporary named exceptions, each owned by a task.5012 phase:
-    //   - `wallet-analysis/copy-trade-pnl-service.ts` — intentionally
-    //     cross-tenant research aggregator (paper-twin-diff driver). Owner:
-    //     task.5012 Phase 3 (formalize a `ResearchReadModelPort`).
-    //   - `wallet/privy-poly-trader-wallet.adapter.ts` — wallet adapter,
-    //     2,400 LOC, 18+ queries; correct today (explicit billing filter +
-    //     BYPASSRLS) but should adopt the envelope. Owner: task.5012 Phase 2.
-    //
-    // Test fixtures under `tests/component/copy-trade/` and
-    // `tests/component/wallet/` are also exempted — they seed tables
-    // directly to set up the SUT.
-    {
-      name: "tenant-scoped-tables-via-order-ledger-only",
-      severity: "error",
-      from: {
-        path: "^nodes/poly/app/(src|tests)/",
-        pathNot: [
-          "^nodes/poly/app/src/features/trading/",
-          "^nodes/poly/app/src/adapters/test/trading/",
-          "^nodes/poly/app/src/features/wallet-analysis/server/copy-trade-pnl-service\\.ts$",
-          "^nodes/poly/app/src/adapters/server/wallet/privy-poly-trader-wallet\\.adapter\\.ts$",
-          "^nodes/poly/app/tests/component/copy-trade/",
-          "^nodes/poly/app/tests/component/wallet/",
-          "^nodes/poly/app/tests/component/trading/",
-        ],
-      },
-      to: {
-        path: "^nodes/poly/packages/db-schema/src/copy-trade",
-      },
-      comment:
-        "bug.5022 — tenant-scoped tables (`poly_copy_trade_fills`, `poly_copy_trade_decisions`) must be accessed via `OrderLedger.forTenant(ctx)` so tenant attribution is structurally enforced. Two temporary named exceptions are tracked by task.5012 (privy adapter Phase 2; wallet-analysis cross-tenant research Phase 3); when those migrate, drop them from `pathNot`.",
-    },
   ],
 };
