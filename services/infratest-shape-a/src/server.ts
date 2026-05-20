@@ -19,7 +19,7 @@ type Handler = (req: IncomingMessage, res: ServerResponse) => void;
 
 export function buildHandler(deps: ServerDeps): Handler {
   const version = {
-    version: "0.0.0",
+    version: "0.0.1",
     buildSha: deps.config.BUILD_SHA,
     buildTime: deps.config.BUILD_TS,
     service: "infratest-shape-a",
