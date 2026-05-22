@@ -19,13 +19,13 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    digest: "sha256:d0bea8a8a50b74bc1120945064320c0e4eedd904162e251194bda48cc84c79ec"
+    digest: "sha256:7158d5600c6584735ba2ce60574a455b8bfdcdc09c79730007c100d5dcc6118d"
   - name: ghcr.io/cogni-dao/poly-paper-sidecar
     newName: ghcr.io/cogni-dao/poly-paper-sidecar
-    digest: "sha256:7463b9be0f0e19a10cd2bdceb6885261d8537042cbcfcff174cc5af5a4216823"
+    digest: "sha256:929b3d56bc96261b9fc32b248cd6cd8256bc6c5e6c6609fa708b6a56c73712b9"
   - name: ghcr.io/cogni-dao/poly-echo-sidecar
     newName: ghcr.io/cogni-dao/poly-echo-sidecar
-    digest: "sha256:330e3253b9b726e22f46fe79cfeeefd9472f725762f128a0be4b5345074adc31"
+    digest: "sha256:f1c441d76bafccd82ab3536f0c218b659f612df5f0a3dba70da825889dfcb600"
   # Sidecar digests are written by promote-build-payload + image-name-aware
   # promote-k8s-image (catalog v2). The poly-echo-sidecar placeholder newTag is
   # overwritten on first promote. Container shape lives in each sidecar's
@@ -133,3 +133,52 @@ patches:
   # The base manifest (`infra/k8s/base/node-app/external-services.yaml`)
   # provides selectorless Services + EndpointSlices pointing at 10.42.0.1
   # (k3s cni0 gateway). Read the base file header for the full rationale.
+
+# bug.5025: `namePrefix: poly-` above rewrites Service names but NOT the
+# `kubernetes.io/service-name` label on the paired EndpointSlices. Without
+# this fix-up, the EndpointSlices stay labelled `temporal-external` while
+# the Service they're meant to back is renamed `poly-temporal-external` —
+# the EndpointSlices are orphaned and CoreDNS returns NXDOMAIN. Replacements
+# below copy the post-namePrefix Service name into the paired EndpointSlice
+# label in lockstep. Apply to every external-services pair.
+replacements:
+  - source:
+      kind: Service
+      name: poly-temporal-external
+      fieldPath: metadata.name
+    targets:
+      - select: { kind: EndpointSlice, name: poly-temporal-external-1 }
+        fieldPaths:
+          - "metadata.labels.[kubernetes.io/service-name]"
+  - source:
+      kind: Service
+      name: poly-postgres-external
+      fieldPath: metadata.name
+    targets:
+      - select: { kind: EndpointSlice, name: poly-postgres-external-1 }
+        fieldPaths:
+          - "metadata.labels.[kubernetes.io/service-name]"
+  - source:
+      kind: Service
+      name: poly-litellm-external
+      fieldPath: metadata.name
+    targets:
+      - select: { kind: EndpointSlice, name: poly-litellm-external-1 }
+        fieldPaths:
+          - "metadata.labels.[kubernetes.io/service-name]"
+  - source:
+      kind: Service
+      name: poly-redis-external
+      fieldPath: metadata.name
+    targets:
+      - select: { kind: EndpointSlice, name: poly-redis-external-1 }
+        fieldPaths:
+          - "metadata.labels.[kubernetes.io/service-name]"
+  - source:
+      kind: Service
+      name: poly-doltgres-external
+      fieldPath: metadata.name
+    targets:
+      - select: { kind: EndpointSlice, name: poly-doltgres-external-1 }
+        fieldPaths:
+          - "metadata.labels.[kubernetes.io/service-name]"
