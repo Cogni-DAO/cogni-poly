@@ -1,12 +1,22 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
-# Selectorless Services + EndpointSlices for k8s→Compose connectivity.
-# Node apps run in k3s; infra (Postgres, Temporal, LiteLLM, Redis) runs on Compose.
-# These let pods reach Compose services via k8s DNS.
+# Selectorless Services + EndpointSlices for k8s → host-Compose connectivity.
+# Node apps run in k3s; infra (Postgres, Temporal, LiteLLM, Redis, Doltgres)
+# runs on Compose on the same VM. These resources let pods reach Compose
+# services via standard k8s DNS (e.g. "postgres-external", "temporal-external").
 #
-# Base uses placeholder 10.0.0.1 — overlays MUST patch with the node's InternalIP.
-# k8s rejects loopback (127.0.0.1) in EndpointSlices. Use the node IP instead.
+# Address `10.42.0.1` is the k3s flannel default cni0 bridge — the host's
+# gateway from any pod's perspective. Same on every default-flannel k3s VM
+# (a k3s convention, not a host-specific IP). Compose containers binding
+# `0.0.0.0:<port>` are reachable here from the pod CIDR.
+#
+# bug.5025 (2026-05-22): a prior shape OVERRODE each Service to ExternalName
+# pointing at `<env>.vm.cognidao.org`. Public-hostname DNS is out-of-repo
+# state and drifts silently; switching to a k3s-internal convention keeps
+# addressing in git and survives VM reprovisions. Overlays MUST NOT
+# re-introduce ExternalName overrides unless a future env genuinely routes
+# through a separate host.
 
 # --- PostgreSQL ---
 apiVersion: v1
@@ -29,7 +39,7 @@ metadata:
 addressType: IPv4
 endpoints:
   - addresses:
-      - "10.0.0.1"
+      - "10.42.0.1"
 ports:
   - port: 5432
     protocol: TCP
@@ -57,7 +67,7 @@ metadata:
 addressType: IPv4
 endpoints:
   - addresses:
-      - "10.0.0.1"
+      - "10.42.0.1"
 ports:
   - port: 7233
     protocol: TCP
@@ -85,7 +95,7 @@ metadata:
 addressType: IPv4
 endpoints:
   - addresses:
-      - "10.0.0.1"
+      - "10.42.0.1"
 ports:
   - port: 4000
     protocol: TCP
@@ -113,7 +123,7 @@ metadata:
 addressType: IPv4
 endpoints:
   - addresses:
-      - "10.0.0.1"
+      - "10.42.0.1"
 ports:
   - port: 5435
     protocol: TCP
@@ -141,7 +151,7 @@ metadata:
 addressType: IPv4
 endpoints:
   - addresses:
-      - "10.0.0.1"
+      - "10.42.0.1"
 ports:
   - port: 6379
     protocol: TCP
