@@ -39,7 +39,12 @@ export {
   shouldCountLedgerTrade,
   TERMINAL_LEDGER_POSITION_LIFECYCLES,
 } from "./ledger-lifecycle";
-export { createOrderLedger, type OrderLedgerDeps } from "./order-ledger";
+export {
+  createOrderLedger,
+  type OrderLedgerDeps,
+  SNAPSHOT_DEDUP_ROW_CAP,
+  SNAPSHOT_DEDUP_WINDOW_DAYS,
+} from "./order-ledger";
 export {
   AlreadyRestingError,
   type InsertPendingInput,

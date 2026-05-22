@@ -121,19 +121,23 @@ export interface StateSnapshot {
   today_spent_usdc: number;
   fills_last_hour: number;
   /**
-   * `client_order_id` values already in the ledger for this target_id. Used by
-   * plan-mirror's `already_placed` gate. **Note**: see `placed_fill_ids` —
-   * after the `clientOrderIdFor` shape change (multi-tenant PK fix), the COID
-   * stored on a pre-cutover row will not match a freshly computed COID for the
-   * same `(target_id, fill_id)`. `placed_fill_ids` is the durable membership
-   * key; this field stays as a fast-path for in-tick fresh placements.
+   * `client_order_id` values placed by this tenant for this target within the
+   * `DEDUP_WINDOW_IS_BOUNDED` window (bug.5023 — see `order-ledger.ts`).
+   * Used by plan-mirror's `already_placed` gate. Older COIDs that fall
+   * outside the window are caught by the PK `(target_id, fill_id)`
+   * ON CONFLICT DO NOTHING backstop on insert — they cannot cause duplicate
+   * placements. **Note**: see `placed_fill_ids` — after the `clientOrderIdFor`
+   * shape change (multi-tenant PK fix), the COID stored on a pre-cutover row
+   * will not match a freshly computed COID for the same `(target_id, fill_id)`;
+   * `placed_fill_ids` is the durable membership key.
    */
   already_placed_ids: string[];
   /**
-   * `fill_id` values already in the ledger for this target_id (any
-   * `billing_account_id`, any `status`). The real idempotency key: a fill
-   * already on record should not be re-mirrored regardless of which COID
-   * shape produced its row. Survives the `clientOrderIdFor` shape change.
+   * `fill_id` values placed by this tenant for this target within the
+   * `DEDUP_WINDOW_IS_BOUNDED` window (bug.5023). The real idempotency key: a
+   * fill already on record should not be re-mirrored regardless of which COID
+   * shape produced its row. Outside-window fills are caught by the PK
+   * backstop on insert.
    */
   placed_fill_ids: string[];
   /**

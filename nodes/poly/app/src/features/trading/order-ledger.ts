@@ -13,6 +13,7 @@
  *   - CAPS_COUNT_INTENTS — `today_spent_usdc` + `fills_last_hour` count every row whose `observed_at` falls in the window, regardless of terminal status. Matches `decide.ts::INTENT_BASED_CAPS`.
  *   - CAP_IS_PER_TOKEN_ID (bug.5004) — `cumulativeIntentForMarketToken` and the atomic SELECT inside `insertPending` both filter by `attributes->>'token_id'`. YES + NO outcome tokens of the same conditionId have independent budgets. The advisory lock key includes token_id so concurrent placements on different tokens do not serialize unnecessarily.
  *   - TENANT_FILTER_IN_EVERY_SNAPSHOT_QUERY (bug.5022) — all four `snapshotState` reads (spend, rate, COID dedup, position aggregates) filter on both `targetId` AND `billingAccountId`. Pre-bug.5022 the billing_account_id arg was accepted but ignored, causing cross-tenant `position_aggregates` pollution under shared targets.
+ *   - DEDUP_WINDOW_IS_BOUNDED (bug.5023) — the COID/fill_id dedup query is bounded to fills `created_at >= now() - SNAPSHOT_DEDUP_WINDOW_DAYS` AND `LIMIT SNAPSHOT_DEDUP_ROW_CAP` rows ordered by `created_at DESC`. Older COIDs/fill_ids that escape the window are caught by the PK `(target_id, fill_id)` ON CONFLICT DO NOTHING backstop in `insertPending` — collisions become silent no-ops, never duplicate placements. Pre-bug.5023 the dedup query was unbounded, returning every fill the tenant had ever placed on this target and gunking the Node event loop on every chain event.
  *   - FORTENANT_RUNS_UNDER_RLS (bug.5022) — every method on the `TenantOrderLedger` returned by `OrderLedger.forTenant(ctx)` — both reads (`snapshotState`, `cumulativeIntentForMarketToken`, `hasOpenForMarket`, `findOpenForMarket`) AND writes (`insertPending`, `recordDecision`) — runs inside `withTenantScope(appDb, ctx.created_by_user_id, ...)`. Postgres RLS on `poly_copy_trade_{fills,decisions}` is the runtime backstop: even if a query forgets the explicit `billingAccountId` filter, the DB strips rows owned by another user. The `insertPending` advisory_xact_lock holds for the lifetime of the outer withTenantScope tx (the inner `db.transaction(...)` becomes a SAVEPOINT) — same atomicity as the legacy root path.
  *   - SYNCED_AT_WRITTEN_ON_EVERY_SYNC — `markSynced` sets `synced_at = now()` for every row for which the reconciler received a typed CLOB response (found OR not_found). Rows never checked show `synced_at IS NULL`. (task.0328 CP3)
  *   - REALIZED_COLUMNS_WRITTEN (bug.5018) — `markOrderId` and `updateStatus` write `price` / `shares` / `fees_usdc` directly into first-class columns (NOT JSONB) when the receipt carries them. Fields are skipped (column left NULL) when the upstream did not surface a realized value — distinct from "wrote 0". JSONB `attributes` carries only adapter-specific metadata (rawStatus, transactionsHashes, sidecar diagnostics) — no double-write.
@@ -68,6 +69,34 @@ import {
   type TenantScopedRecordDecisionInput,
   type UpdateStatusInput,
 } from "./order-ledger.types";
+
+/**
+ * bug.5023 — `snapshotState.cidRows` (the COID/fill_id dedup arrays) is
+ * bounded to fills `created_at` within this many days. Anything older is
+ * statistically certain to be either (a) outside the mirror-pipeline cursor's
+ * replay window (`WARMUP_BACKLOG_SEC = 60s`, ticks every 30s) or (b) caught
+ * by the `(target_id, fill_id)` ON CONFLICT DO NOTHING backstop on insert.
+ *
+ * Pre-bug.5023 this was unbounded → O(N) heap allocation per fill processed,
+ * O(N²) cumulative work over a tenant's lifetime, OOM ~10–20h on a Tier-0
+ * pod with a single high-placement tenant.
+ *
+ * Exported so component tests can assert on the bound directly without
+ * embedding the magic number.
+ */
+export const SNAPSHOT_DEDUP_WINDOW_DAYS = 7;
+
+/**
+ * bug.5023 — hard ceiling on `snapshotState.cidRows` regardless of window.
+ * Belt-and-suspenders: a future regression that lets the window grow can't
+ * OOM the pod. `ORDER BY created_at DESC` ensures the kept rows are the
+ * most-recent — those are the ones the cursor-bounded fill stream could
+ * plausibly replay. The PK collision backstop catches anything older.
+ *
+ * Exported so component tests can assert on the bound directly without
+ * embedding the magic number.
+ */
+export const SNAPSHOT_DEDUP_ROW_CAP = 5000;
 
 /** Dependencies injected at the `bootstrap/container.ts` boundary. */
 export interface OrderLedgerDeps {
@@ -311,6 +340,17 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
               gte(polyCopyTradeFills.createdAt, sql`now() - interval '1 hour'`)
             )
           ),
+        // bug.5023: bound the COID/fill_id dedup window to the last
+        // SNAPSHOT_DEDUP_WINDOW_DAYS days + cap at SNAPSHOT_DEDUP_ROW_CAP.
+        // Pre-bug.5023 this query was unbounded — it returned every fill row
+        // this tenant had ever written for this target, hydrated into JS heap
+        // as two parallel string[]s on every fill processed by mirror-pipeline.
+        // The DEDUP_WINDOW_IS_BOUNDED invariant + the PK `(target_id, fill_id)`
+        // ON CONFLICT DO NOTHING backstop together guarantee correctness: any
+        // older COID/fill_id that escapes the window collides on insert and
+        // is a silent no-op. ORDER BY ... DESC + LIMIT keeps the most-recent
+        // rows, which are the ones the cursor-bounded fill stream could
+        // plausibly replay.
         db
           .select({
             cid: polyCopyTradeFills.clientOrderId,
@@ -320,9 +360,15 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           .where(
             and(
               eq(polyCopyTradeFills.billingAccountId, billing_account_id),
-              eq(polyCopyTradeFills.targetId, target_id)
+              eq(polyCopyTradeFills.targetId, target_id),
+              gte(
+                polyCopyTradeFills.createdAt,
+                sql`now() - interval '${sql.raw(String(SNAPSHOT_DEDUP_WINDOW_DAYS))} days'`
+              )
             )
-          ),
+          )
+          .orderBy(desc(polyCopyTradeFills.createdAt))
+          .limit(SNAPSHOT_DEDUP_ROW_CAP),
         db
           .select({
             market_id: polyCopyTradeFills.marketId,
