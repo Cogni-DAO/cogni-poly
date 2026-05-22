@@ -133,3 +133,52 @@ patches:
   # The base manifest (`infra/k8s/base/node-app/external-services.yaml`)
   # provides selectorless Services + EndpointSlices pointing at 10.42.0.1
   # (k3s cni0 gateway). Read the base file header for the full rationale.
+
+# bug.5025: `namePrefix: poly-` above rewrites Service names but NOT the
+# `kubernetes.io/service-name` label on the paired EndpointSlices. Without
+# this fix-up, the EndpointSlices stay labelled `temporal-external` while
+# the Service they're meant to back is renamed `poly-temporal-external` —
+# the EndpointSlices are orphaned and CoreDNS returns NXDOMAIN. Replacements
+# below copy the post-namePrefix Service name into the paired EndpointSlice
+# label in lockstep. Apply to every external-services pair.
+replacements:
+  - source:
+      kind: Service
+      name: poly-temporal-external
+      fieldPath: metadata.name
+    targets:
+      - select: { kind: EndpointSlice, name: poly-temporal-external-1 }
+        fieldPaths:
+          - "metadata.labels.[kubernetes.io/service-name]"
+  - source:
+      kind: Service
+      name: poly-postgres-external
+      fieldPath: metadata.name
+    targets:
+      - select: { kind: EndpointSlice, name: poly-postgres-external-1 }
+        fieldPaths:
+          - "metadata.labels.[kubernetes.io/service-name]"
+  - source:
+      kind: Service
+      name: poly-litellm-external
+      fieldPath: metadata.name
+    targets:
+      - select: { kind: EndpointSlice, name: poly-litellm-external-1 }
+        fieldPaths:
+          - "metadata.labels.[kubernetes.io/service-name]"
+  - source:
+      kind: Service
+      name: poly-redis-external
+      fieldPath: metadata.name
+    targets:
+      - select: { kind: EndpointSlice, name: poly-redis-external-1 }
+        fieldPaths:
+          - "metadata.labels.[kubernetes.io/service-name]"
+  - source:
+      kind: Service
+      name: poly-doltgres-external
+      fieldPath: metadata.name
+    targets:
+      - select: { kind: EndpointSlice, name: poly-doltgres-external-1 }
+        fieldPaths:
+          - "metadata.labels.[kubernetes.io/service-name]"
