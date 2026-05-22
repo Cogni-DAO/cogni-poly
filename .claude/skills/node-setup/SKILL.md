@@ -128,20 +128,21 @@ gh api -X PUT repos/<org>/<repo>/environments/<env>
 
 **Gate:** `gh secret list --env preview` shows all required secrets.
 
-### Phase 6: DNS — two layers, both required
+### Phase 6: DNS — only the user-facing record
 
-Pods reach host-network infra (Postgres, Temporal, LiteLLM, Redis) through a separate DNS layer from the user-facing one. The kustomize overlays use `Service: type: ExternalName → <env>.vm.cognidao.org` (per `bug.0295`). If only the user-facing record exists, the app crashes with Temporal/DB connection timeouts.
+Pods reach host-network infra (Postgres, Temporal, LiteLLM, Redis, Doltgres) through the k3s cni0 gateway (`10.42.0.1`) baked into the base `external-services.yaml` manifests — **no DNS lookup is involved** in pod-to-host service discovery. Only the user-facing record needs DNS.
 
-Create A records for both:
+Create one A record:
 
-| Record                  | Purpose                                             | Example                                 |
-| ----------------------- | --------------------------------------------------- | --------------------------------------- |
-| `<user-fqdn>`           | User-facing app via Caddy (matches `DOMAIN` secret) | `poly-test.cognidao.org → <vm-ip>`      |
-| `<env>.vm.cognidao.org` | Pod-to-host service discovery (`bug.0295`)          | `candidate-a.vm.cognidao.org → <vm-ip>` |
+| Record        | Purpose                                             | Example                            |
+| ------------- | --------------------------------------------------- | ---------------------------------- |
+| `<user-fqdn>` | User-facing app via Caddy (matches `DOMAIN` secret) | `poly-test.cognidao.org → <vm-ip>` |
 
 **Stale records from prior destroyed VMs silently break this** — always list-then-delete before POSTing a new A record. See [dns-ops skill](../dns-ops/SKILL.md).
 
-**Gate:** `dig +short <user-fqdn> @1.1.1.1` AND `dig +short <env>.vm.cognidao.org @1.1.1.1` both return the new VM IP.
+**Gate:** `dig +short <user-fqdn> @1.1.1.1` returns the new VM IP.
+
+> Historical: pre-bug.5025 the overlays used `Service: type: ExternalName → <env>.vm.cognidao.org` to find host services (the `bug.0295` shape). That out-of-repo DNS hop drifted silently when a record stayed stale across a VM reprovision; the pod-CIDR-to-public-IP hairpin was also fragile. `10.42.0.1` lives in the base manifest and survives reprovision automatically.
 
 ### Phase 6b: Declare the node in the catalog (v2 shape)
 
