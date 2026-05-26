@@ -1250,238 +1250,243 @@ function renderReportHtml(args: {
     return SERIES_COLORS[(idx + 1) % SERIES_COLORS.length]!;
   };
 
-  // ── Q1: paper fidelity ─────────────────────────────────────────────────────
-  const exactPct = fidelity && fidelity.shared_fills > 0
-    ? fidelity.exact_match / fidelity.shared_fills
-    : null;
-  const q1Cls = exactPct === null ? "" : exactPct >= 0.99 ? "pos" : "neg";
-  const q1Number = exactPct === null ? "—" : `${(exactPct * 100).toFixed(1)}%`;
-  const q1Verdict =
-    exactPct === null
-      ? "no shared fills to compare"
-      : exactPct >= 0.99
-        ? "YES — paper twin matches prod"
-        : "NO — paper twin does NOT match prod";
-  const topMm = fidelity?.top_mismatches[0];
-  const q1Cause = topMm
-    ? `Biggest mismatch: <code>${topMm.count}</code> fills where TWIN said <code>${escapeHtml(topMm.twin_outcome)}${topMm.twin_reason ? `(${escapeHtml(topMm.twin_reason)})` : ""}</code> but LIVE said <code>${escapeHtml(topMm.live_outcome)}${topMm.live_reason ? `(${escapeHtml(topMm.live_reason)})` : ""}</code>.`
-    : "";
-
-  // ── Q2: best paper algo ────────────────────────────────────────────────────
-  const isProdLive = (m: TenantMetrics): boolean =>
-    m.tenant.envSlug === "production" && m.tenant.role === "LIVE";
-  const paperRows = metrics
-    .filter((m) => !isProdLive(m))
-    .sort((a, b) => {
-      const pnlDiff = b.pnl.realized_pnl_usdc - a.pnl.realized_pnl_usdc;
-      if (pnlDiff !== 0) return pnlDiff;
-      return (b.market_coverage_pct ?? -1) - (a.market_coverage_pct ?? -1);
-    });
-  const prodLiveRow = metrics.find(isProdLive) ?? null;
-  const winner = paperRows[0];
-  const ranksTrustworthy = exactPct !== null && exactPct >= 0.99;
+  // ── fmt helpers (shared by Q1, Q2, appendix) ──────────────────────────────
   const fmtPnl = (n: number): string => {
     const sign = n < 0 ? "−" : n > 0 ? "+" : "";
     return `${sign}$${Math.abs(n).toFixed(2)}`;
   };
-  const winnerPnl = winner?.pnl.realized_pnl_usdc ?? 0;
-  const winnerLow = (winner?.pnl.resolved_markets ?? 0) < 3;
-  const q2Cls = !ranksTrustworthy
-    ? "gated"
-    : winnerPnl > 0
-      ? "pos"
-      : winnerPnl < 0
-        ? "neg"
-        : "";
-  const q2Number = !ranksTrustworthy
-    ? "GATED"
-    : winnerLow
-      ? "LOW SAMPLE"
-      : winner
-        ? fmtPnl(winnerPnl)
-        : "—";
-  const q2Verdict = !ranksTrustworthy
-    ? `wait — Q1 must pass first (currently ${q1Number})`
-    : winnerLow
-      ? `${winner ? tenantLabel(winner) : "—"} leads but only ${winner?.pnl.resolved_markets ?? 0} resolved markets`
-      : winner
-        ? `${tenantLabel(winner)} — ${winner.pnl.markets_won}W / ${winner.pnl.markets_lost}L`
-        : "no paper tenants in matrix";
-  const q2Ref = prodLiveRow
-    ? `prod LIVE reference: <code>${fmtPnl(prodLiveRow.pnl.realized_pnl_usdc)}</code> over <code>${prodLiveRow.pnl.resolved_markets}</code> resolved markets`
-    : "";
+  const fmtPct = (x: number | null, places = 1): string =>
+    x === null ? "—" : `${(x * 100).toFixed(places)}%`;
+  const isProdLive = (m: TenantMetrics): boolean =>
+    m.tenant.envSlug === "production" && m.tenant.role === "LIVE";
 
-  // ── Appendix bits (computed once) ──────────────────────────────────────────
-  const mismatchTable =
-    fidelity && fidelity.top_mismatches.length > 0
-      ? `<table class="ab"><thead><tr><th>twin said</th><th>live said</th><th class="num">count</th></tr></thead><tbody>${fidelity.top_mismatches
-          .map(
-            (m) =>
-              `<tr><td>${escapeHtml(m.twin_outcome)}${m.twin_reason ? ` <span class="muted">(${escapeHtml(m.twin_reason)})</span>` : ""}</td><td>${escapeHtml(m.live_outcome)}${m.live_reason ? ` <span class="muted">(${escapeHtml(m.live_reason)})</span>` : ""}</td><td class="num"><strong>${m.count}</strong></td></tr>`
-          )
-          .join("")}</tbody></table>`
-      : `<p class="muted">no mismatch data</p>`;
+  // ── Q1: does the paper mirror of the target match the target itself? ─────
+  // Pick the canonical paper-twin in priority order. POLY_PROD_TENANT_TRUST_TWIN
+  // is the textbook "paper mirror of derek's prod wallet"; falling back to the
+  // preview TRUST_TWIN keeps the question answerable when the prod block isn't
+  // configured. The question shifts from "twin ↔ live shared fills" (zero when
+  // prod isn't trading) to "paper-twin ↔ target on PnL%, placement, intent,
+  // markets" — exactly the same axes the leaderboard ranks on.
+  const q1Twin: TenantMetrics | null =
+    metrics.find(
+      (m) => m.tenant.envSlug === "production" && m.tenant.role === "TRUST_TWIN"
+    ) ??
+    metrics.find(
+      (m) => m.tenant.envSlug === "preview" && m.tenant.role === "TRUST_TWIN"
+    ) ??
+    null;
+  const q1TwinDistance =
+    q1Twin === null
+      ? null
+      : distances.find((d) => d.envKeyPrefix === q1Twin.tenant.envKeyPrefix) ??
+        null;
+  const q1Agg = q1TwinDistance?.aggregate_distance ?? null;
+  const q1Cls =
+    q1Agg === null ? "gated" : q1Agg < 0.25 ? "pos" : q1Agg < 0.75 ? "" : "neg";
+  const q1Number = q1Agg === null ? "—" : q1Agg.toFixed(3);
+  const q1Verdict =
+    q1Twin === null
+      ? "no paper-twin configured for target"
+      : q1Agg === null
+        ? `paper twin ${tenantLabel(q1Twin)} produced no comparable signal`
+        : q1Agg < 0.25
+          ? `🟢 paper twin tracks target (${tenantLabel(q1Twin)})`
+          : q1Agg < 0.75
+            ? `🟡 paper twin drifts from target (${tenantLabel(q1Twin)})`
+            : `🔴 paper twin does NOT mirror target (${tenantLabel(q1Twin)})`;
+  // Name the dominant divergence axis so the human knows what failed.
+  const q1Cause = (() => {
+    if (!q1TwinDistance || !q1Twin) return "";
+    const parts: Array<{ name: string; value: number; detail: string }> = [];
+    if (q1TwinDistance.pnl_pct_distance !== null) {
+      const targetPct =
+        target.intent_usdc > 0
+          ? target.pnl.realized_pnl_usdc / target.intent_usdc
+          : null;
+      const twinPct =
+        q1Twin.fills.intent_usdc > 0
+          ? q1Twin.pnl.realized_pnl_usdc / q1Twin.fills.intent_usdc
+          : null;
+      parts.push({
+        name: "PnL %",
+        value: q1TwinDistance.pnl_pct_distance,
+        detail: `target=${fmtPct(targetPct, 2)} twin=${fmtPct(twinPct, 2)}`,
+      });
+    }
+    if (q1TwinDistance.intent_usdc_ratio_distance !== null) {
+      parts.push({
+        name: "intent $",
+        value: q1TwinDistance.intent_usdc_ratio_distance,
+        detail: `target=$${target.intent_usdc.toFixed(0)} twin=$${q1Twin.fills.intent_usdc.toFixed(0)}`,
+      });
+    }
+    if (q1TwinDistance.markets_touched_ratio_distance !== null) {
+      parts.push({
+        name: "markets touched",
+        value: q1TwinDistance.markets_touched_ratio_distance,
+        detail: `target=${target.market_set.length} twin=${q1Twin.fills.markets_count}`,
+      });
+    }
+    if (parts.length === 0) return "";
+    parts.sort((a, b) => b.value - a.value);
+    const top = parts[0]!;
+    return `Dominant gap: <code>${top.name}</code> — ${top.detail} (axis distance ${top.value.toFixed(3)}).`;
+  })();
+  // Per-fill outcome-fidelity sub-signal (kept as a sidecar — informative when
+  // prod LIVE has fills in window, silent otherwise). Surfaces in Q1 detail.
+  const q1SubFidelity =
+    fidelity && fidelity.shared_fills > 0
+      ? `<p class="muted">Per-fill outcome match (twin ↔ prod LIVE on shared fills): <strong>${((fidelity.exact_match / fidelity.shared_fills) * 100).toFixed(1)}%</strong> exact on <code>${fidelity.shared_fills}</code> shared fills.</p>`
+      : `<p class="muted">No per-fill outcome-fidelity check this run — prod LIVE has <code>0</code> shared fills with the twin in window (i.e. derek's prod wallet did not trade).</p>`;
 
-  const fidelitySummary = fidelity
-    ? `<p class="muted">shared fills: <code>${fidelity.shared_fills}</code> · exact match: <code>${fidelity.exact_match}</code> · outcome match but reason differs: <code>${fidelity.outcome_match_reason_diff}</code> · outcome disagree: <code>${fidelity.outcome_disagree}</code> · twin-only: <code>${fidelity.twin_only_fills}</code> · live-only: <code>${fidelity.live_only_fills}</code></p>`
-    : "";
+  // ── Q2: which paper policy is closest to swisstony's actual behavior? ────
+  // Rank by aggregate distance ascending. Swisstony is the implicit 🎯 row
+  // (synthetic distance 0); prod LIVE pinned at the bottom as a real-money
+  // reference. Paper variants sit between them sorted by distance — first row
+  // is the promotion candidate (gated by Q1).
+  const paperRowsSorted = [...metrics]
+    .filter((m) => !isProdLive(m))
+    .map((m) => ({
+      m,
+      d: distances.find((d) => d.envKeyPrefix === m.tenant.envKeyPrefix) ?? null,
+    }))
+    .sort((a, b) => {
+      const ad = a.d?.aggregate_distance;
+      const bd = b.d?.aggregate_distance;
+      if (ad === null || ad === undefined) return 1;
+      if (bd === null || bd === undefined) return -1;
+      return ad - bd;
+    });
+  const prodLiveRow = metrics.find(isProdLive) ?? null;
+  const winner = paperRowsSorted[0]?.m ?? null;
+  const winnerDistance = paperRowsSorted[0]?.d?.aggregate_distance ?? null;
+  const q1IsRed = q1Agg !== null && q1Agg >= 0.75;
+  const q2Cls = q1IsRed ? "gated" : winnerDistance === null ? "" : "pos";
+  const q2Number =
+    q1IsRed
+      ? "GATED"
+      : winnerDistance === null
+        ? "—"
+        : winnerDistance.toFixed(3);
+  const q2Verdict = q1IsRed
+    ? `wait — Q1 says paper isn't a trustworthy substrate (distance ${q1Number})`
+    : winner
+      ? `${tenantLabel(winner)} hugs target tightest`
+      : "no paper tenants in matrix";
+  const q2Ref = (() => {
+    const targetPct =
+      target.intent_usdc > 0
+        ? target.pnl.realized_pnl_usdc / target.intent_usdc
+        : null;
+    return `🎯 swisstony actual: <code>${fmtPnl(target.pnl.realized_pnl_usdc)}</code> on <code>$${target.intent_usdc.toFixed(0)}</code> intent (<code>${fmtPct(targetPct, 2)}</code>) across <code>${target.market_set.length}</code> markets`;
+  })();
 
-  const targetVol =
-    target.cumulative_usdc.length > 0
-      ? target.cumulative_usdc[target.cumulative_usdc.length - 1]!.value
-      : 0;
-  const targetMarketCount = target.market_set.length;
-  const rankRows = [...paperRows, ...(prodLiveRow ? [prodLiveRow] : [])];
-  const algoTable = `<table class="ab algo"><thead><tr><th>tenant</th><th class="num">PnL $</th><th class="num">resolved</th><th class="num">W/L</th><th class="num">Δ vs swisstony</th><th class="num">$ filled</th><th class="num">capture %</th></tr></thead><tbody>${rankRows
-    .map((m, idx) => {
+  // ── Algo table: swisstony 🎯 row at top, paper variants sorted by distance,
+  // prod LIVE pinned at bottom. Same shape as before, just with the target as
+  // a first-class row (was missing before — the user's review called this out).
+  const targetPctOverall =
+    target.intent_usdc > 0
+      ? target.pnl.realized_pnl_usdc / target.intent_usdc
+      : null;
+  const targetRow = `<tr class="target"><td class="role">🎯 swisstony · target</td><td class="num pos"><strong>${fmtPnl(target.pnl.realized_pnl_usdc)}</strong></td><td class="num">${target.pnl.resolved_markets}</td><td class="num">${target.pnl.markets_won}/${target.pnl.markets_lost}</td><td class="num">${fmtPct(targetPctOverall, 2)}</td><td class="num">—</td><td class="num">$${target.intent_usdc.toFixed(0)}</td><td class="num">${target.market_set.length}</td></tr>`;
+  const paperTableRows = paperRowsSorted
+    .map((row, idx) => {
+      const m = row.m;
+      const d = row.d;
       const pnl = m.pnl.realized_pnl_usdc;
       const pnlCls = pnl > 0 ? "pos" : pnl < 0 ? "neg" : "";
-      const cov = m.market_coverage_pct;
-      const delta = cov === null ? null : 1 - cov;
-      const lowSample = m.pnl.resolved_markets < 3;
-      const refRow = isProdLive(m);
-      const trCls = refRow ? "ref" : idx === 0 && !refRow ? "rank-1" : "";
-      const capture = targetVol === 0 ? null : m.fills.realized_size_usdc / targetVol;
-      const refTag = refRow ? " (prod ref)" : "";
-      const ctlTag = m.tenant.envKeyPrefix === control.tenant.envKeyPrefix ? " (control)" : "";
-      const trophy = idx === 0 && !refRow && ranksTrustworthy ? " 🏆" : "";
-      return `<tr class="${trCls}"><td class="role" style="color:${colorFor(m)}">${escapeHtml(tenantLabel(m))}${ctlTag}${refTag}${trophy}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong>${lowSample ? " 🟡" : ""}</td><td class="num">${m.pnl.resolved_markets}</td><td class="num">${m.pnl.markets_won}/${m.pnl.markets_lost}</td><td class="num">${delta === null ? "—" : `${(delta * 100).toFixed(1)}%`}</td><td class="num">$${m.fills.realized_size_usdc.toFixed(2)}</td><td class="num">${capture === null ? "—" : `${(capture * 100).toFixed(3)}%`}</td></tr>`;
+      const lowSample = m.pnl.resolved_markets < 50;
+      const dist = d?.aggregate_distance ?? null;
+      const tenantPnlPct =
+        m.fills.intent_usdc > 0 ? pnl / m.fills.intent_usdc : null;
+      const trCls = idx === 0 && !q1IsRed ? "rank-1" : "";
+      const ctlTag =
+        m.tenant.envKeyPrefix === control.tenant.envKeyPrefix
+          ? " (Q1 twin)"
+          : "";
+      const trophy = idx === 0 && !q1IsRed ? " 🏆" : "";
+      return `<tr class="${trCls}"><td class="role" style="color:${colorFor(m)}">${escapeHtml(tenantLabel(m))}${ctlTag}${trophy}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong>${lowSample ? " 🟡" : ""}</td><td class="num">${m.pnl.resolved_markets}</td><td class="num">${m.pnl.markets_won}/${m.pnl.markets_lost}</td><td class="num">${fmtPct(tenantPnlPct, 2)}</td><td class="num"><strong>${dist === null ? "—" : dist.toFixed(3)}</strong></td><td class="num">$${m.fills.intent_usdc.toFixed(0)}</td><td class="num">${m.fills.markets_count}</td></tr>`;
     })
-    .join("")}</tbody></table>`;
-
-  const filledChartTwinLive = prodLive
-    ? svgLineChart({
-        title: "$ filled — twin vs live",
-        series: [
-          { label: "TWIN · paper", color: SERIES_COLORS[0]!, points: control.cumulative.realized_usdc },
-          { label: "LIVE · real", color: SERIES_COLORS[2]!, points: prodLive.cumulative.realized_usdc },
-        ],
-        xRange: { since, until },
-        height: 260,
-      })
+    .join("");
+  const refRowHtml = prodLiveRow
+    ? (() => {
+        const pnl = prodLiveRow.pnl.realized_pnl_usdc;
+        const pnlCls = pnl > 0 ? "pos" : pnl < 0 ? "neg" : "";
+        const refPct =
+          prodLiveRow.fills.intent_usdc > 0
+            ? pnl / prodLiveRow.fills.intent_usdc
+            : null;
+        return `<tr class="ref"><td class="role">${escapeHtml(tenantLabel(prodLiveRow))} (prod ref)</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong></td><td class="num">${prodLiveRow.pnl.resolved_markets}</td><td class="num">${prodLiveRow.pnl.markets_won}/${prodLiveRow.pnl.markets_lost}</td><td class="num">${fmtPct(refPct, 2)}</td><td class="num">—</td><td class="num">$${prodLiveRow.fills.intent_usdc.toFixed(0)}</td><td class="num">${prodLiveRow.fills.markets_count}</td></tr>`;
+      })()
     : "";
+  const algoTable = `<table class="ab algo"><thead><tr><th>tenant</th><th class="num">PnL $</th><th class="num">resolved</th><th class="num">W/L</th><th class="num">PnL %</th><th class="num">distance to 🎯</th><th class="num">intent $</th><th class="num">markets</th></tr></thead><tbody>${targetRow}${paperTableRows}${refRowHtml}</tbody></table>`;
+
+  // ── Q1 detail — twin vs target line chart ──────────────────────────────────
+  // Replaces the prior "twin vs prod LIVE" line; the new framing is twin
+  // tracking target. When prod LIVE has any fills they go on as a faint
+  // reference line.
+  const filledChartTwinTarget =
+    q1Twin === null
+      ? ""
+      : svgLineChart({
+          title: "cumulative $ filled — paper twin vs target",
+          series: [
+            {
+              label: `🎯 ${targetWallet.slice(0, 10)}… (target)`,
+              color: SERIES_COLORS[2]!,
+              points: target.cumulative_usdc,
+            },
+            {
+              label: `${tenantLabel(q1Twin)} (twin · paper)`,
+              color: SERIES_COLORS[0]!,
+              points: q1Twin.cumulative.realized_usdc,
+            },
+            ...(prodLive
+              ? [
+                  {
+                    label: `${tenantLabel(prodLive)} (prod ref)`,
+                    color: "#6b7280",
+                    points: prodLive.cumulative.realized_usdc,
+                  },
+                ]
+              : []),
+          ],
+          xRange: { since, until },
+          height: 280,
+        });
+  // Q2 detail — every paper variant + target overlaid.
   const filledChartAllTenants = svgLineChart({
-    title: "$ filled — all paper tenants",
-    series: metrics.map((m) => ({
-      label: tenantLabel(m),
-      color: colorFor(m),
-      points: m.cumulative.realized_usdc,
-    })),
+    title: "cumulative $ filled — all paper tenants vs target",
+    series: [
+      {
+        label: "🎯 target",
+        color: SERIES_COLORS[2]!,
+        points: target.cumulative_usdc,
+      },
+      ...metrics
+        .filter((m) => !isProdLive(m))
+        .map((m, i) => ({
+          label: tenantLabel(m),
+          color: SERIES_COLORS[(i + 3) % SERIES_COLORS.length]!,
+          points: m.cumulative.realized_usdc,
+        })),
+    ],
     xRange: { since, until },
     height: 280,
   });
 
-  // ── Structured Δ summary (above takeaway) ─────────────────────────────────
-  // Three machine-derived lines per the spec: closest-to-target, prod-twin
-  // fidelity, sample-size floor. Each line stands alone — the human can
-  // skim, the LLM-authored takeaway below adds judgement.
-  const fmtPct = (x: number | null, places = 1): string =>
-    x === null ? "—" : `${(x * 100).toFixed(places)}%`;
-  const distEmoji = (d: number | null): string => {
-    if (d === null) return "🟡";
-    if (d < 0.25) return "🟢";
-    if (d < 0.75) return "🟡";
-    return "🔴";
-  };
-  const fidelityEmoji = (cls: ProdTwinFidelity["classification"] | null): string => {
-    if (cls === "green") return "🟢";
-    if (cls === "yellow") return "🟡";
-    if (cls === "red") return "🔴";
-    return "⚪";
-  };
-  const closestLine = closest
-    ? `${distEmoji(closestDistance)} closest to target: <code>${escapeHtml(tenantLabel(closest))}</code> (distance=<code>${closestDistance === null ? "—" : closestDistance.toFixed(3)}</code>)`
-    : `⚪ closest to target: <code>—</code> (no tenant produced a comparable signal)`;
-  const fidelityLine = prodTwinFidelity
-    ? `${fidelityEmoji(prodTwinFidelity.classification)} prod-twin fidelity: shared=<code>${prodTwinFidelity.shared_fills}</code>, PnL Δ=<code>${fmt$(prodTwinFidelity.pnl_delta_usdc, true)}</code> (<code>${fmtPct(prodTwinFidelity.pnl_delta_pct)}</code>), classification=${fidelityEmoji(prodTwinFidelity.classification)}`
-    : `⚪ prod-twin fidelity: not configured — set POLY_PROD_TENANT_TRUST_TWIN_* env block for full signal`;
-  const sampleFloorMin = sampleFloorWarning
-    .slice()
-    .sort((a, b) => a.resolved_markets - b.resolved_markets)[0];
-  const sampleFloorEmoji = sampleFloorMin ? "🟡" : "🟢";
-  const sampleFloorLine = sampleFloorMin
-    ? `${sampleFloorEmoji} sample-size floor: <code>${escapeHtml(sampleFloorMin.envKeyPrefix)}</code> resolved_markets=<code>${sampleFloorMin.resolved_markets}</code> (<50 — interpret comparisons cautiously)`
-    : `${sampleFloorEmoji} sample-size floor: every tenant ≥50 resolved markets`;
-
-  const envGapBlock =
+  // Env-gap callout — surfaces matrix charter drift inline. Was a separate
+  // post-takeaway block; now lives as a thin strip under the Q-cards because
+  // it's a "fix-this-now" maintenance signal, not a finding.
+  const envGapStrip =
     envGapWarnings.length === 0
       ? ""
-      : `<div class="env-gaps">
-    <strong>${envGapWarnings.length} matrix gap${envGapWarnings.length === 1 ? "" : "s"}</strong> — tenants active in DB without env-key mapping (excluded from this run):
-    <ul>${envGapWarnings.map((w) => `<li><code>${escapeHtml(w.env)}</code> · billing <code>${escapeHtml(w.short_id)}</code> · policy <code>${escapeHtml(w.sizing_policy_kind)}</code></li>`).join("")}</ul>
-  </div>`;
-
-  const summaryBlock = `<div class="delta-summary">
-  <h3>Δ summary</h3>
-  <div class="ds-line">${closestLine}</div>
-  <div class="ds-line">${fidelityLine}</div>
-  <div class="ds-line">${sampleFloorLine}</div>
-  ${envGapBlock}
-</div>`;
-
-  // ── Distance-to-target leaderboard ─────────────────────────────────────────
-  // Sorted ascending — first row hugs swisstony tightest. The horizontal bar
-  // chart is a v0 visual: one row per tenant, width ∝ aggregate distance.
-  const leaderboardRows = [...distances]
-    .filter((d) => d.aggregate_distance !== null)
-    .sort((a, b) => (a.aggregate_distance ?? 0) - (b.aggregate_distance ?? 0));
-  const leaderboardMax = leaderboardRows.reduce(
-    (mx, d) => Math.max(mx, d.aggregate_distance ?? 0),
-    1e-9
-  );
-  const leaderboardSvg = (() => {
-    if (leaderboardRows.length === 0) return "";
-    const W = 1080;
-    const ROW_H = 24;
-    const H = leaderboardRows.length * ROW_H + 24;
-    const labelW = 260;
-    const barX = labelW + 8;
-    const barMaxW = W - barX - 70;
-    const bars = leaderboardRows
-      .map((d, i) => {
-        const m = metrics.find((mm) => mm.tenant.envKeyPrefix === d.envKeyPrefix);
-        const label = m ? tenantLabel(m) : d.envKeyPrefix;
-        const dist = d.aggregate_distance ?? 0;
-        const bw = Math.max(1, (dist / leaderboardMax) * barMaxW);
-        const y = 12 + i * ROW_H;
-        const fill = i === 0 ? SERIES_COLORS[2]! : SERIES_COLORS[1]!;
-        const distStr = dist.toFixed(3);
-        return `<g transform="translate(0,${y})">
-          <text x="${labelW - 4}" y="14" text-anchor="end" class="lb-label">${escapeHtml(label)}</text>
-          <rect x="${barX}" y="4" width="${bw}" height="14" rx="2" fill="${fill}"/>
-          <text x="${barX + bw + 6}" y="14" class="lb-value">${escapeHtml(distStr)}</text>
-        </g>`;
-      })
-      .join("");
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="leaderboard">
-  ${bars}
-</svg>`;
-  })();
-
-  // ── Prod-twin fidelity Δ section ───────────────────────────────────────────
-  const prodTwinFidelityBlock = (() => {
-    if (!prodTwinFidelity) {
-      return `<p class="muted">No prod-twin fidelity signal — POLY_PROD_TENANT_TRUST_TWIN env block not configured. Fidelity Δ falls back to (control ↔ prod LIVE) — same metric, weaker signal. See Q1 block above.</p>`;
-    }
-    const cls = prodTwinFidelity.classification;
-    const colorWord =
-      cls === "green"
-        ? "WITHIN ±5% — paper is a trustworthy A/B substrate"
-        : cls === "yellow"
-          ? "WITHIN ±20% — paper drifts; A/B signal usable with caveats"
-          : cls === "red"
-            ? "OUTSIDE ±20% — paper NOT a trustworthy substrate"
-            : "INSUFFICIENT DATA";
-    return `<table class="ab"><tbody>
-      <tr><td>twin</td><td><code>${escapeHtml(prodTwinFidelity.twin_env_key_prefix)}</code></td></tr>
-      <tr><td>live</td><td><code>${escapeHtml(prodTwinFidelity.live_env_key_prefix)}</code></td></tr>
-      <tr><td>shared fills</td><td class="num"><code>${prodTwinFidelity.shared_fills}</code></td></tr>
-      <tr><td>per-aggregate PnL Δ (twin − live)</td><td class="num"><code>${fmt$(prodTwinFidelity.pnl_delta_usdc, true)}</code></td></tr>
-      <tr><td>PnL Δ %</td><td class="num"><code>${fmtPct(prodTwinFidelity.pnl_delta_pct)}</code></td></tr>
-      <tr><td>markets touched Δ</td><td class="num"><code>${prodTwinFidelity.markets_touched_delta >= 0 ? "+" : ""}${prodTwinFidelity.markets_touched_delta}</code></td></tr>
-      <tr><td>classification</td><td><strong>${fidelityEmoji(cls)} ${escapeHtml(colorWord)}</strong></td></tr>
-    </tbody></table>`;
-  })();
+      : `<div class="env-gap-strip"><strong>⚠ ${envGapWarnings.length} matrix gap${envGapWarnings.length === 1 ? "" : "s"}</strong> — active in DB without env-key mapping, excluded from this run: ${envGapWarnings
+          .map(
+            (w) =>
+              `<code>${escapeHtml(w.env)}/${escapeHtml(w.short_id)} (${escapeHtml(w.sizing_policy_kind)})</code>`
+          )
+          .join(" · ")}</div>`;
 
   const decisionsRefRows = [...metrics]
     .sort((a, b) =>
@@ -1549,8 +1554,10 @@ table.ab td.role { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; }
 table.ab td.skips { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: #94a3b8; max-width: 380px; }
 table.ab.algo tr.rank-1 td { background: rgba(251,191,36,0.08); }
 table.ab.algo tr.rank-1 td.role { color: #fbbf24 !important; font-weight: 600; }
-table.ab.algo tr.ref td { background: rgba(16,185,129,0.05); border-top: 2px solid #1f2937; }
-table.ab.algo tr.ref td.role { color: #34d399 !important; font-style: italic; }
+table.ab.algo tr.target td { background: rgba(52,211,153,0.08); border-top: 2px solid #1f2937; }
+table.ab.algo tr.target td.role { color: #34d399 !important; font-weight: 700; }
+table.ab.algo tr.ref td { background: rgba(148,163,184,0.05); border-top: 1px dashed #1f2937; }
+table.ab.algo tr.ref td.role { color: #94a3b8 !important; font-style: italic; }
 .pos { color: #22c55e; } .neg { color: #ef4444; }
 .chart { background: #0e1422; border: 1px solid #1f2937; border-radius: 6px; padding: 6px; margin: 10px 0; }
 .chart svg { display: block; width: 100%; height: auto; }
@@ -1559,18 +1566,13 @@ table.ab.algo tr.ref td.role { color: #34d399 !important; font-style: italic; }
 .line-chart .legend { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
 .footer-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid #1f2937; font-size: 10px; color: #6b7280; }
 .footer-note a { color: #60a5fa; }
-.delta-summary { background: #0e1422; border: 1px solid #1f2937; border-left: 3px solid #60a5fa; border-radius: 6px; padding: 12px 16px; margin: 0 0 14px; }
-.delta-summary h3 { margin: 0 0 8px; font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; }
-.delta-summary .ds-line { font-size: 12px; color: #e5e7eb; margin: 4px 0; font-family: 'SF Mono', Menlo, monospace; }
-.delta-summary .ds-line code { background: #131826; padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 11px; }
-.delta-summary .env-gaps { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #1f2937; font-size: 11px; color: #cbd5e1; }
-.delta-summary .env-gaps strong { color: #f59e0b; }
-.delta-summary .env-gaps ul { margin: 4px 0 0 18px; padding: 0; }
-.delta-summary .env-gaps li { margin: 2px 0; font-family: 'SF Mono', Menlo, monospace; font-size: 10px; }
-.delta-summary .env-gaps code { background: #131826; padding: 1px 4px; border-radius: 3px; color: #cbd5e1; }
-.leaderboard { display: block; width: 100%; height: auto; }
-.leaderboard .lb-label { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
-.leaderboard .lb-value { fill: #fbbf24; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }`;
+.env-gap-strip { background: #1a1208; border: 1px solid #78350f; border-radius: 6px; padding: 8px 12px; margin: 0 0 14px; font-size: 11px; color: #fcd34d; font-family: 'SF Mono', Menlo, monospace; }
+.env-gap-strip strong { color: #fbbf24; margin-right: 6px; }
+.env-gap-strip code { background: #131826; padding: 1px 5px; border-radius: 3px; color: #fde68a; font-size: 10px; }
+.finding-detail p { margin: 0 0 10px; font-size: 13px; line-height: 1.5; }
+.finding-detail strong { color: #fbbf24; }
+.finding-detail .placeholder { color: #64748b; font-style: italic; }
+.finding-detail code { background: #131826; padding: 1px 5px; border-radius: 3px; color: #cbd5e1; font-size: 11px; }`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1585,61 +1587,44 @@ table.ab.algo tr.ref td.role { color: #34d399 !important; font-style: italic; }
   Target: <code>${escapeHtml(targetWallet)}</code> · Window: <code>${escapeHtml(window.since)}</code> → <code>${escapeHtml(window.until)}</code> · ${metrics.length} tenants · target DS <code>${escapeHtml(target.resolved_via_ds_uid ?? "—")}</code> · <a href="#appendix">↓ jump to appendix</a>
 </div>
 
-${summaryBlock}
-
 <!-- TAKEAWAY:START -->
 <div class="takeaway">
-  <h2>↗ LLM takeaway (optional)</h2>
-  <div class="placeholder">One primary finding (max two), % confidence, cite file:line for any planner claim.</div>
+  <h2>↗ LLM takeaway</h2>
+  <div class="placeholder">One primary finding, ≤20 words, in bold. Optional muted-text postfix: % confidence · cause · next-fix · see Finding detail.</div>
 </div>
 <!-- TAKEAWAY:END -->
 
 <div class="q ${q1Cls}">
-  <div class="q-label">Q1 · Does paper twin match prod live?</div>
+  <div class="q-label">Q1 · Does swisstony-paper match swisstony? (paper-twin distance to target)</div>
   <div class="q-number">${q1Number}</div>
-  <div class="q-verdict">${escapeHtml(q1Verdict)}</div>
-  <div class="q-cause">${q1Cause}</div>
+  <div class="q-verdict">${q1Verdict}</div>
+  ${q1Cause ? `<div class="q-cause">${q1Cause}</div>` : ""}
 </div>
 
 <div class="q ${q2Cls}">
-  <div class="q-label">Q2 · Best paper algo (PnL on resolved markets)</div>
+  <div class="q-label">Q2 · Closest paper algo to swisstony (winner of distance-to-target leaderboard)</div>
   <div class="q-number">${q2Number}</div>
   <div class="q-verdict">${escapeHtml(q2Verdict)}</div>
-  ${q2Ref ? `<div class="q-ref">${q2Ref}</div>` : ""}
+  <div class="q-ref">${q2Ref}</div>
 </div>
 
-<details open>
-  <summary>🪞 Prod-twin fidelity Δ — is paper trading a trustworthy A/B substrate?</summary>
-  <div class="details-body">
-    <p class="muted">Compares <code>POLY_PROD_TENANT_TRUST_TWIN</code> (the paper mirror of derek's wallet) to <code>POLY_PROD_TENANT_LIVE</code> (the real wallet) on the same on-chain target. PnL Δ within ±5% with &gt;50 shared fills → 🟢 trustworthy. PnL Δ within ±20% → 🟡. Otherwise → 🔴 paper is not safe to A/B from.</p>
-    ${prodTwinFidelityBlock}
-  </div>
-</details>
-
-<details open>
-  <summary>🎯 Distance-to-target leaderboard — closest paper policy to the real wallet</summary>
-  <div class="details-body">
-    <p class="muted">Per-tenant aggregate distance to <code>${escapeHtml(targetWallet.slice(0, 10))}</code>'s actual behavior. Axes: realized-PnL % gap, placement-rate, intent-USDC ratio, markets-touched ratio. Lower bar = tighter hug. <strong>The leaderboard winner is the promotion candidate</strong> — provided Q1 (paper fidelity) is green.</p>
-    <div class="chart">${leaderboardSvg || "<em class=\"muted\">no comparable tenants in this run</em>"}</div>
-  </div>
-</details>
+${envGapStrip}
 
 <a id="appendix"></a>
 
-<details>
-  <summary>📊 Q1 detail — top decision mismatches (twin vs live)</summary>
+<details open>
+  <summary>📊 Q1 detail — paper twin tracking target over window</summary>
   <div class="details-body">
-    ${fidelitySummary}
-    ${mismatchTable}
-    <p class="muted" style="margin-top: 12px">Visual sanity check — cumulative <code>$ filled</code> by tenant. Visual diverges from numbers when one tenant filled mostly outside the window; trust the table above.</p>
-    <div class="chart">${filledChartTwinLive}</div>
+    ${q1SubFidelity}
+    <p class="muted">Twin: <code>${q1Twin ? escapeHtml(q1Twin.tenant.envKeyPrefix) : "—"}</code>. Lines below show cumulative realized $ filled — target vs twin (and prod LIVE as faint reference when configured). If the twin's curve is the same shape as target's (just scaled), paper is a faithful mirror; if the shapes diverge, paper's sizing or selection breaks down.</p>
+    <div class="chart">${filledChartTwinTarget || "<em class=\"muted\">no twin configured</em>"}</div>
   </div>
 </details>
 
-<details>
-  <summary>📊 Q2 detail — full ranking (all paper tenants + prod reference)</summary>
+<details open>
+  <summary>📊 Q2 detail — full ranking (swisstony 🎯 → paper variants → prod ref)</summary>
   <div class="details-body">
-    <p class="muted">swisstony traded <code>${targetMarketCount}</code> markets totaling <code>$${targetVol.toFixed(2)}</code>. <code>PnL $</code> = realized gain/loss on markets resolved in window. <code>Δ vs swisstony</code> = 100% − (our markets ∩ swisstony's markets) ÷ swisstony's markets.</p>
+    <p class="muted">Sorted by aggregate distance to target ascending. <code>PnL %</code> = realized PnL ÷ intent $. <code>distance to 🎯</code> is the mean of fractional gaps across PnL %, placement rate, intent ratio, and markets-touched ratio. 🟡 = resolved markets &lt; 50.</p>
     ${algoTable}
     <div class="chart">${filledChartAllTenants}</div>
   </div>
@@ -1650,20 +1635,23 @@ ${summaryBlock}
   <div class="details-body">
     <p class="muted">Why did orders not place? Decision-side counts and top 3 skip reasons per tenant. Explanatory only — NOT a ranking surface.</p>
     <table class="ab">
-      <thead><tr><th>tenant</th><th class="num">decisions</th><th class="num">placed</th><th class="num">placement rate</th><th class="num">Δ rate vs control</th><th>top skip reasons</th></tr></thead>
+      <thead><tr><th>tenant</th><th class="num">decisions</th><th class="num">placed</th><th class="num">placement rate</th><th class="num">Δ rate vs Q1 twin</th><th>top skip reasons</th></tr></thead>
       <tbody>${decisionsRefRows}</tbody>
     </table>
   </div>
 </details>
 
-<details>
-  <summary>🤖 AI agent appendix — what to investigate next</summary>
-  <div class="details-body">
-    <p class="muted">If <strong>Q1 &lt; 99%</strong>: paper sidecar is missing planner gates. Top mismatch reason names the gate (e.g. <code>followup_position_too_small</code> means the paper sidecar's planner is letting through orders the live planner correctly skips). Cite <code>nodes/poly/sidecars/paper-trader/server.py</code> or the planner gate in <code>nodes/poly/app/src/features/copy-trade/plan-mirror.ts</code> in the LLM finding.</p>
-    <p class="muted">If <strong>Q2 is GATED</strong>: do NOT promote any paper policy. Fix Q1 first. If Q2 is ungated and a paper tenant beats prod ref with ≥3 resolved markets, that's the promotion candidate.</p>
-    <p class="muted">Many <strong>live-only fills</strong> (in mismatch summary) = twin's wallet-watch missed entire chunks of target activity. Check poll cadence + websocket health.</p>
-    <p class="muted">Full structured data: <a href="bundle.json">bundle.json</a> · LLM stub: <a href="findings.json">findings.json</a>.</p>
+<details open>
+  <summary>🔎 Finding detail</summary>
+  <!-- FINDING:START -->
+  <div class="details-body finding-detail">
+    <p class="muted"><em>LLM-authored: one focused paragraph each — what the signal is, where in code, what to do next. Replace this stub.</em></p>
+    <p><strong>What:</strong> <span class="placeholder">describe the dominant signal in one sentence — which Q is the gate, which row(s) carry it, why the rest follows.</span></p>
+    <p><strong>Why (code path):</strong> <span class="placeholder">cite <code>file:line</code> for the planner or sidecar code that produces the divergence. No file:line = not done.</span></p>
+    <p><strong>Next fix:</strong> <span class="placeholder">the smallest concrete edit that would move the dominant axis. Link the spec or charter row that authorizes it.</span></p>
+    <p class="muted">Full structured data: <a href="bundle.json">bundle.json</a> · <a href="findings.json">findings.json</a>.</p>
   </div>
+  <!-- FINDING:END -->
 </details>
 
 <div class="footer-note">
