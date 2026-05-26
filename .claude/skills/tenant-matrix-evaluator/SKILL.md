@@ -18,11 +18,11 @@ description: "Cross-policy A/B evaluator across every per-(env, tenant) paper-tr
 
 A run is complete when ALL of these are true:
 
-1. `report.html` rendered with one bar chart per axis (decisions, placed, placement-rate, intent $, realized $, open positions, markets touched) and an A/B Δ-table.
-2. `bundle.json` covers every controllable tenant in `.env.cogni` (no `half-block detected` errors at startup).
-3. Low-sample rows (decisions < 50) are flagged 🟡 in the report.
+1. `report.html` rendered with the **structured Δ summary block above the takeaway** (three lines: closest-to-target, prod-twin fidelity, sample-size floor), the **🪞 prod-twin fidelity Δ section** with classification chip, the **🎯 distance-to-target leaderboard chart** sorted ascending, then the legacy Q1 + Q2 blocks + decisions reference.
+2. `bundle.json` covers every controllable tenant in `.env.cogni` (no `half-block detected` errors at startup). Charter-active tenants without env blocks emit `::warning::matrix gap: ...` and appear in `env_gap_warnings` — they do NOT block the run, but they DO require a follow-up.
+3. Target-wallet fills appear in the bundle (>0 markets, plausible volume) OR the tool failed fast with the verbatim `::error::target-wallet has no fills in DS=<uid> for window; check DS config — wallet-watch is NOT the suspect…` message. Silent-zero behavior is not allowed. Low-sample rows (resolved markets < 50) appear in `sample_floor_warnings[]` and 🟡 in the structured summary.
 4. The `<!-- TAKEAWAY:START -->` block carries **ONE sentence, ≤20 words**, in **bold**, of the most decision-changing signal. Hard cap. Optional muted-text postfix: `% confidence · cause · next-fix · see appendix`. NO paragraphs, NO multi-claim findings, NO code blocks, NO inline reasoning. **All supporting reasoning goes in an `<details>` appendix block** below the chart area. The takeaway is for humans who don't read; the appendix is for humans who do.
-5. `findings.json` mirrors the TAKEAWAY: `primary_class` (D1–D8 or `null`+reason), `primary_confidence` (0–1), `primary_one_liner` (≤20 words, machine-readable mirror of the bold sentence), `pareto_next_fix` (≤20 words), `evidence.code_path` (file:line), `authored_at`.
+5. `findings.json` mirrors the TAKEAWAY: `primary_class` (D1–D8 or `null`+reason), `primary_confidence` (0–1), `primary_one_liner` (≤20 words, machine-readable mirror of the bold sentence), `pareto_next_fix` (≤20 words), `evidence.code_path` (file:line), `authored_at`. AND the four structured Δ fields the tool pre-fills: `closest_to_target_role`, `closest_to_target_distance`, `prod_twin_fidelity_pct`, `prod_twin_fidelity_class`. The LLM is forbidden from claiming a paper policy beats the target on PnL when `prod_twin_fidelity_class` is `red` — that result is gated.
 6. Zero `POST/PATCH/DELETE` lines against `poly-*.cognidao.org` in stderr — the tool is GET-only by construction; if anything else appears, that's a regression to file.
 7. **Final-step human handoff (MANDATORY).** The agent's last message MUST contain exactly two lines: (a) the absolute file path to `report.html` so the human can `open` it, (b) the bold one-liner takeaway verbatim. Anything else the human wants they can pull from the report. Do NOT re-narrate the bundle in chat.
 
@@ -33,13 +33,17 @@ A run is complete when ALL of these are true:
 pnpm tsx nodes/poly/scripts/tenant-matrix-evaluator.ts \
   0x204f72f35326db932158cba6adff0b9a1da95e14 \
   [--since 2026-05-17T00:00:00Z] [--until 2026-05-18T00:00:00Z] \
-  [--control POLY_PREVIEW_TENANT_TRUST_TWIN] [--out path]
+  [--control-tenant-role POLY_PREVIEW_TENANT_TRUST_TWIN] \
+  [--target-ds-uid cogni-preview-poly-postgres] \
+  [--out path]
 ```
 
-Default control: `POLY_PREVIEW_TENANT_TRUST_TWIN`. Default window: last 24h. Output dir: `nodes/poly/research/tenant-matrix/<iso>/`.
+**Default control axis: the target wallet itself.** No paper-tenant control unless `--control-tenant-role` is set explicitly. Default window: last 24h. Output dir: `nodes/poly/research/tenant-matrix/<iso>/`.
 
-1. **Run the tool.** It auto-discovers tenants from `POLY_<ENV>_TENANT_<ROLE>_*` env vars; fails fast on half-blocks.
-2. **Read the bars first.** Each chart is one axis across all tenants; control is amber. If sample size is too small to claim anything, that IS the finding — say so.
+**Target DS resolution.** The tool probes every unique env DS (`cogni-<env>-poly-postgres`) for the target wallet's `poly_trader_fills` hourly buckets and picks the env with the most non-zero buckets. If every env returns 0, the tool fails fast with `::error::target-wallet has no fills in DS=<uid> for window; check DS config — wallet-watch is NOT the suspect, the data is in poly_trader_fills in every env's poly DB.` That message is the punchline: when the previous tool version silently produced empty matrices for weeks, the cause was a Grafana DS pointed at the wrong DB, not a wallet-watch backfill gap. Wallet-watch is fine in every env.
+
+1. **Run the tool.** It auto-discovers tenants from `POLY_<ENV>_TENANT_<ROLE>_*` env vars; fails fast on half-blocks. Charter-active tenants without env blocks emit `::warning::matrix gap` lines — they're listed in `env_gap_warnings[]`. File a follow-up to add the env block (DON'T paper over with a synthesized role).
+2. **Read the Δ summary block first.** Three lines above the takeaway: closest-to-target, prod-twin fidelity, sample-size floor. The leaderboard chart sorts paper policies by aggregate distance to swisstony ascending — first row is the promotion candidate. If prod-twin fidelity is 🔴, the leaderboard is GATED — do not promote anything.
 3. **Cross-reference code BEFORE claiming.** Skip-reason or sizing claim → cite `nodes/poly/app/src/features/copy-trade/plan-mirror.ts:<line>`. Volume / mode mismatch claim → cite `nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts` or `target-source.ts`. No file:line = not done.
 4. **Author the TAKEAWAY + appendix + findings.json.** One bold ≤20-word sentence in the TAKEAWAY block. Full reasoning in a `<details><summary>🔎 Finding detail</summary>…</details>` appendix above the existing chart appendices. `findings.json` mirrors with `primary_one_liner` (≤20 words), `primary_confidence`, `primary_class` (D1–D8 or `null`+reason), `pareto_next_fix` (≤20 words), `evidence.code_path`.
 5. **Reframe instruments, don't rename them.** If a matrix row falsifies its own assumption (e.g. a "trust twin" reveals paper isn't trustworthy), that's the instrument working — the right call is to heed it, not to rename it. Take care to distinguish "the experiment failed" from "the question was wrong."
