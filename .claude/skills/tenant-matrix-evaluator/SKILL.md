@@ -9,12 +9,16 @@ description: "Cross-policy A/B evaluator across every per-(env, tenant) paper-tr
 
 ## Terminology — read this before reading the report
 
-The word "trust twin" is overloaded in this repo. The two meanings are NOT interchangeable; conflating them is how the previous evaluator pass produced a wrong takeaway.
+There is **ONE trust twin**. It is the paper-side preview tenant whose sizing policy + config is a **1:1 match with prod LIVE**. Its only job is to answer one question: _does the paper adapter produce the same orders + fills as the real Polymarket CLOB when fed the identical algorithm?_ Hold the algo constant; only paper-vs-live varies.
 
-- **Fidelity trust twin** — a paper-side tenant configured with the **identical sizing policy + config** as a live tenant on the same target wallet. The only variable is "paper sidecar vs real CLOB". Answers: _does our paper adapter produce the same orders + fills as live Polymarket when fed the same algorithm?_ This is the only thing that lets you say "paper is a trustworthy substitute for live." Q1 measures fidelity-twin-vs-target proximity; only a `red` Q1 lets you blame the paper adapter.
-- **Policy variant** — a paper-side tenant running a **different** policy than live, often size-matched to the target's book. The label `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN` (position_gap @ $500k) is a policy variant despite the name — it tests a different algorithm, not paper-vs-live adapter fidelity. Its closeness to swisstony in Q2 says "this policy is well-sized for swisstony's book," not "paper trading is trustworthy."
+When prod LIVE is trading-disabled (current state on this repo, 2026-05-26), **the trust twin question is irrelevant** — there is no live signal to compare against, so paper fidelity is untestable until prod resumes trading. Q1 will say `⚪ NOT TESTABLE` and explain why.
 
-Practical rule: only a tenant whose policy config exactly matches a corresponding live tenant counts as a fidelity twin. If no such pairing exists for the target, Q1 cannot run cleanly — file a charter follow-up to provision one (POLY_PROD_TENANT_TRUST_TWIN sized to the live tenant) rather than abusing an existing policy variant as a fidelity probe.
+**Other paper tenants are NOT trust twins**, regardless of what their env-block name says:
+
+- `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN` runs `position_gap @ $500k` to model swisstony's book size. That is a **budget mirror** — a paper variant whose capital allocation matches the target wallet's book. It tells you whether the policy is correctly sized; it does NOT tell you whether paper trading is trustworthy. The "trust twin" suffix in the env-block name is a misnomer; the tool aliases the display label to `SWISSTONY_BUDGET_MIRROR`. Renaming the env block itself is a follow-up.
+- Every other paper tenant (`GAP`, `VALIDATION`, the candidate-a duplicates, etc.) is a **policy variant** — different policy, different cap, different filter. They're useful for Q2 (ranking which algo comes closest to swisstony's actual behavior), not Q1.
+
+Practical rule: **only the policy-match-to-prod-LIVE tenant counts as a trust twin.** Q1 picks it automatically by comparing each preview tenant's `(sizing_policy_kind, mirror_max_usdc_per_trade, mirror_capital_alloc_usdc, mirror_filter_percentile)` against prod LIVE's row in `poly_copy_trade_targets`. If no exact match exists, Q1 = `⚪ NOT TESTABLE — no fidelity twin configured`.
 
 ## Discovery sources (what the tool sees)
 
