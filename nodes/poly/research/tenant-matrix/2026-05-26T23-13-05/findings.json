@@ -1,0 +1,114 @@
+{
+  "report_path": "/Users/derek/conductor/workspaces/cogni-poly/worcester/nodes/poly/research/tenant-matrix/2026-05-26T23-13-05/report.html",
+  "primary_class": null,
+  "primary_class_reason": "primary finding is an infra outage (preview mirror coordinator silent 49h), not a D-class copy-delta — POLY_COPY_DELTA D1-D8 don't fit; this is an infra/observability gap",
+  "primary_confidence": 0.95,
+  "primary_one_liner": "Preview mirror coordinator has been dead 49h — fix the infra before trusting any policy ranking.",
+  "secondary_class": "D2",
+  "secondary_confidence": 0.75,
+  "secondary_one_liner": "Within the candidate-a-fresh subset, every paper variant lost money on a positive target (D2 fill-chase) — but this finding is gated by the env outage above.",
+  "pareto_next_fix": "Investigate preview mirror-coordinator pod state + recent deploys (possibly related to bug.5025 networking work). Re-run matrix once preview resumes; only then trust the policy ranking.",
+  "evidence": {
+    "code_path": "nodes/poly/scripts/tenant-matrix-evaluator.ts (env_freshness check landed in this run)",
+    "secondary_code_path": "nodes/poly/app/src/features/copy-trade/plan-mirror.ts:323"
+  },
+  "env_freshness_summary": {
+    "candidate-a": { "last_decision_at": "fresh (<2min)", "is_stale": false },
+    "preview": {
+      "last_decision_at": "2026-05-24T22:32:27Z",
+      "staleness_hours": 49,
+      "is_stale": true
+    },
+    "production": {
+      "last_decision_at": "2026-05-12T01:45:47Z",
+      "staleness_hours": 357,
+      "is_stale": true
+    }
+  },
+  "closest_to_target_role": "SWISSTONY_TRUST_TWIN@preview",
+  "closest_to_target_env_key_prefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+  "closest_to_target_distance": 0.8992356336234222,
+  "prod_twin_fidelity_pct": null,
+  "prod_twin_fidelity_class": "no_data",
+  "prod_twin_fidelity_shared_fills": 0,
+  "sample_floor_warnings": [
+    {
+      "envKeyPrefix": "POLY_PROD_TENANT_LIVE",
+      "resolved_markets": 0
+    }
+  ],
+  "env_gap_warnings": [
+    {
+      "env": "candidate-a",
+      "billing_account_id": "20fdb57a-4db2-4669-8abc-20cf4d6b8862",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "20fdb57a"
+    },
+    {
+      "env": "candidate-a",
+      "billing_account_id": "acd63233-764b-46a6-8d91-b645cc3417bd",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "acd63233"
+    },
+    {
+      "env": "candidate-a",
+      "billing_account_id": "809e37f7-40b3-403d-a354-79a547bae48a",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "809e37f7"
+    },
+    {
+      "env": "preview",
+      "billing_account_id": "376c594c-e6e1-44b2-aafb-366382032461",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "position_gap",
+      "short_id": "376c594c"
+    },
+    {
+      "env": "preview",
+      "billing_account_id": "fb8f65d5-29e4-446a-8753-280d5328b2a2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "fb8f65d5"
+    }
+  ],
+  "env_freshness": [
+    {
+      "dsUid": "cogni-candidate-a-poly-postgres",
+      "envSlug": "candidate-a",
+      "last_decision_at": "2026-05-26T23:12:10.557Z",
+      "staleness_seconds": -8.948,
+      "is_stale": false
+    },
+    {
+      "dsUid": "cogni-preview-poly-postgres",
+      "envSlug": "preview",
+      "last_decision_at": "2026-05-24T22:32:27.559Z",
+      "staleness_seconds": 175174.05,
+      "is_stale": true
+    },
+    {
+      "dsUid": "cogni-production-poly-postgres",
+      "envSlug": "production",
+      "last_decision_at": "2026-05-12T01:45:47.133Z",
+      "staleness_seconds": 1286774.476,
+      "is_stale": true
+    }
+  ],
+  "env_stale": [
+    {
+      "env": "preview",
+      "last_decision_at": "2026-05-24T22:32:27.559Z",
+      "staleness_hours": 49
+    },
+    {
+      "env": "production",
+      "last_decision_at": "2026-05-12T01:45:47.133Z",
+      "staleness_hours": 357
+    }
+  ],
+  "target_ds_uid": "cogni-candidate-a-poly-postgres",
+  "authored_at": "2026-05-26T23:20:00Z"
+}
