@@ -67,9 +67,26 @@ export type Tenant = {
   envSlug: "production" | "preview" | "candidate-a";
   apiBaseUrl: string;
   dsUid: string;
+  // Empty string when the tenant was discovered from DB without a matching
+  // POLY_<env>_TENANT_<role>_* env block. Read-side queries (every SQL this
+  // tool runs) go through the Grafana service-account, not per-tenant API
+  // keys, so DB-only tenants ARE observable end-to-end. The apiKey is only
+  // needed for mutating routes (PATCH/DELETE), which this tool never calls.
   apiKey: string;
   billingAccountId: string;
+  // Display key. For env-discovered tenants: POLY_<env>_TENANT_<role>.
+  // For DB-only tenants: DB_ONLY_<env>_<short> with sourceFromEnv=false.
   envKeyPrefix: string;
+  sourceFromEnv: boolean;
+  // Snapshot of charter-side policy knobs read from poly_copy_trade_targets
+  // at discovery time. Drives the policy column in the Q2 algo table without
+  // requiring per-tenant API access.
+  policy: {
+    kind: string; // sizing_policy_kind ('auto' | 'position_gap' | …)
+    max_usdc_per_trade: number | null;
+    capital_alloc_usdc: number | null;
+    filter_percentile: number | null;
+  } | null;
 };
 
 export type TenantDiscoveryError = {
@@ -148,6 +165,8 @@ export function discoverTenants(env: NodeJS.ProcessEnv): {
       apiKey: cur.apiKey,
       billingAccountId: cur.billingAccountId,
       envKeyPrefix: prefix,
+      sourceFromEnv: true,
+      policy: null, // filled later by hydrateTenantPolicy
     });
   }
   tenants.sort((a, b) =>
@@ -264,7 +283,13 @@ export type TsPoint = { ts: string; value: number };
 export type TenantMetrics = {
   tenant: Pick<
     Tenant,
-    "envLabel" | "role" | "envSlug" | "billingAccountId" | "envKeyPrefix"
+    | "envLabel"
+    | "role"
+    | "envSlug"
+    | "billingAccountId"
+    | "envKeyPrefix"
+    | "sourceFromEnv"
+    | "policy"
   >;
   target_id: string;
   target_wallet: string;
@@ -865,23 +890,127 @@ async function fetchTargetRealizedPnl(
   };
 }
 
-// Active targets per env — used to surface env-discovery gaps (charter rows
-// alive in DB but not represented by POLY_<env>_TENANT_<role>_* env blocks).
+// Active charter rows per env. Promoted from env-gap warning to a first-class
+// discovery source: the tool now also QUERIES these tenants via the env DS
+// (using the Grafana service-account, no per-tenant API key needed). The
+// env-gap framing becomes "DB-only / observability-only" rather than
+// "excluded from this run" — because the read side IS available, only the
+// mutating side is missing. Older versions of this tool emitted ::warning::
+// then silently dropped the tenant from metrics, which understated the
+// matrix by half on 2026-05-26 (376c594c + fb8f65d5 had 7k+ placements
+// each but were missing from the report).
+export type ActiveTargetRow = {
+  billing_account_id: string;
+  target_wallet: string;
+  sizing_policy_kind: string;
+  mirror_max_usdc_per_trade: number | null;
+  mirror_capital_alloc_usdc: number | null;
+  mirror_filter_percentile: number | null;
+};
+
 async function fetchActiveTargetsInEnv(
   grafana: { url: string; saToken: string },
   dsUid: string
-): Promise<Array<{ billing_account_id: string; target_wallet: string; sizing_policy_kind: string }>> {
+): Promise<ActiveTargetRow[]> {
+  // Schema differs across envs (the 2026-05-26 prod-poly DS lacks
+  // sizing_policy_kind / mirror_capital_alloc_usdc columns). Probe the
+  // information_schema first and only SELECT columns that exist; missing
+  // columns surface as null in the result.
+  const colsSql = `
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_name = 'poly_copy_trade_targets'
+  `;
+  const colRows = await grafanaPgQuery(grafana.url, grafana.saToken, dsUid, colsSql);
+  const present = new Set(
+    colRows
+      .map((r) => (typeof r.column_name === "string" ? r.column_name : ""))
+      .filter((s) => s !== "")
+  );
+  const need = [
+    "billing_account_id",
+    "target_wallet",
+    "sizing_policy_kind",
+    "mirror_max_usdc_per_trade",
+    "mirror_capital_alloc_usdc",
+    "mirror_filter_percentile",
+    "disabled_at",
+  ];
+  if (!present.has("billing_account_id") || !present.has("target_wallet")) {
+    return [];
+  }
+  const selectCols = need
+    .filter((c) => c !== "disabled_at")
+    .map((c) => (present.has(c) ? c : `NULL AS ${c}`))
+    .join(", ");
   const sql = `
-    SELECT billing_account_id, target_wallet, sizing_policy_kind
+    SELECT ${selectCols}
     FROM poly_copy_trade_targets
-    WHERE disabled_at IS NULL
+    ${present.has("disabled_at") ? "WHERE disabled_at IS NULL" : ""}
   `;
   const rows = await grafanaPgQuery(grafana.url, grafana.saToken, dsUid, sql);
+  const toNumOrNull = (v: unknown): number | null => {
+    if (v === null || v === undefined) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
   return rows.map((r) => ({
-    billing_account_id: typeof r.billing_account_id === "string" ? r.billing_account_id : "",
-    target_wallet: typeof r.target_wallet === "string" ? r.target_wallet.toLowerCase() : "",
-    sizing_policy_kind: typeof r.sizing_policy_kind === "string" ? r.sizing_policy_kind : "",
+    billing_account_id:
+      typeof r.billing_account_id === "string" ? r.billing_account_id : "",
+    target_wallet:
+      typeof r.target_wallet === "string" ? r.target_wallet.toLowerCase() : "",
+    sizing_policy_kind:
+      typeof r.sizing_policy_kind === "string" ? r.sizing_policy_kind : "",
+    mirror_max_usdc_per_trade: toNumOrNull(r.mirror_max_usdc_per_trade),
+    mirror_capital_alloc_usdc: toNumOrNull(r.mirror_capital_alloc_usdc),
+    mirror_filter_percentile: toNumOrNull(r.mirror_filter_percentile),
   }));
+}
+
+// Look up a tenant's policy snapshot from the active-targets index built
+// during DB-side discovery. Mutates in place (sets tenant.policy).
+function hydrateTenantPolicy(
+  tenant: Tenant,
+  activeByDsAndBilling: Map<string, ActiveTargetRow>
+): void {
+  if (tenant.policy !== null) return;
+  const key = `${tenant.dsUid}|${tenant.billingAccountId}`;
+  const row = activeByDsAndBilling.get(key);
+  if (!row) return;
+  tenant.policy = {
+    kind: row.sizing_policy_kind,
+    max_usdc_per_trade: row.mirror_max_usdc_per_trade,
+    capital_alloc_usdc: row.mirror_capital_alloc_usdc,
+    filter_percentile: row.mirror_filter_percentile,
+  };
+}
+
+// Synthesize a Tenant for a DB-only row. The role is DB_ONLY_<short> so
+// env-discovered tenants (e.g. POLY_PREVIEW_TENANT_TRUST_TWIN) keep their
+// canonical names; readers can grep the prefix to tell them apart.
+function tenantFromDbRow(
+  envSlug: Tenant["envSlug"],
+  envLabel: string,
+  row: ActiveTargetRow
+): Tenant {
+  const short = row.billing_account_id.slice(0, 8);
+  return {
+    envLabel,
+    role: `DB_ONLY_${short}`,
+    envSlug,
+    apiBaseUrl: ENV_SLUG_TO_BASE_URL[envSlug],
+    dsUid: `cogni-${envSlug}-poly-postgres`,
+    apiKey: "", // read-only via Grafana SA — no mutating path
+    billingAccountId: row.billing_account_id,
+    envKeyPrefix: `DB_ONLY_${envSlug.toUpperCase().replace(/-/g, "_")}_${short}`,
+    sourceFromEnv: false,
+    policy: {
+      kind: row.sizing_policy_kind,
+      max_usdc_per_trade: row.mirror_max_usdc_per_trade,
+      capital_alloc_usdc: row.mirror_capital_alloc_usdc,
+      filter_percentile: row.mirror_filter_percentile,
+    },
+  };
 }
 
 // ─── Target DS resolution ────────────────────────────────────────────────────
@@ -1283,54 +1412,65 @@ function renderReportHtml(args: {
   const q1Agg = q1TwinDistance?.aggregate_distance ?? null;
   const q1Cls =
     q1Agg === null ? "gated" : q1Agg < 0.25 ? "pos" : q1Agg < 0.75 ? "" : "neg";
-  const q1Number = q1Agg === null ? "—" : q1Agg.toFixed(3);
+  // Plain-English verdict word. Distance is internal; humans see the result.
+  const q1Number = (() => {
+    if (q1Twin === null) return "NOT CONFIGURED";
+    if (q1Agg === null) return "NO DATA";
+    if (q1Agg < 0.25) return "✅ MATCHES";
+    if (q1Agg < 0.75) return "⚠ DRIFTS";
+    return "❌ NO MATCH";
+  })();
   const q1Verdict =
     q1Twin === null
-      ? "no paper-twin configured for target"
+      ? "No paper-twin tenant configured for this target — set POLY_PROD_TENANT_TRUST_TWIN_* to compare paper output against real swisstony."
       : q1Agg === null
-        ? `paper twin ${tenantLabel(q1Twin)} produced no comparable signal`
+        ? `Paper twin ${tenantLabel(q1Twin)} produced no comparable signal in this window.`
         : q1Agg < 0.25
-          ? `🟢 paper twin tracks target (${tenantLabel(q1Twin)})`
+          ? `Paper twin ${tenantLabel(q1Twin)} tracks swisstony's real behavior closely — paper outputs are a trustworthy substitute.`
           : q1Agg < 0.75
-            ? `🟡 paper twin drifts from target (${tenantLabel(q1Twin)})`
-            : `🔴 paper twin does NOT mirror target (${tenantLabel(q1Twin)})`;
-  // Name the dominant divergence axis so the human knows what failed.
+            ? `Paper twin ${tenantLabel(q1Twin)} drifts from swisstony — paper signals are usable but biased.`
+            : `Paper twin ${tenantLabel(q1Twin)} does not behave like swisstony. Do not use paper outputs as a substitute for live decisions.`;
+  // Plain-English cause — name the biggest gap in dollars and percent, not distance metrics.
   const q1Cause = (() => {
     if (!q1TwinDistance || !q1Twin) return "";
-    const parts: Array<{ name: string; value: number; detail: string }> = [];
-    if (q1TwinDistance.pnl_pct_distance !== null) {
-      const targetPct =
-        target.intent_usdc > 0
-          ? target.pnl.realized_pnl_usdc / target.intent_usdc
-          : null;
-      const twinPct =
-        q1Twin.fills.intent_usdc > 0
-          ? q1Twin.pnl.realized_pnl_usdc / q1Twin.fills.intent_usdc
-          : null;
+    const targetPct =
+      target.intent_usdc > 0
+        ? target.pnl.realized_pnl_usdc / target.intent_usdc
+        : null;
+    const twinPct =
+      q1Twin.fills.intent_usdc > 0
+        ? q1Twin.pnl.realized_pnl_usdc / q1Twin.fills.intent_usdc
+        : null;
+    const parts: Array<{ priority: number; phrase: string; gap: number }> = [];
+    if (
+      targetPct !== null &&
+      twinPct !== null &&
+      Math.sign(targetPct) !== Math.sign(twinPct) &&
+      Math.abs(targetPct - twinPct) > 0.005
+    ) {
       parts.push({
-        name: "PnL %",
-        value: q1TwinDistance.pnl_pct_distance,
-        detail: `target=${fmtPct(targetPct, 2)} twin=${fmtPct(twinPct, 2)}`,
+        priority: 1,
+        gap: Math.abs(targetPct - twinPct),
+        phrase: `<strong>Sign flip on PnL:</strong> swisstony made <code class="pos">${fmtPct(targetPct, 2)}</code>; paper twin earned <code class="neg">${fmtPct(twinPct, 2)}</code>.`,
+      });
+    } else if (targetPct !== null && twinPct !== null) {
+      parts.push({
+        priority: 2,
+        gap: Math.abs(targetPct - twinPct),
+        phrase: `<strong>PnL gap:</strong> swisstony <code>${fmtPct(targetPct, 2)}</code> vs paper twin <code>${fmtPct(twinPct, 2)}</code> (${((Math.abs(targetPct - twinPct)) * 100).toFixed(2)} pp apart).`,
       });
     }
-    if (q1TwinDistance.intent_usdc_ratio_distance !== null) {
+    if (q1Twin.fills.intent_usdc < target.intent_usdc * 0.5) {
+      const tinyPct = q1Twin.fills.intent_usdc / target.intent_usdc;
       parts.push({
-        name: "intent $",
-        value: q1TwinDistance.intent_usdc_ratio_distance,
-        detail: `target=$${target.intent_usdc.toFixed(0)} twin=$${q1Twin.fills.intent_usdc.toFixed(0)}`,
-      });
-    }
-    if (q1TwinDistance.markets_touched_ratio_distance !== null) {
-      parts.push({
-        name: "markets touched",
-        value: q1TwinDistance.markets_touched_ratio_distance,
-        detail: `target=${target.market_set.length} twin=${q1Twin.fills.markets_count}`,
+        priority: 3,
+        gap: 1 - tinyPct,
+        phrase: `<strong>Size mismatch:</strong> twin filled <code>$${q1Twin.fills.intent_usdc.toFixed(0)}</code> against swisstony's <code>$${target.intent_usdc.toFixed(0)}</code> (twin is ${(tinyPct * 100).toFixed(2)}% the size — the policy is undersized vs target's book).`,
       });
     }
     if (parts.length === 0) return "";
-    parts.sort((a, b) => b.value - a.value);
-    const top = parts[0]!;
-    return `Dominant gap: <code>${top.name}</code> — ${top.detail} (axis distance ${top.value.toFixed(3)}).`;
+    parts.sort((a, b) => a.priority - b.priority || b.gap - a.gap);
+    return parts[0]!.phrase;
   })();
   // Per-fill outcome-fidelity sub-signal (kept as a sidecar — informative when
   // prod LIVE has fills in window, silent otherwise). Surfaces in Q1 detail.
@@ -1361,34 +1501,57 @@ function renderReportHtml(args: {
   const winner = paperRowsSorted[0]?.m ?? null;
   const winnerDistance = paperRowsSorted[0]?.d?.aggregate_distance ?? null;
   const q1IsRed = q1Agg !== null && q1Agg >= 0.75;
-  const q2Cls = q1IsRed ? "gated" : winnerDistance === null ? "" : "pos";
-  const q2Number =
-    q1IsRed
-      ? "GATED"
-      : winnerDistance === null
+  const winnerPnlPct =
+    winner && winner.fills.intent_usdc > 0
+      ? winner.pnl.realized_pnl_usdc / winner.fills.intent_usdc
+      : null;
+  const q2Cls = q1IsRed
+    ? "gated"
+    : winner === null
+      ? ""
+      : winnerPnlPct !== null && winnerPnlPct > 0
+        ? "pos"
+        : "neg";
+  // Plain-English Q2 number — the closest paper's PnL %, or GATED.
+  const q2Number = q1IsRed
+    ? "GATED"
+    : winner === null
+      ? "—"
+      : winnerPnlPct === null
         ? "—"
-        : winnerDistance.toFixed(3);
-  const q2Verdict = q1IsRed
-    ? `wait — Q1 says paper isn't a trustworthy substrate (distance ${q1Number})`
-    : winner
-      ? `${tenantLabel(winner)} hugs target tightest`
-      : "no paper tenants in matrix";
-  const q2Ref = (() => {
-    const targetPct =
-      target.intent_usdc > 0
-        ? target.pnl.realized_pnl_usdc / target.intent_usdc
-        : null;
-    return `🎯 swisstony actual: <code>${fmtPnl(target.pnl.realized_pnl_usdc)}</code> on <code>$${target.intent_usdc.toFixed(0)}</code> intent (<code>${fmtPct(targetPct, 2)}</code>) across <code>${target.market_set.length}</code> markets`;
-  })();
-
-  // ── Algo table: swisstony 🎯 row at top, paper variants sorted by distance,
-  // prod LIVE pinned at bottom. Same shape as before, just with the target as
-  // a first-class row (was missing before — the user's review called this out).
-  const targetPctOverall =
+        : fmtPct(winnerPnlPct, 2);
+  const targetPctOverallEarly =
     target.intent_usdc > 0
       ? target.pnl.realized_pnl_usdc / target.intent_usdc
       : null;
-  const targetRow = `<tr class="target"><td class="role">🎯 swisstony · target</td><td class="num pos"><strong>${fmtPnl(target.pnl.realized_pnl_usdc)}</strong></td><td class="num">${target.pnl.resolved_markets}</td><td class="num">${target.pnl.markets_won}/${target.pnl.markets_lost}</td><td class="num">${fmtPct(targetPctOverall, 2)}</td><td class="num">—</td><td class="num">$${target.intent_usdc.toFixed(0)}</td><td class="num">${target.market_set.length}</td></tr>`;
+  const q2Verdict = q1IsRed
+    ? `Don't promote any paper variant. Q1 says paper outputs don't match real swisstony — the leaderboard below is unreliable.`
+    : winner
+      ? `Closest paper variant to swisstony: ${tenantLabel(winner)} (${winner.tenant.policy?.kind ?? "?"})${winnerPnlPct !== null && targetPctOverallEarly !== null ? ` — earned ${fmtPct(winnerPnlPct, 2)} vs swisstony's ${fmtPct(targetPctOverallEarly, 2)}` : ""}.`
+      : "No paper tenants in this matrix.";
+  const q2Ref = (() => {
+    return `🎯 swisstony actual: <code>${fmtPnl(target.pnl.realized_pnl_usdc)}</code> on <code>$${target.intent_usdc.toFixed(0)}</code> intent (<code>${fmtPct(targetPctOverallEarly, 2)}</code>) across <code>${target.market_set.length}</code> markets · <code>${target.pnl.resolved_markets}</code> resolved.`;
+  })();
+
+  // ── Algo table: swisstony 🎯 row at top, paper variants sorted by distance,
+  // prod LIVE pinned at bottom. Policy column shows the actual sizing knobs
+  // from poly_copy_trade_targets so the row identifies what algo it ran
+  // (auto p80/$15, position_gap $50k, etc.) without the human having to
+  // cross-reference the charter.
+  const fmtPolicy = (m: TenantMetrics): string => {
+    const p = m.tenant.policy;
+    if (!p) return "—";
+    if (p.kind === "position_gap") {
+      return `<code>position_gap</code>${p.capital_alloc_usdc !== null ? ` @ $${p.capital_alloc_usdc.toLocaleString()}` : ""}`;
+    }
+    if (p.kind === "auto" || p.kind === "target_percentile_scaled") {
+      const pct = p.filter_percentile;
+      const cap = p.max_usdc_per_trade;
+      return `<code>${escapeHtml(p.kind)}</code>${pct !== null ? ` p${pct}` : ""}${cap !== null ? ` / $${cap}` : ""}`;
+    }
+    return `<code>${escapeHtml(p.kind || "—")}</code>`;
+  };
+  const targetRow = `<tr class="target"><td class="role">🎯 swisstony · target</td><td class="policy"><em>real on-chain</em></td><td class="num pos"><strong>${fmtPnl(target.pnl.realized_pnl_usdc)}</strong></td><td class="num">${target.pnl.resolved_markets}</td><td class="num">${target.pnl.markets_won}/${target.pnl.markets_lost}</td><td class="num">${fmtPct(targetPctOverallEarly, 2)}</td><td class="num">—</td><td class="num">$${target.intent_usdc.toLocaleString()}</td><td class="num">${target.market_set.length}</td></tr>`;
   const paperTableRows = paperRowsSorted
     .map((row, idx) => {
       const m = row.m;
@@ -1404,8 +1567,9 @@ function renderReportHtml(args: {
         m.tenant.envKeyPrefix === control.tenant.envKeyPrefix
           ? " (Q1 twin)"
           : "";
+      const dbOnlyTag = m.tenant.sourceFromEnv === false ? " (DB-only)" : "";
       const trophy = idx === 0 && !q1IsRed ? " 🏆" : "";
-      return `<tr class="${trCls}"><td class="role" style="color:${colorFor(m)}">${escapeHtml(tenantLabel(m))}${ctlTag}${trophy}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong>${lowSample ? " 🟡" : ""}</td><td class="num">${m.pnl.resolved_markets}</td><td class="num">${m.pnl.markets_won}/${m.pnl.markets_lost}</td><td class="num">${fmtPct(tenantPnlPct, 2)}</td><td class="num"><strong>${dist === null ? "—" : dist.toFixed(3)}</strong></td><td class="num">$${m.fills.intent_usdc.toFixed(0)}</td><td class="num">${m.fills.markets_count}</td></tr>`;
+      return `<tr class="${trCls}"><td class="role" style="color:${colorFor(m)}">${escapeHtml(tenantLabel(m))}${ctlTag}${dbOnlyTag}${trophy}</td><td class="policy">${fmtPolicy(m)}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong>${lowSample ? " 🟡" : ""}</td><td class="num">${m.pnl.resolved_markets}</td><td class="num">${m.pnl.markets_won}/${m.pnl.markets_lost}</td><td class="num">${fmtPct(tenantPnlPct, 2)}</td><td class="num"><strong>${dist === null ? "—" : dist.toFixed(2)}</strong></td><td class="num">$${m.fills.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td class="num">${m.fills.markets_count}</td></tr>`;
     })
     .join("");
   const refRowHtml = prodLiveRow
@@ -1416,10 +1580,10 @@ function renderReportHtml(args: {
           prodLiveRow.fills.intent_usdc > 0
             ? pnl / prodLiveRow.fills.intent_usdc
             : null;
-        return `<tr class="ref"><td class="role">${escapeHtml(tenantLabel(prodLiveRow))} (prod ref)</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong></td><td class="num">${prodLiveRow.pnl.resolved_markets}</td><td class="num">${prodLiveRow.pnl.markets_won}/${prodLiveRow.pnl.markets_lost}</td><td class="num">${fmtPct(refPct, 2)}</td><td class="num">—</td><td class="num">$${prodLiveRow.fills.intent_usdc.toFixed(0)}</td><td class="num">${prodLiveRow.fills.markets_count}</td></tr>`;
+        return `<tr class="ref"><td class="role">${escapeHtml(tenantLabel(prodLiveRow))} (prod ref)</td><td class="policy">${fmtPolicy(prodLiveRow)}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong></td><td class="num">${prodLiveRow.pnl.resolved_markets}</td><td class="num">${prodLiveRow.pnl.markets_won}/${prodLiveRow.pnl.markets_lost}</td><td class="num">${fmtPct(refPct, 2)}</td><td class="num">—</td><td class="num">$${prodLiveRow.fills.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td class="num">${prodLiveRow.fills.markets_count}</td></tr>`;
       })()
     : "";
-  const algoTable = `<table class="ab algo"><thead><tr><th>tenant</th><th class="num">PnL $</th><th class="num">resolved</th><th class="num">W/L</th><th class="num">PnL %</th><th class="num">distance to 🎯</th><th class="num">intent $</th><th class="num">markets</th></tr></thead><tbody>${targetRow}${paperTableRows}${refRowHtml}</tbody></table>`;
+  const algoTable = `<table class="ab algo"><thead><tr><th>tenant</th><th>policy</th><th class="num">PnL $</th><th class="num">resolved</th><th class="num">W/L</th><th class="num">PnL %</th><th class="num">gap to 🎯</th><th class="num">intent $</th><th class="num">markets</th></tr></thead><tbody>${targetRow}${paperTableRows}${refRowHtml}</tbody></table>`;
 
   // ── Q1 detail — twin vs target line chart ──────────────────────────────────
   // Replaces the prior "twin vs prod LIVE" line; the new framing is twin
@@ -1475,13 +1639,14 @@ function renderReportHtml(args: {
     height: 280,
   });
 
-  // Env-gap callout — surfaces matrix charter drift inline. Was a separate
-  // post-takeaway block; now lives as a thin strip under the Q-cards because
-  // it's a "fix-this-now" maintenance signal, not a finding.
+  // Env-gap callout — DB-only tenants ARE in the report (read-only via
+  // Grafana SA), but adding a POLY_<env>_TENANT_<role>_* env block makes
+  // them mutatable from agent sessions (PATCH policy, soft-delete, etc).
+  // Strip is a maintenance reminder, not a blocker.
   const envGapStrip =
     envGapWarnings.length === 0
       ? ""
-      : `<div class="env-gap-strip"><strong>⚠ ${envGapWarnings.length} matrix gap${envGapWarnings.length === 1 ? "" : "s"}</strong> — active in DB without env-key mapping, excluded from this run: ${envGapWarnings
+      : `<div class="env-gap-strip"><strong>ℹ ${envGapWarnings.length} DB-only tenant${envGapWarnings.length === 1 ? "" : "s"}</strong> — observable read-only via Grafana SA; add a POLY_&lt;env&gt;_TENANT_&lt;role&gt;_* env block to mutate from agent sessions: ${envGapWarnings
           .map(
             (w) =>
               `<code>${escapeHtml(w.env)}/${escapeHtml(w.short_id)} (${escapeHtml(w.sizing_policy_kind)})</code>`
@@ -1531,6 +1696,12 @@ h1 { font-size: 20px; font-weight: 600; margin: 0 0 2px; }
 .q.pos .q-number { color: #22c55e; }
 .q.neg .q-number { color: #ef4444; }
 .q.gated .q-number { color: #94a3b8; font-size: 36px; letter-spacing: 0.04em; }
+.q .q-number.q-word { font-size: 38px; letter-spacing: 0.02em; }
+.q.pos .q-number.q-word { color: #22c55e; }
+.q.neg .q-number.q-word { color: #ef4444; }
+table.ab td.policy { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: #cbd5e1; }
+table.ab td.policy code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; color: #fbbf24; }
+table.ab td.policy em { color: #34d399; font-style: italic; }
 .q-verdict { font-size: 15px; font-weight: 600; color: #e5e7eb; margin: 4px 0 8px; }
 .q-cause { font-size: 12px; color: #cbd5e1; }
 .q-cause code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 11px; }
@@ -1595,14 +1766,14 @@ table.ab.algo tr.ref td.role { color: #94a3b8 !important; font-style: italic; }
 <!-- TAKEAWAY:END -->
 
 <div class="q ${q1Cls}">
-  <div class="q-label">Q1 · Does swisstony-paper match swisstony? (paper-twin distance to target)</div>
-  <div class="q-number">${q1Number}</div>
+  <div class="q-label">Q1 · Does our paper trader behave like real swisstony?</div>
+  <div class="q-number q-word">${q1Number}</div>
   <div class="q-verdict">${q1Verdict}</div>
   ${q1Cause ? `<div class="q-cause">${q1Cause}</div>` : ""}
 </div>
 
 <div class="q ${q2Cls}">
-  <div class="q-label">Q2 · Closest paper algo to swisstony (winner of distance-to-target leaderboard)</div>
+  <div class="q-label">Q2 · Which paper algorithm comes closest to real swisstony?</div>
   <div class="q-number">${q2Number}</div>
   <div class="q-verdict">${escapeHtml(q2Verdict)}</div>
   <div class="q-ref">${q2Ref}</div>
@@ -1871,6 +2042,8 @@ async function fetchTenant(
       envSlug: tenant.envSlug,
       billingAccountId: tenant.billingAccountId,
       envKeyPrefix: tenant.envKeyPrefix,
+      sourceFromEnv: tenant.sourceFromEnv,
+      policy: tenant.policy,
     },
     target_id: targetId,
     target_wallet: targetWallet,
@@ -2041,12 +2214,19 @@ async function main(): Promise<void> {
     target_resolved_markets: targetPnl.resolved_markets,
   });
 
-  // ── Env-discovery gap (Option B) ───────────────────────────────────────────
-  // For each unique env DS, list active poly_copy_trade_targets rows; emit a
-  // ::warning:: for any row whose billing_account_id isn't represented by a
-  // POLY_<env>_TENANT_<role>_* block. Surfaces matrix-charter drift without
-  // changing the env-key discovery scheme.
+  // ── Charter discovery (DB-side) ────────────────────────────────────────────
+  // For each unique env DS, list active poly_copy_trade_targets rows on this
+  // target wallet. Any billing_account_id NOT already represented by a
+  // POLY_<env>_TENANT_<role>_* block is included as a DB-only tenant —
+  // observability is read-only via the Grafana service-account, so the env
+  // block (which only gates mutating API calls) isn't required to surface
+  // metrics. The previous "::warning:: ... excluded from this run" framing
+  // was incorrect: the data WAS available, the tool was just dropping it.
+  // Also hydrates each env-discovered tenant's policy snapshot for the
+  // algo-table policy column.
+  const dbOnlyTenants: Tenant[] = [];
   const envGapWarnings: EnvGapWarning[] = [];
+  const activeIndex = new Map<string, ActiveTargetRow>(); // dsUid|billing → row
   const envBillingByDs = new Map<string, Set<string>>();
   for (const t of tenants) {
     const s = envBillingByDs.get(t.dsUid) ?? new Set<string>();
@@ -2059,7 +2239,10 @@ async function main(): Promise<void> {
       const known = envBillingByDs.get(dsUid) ?? new Set<string>();
       const envSlug = (tenants.find((t) => t.dsUid === dsUid)?.envSlug ??
         "candidate-a") as Tenant["envSlug"];
+      const envLabel = (tenants.find((t) => t.dsUid === dsUid)?.envLabel ??
+        envSlug.toUpperCase().replace(/-/g, "_"));
       for (const row of active) {
+        activeIndex.set(`${dsUid}|${row.billing_account_id}`, row);
         if (row.target_wallet !== args.targetWallet) continue;
         if (known.has(row.billing_account_id)) continue;
         const short = row.billing_account_id.slice(0, 8);
@@ -2070,8 +2253,9 @@ async function main(): Promise<void> {
           sizing_policy_kind: row.sizing_policy_kind,
           short_id: short,
         });
+        dbOnlyTenants.push(tenantFromDbRow(envSlug, envLabel, row));
         console.error(
-          `::warning::matrix gap: ${envSlug} billing=${row.billing_account_id} (short=${short}) wallet=${row.target_wallet} policy=${row.sizing_policy_kind} — no POLY_${envSlug.toUpperCase().replace(/-/g, "_")}_TENANT_<role>_* env block; tenant excluded from this run`
+          `::notice::db-only tenant: ${envSlug} billing=${row.billing_account_id} (short=${short}) policy=${row.sizing_policy_kind} max=${row.mirror_max_usdc_per_trade} alloc=${row.mirror_capital_alloc_usdc} — no POLY_${envSlug.toUpperCase().replace(/-/g, "_")}_TENANT_<role>_* env block; included as read-only via Grafana SA`
         );
       }
     } catch (e) {
@@ -2081,6 +2265,12 @@ async function main(): Promise<void> {
       });
     }
   }
+  // Hydrate env-discovered tenants with their policy snapshot from the DB
+  // index built above (uses the same active-targets query, so one round trip).
+  for (const t of tenants) hydrateTenantPolicy(t, activeIndex);
+  // Merge DB-only tenants into the working set. They participate in every
+  // downstream metric query (fetchTenant uses Grafana SA, not tenant API key).
+  tenants.push(...dbOnlyTenants);
 
   const metrics: TenantMetrics[] = [];
   for (const t of tenants) {
