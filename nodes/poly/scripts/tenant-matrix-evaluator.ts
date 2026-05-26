@@ -1369,8 +1369,15 @@ function renderReportHtml(args: {
   const since = new Date(window.since);
   const until = new Date(window.until);
 
+  // Display alias: SWISSTONY_TRUST_TWIN is misnamed — it's a position_gap @
+  // $500k policy variant that mirrors swisstony's BUDGET, not a fidelity
+  // trust twin (which would require same policy as prod LIVE). Display it
+  // as SWISSTONY_BUDGET_MIRROR so the report doesn't propagate the
+  // misnomer. Env-block rename is a follow-up (touches .env.cogni).
+  const aliasRole = (role: string): string =>
+    role === "SWISSTONY_TRUST_TWIN" ? "SWISSTONY_BUDGET_MIRROR" : role;
   const tenantLabel = (m: TenantMetrics): string =>
-    `${m.tenant.role} · ${m.tenant.envSlug}`;
+    `${aliasRole(m.tenant.role)} · ${m.tenant.envSlug}`;
   const colorFor = (m: TenantMetrics): string => {
     if (m.tenant.envKeyPrefix === control.tenant.envKeyPrefix) return SERIES_COLORS[0]!;
     const idx = metrics
@@ -1389,89 +1396,96 @@ function renderReportHtml(args: {
   const isProdLive = (m: TenantMetrics): boolean =>
     m.tenant.envSlug === "production" && m.tenant.role === "LIVE";
 
-  // ── Q1: does the paper mirror of the target match the target itself? ─────
-  // Pick the canonical paper-twin in priority order. POLY_PROD_TENANT_TRUST_TWIN
-  // is the textbook "paper mirror of derek's prod wallet"; falling back to the
-  // preview TRUST_TWIN keeps the question answerable when the prod block isn't
-  // configured. The question shifts from "twin ↔ live shared fills" (zero when
-  // prod isn't trading) to "paper-twin ↔ target on PnL%, placement, intent,
-  // markets" — exactly the same axes the leaderboard ranks on.
-  const q1Twin: TenantMetrics | null =
-    metrics.find(
-      (m) => m.tenant.envSlug === "production" && m.tenant.role === "TRUST_TWIN"
-    ) ??
-    metrics.find(
-      (m) => m.tenant.envSlug === "preview" && m.tenant.role === "TRUST_TWIN"
-    ) ??
-    null;
-  const q1TwinDistance =
-    q1Twin === null
+  // ── Q1: is paper trading a trustworthy mirror of live trading? ───────────
+  // The trust twin is a paper-side tenant whose sizing policy EXACTLY matches
+  // a live tenant (currently prod LIVE) on the same target. That holds the
+  // algorithm constant; the only variable left is "paper sidecar vs real
+  // CLOB", which is what a trustworthiness claim hinges on.
+  //
+  // Misnamed tenants (e.g. SWISSTONY_TRUST_TWIN that runs position_gap @
+  // $500k while live runs auto p80/$15) are NOT trust twins; they're budget
+  // mirrors or other policy variants. They are excluded from Q1.
+  //
+  // Q1 is intentionally tri-state: ✅ MATCHES · ⚠ DRIFTS · ❌ NO MATCH only
+  // when both sides have data; otherwise ⚪ NOT TESTABLE with the exact
+  // reason. This window: prod LIVE has 0 decisions because copy-trade is
+  // disabled on derek's prod wallet, so Q1 is NOT TESTABLE — paper fidelity
+  // is unanswerable until prod resumes trading.
+  const prodLiveActive =
+    prodLive !== null && (prodLive.pnl.resolved_markets > 0 || prodLive.fills.fills_count > 0);
+  const fidelityTwin: TenantMetrics | null = (() => {
+    if (!prodLive || !prodLive.tenant.policy) return null;
+    const live = prodLive.tenant.policy;
+    return (
+      metrics.find((m) => {
+        if (m.tenant.envSlug === "production") return false;
+        const p = m.tenant.policy;
+        if (!p || !p.kind) return false;
+        if (p.kind !== live.kind) return false;
+        if ((p.max_usdc_per_trade ?? null) !== (live.max_usdc_per_trade ?? null))
+          return false;
+        if (
+          (p.capital_alloc_usdc ?? null) !== (live.capital_alloc_usdc ?? null)
+        )
+          return false;
+        if (
+          (p.filter_percentile ?? null) !== (live.filter_percentile ?? null)
+        )
+          return false;
+        return true;
+      }) ?? null
+    );
+  })();
+  const fidelityTwinDistance =
+    fidelityTwin === null
       ? null
-      : distances.find((d) => d.envKeyPrefix === q1Twin.tenant.envKeyPrefix) ??
-        null;
-  const q1Agg = q1TwinDistance?.aggregate_distance ?? null;
-  const q1Cls =
-    q1Agg === null ? "gated" : q1Agg < 0.25 ? "pos" : q1Agg < 0.75 ? "" : "neg";
-  // Plain-English verdict word. Distance is internal; humans see the result.
-  const q1Number = (() => {
-    if (q1Twin === null) return "NOT CONFIGURED";
-    if (q1Agg === null) return "NO DATA";
-    if (q1Agg < 0.25) return "✅ MATCHES";
-    if (q1Agg < 0.75) return "⚠ DRIFTS";
-    return "❌ NO MATCH";
-  })();
-  const q1Verdict =
-    q1Twin === null
-      ? "No paper-twin tenant configured for this target — set POLY_PROD_TENANT_TRUST_TWIN_* to compare paper output against real swisstony."
-      : q1Agg === null
-        ? `Paper twin ${tenantLabel(q1Twin)} produced no comparable signal in this window.`
-        : q1Agg < 0.25
-          ? `Paper twin ${tenantLabel(q1Twin)} tracks swisstony's real behavior closely — paper outputs are a trustworthy substitute.`
-          : q1Agg < 0.75
-            ? `Paper twin ${tenantLabel(q1Twin)} drifts from swisstony — paper signals are usable but biased.`
-            : `Paper twin ${tenantLabel(q1Twin)} does not behave like swisstony. Do not use paper outputs as a substitute for live decisions.`;
-  // Plain-English cause — name the biggest gap in dollars and percent, not distance metrics.
-  const q1Cause = (() => {
-    if (!q1TwinDistance || !q1Twin) return "";
-    const targetPct =
-      target.intent_usdc > 0
-        ? target.pnl.realized_pnl_usdc / target.intent_usdc
-        : null;
-    const twinPct =
-      q1Twin.fills.intent_usdc > 0
-        ? q1Twin.pnl.realized_pnl_usdc / q1Twin.fills.intent_usdc
-        : null;
-    const parts: Array<{ priority: number; phrase: string; gap: number }> = [];
-    if (
-      targetPct !== null &&
-      twinPct !== null &&
-      Math.sign(targetPct) !== Math.sign(twinPct) &&
-      Math.abs(targetPct - twinPct) > 0.005
-    ) {
-      parts.push({
-        priority: 1,
-        gap: Math.abs(targetPct - twinPct),
-        phrase: `<strong>Sign flip on PnL:</strong> swisstony made <code class="pos">${fmtPct(targetPct, 2)}</code>; paper twin earned <code class="neg">${fmtPct(twinPct, 2)}</code>.`,
-      });
-    } else if (targetPct !== null && twinPct !== null) {
-      parts.push({
-        priority: 2,
-        gap: Math.abs(targetPct - twinPct),
-        phrase: `<strong>PnL gap:</strong> swisstony <code>${fmtPct(targetPct, 2)}</code> vs paper twin <code>${fmtPct(twinPct, 2)}</code> (${((Math.abs(targetPct - twinPct)) * 100).toFixed(2)} pp apart).`,
-      });
-    }
-    if (q1Twin.fills.intent_usdc < target.intent_usdc * 0.5) {
-      const tinyPct = q1Twin.fills.intent_usdc / target.intent_usdc;
-      parts.push({
-        priority: 3,
-        gap: 1 - tinyPct,
-        phrase: `<strong>Size mismatch:</strong> twin filled <code>$${q1Twin.fills.intent_usdc.toFixed(0)}</code> against swisstony's <code>$${target.intent_usdc.toFixed(0)}</code> (twin is ${(tinyPct * 100).toFixed(2)}% the size — the policy is undersized vs target's book).`,
-      });
-    }
-    if (parts.length === 0) return "";
-    parts.sort((a, b) => a.priority - b.priority || b.gap - a.gap);
-    return parts[0]!.phrase;
-  })();
+      : distances.find(
+          (d) => d.envKeyPrefix === fidelityTwin.tenant.envKeyPrefix
+        ) ?? null;
+  const q1Agg = fidelityTwinDistance?.aggregate_distance ?? null;
+  const q1NotTestable = !prodLive || !prodLiveActive || !fidelityTwin;
+  // Reason priority: prod-not-trading wins over schema-gap wins over policy-
+  // mismatch. The fundamental cause is "live isn't generating signal", not
+  // "we couldn't read its policy from a stale DS."
+  const q1NotTestableReason = !prodLive
+    ? "no prod LIVE tenant configured (POLY_PROD_TENANT_LIVE_* missing)"
+    : !prodLiveActive
+      ? "prod LIVE has 0 decisions in this window — copy-trade currently disabled on derek's prod wallet, no live signal to compare against"
+      : !prodLive.tenant.policy
+        ? "prod LIVE policy snapshot unavailable (prod-poly DS schema is missing sizing_policy_kind / mirror_capital_alloc_usdc columns; the DS itself needs a schema migration)"
+        : !fidelityTwin
+          ? `no paper tenant runs the exact same policy as prod LIVE (${prodLive.tenant.policy.kind} p${prodLive.tenant.policy.filter_percentile ?? "?"} / $${prodLive.tenant.policy.max_usdc_per_trade ?? "?"})`
+          : "data incomplete";
+  const q1Cls = q1NotTestable
+    ? "gated"
+    : q1Agg === null
+      ? "gated"
+      : q1Agg < 0.25
+        ? "pos"
+        : q1Agg < 0.75
+          ? ""
+          : "neg";
+  const q1Number = q1NotTestable
+    ? "⚪ NOT TESTABLE"
+    : q1Agg === null
+      ? "⚪ NO DATA"
+      : q1Agg < 0.25
+        ? "✅ MATCHES"
+        : q1Agg < 0.75
+          ? "⚠ DRIFTS"
+          : "❌ NO MATCH";
+  const q1Verdict = q1NotTestable
+    ? `Cannot test paper-vs-live trustworthiness right now: ${q1NotTestableReason}. Q1 will become answerable when prod LIVE resumes trading with a policy-matched fidelity twin.`
+    : q1Agg === null
+      ? `Fidelity twin ${tenantLabel(fidelityTwin!)} produced no comparable signal in this window.`
+      : q1Agg < 0.25
+        ? `Fidelity twin ${tenantLabel(fidelityTwin!)} tracks prod LIVE closely — paper outputs are a trustworthy substitute for live decisions.`
+        : q1Agg < 0.75
+          ? `Fidelity twin ${tenantLabel(fidelityTwin!)} drifts from prod LIVE — paper signals are usable but biased.`
+          : `Fidelity twin ${tenantLabel(fidelityTwin!)} does not behave like prod LIVE. Do not use paper outputs as a substitute for live decisions.`;
+  const q1Cause = q1NotTestable
+    ? `<em>To enable Q1:</em> (a) resume copy-trading on derek's prod wallet, AND (b) ensure a preview tenant runs the IDENTICAL sizing policy + caps as prod LIVE. The current preview matrix has multiple paper variants but none of them is a policy-match fidelity twin.`
+    : "";
   // Per-fill outcome-fidelity sub-signal (kept as a sidecar — informative when
   // prod LIVE has fills in window, silent otherwise). Surfaces in Q1 detail.
   const q1SubFidelity =
@@ -1500,38 +1514,34 @@ function renderReportHtml(args: {
   const prodLiveRow = metrics.find(isProdLive) ?? null;
   const winner = paperRowsSorted[0]?.m ?? null;
   const winnerDistance = paperRowsSorted[0]?.d?.aggregate_distance ?? null;
-  const q1IsRed = q1Agg !== null && q1Agg >= 0.75;
+  // Q2 is independent of Q1 — "which paper algo hugs swisstony tightest" is
+  // a policy-ranking question, not a fidelity question. Q1 being NOT TESTABLE
+  // (prod LIVE quiet) does NOT gate Q2; instead Q2's verdict carries a
+  // caveat that paper-side PnL hasn't been validated against live yet.
   const winnerPnlPct =
     winner && winner.fills.intent_usdc > 0
       ? winner.pnl.realized_pnl_usdc / winner.fills.intent_usdc
       : null;
-  const q2Cls = q1IsRed
-    ? "gated"
-    : winner === null
-      ? ""
-      : winnerPnlPct !== null && winnerPnlPct > 0
-        ? "pos"
-        : "neg";
-  // Plain-English Q2 number — the closest paper's PnL %, or GATED.
-  const q2Number = q1IsRed
-    ? "GATED"
-    : winner === null
-      ? "—"
-      : winnerPnlPct === null
-        ? "—"
-        : fmtPct(winnerPnlPct, 2);
   const targetPctOverallEarly =
     target.intent_usdc > 0
       ? target.pnl.realized_pnl_usdc / target.intent_usdc
       : null;
-  const q2Verdict = q1IsRed
-    ? `Don't promote any paper variant. Q1 says paper outputs don't match real swisstony — the leaderboard below is unreliable.`
-    : winner
-      ? `Closest paper variant to swisstony: ${tenantLabel(winner)} (${winner.tenant.policy?.kind ?? "?"})${winnerPnlPct !== null && targetPctOverallEarly !== null ? ` — earned ${fmtPct(winnerPnlPct, 2)} vs swisstony's ${fmtPct(targetPctOverallEarly, 2)}` : ""}.`
-      : "No paper tenants in this matrix.";
-  const q2Ref = (() => {
-    return `🎯 swisstony actual: <code>${fmtPnl(target.pnl.realized_pnl_usdc)}</code> on <code>$${target.intent_usdc.toFixed(0)}</code> intent (<code>${fmtPct(targetPctOverallEarly, 2)}</code>) across <code>${target.market_set.length}</code> markets · <code>${target.pnl.resolved_markets}</code> resolved.`;
-  })();
+  const q2Cls =
+    winner === null
+      ? ""
+      : winnerPnlPct !== null && winnerPnlPct > 0
+        ? "pos"
+        : "neg";
+  const q2Number =
+    winner === null
+      ? "—"
+      : winnerPnlPct === null
+        ? "—"
+        : fmtPct(winnerPnlPct, 2);
+  const q2Verdict = winner
+    ? `Closest paper variant to swisstony: ${tenantLabel(winner)}${winnerPnlPct !== null && targetPctOverallEarly !== null ? ` — earned ${fmtPct(winnerPnlPct, 2)} vs swisstony's ${fmtPct(targetPctOverallEarly, 2)}` : ""}.`
+    : "No paper tenants in this matrix.";
+  const q2Ref = `🎯 swisstony actual: <code>${fmtPnl(target.pnl.realized_pnl_usdc)}</code> on <code>$${target.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</code> intent (<code>${fmtPct(targetPctOverallEarly, 2)}</code>) across <code>${target.market_set.length}</code> markets · <code>${target.pnl.resolved_markets}</code> resolved.${q1NotTestable ? ` <span class="muted">Paper-vs-live fidelity untested this window (Q1 ⚪) — treat ranking as advisory.</span>` : ""}`;
 
   // ── Algo table: swisstony 🎯 row at top, paper variants sorted by distance,
   // prod LIVE pinned at bottom. Policy column shows the actual sizing knobs
@@ -1562,14 +1572,15 @@ function renderReportHtml(args: {
       const dist = d?.aggregate_distance ?? null;
       const tenantPnlPct =
         m.fills.intent_usdc > 0 ? pnl / m.fills.intent_usdc : null;
-      const trCls = idx === 0 && !q1IsRed ? "rank-1" : "";
-      const ctlTag =
-        m.tenant.envKeyPrefix === control.tenant.envKeyPrefix
-          ? " (Q1 twin)"
+      const trCls = idx === 0 ? "rank-1" : "";
+      const fidelityTag =
+        fidelityTwin !== null &&
+        m.tenant.envKeyPrefix === fidelityTwin.tenant.envKeyPrefix
+          ? " (fidelity twin)"
           : "";
       const dbOnlyTag = m.tenant.sourceFromEnv === false ? " (DB-only)" : "";
-      const trophy = idx === 0 && !q1IsRed ? " 🏆" : "";
-      return `<tr class="${trCls}"><td class="role" style="color:${colorFor(m)}">${escapeHtml(tenantLabel(m))}${ctlTag}${dbOnlyTag}${trophy}</td><td class="policy">${fmtPolicy(m)}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong>${lowSample ? " 🟡" : ""}</td><td class="num">${m.pnl.resolved_markets}</td><td class="num">${m.pnl.markets_won}/${m.pnl.markets_lost}</td><td class="num">${fmtPct(tenantPnlPct, 2)}</td><td class="num"><strong>${dist === null ? "—" : dist.toFixed(2)}</strong></td><td class="num">$${m.fills.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td class="num">${m.fills.markets_count}</td></tr>`;
+      const trophy = idx === 0 ? " 🏆" : "";
+      return `<tr class="${trCls}"><td class="role" style="color:${colorFor(m)}">${escapeHtml(tenantLabel(m))}${fidelityTag}${dbOnlyTag}${trophy}</td><td class="policy">${fmtPolicy(m)}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong>${lowSample ? " 🟡" : ""}</td><td class="num">${m.pnl.resolved_markets}</td><td class="num">${m.pnl.markets_won}/${m.pnl.markets_lost}</td><td class="num">${fmtPct(tenantPnlPct, 2)}</td><td class="num"><strong>${dist === null ? "—" : dist.toFixed(2)}</strong></td><td class="num">$${m.fills.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td class="num">${m.fills.markets_count}</td></tr>`;
     })
     .join("");
   const refRowHtml = prodLiveRow
@@ -1585,73 +1596,70 @@ function renderReportHtml(args: {
     : "";
   const algoTable = `<table class="ab algo"><thead><tr><th>tenant</th><th>policy</th><th class="num">PnL $</th><th class="num">resolved</th><th class="num">W/L</th><th class="num">PnL %</th><th class="num">gap to 🎯</th><th class="num">intent $</th><th class="num">markets</th></tr></thead><tbody>${targetRow}${paperTableRows}${refRowHtml}</tbody></table>`;
 
-  // ── Q1 detail — twin vs target line chart ──────────────────────────────────
-  // Replaces the prior "twin vs prod LIVE" line; the new framing is twin
-  // tracking target. When prod LIVE has any fills they go on as a faint
-  // reference line.
-  const filledChartTwinTarget =
-    q1Twin === null
+  // ── Q1 detail — fidelity twin vs prod LIVE line chart ───────────────────
+  // The Q1 fidelity question is paper-vs-live on identical policy. Chart
+  // overlays the fidelity twin's cumulative $ filled with prod LIVE's
+  // cumulative $ filled. When prod LIVE has 0 fills (Q1 NOT TESTABLE) the
+  // chart explicitly says so rather than rendering a single flat line.
+  const filledChartFidelity =
+    fidelityTwin === null || !prodLive || !prodLiveActive
       ? ""
       : svgLineChart({
-          title: "cumulative $ filled — paper twin vs target",
+          title: "cumulative $ filled — fidelity twin vs prod LIVE (identical policy)",
           series: [
             {
-              label: `🎯 ${targetWallet.slice(0, 10)}… (target)`,
+              label: `${tenantLabel(prodLive)} (real CLOB)`,
               color: SERIES_COLORS[2]!,
-              points: target.cumulative_usdc,
+              points: prodLive.cumulative.realized_usdc,
             },
             {
-              label: `${tenantLabel(q1Twin)} (twin · paper)`,
+              label: `${tenantLabel(fidelityTwin)} (paper)`,
               color: SERIES_COLORS[0]!,
-              points: q1Twin.cumulative.realized_usdc,
+              points: fidelityTwin.cumulative.realized_usdc,
             },
-            ...(prodLive
-              ? [
-                  {
-                    label: `${tenantLabel(prodLive)} (prod ref)`,
-                    color: "#6b7280",
-                    points: prodLive.cumulative.realized_usdc,
-                  },
-                ]
-              : []),
           ],
           xRange: { since, until },
-          height: 280,
+          height: 260,
         });
-  // Q2 detail — every paper variant + target overlaid.
-  const filledChartAllTenants = svgLineChart({
-    title: "cumulative $ filled — all paper tenants vs target",
+  // ── Q2 detail — TWO panels, because target's $7.8M scale would crush
+  // every paper line to ~0 if overlaid. Top: target only (M-scale). Bottom:
+  // paper variants only (each on its own scale via per-series normalisation
+  // would re-introduce confusion; instead shared linear scale across paper
+  // variants — they range $2k → $4M, all readable together).
+  const filledChartTarget = svgLineChart({
+    title: "cumulative $ filled — swisstony actual (real on-chain)",
     series: [
       {
-        label: "🎯 target",
+        label: "🎯 swisstony",
         color: SERIES_COLORS[2]!,
         points: target.cumulative_usdc,
       },
-      ...metrics
-        .filter((m) => !isProdLive(m))
-        .map((m, i) => ({
-          label: tenantLabel(m),
-          color: SERIES_COLORS[(i + 3) % SERIES_COLORS.length]!,
-          points: m.cumulative.realized_usdc,
-        })),
     ],
+    xRange: { since, until },
+    height: 220,
+  });
+  const filledChartPaperOnly = svgLineChart({
+    title: "cumulative $ filled — paper variants only (own scale)",
+    series: metrics
+      .filter((m) => !isProdLive(m))
+      .map((m, i) => ({
+        label: tenantLabel(m),
+        color: SERIES_COLORS[(i + 1) % SERIES_COLORS.length]!,
+        points: m.cumulative.realized_usdc,
+      })),
     xRange: { since, until },
     height: 280,
   });
 
-  // Env-gap callout — DB-only tenants ARE in the report (read-only via
-  // Grafana SA), but adding a POLY_<env>_TENANT_<role>_* env block makes
-  // them mutatable from agent sessions (PATCH policy, soft-delete, etc).
-  // Strip is a maintenance reminder, not a blocker.
-  const envGapStrip =
-    envGapWarnings.length === 0
-      ? ""
-      : `<div class="env-gap-strip"><strong>ℹ ${envGapWarnings.length} DB-only tenant${envGapWarnings.length === 1 ? "" : "s"}</strong> — observable read-only via Grafana SA; add a POLY_&lt;env&gt;_TENANT_&lt;role&gt;_* env block to mutate from agent sessions: ${envGapWarnings
-          .map(
-            (w) =>
-              `<code>${escapeHtml(w.env)}/${escapeHtml(w.short_id)} (${escapeHtml(w.sizing_policy_kind)})</code>`
-          )
-          .join(" · ")}</div>`;
+  // Data-completeness banner — explicit acknowledgement of every active
+  // tenant on the target. Lists DB-only tenants inline so the reader can
+  // verify nothing's missing at a glance.
+  const totalActive = metrics.filter((m) => !isProdLive(m)).length;
+  const dbOnlyCount = envGapWarnings.length;
+  const envBlockCount = totalActive - dbOnlyCount;
+  const completenessBanner = `<div class="completeness">
+  <strong>Data scope</strong> · ${totalActive} active paper tenant${totalActive === 1 ? "" : "s"} on this target (${envBlockCount} env-discovered + ${dbOnlyCount} DB-only via Grafana SA) · prod LIVE: <code>${prodLiveActive ? `${prodLive!.fills.fills_count} fills` : "0 decisions in window (copy-trade disabled)"}</code>
+</div>`;
 
   const decisionsRefRows = [...metrics]
     .sort((a, b) =>
@@ -1737,9 +1745,9 @@ table.ab.algo tr.ref td.role { color: #94a3b8 !important; font-style: italic; }
 .line-chart .legend { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
 .footer-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid #1f2937; font-size: 10px; color: #6b7280; }
 .footer-note a { color: #60a5fa; }
-.env-gap-strip { background: #1a1208; border: 1px solid #78350f; border-radius: 6px; padding: 8px 12px; margin: 0 0 14px; font-size: 11px; color: #fcd34d; font-family: 'SF Mono', Menlo, monospace; }
-.env-gap-strip strong { color: #fbbf24; margin-right: 6px; }
-.env-gap-strip code { background: #131826; padding: 1px 5px; border-radius: 3px; color: #fde68a; font-size: 10px; }
+.completeness { background: #0e1422; border: 1px solid #1f2937; border-left: 3px solid #34d399; border-radius: 6px; padding: 8px 12px; margin: 0 0 14px; font-size: 11px; color: #cbd5e1; }
+.completeness strong { color: #34d399; margin-right: 6px; }
+.completeness code { background: #131826; padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 10px; }
 .finding-detail p { margin: 0 0 10px; font-size: 13px; line-height: 1.5; }
 .finding-detail strong { color: #fbbf24; }
 .finding-detail .placeholder { color: #64748b; font-style: italic; }
@@ -1766,7 +1774,7 @@ table.ab.algo tr.ref td.role { color: #94a3b8 !important; font-style: italic; }
 <!-- TAKEAWAY:END -->
 
 <div class="q ${q1Cls}">
-  <div class="q-label">Q1 · Does our paper trader behave like real swisstony?</div>
+  <div class="q-label">Q1 · Does paper trading match LIVE trading on the same algorithm? (fidelity twin)</div>
   <div class="q-number q-word">${q1Number}</div>
   <div class="q-verdict">${q1Verdict}</div>
   ${q1Cause ? `<div class="q-cause">${q1Cause}</div>` : ""}
@@ -1779,25 +1787,35 @@ table.ab.algo tr.ref td.role { color: #94a3b8 !important; font-style: italic; }
   <div class="q-ref">${q2Ref}</div>
 </div>
 
-${envGapStrip}
+${completenessBanner}
 
 <a id="appendix"></a>
 
 <details open>
-  <summary>📊 Q1 detail — paper twin tracking target over window</summary>
+  <summary>📊 Q1 detail — paper fidelity twin vs prod LIVE (identical policy)</summary>
   <div class="details-body">
     ${q1SubFidelity}
-    <p class="muted">Twin: <code>${q1Twin ? escapeHtml(q1Twin.tenant.envKeyPrefix) : "—"}</code>. Lines below show cumulative realized $ filled — target vs twin (and prod LIVE as faint reference when configured). If the twin's curve is the same shape as target's (just scaled), paper is a faithful mirror; if the shapes diverge, paper's sizing or selection breaks down.</p>
-    <div class="chart">${filledChartTwinTarget || "<em class=\"muted\">no twin configured</em>"}</div>
+    ${
+      fidelityTwin
+        ? `<p class="muted">Fidelity twin: <code>${escapeHtml(fidelityTwin.tenant.envKeyPrefix)}</code> (policy matches prod LIVE: ${fmtPolicy(fidelityTwin)}). Q1 compares the twin's <code>cumulative $ filled</code> against prod LIVE's. Same shape → paper adapter is faithful; divergent shape → paper sidecar drifts from real CLOB execution.</p>`
+        : `<p class="muted">No paper tenant is configured with the IDENTICAL sizing policy as prod LIVE — there is no fidelity twin to test. To enable Q1, add a preview tenant whose <code>sizing_policy_kind</code> + <code>mirror_max_usdc_per_trade</code> + <code>mirror_capital_alloc_usdc</code> + <code>mirror_filter_percentile</code> exactly match prod LIVE's row in <code>poly_copy_trade_targets</code>.</p>`
+    }
+    ${
+      prodLiveActive
+        ? `<div class="chart">${filledChartFidelity || "<em class=\"muted\">no fidelity twin configured</em>"}</div>`
+        : `<p class="muted"><em>Prod LIVE has 0 decisions and 0 fills in this window — copy-trading is currently disabled on derek's prod wallet. Without live data, Q1 cannot run regardless of whether a fidelity twin is configured.</em></p>`
+    }
   </div>
 </details>
 
 <details open>
   <summary>📊 Q2 detail — full ranking (swisstony 🎯 → paper variants → prod ref)</summary>
   <div class="details-body">
-    <p class="muted">Sorted by aggregate distance to target ascending. <code>PnL %</code> = realized PnL ÷ intent $. <code>distance to 🎯</code> is the mean of fractional gaps across PnL %, placement rate, intent ratio, and markets-touched ratio. 🟡 = resolved markets &lt; 50.</p>
+    <p class="muted">Sorted by aggregate distance to target ascending. <code>PnL %</code> = realized PnL ÷ intent $. <code>gap to 🎯</code> is the mean of fractional gaps across PnL %, placement rate, intent ratio, and markets-touched ratio. 🟡 = resolved markets &lt; 50.</p>
     ${algoTable}
-    <div class="chart">${filledChartAllTenants}</div>
+    <p class="muted" style="margin-top:14px">Cumulative fill trajectories on separate scales — swisstony's $7.86M dwarfs every paper variant ($2k → $4M) so they share no useful axis.</p>
+    <div class="chart">${filledChartTarget}</div>
+    <div class="chart">${filledChartPaperOnly}</div>
   </div>
 </details>
 
