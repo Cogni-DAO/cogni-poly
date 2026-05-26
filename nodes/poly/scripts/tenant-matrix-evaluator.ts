@@ -290,6 +290,38 @@ export type TargetSeries = {
   wallet: string;
   cumulative_usdc: TsPoint[];
   market_set: string[]; // bare conditionIds the target traded in window
+  pnl: PnlAgg;
+  intent_usdc: number; // total filled USDC volume across all markets (sum of size_usdc)
+  resolved_via_ds_uid: string | null;
+};
+
+export type EnvGapWarning = {
+  env: Tenant["envSlug"];
+  billing_account_id: string;
+  target_wallet: string;
+  sizing_policy_kind: string;
+  // bare hex-prefix of billing_account_id, the way the charter labels orphan rows
+  short_id: string;
+};
+
+export type DistanceToTarget = {
+  envKeyPrefix: string;
+  // each component is fractional |t − x| ÷ |t| (clamped to 1 if target is 0)
+  pnl_pct_distance: number | null;
+  placement_rate_distance: number | null;
+  intent_usdc_ratio_distance: number | null;
+  markets_touched_ratio_distance: number | null;
+  aggregate_distance: number | null; // arithmetic mean of non-null components
+};
+
+export type ProdTwinFidelity = {
+  twin_env_key_prefix: string;
+  live_env_key_prefix: string;
+  shared_fills: number;
+  pnl_delta_usdc: number; // twin PnL − live PnL
+  pnl_delta_pct: number | null; // delta ÷ |live PnL|
+  classification: "green" | "yellow" | "red" | "no_data";
+  markets_touched_delta: number; // twin.markets − live.markets
 };
 
 // ─── Pure metric helpers (unit-testable) ─────────────────────────────────────
@@ -767,6 +799,193 @@ async function fetchTargetHourlyVolume(
     .filter((p) => p.ts !== "");
 }
 
+async function fetchTargetIntentUsdc(
+  grafana: { url: string; saToken: string },
+  targetDsUid: string,
+  targetWallet: string,
+  window: { since: string; until: string }
+): Promise<number> {
+  const sql = `
+    SELECT COALESCE(SUM(f.size_usdc), 0)::float8 AS total_usdc
+    FROM poly_trader_fills f
+    JOIN poly_trader_wallets w ON w.id = f.trader_wallet_id
+    WHERE LOWER(w.wallet_address) = LOWER('${targetWallet}')
+      AND f.observed_at >= '${window.since}'::timestamptz
+      AND f.observed_at <  '${window.until}'::timestamptz
+  `;
+  const rows = await grafanaPgQuery(grafana.url, grafana.saToken, targetDsUid, sql);
+  return Number(rows[0]?.total_usdc) || 0;
+}
+
+// Target wallet's realized PnL via outcome join — mirrors
+// fetchTenantRealizedPnl's math (winner payout − cost basis | loser cost
+// basis loss) but reads from poly_trader_fills (the on-chain trader truth)
+// instead of poly_copy_trade_fills (our mirror ledger). This was the
+// v0-deferred join the SKILL.md called out.
+async function fetchTargetRealizedPnl(
+  grafana: { url: string; saToken: string },
+  targetDsUid: string,
+  targetWallet: string,
+  window: { since: string; until: string }
+): Promise<PnlAgg> {
+  const sql = `
+    SELECT
+      COALESCE(SUM(
+        CASE
+          WHEN o.outcome = 'winner'
+          THEN f.shares * COALESCE(o.payout, 1.0)::numeric
+               - f.shares * f.price
+          WHEN o.outcome = 'loser'
+          THEN -(f.shares * f.price)
+          ELSE 0
+        END
+      ), 0)::float8 AS realized_pnl_usdc,
+      COUNT(DISTINCT f.condition_id) FILTER (WHERE o.outcome IN ('winner','loser'))::int AS resolved_markets,
+      COUNT(DISTINCT f.condition_id) FILTER (WHERE o.outcome = 'winner')::int AS markets_won,
+      COUNT(DISTINCT f.condition_id) FILTER (WHERE o.outcome = 'loser')::int AS markets_lost
+    FROM poly_trader_fills f
+    JOIN poly_trader_wallets w ON w.id = f.trader_wallet_id
+    LEFT JOIN poly_market_outcomes o
+      ON LOWER(o.condition_id) = LOWER(f.condition_id)
+     AND o.token_id = f.token_id
+    WHERE LOWER(w.wallet_address) = LOWER('${targetWallet}')
+      AND f.observed_at >= '${window.since}'::timestamptz
+      AND f.observed_at <  '${window.until}'::timestamptz
+      AND f.price IS NOT NULL
+      AND f.shares IS NOT NULL
+      AND f.side = 'BUY'
+  `;
+  const rows = await grafanaPgQuery(grafana.url, grafana.saToken, targetDsUid, sql);
+  const r = rows[0] ?? {};
+  return {
+    realized_pnl_usdc: Number(r.realized_pnl_usdc) || 0,
+    resolved_markets: Number(r.resolved_markets) || 0,
+    markets_won: Number(r.markets_won) || 0,
+    markets_lost: Number(r.markets_lost) || 0,
+  };
+}
+
+// Active targets per env — used to surface env-discovery gaps (charter rows
+// alive in DB but not represented by POLY_<env>_TENANT_<role>_* env blocks).
+async function fetchActiveTargetsInEnv(
+  grafana: { url: string; saToken: string },
+  dsUid: string
+): Promise<Array<{ billing_account_id: string; target_wallet: string; sizing_policy_kind: string }>> {
+  const sql = `
+    SELECT billing_account_id, target_wallet, sizing_policy_kind
+    FROM poly_copy_trade_targets
+    WHERE disabled_at IS NULL
+  `;
+  const rows = await grafanaPgQuery(grafana.url, grafana.saToken, dsUid, sql);
+  return rows.map((r) => ({
+    billing_account_id: typeof r.billing_account_id === "string" ? r.billing_account_id : "",
+    target_wallet: typeof r.target_wallet === "string" ? r.target_wallet.toLowerCase() : "",
+    sizing_policy_kind: typeof r.sizing_policy_kind === "string" ? r.sizing_policy_kind : "",
+  }));
+}
+
+// ─── Target DS resolution ────────────────────────────────────────────────────
+
+// Tries each candidate env DS for the target wallet's fills; picks the one
+// with the most non-zero hourly buckets in the window. Returns null if every
+// DS produced zero buckets (caller fails fast). Removes the hard-coded
+// production-DS assumption that silently masked Grafana DS misconfigurations
+// (the cogni-production-poly-postgres DS was the suspect in the 2026-05-26 run).
+export async function pickTargetDs(
+  grafana: { url: string; saToken: string },
+  candidateDsUids: string[],
+  targetWallet: string,
+  window: { since: string; until: string }
+): Promise<{ dsUid: string; buckets: number } | null> {
+  let best: { dsUid: string; buckets: number } | null = null;
+  for (const dsUid of candidateDsUids) {
+    try {
+      const sql = `
+        SELECT COUNT(*)::int AS n
+        FROM (
+          SELECT 1 FROM poly_trader_fills f
+          JOIN poly_trader_wallets w ON w.id = f.trader_wallet_id
+          WHERE LOWER(w.wallet_address) = LOWER('${targetWallet}')
+            AND f.observed_at >= '${window.since}'::timestamptz
+            AND f.observed_at <  '${window.until}'::timestamptz
+          GROUP BY date_trunc('hour', f.observed_at)
+        ) buckets
+      `;
+      const rows = await grafanaPgQuery(grafana.url, grafana.saToken, dsUid, sql);
+      const n = Number(rows[0]?.n) || 0;
+      logEvent("evaluator.target_ds_probe", { dsUid, buckets: n });
+      if (!best || n > best.buckets) best = { dsUid, buckets: n };
+    } catch (e) {
+      logEvent("evaluator.target_ds_probe_failed", {
+        dsUid,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+  return best && best.buckets > 0 ? best : null;
+}
+
+// ─── Distance to target ──────────────────────────────────────────────────────
+
+// Distance is a non-negative fractional gap on each axis: |t − x| / max(|t|, ε).
+// Per-tenant aggregate is the mean of non-null components. A perfect copy of
+// the target's behavior → 0. The leaderboard's first row is the winning policy.
+export function distanceToTarget(
+  m: TenantMetrics,
+  target: TargetSeries
+): DistanceToTarget {
+  const targetPnlPct =
+    target.intent_usdc > 0 && target.pnl.realized_pnl_usdc !== 0
+      ? target.pnl.realized_pnl_usdc / target.intent_usdc
+      : null;
+  const tenantPnlPct =
+    m.fills.intent_usdc > 0 && m.pnl.realized_pnl_usdc !== 0
+      ? m.pnl.realized_pnl_usdc / m.fills.intent_usdc
+      : null;
+  const fracDist = (t: number | null, x: number | null): number | null => {
+    if (t === null || x === null) return null;
+    const denom = Math.max(Math.abs(t), 1e-9);
+    return Math.min(Math.abs(t - x) / denom, 10);
+  };
+  const ratioDist = (t: number, x: number): number | null => {
+    if (t <= 0) return null;
+    return Math.min(Math.abs(t - x) / t, 10);
+  };
+  const pnl = fracDist(targetPnlPct, tenantPnlPct);
+  // Target's placement_rate proxy: target wallet has no "decisions", so use 1.0 (it placed every trade it made).
+  const placement = m.placement_rate === null ? null : Math.abs(1.0 - m.placement_rate);
+  const intent = ratioDist(target.intent_usdc, m.fills.intent_usdc);
+  const markets = ratioDist(target.market_set.length, m.fills.markets_count);
+  const components = [pnl, placement, intent, markets].filter(
+    (c): c is number => c !== null
+  );
+  const aggregate =
+    components.length === 0
+      ? null
+      : components.reduce((s, c) => s + c, 0) / components.length;
+  return {
+    envKeyPrefix: m.tenant.envKeyPrefix,
+    pnl_pct_distance: pnl,
+    placement_rate_distance: placement,
+    intent_usdc_ratio_distance: intent,
+    markets_touched_ratio_distance: markets,
+    aggregate_distance: aggregate,
+  };
+}
+
+// Classify a prod-twin fidelity signal per the SKILL.md contract:
+// 🟢 shared > 50 AND PnL Δ within ±5% · 🟡 within ±20% · 🔴 otherwise.
+export function classifyProdTwinFidelity(args: {
+  shared_fills: number;
+  pnl_delta_pct: number | null;
+}): ProdTwinFidelity["classification"] {
+  if (args.shared_fills === 0 || args.pnl_delta_pct === null) return "no_data";
+  const abs = Math.abs(args.pnl_delta_pct);
+  if (args.shared_fills > 50 && abs <= 0.05) return "green";
+  if (abs <= 0.2) return "yellow";
+  return "red";
+}
+
 // ─── A/B compare ─────────────────────────────────────────────────────────────
 
 export type AbAxis =
@@ -993,6 +1212,12 @@ function renderReportHtml(args: {
   target: TargetSeries;
   abMatrix: Record<string, AbDelta[]>;
   fidelity: DecisionFidelity | null;
+  distances: DistanceToTarget[];
+  closest: TenantMetrics | null;
+  closestDistance: number | null;
+  prodTwinFidelity: ProdTwinFidelity | null;
+  envGapWarnings: EnvGapWarning[];
+  sampleFloorWarning: Array<{ envKeyPrefix: string; resolved_markets: number }>;
 }): string {
   const {
     capturedAt,
@@ -1004,6 +1229,12 @@ function renderReportHtml(args: {
     target,
     abMatrix,
     fidelity,
+    distances,
+    closest,
+    closestDistance,
+    prodTwinFidelity,
+    envGapWarnings,
+    sampleFloorWarning,
   } = args;
 
   const since = new Date(window.since);
@@ -1140,6 +1371,118 @@ function renderReportHtml(args: {
     height: 280,
   });
 
+  // ── Structured Δ summary (above takeaway) ─────────────────────────────────
+  // Three machine-derived lines per the spec: closest-to-target, prod-twin
+  // fidelity, sample-size floor. Each line stands alone — the human can
+  // skim, the LLM-authored takeaway below adds judgement.
+  const fmtPct = (x: number | null, places = 1): string =>
+    x === null ? "—" : `${(x * 100).toFixed(places)}%`;
+  const distEmoji = (d: number | null): string => {
+    if (d === null) return "🟡";
+    if (d < 0.25) return "🟢";
+    if (d < 0.75) return "🟡";
+    return "🔴";
+  };
+  const fidelityEmoji = (cls: ProdTwinFidelity["classification"] | null): string => {
+    if (cls === "green") return "🟢";
+    if (cls === "yellow") return "🟡";
+    if (cls === "red") return "🔴";
+    return "⚪";
+  };
+  const closestLine = closest
+    ? `${distEmoji(closestDistance)} closest to target: <code>${escapeHtml(tenantLabel(closest))}</code> (distance=<code>${closestDistance === null ? "—" : closestDistance.toFixed(3)}</code>)`
+    : `⚪ closest to target: <code>—</code> (no tenant produced a comparable signal)`;
+  const fidelityLine = prodTwinFidelity
+    ? `${fidelityEmoji(prodTwinFidelity.classification)} prod-twin fidelity: shared=<code>${prodTwinFidelity.shared_fills}</code>, PnL Δ=<code>${fmt$(prodTwinFidelity.pnl_delta_usdc, true)}</code> (<code>${fmtPct(prodTwinFidelity.pnl_delta_pct)}</code>), classification=${fidelityEmoji(prodTwinFidelity.classification)}`
+    : `⚪ prod-twin fidelity: not configured — set POLY_PROD_TENANT_TRUST_TWIN_* env block for full signal`;
+  const sampleFloorMin = sampleFloorWarning
+    .slice()
+    .sort((a, b) => a.resolved_markets - b.resolved_markets)[0];
+  const sampleFloorEmoji = sampleFloorMin ? "🟡" : "🟢";
+  const sampleFloorLine = sampleFloorMin
+    ? `${sampleFloorEmoji} sample-size floor: <code>${escapeHtml(sampleFloorMin.envKeyPrefix)}</code> resolved_markets=<code>${sampleFloorMin.resolved_markets}</code> (<50 — interpret comparisons cautiously)`
+    : `${sampleFloorEmoji} sample-size floor: every tenant ≥50 resolved markets`;
+
+  const envGapBlock =
+    envGapWarnings.length === 0
+      ? ""
+      : `<div class="env-gaps">
+    <strong>${envGapWarnings.length} matrix gap${envGapWarnings.length === 1 ? "" : "s"}</strong> — tenants active in DB without env-key mapping (excluded from this run):
+    <ul>${envGapWarnings.map((w) => `<li><code>${escapeHtml(w.env)}</code> · billing <code>${escapeHtml(w.short_id)}</code> · policy <code>${escapeHtml(w.sizing_policy_kind)}</code></li>`).join("")}</ul>
+  </div>`;
+
+  const summaryBlock = `<div class="delta-summary">
+  <h3>Δ summary</h3>
+  <div class="ds-line">${closestLine}</div>
+  <div class="ds-line">${fidelityLine}</div>
+  <div class="ds-line">${sampleFloorLine}</div>
+  ${envGapBlock}
+</div>`;
+
+  // ── Distance-to-target leaderboard ─────────────────────────────────────────
+  // Sorted ascending — first row hugs swisstony tightest. The horizontal bar
+  // chart is a v0 visual: one row per tenant, width ∝ aggregate distance.
+  const leaderboardRows = [...distances]
+    .filter((d) => d.aggregate_distance !== null)
+    .sort((a, b) => (a.aggregate_distance ?? 0) - (b.aggregate_distance ?? 0));
+  const leaderboardMax = leaderboardRows.reduce(
+    (mx, d) => Math.max(mx, d.aggregate_distance ?? 0),
+    1e-9
+  );
+  const leaderboardSvg = (() => {
+    if (leaderboardRows.length === 0) return "";
+    const W = 1080;
+    const ROW_H = 24;
+    const H = leaderboardRows.length * ROW_H + 24;
+    const labelW = 260;
+    const barX = labelW + 8;
+    const barMaxW = W - barX - 70;
+    const bars = leaderboardRows
+      .map((d, i) => {
+        const m = metrics.find((mm) => mm.tenant.envKeyPrefix === d.envKeyPrefix);
+        const label = m ? tenantLabel(m) : d.envKeyPrefix;
+        const dist = d.aggregate_distance ?? 0;
+        const bw = Math.max(1, (dist / leaderboardMax) * barMaxW);
+        const y = 12 + i * ROW_H;
+        const fill = i === 0 ? SERIES_COLORS[2]! : SERIES_COLORS[1]!;
+        const distStr = dist.toFixed(3);
+        return `<g transform="translate(0,${y})">
+          <text x="${labelW - 4}" y="14" text-anchor="end" class="lb-label">${escapeHtml(label)}</text>
+          <rect x="${barX}" y="4" width="${bw}" height="14" rx="2" fill="${fill}"/>
+          <text x="${barX + bw + 6}" y="14" class="lb-value">${escapeHtml(distStr)}</text>
+        </g>`;
+      })
+      .join("");
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="leaderboard">
+  ${bars}
+</svg>`;
+  })();
+
+  // ── Prod-twin fidelity Δ section ───────────────────────────────────────────
+  const prodTwinFidelityBlock = (() => {
+    if (!prodTwinFidelity) {
+      return `<p class="muted">No prod-twin fidelity signal — POLY_PROD_TENANT_TRUST_TWIN env block not configured. Fidelity Δ falls back to (control ↔ prod LIVE) — same metric, weaker signal. See Q1 block above.</p>`;
+    }
+    const cls = prodTwinFidelity.classification;
+    const colorWord =
+      cls === "green"
+        ? "WITHIN ±5% — paper is a trustworthy A/B substrate"
+        : cls === "yellow"
+          ? "WITHIN ±20% — paper drifts; A/B signal usable with caveats"
+          : cls === "red"
+            ? "OUTSIDE ±20% — paper NOT a trustworthy substrate"
+            : "INSUFFICIENT DATA";
+    return `<table class="ab"><tbody>
+      <tr><td>twin</td><td><code>${escapeHtml(prodTwinFidelity.twin_env_key_prefix)}</code></td></tr>
+      <tr><td>live</td><td><code>${escapeHtml(prodTwinFidelity.live_env_key_prefix)}</code></td></tr>
+      <tr><td>shared fills</td><td class="num"><code>${prodTwinFidelity.shared_fills}</code></td></tr>
+      <tr><td>per-aggregate PnL Δ (twin − live)</td><td class="num"><code>${fmt$(prodTwinFidelity.pnl_delta_usdc, true)}</code></td></tr>
+      <tr><td>PnL Δ %</td><td class="num"><code>${fmtPct(prodTwinFidelity.pnl_delta_pct)}</code></td></tr>
+      <tr><td>markets touched Δ</td><td class="num"><code>${prodTwinFidelity.markets_touched_delta >= 0 ? "+" : ""}${prodTwinFidelity.markets_touched_delta}</code></td></tr>
+      <tr><td>classification</td><td><strong>${fidelityEmoji(cls)} ${escapeHtml(colorWord)}</strong></td></tr>
+    </tbody></table>`;
+  })();
+
   const decisionsRefRows = [...metrics]
     .sort((a, b) =>
       a.tenant.envKeyPrefix === control.tenant.envKeyPrefix
@@ -1215,7 +1558,19 @@ table.ab.algo tr.ref td.role { color: #34d399 !important; font-style: italic; }
 .line-chart .axis { fill: #94a3b8; font-size: 10px; font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, monospace; }
 .line-chart .legend { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
 .footer-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid #1f2937; font-size: 10px; color: #6b7280; }
-.footer-note a { color: #60a5fa; }`;
+.footer-note a { color: #60a5fa; }
+.delta-summary { background: #0e1422; border: 1px solid #1f2937; border-left: 3px solid #60a5fa; border-radius: 6px; padding: 12px 16px; margin: 0 0 14px; }
+.delta-summary h3 { margin: 0 0 8px; font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; }
+.delta-summary .ds-line { font-size: 12px; color: #e5e7eb; margin: 4px 0; font-family: 'SF Mono', Menlo, monospace; }
+.delta-summary .ds-line code { background: #131826; padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 11px; }
+.delta-summary .env-gaps { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #1f2937; font-size: 11px; color: #cbd5e1; }
+.delta-summary .env-gaps strong { color: #f59e0b; }
+.delta-summary .env-gaps ul { margin: 4px 0 0 18px; padding: 0; }
+.delta-summary .env-gaps li { margin: 2px 0; font-family: 'SF Mono', Menlo, monospace; font-size: 10px; }
+.delta-summary .env-gaps code { background: #131826; padding: 1px 4px; border-radius: 3px; color: #cbd5e1; }
+.leaderboard { display: block; width: 100%; height: auto; }
+.leaderboard .lb-label { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
+.leaderboard .lb-value { fill: #fbbf24; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1227,8 +1582,10 @@ table.ab.algo tr.ref td.role { color: #34d399 !important; font-style: italic; }
 <body>
 <h1>Tenant Matrix Evaluator</h1>
 <div class="header-sub">
-  Target: <code>${escapeHtml(targetWallet)}</code> · Window: <code>${escapeHtml(window.since)}</code> → <code>${escapeHtml(window.until)}</code> · ${metrics.length} tenants · <a href="#appendix">↓ jump to appendix</a>
+  Target: <code>${escapeHtml(targetWallet)}</code> · Window: <code>${escapeHtml(window.since)}</code> → <code>${escapeHtml(window.until)}</code> · ${metrics.length} tenants · target DS <code>${escapeHtml(target.resolved_via_ds_uid ?? "—")}</code> · <a href="#appendix">↓ jump to appendix</a>
 </div>
+
+${summaryBlock}
 
 <!-- TAKEAWAY:START -->
 <div class="takeaway">
@@ -1250,6 +1607,22 @@ table.ab.algo tr.ref td.role { color: #34d399 !important; font-style: italic; }
   <div class="q-verdict">${escapeHtml(q2Verdict)}</div>
   ${q2Ref ? `<div class="q-ref">${q2Ref}</div>` : ""}
 </div>
+
+<details open>
+  <summary>🪞 Prod-twin fidelity Δ — is paper trading a trustworthy A/B substrate?</summary>
+  <div class="details-body">
+    <p class="muted">Compares <code>POLY_PROD_TENANT_TRUST_TWIN</code> (the paper mirror of derek's wallet) to <code>POLY_PROD_TENANT_LIVE</code> (the real wallet) on the same on-chain target. PnL Δ within ±5% with &gt;50 shared fills → 🟢 trustworthy. PnL Δ within ±20% → 🟡. Otherwise → 🔴 paper is not safe to A/B from.</p>
+    ${prodTwinFidelityBlock}
+  </div>
+</details>
+
+<details open>
+  <summary>🎯 Distance-to-target leaderboard — closest paper policy to the real wallet</summary>
+  <div class="details-body">
+    <p class="muted">Per-tenant aggregate distance to <code>${escapeHtml(targetWallet.slice(0, 10))}</code>'s actual behavior. Axes: realized-PnL % gap, placement-rate, intent-USDC ratio, markets-touched ratio. Lower bar = tighter hug. <strong>The leaderboard winner is the promotion candidate</strong> — provided Q1 (paper fidelity) is green.</p>
+    <div class="chart">${leaderboardSvg || "<em class=\"muted\">no comparable tenants in this run</em>"}</div>
+  </div>
+</details>
 
 <a id="appendix"></a>
 
@@ -1307,33 +1680,67 @@ type CliArgs = {
   targetWallet: string;
   since: string;
   until: string;
-  controlEnvKeyPrefix: string | null;
+  controlTenantEnvKeyPrefix: string | null; // opt-in paper-tenant control (back-compat)
+  targetDsUid: string | null; // override which env DS the target wallet's fills come from
   outDir: string | null;
+  printHelp: boolean;
 };
+
+const HELP_TEXT = `usage: tsx nodes/poly/scripts/tenant-matrix-evaluator.ts <target-wallet> [flags]
+
+Cross-policy A/B evaluator. Default control axis is the target wallet itself
+(swisstony in the canonical case) — the leaderboard ranks each paper policy by
+its distance from real on-chain target behavior.
+
+Flags:
+  --since ISO                  window start (default: 24h ago)
+  --until ISO                  window end (default: now)
+  --control-tenant-role PREFIX opt-in paper-tenant control (back-compat); when set,
+                               adds a per-axis A/B Δ-table vs that tenant. Default:
+                               none — target wallet is the implicit control.
+  --target-ds-uid UID          override env DS used for poly_trader_fills (target).
+                               Default: pick the env DS with the most fills in window.
+  --out PATH                   output directory (default: nodes/poly/research/tenant-matrix/<iso>/)
+  -h, --help                   show this help
+
+Behavior on missing target data: if no env DS returns >0 fill buckets for the
+window, the tool fails fast with an ::error:: pointing at DS config. Wallet-watch
+backfill is NOT the suspect — every env's poly_trader_fills carries target rows.
+
+See: docs/spec/poly-tenant-matrix-evaluator.md · .claude/skills/tenant-matrix-evaluator/SKILL.md
+`;
 
 function parseArgs(argv: string[]): CliArgs {
   let since: string | undefined;
   let until: string | undefined;
   let control: string | null = null;
+  let targetDsUid: string | null = null;
   let out: string | null = null;
+  let printHelp = false;
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === undefined) continue;
     if (a === "--since") since = argv[++i];
     else if (a === "--until") until = argv[++i];
-    else if (a === "--control") control = argv[++i] ?? null;
+    // --control kept for back-compat with prior scripts/skill examples.
+    else if (a === "--control" || a === "--control-tenant-role")
+      control = argv[++i] ?? null;
+    else if (a === "--target-ds-uid") targetDsUid = argv[++i] ?? null;
     else if (a === "--out") out = argv[++i] ?? null;
+    else if (a === "-h" || a === "--help") printHelp = true;
     else if (a.startsWith("--")) {
       console.error(`unknown flag: ${a}`);
       process.exit(2);
     } else positional.push(a);
   }
+  if (printHelp) {
+    console.log(HELP_TEXT);
+    process.exit(0);
+  }
   const target = positional[0];
   if (!target) {
-    console.error(
-      "usage: tsx nodes/poly/scripts/tenant-matrix-evaluator.ts <target-wallet> [--since ISO] [--until ISO] [--control POLY_<ENV>_TENANT_<ROLE>] [--out path]"
-    );
+    console.error(HELP_TEXT);
     process.exit(2);
   }
   if (!/^0x[a-fA-F0-9]{40}$/.test(target)) {
@@ -1346,8 +1753,10 @@ function parseArgs(argv: string[]): CliArgs {
     targetWallet: target.toLowerCase(),
     since: since ?? dayAgo.toISOString(),
     until: until ?? now.toISOString(),
-    controlEnvKeyPrefix: control,
+    controlTenantEnvKeyPrefix: control,
+    targetDsUid,
     outDir: out,
+    printHelp: false,
   };
 }
 
@@ -1355,11 +1764,13 @@ function pickControl(tenants: Tenant[], argControl: string | null): Tenant | nul
   if (argControl) {
     const m = tenants.find((t) => t.envKeyPrefix === argControl);
     if (!m) {
-      console.error(`--control ${argControl} not found among discovered tenants`);
+      console.error(`--control-tenant-role ${argControl} not found among discovered tenants`);
       process.exit(2);
     }
     return m;
   }
+  // Back-compat default: preview TRUST_TWIN. Used only when an A/B Δ table
+  // against a paper tenant is wanted alongside the target-as-control axis.
   return (
     tenants.find((t) => t.envSlug === "preview" && t.role === "TRUST_TWIN") ??
     tenants[0] ??
@@ -1489,8 +1900,12 @@ async function fetchTenant(
 }
 
 async function main(): Promise<void> {
-  logEvent("evaluator.start");
   const args = parseArgs(process.argv.slice(2));
+  logEvent("evaluator.start", {
+    target_wallet: args.targetWallet,
+    since: args.since,
+    until: args.until,
+  });
 
   const { tenants, errors: discoveryErrors } = discoverTenants(process.env);
   if (discoveryErrors.length > 0) {
@@ -1505,13 +1920,15 @@ async function main(): Promise<void> {
     );
     process.exit(2);
   }
-  const control = pickControl(tenants, args.controlEnvKeyPrefix);
+  const control = pickControl(tenants, args.controlTenantEnvKeyPrefix);
   if (!control) {
     console.error("could not pick a control tenant");
     process.exit(2);
   }
   const prodLive =
     tenants.find((t) => t.envSlug === "production" && t.role === "LIVE") ?? null;
+  const prodTrustTwin =
+    tenants.find((t) => t.envSlug === "production" && t.role === "TRUST_TWIN") ?? null;
 
   const grafanaUrl = process.env.GRAFANA_URL;
   const saToken = process.env.GRAFANA_SERVICE_ACCOUNT_TOKEN;
@@ -1525,14 +1942,48 @@ async function main(): Promise<void> {
 
   const targetId = uuidv5(args.targetWallet.toLowerCase(), POLY_TARGET_WALLET_NAMESPACE);
 
-  // Pull target's market set + cumulative volume FIRST (production DS) so each
-  // tenant can compute market_coverage_pct against the same target reference.
+  // ── Resolve which DS holds the target wallet's fills ───────────────────────
+  // Drop the hard-coded cogni-production-poly-postgres assumption. Probe each
+  // unique env DS from discovered tenants; pick the env with the most non-zero
+  // hourly buckets in window. Fail fast if EVERY env returns 0 — the bug.5025
+  // class incident (Grafana DS pointed at wrong DB) silently produced empty
+  // matrices for weeks. With this change, the same misconfig is loud.
+  let targetDsResolution: { dsUid: string; buckets: number } | null = null;
+  if (args.targetDsUid) {
+    targetDsResolution = { dsUid: args.targetDsUid, buckets: -1 };
+  } else {
+    const candidateDsUids = Array.from(new Set(tenants.map((t) => t.dsUid)));
+    targetDsResolution = await pickTargetDs(grafana, candidateDsUids, args.targetWallet, {
+      since: args.since,
+      until: args.until,
+    });
+  }
+  if (!targetDsResolution) {
+    console.error(
+      `::error::target-wallet has no fills in DS=<${tenants.map((t) => t.dsUid).join(",")}> for window; check DS config — wallet-watch is NOT the suspect, the data is in poly_trader_fills in every env's poly DB.`
+    );
+    process.exit(2);
+  }
+  const targetDsUid = targetDsResolution.dsUid;
+  logEvent("evaluator.target_ds.selected", {
+    dsUid: targetDsUid,
+    buckets_in_window: targetDsResolution.buckets,
+  });
+
+  // ── Target wallet — fills, markets, PnL ────────────────────────────────────
   let targetBuckets: Array<{ ts: string; value: number }> = [];
   let targetMarketSet: string[] = [];
+  let targetIntentUsdc = 0;
+  let targetPnl: PnlAgg = {
+    realized_pnl_usdc: 0,
+    resolved_markets: 0,
+    markets_won: 0,
+    markets_lost: 0,
+  };
   try {
     targetBuckets = await fetchTargetHourlyVolume(
       grafana,
-      "cogni-production-poly-postgres",
+      targetDsUid,
       args.targetWallet,
       { since: args.since, until: args.until }
     );
@@ -1544,7 +1995,7 @@ async function main(): Promise<void> {
   try {
     targetMarketSet = await fetchTargetMarketSet(
       grafana,
-      "cogni-production-poly-postgres",
+      targetDsUid,
       args.targetWallet,
       { since: args.since, until: args.until }
     );
@@ -1553,18 +2004,95 @@ async function main(): Promise<void> {
       `target_market_set_query_failed: ${e instanceof Error ? e.message : String(e)}`
     );
   }
+  try {
+    targetIntentUsdc = await fetchTargetIntentUsdc(grafana, targetDsUid, args.targetWallet, {
+      since: args.since,
+      until: args.until,
+    });
+  } catch (e) {
+    console.error(
+      `target_intent_usdc_failed: ${e instanceof Error ? e.message : String(e)}`
+    );
+  }
+  try {
+    targetPnl = await fetchTargetRealizedPnl(grafana, targetDsUid, args.targetWallet, {
+      since: args.since,
+      until: args.until,
+    });
+  } catch (e) {
+    console.error(
+      `target_pnl_query_failed: ${e instanceof Error ? e.message : String(e)}`
+    );
+  }
+  // Re-validate the fail-fast contract — buckets may be 0 even if pickTargetDs
+  // chose a DS, if --target-ds-uid was forced or activity vanished between
+  // probe and query. Same verbatim error message.
+  if (targetBuckets.length === 0 && targetMarketSet.length === 0) {
+    console.error(
+      `::error::target-wallet has no fills in DS=${targetDsUid} for window; check DS config — wallet-watch is NOT the suspect, the data is in poly_trader_fills in every env's poly DB.`
+    );
+    process.exit(2);
+  }
   const target: TargetSeries = {
     wallet: args.targetWallet,
     cumulative_usdc: cumulativeFromBuckets(targetBuckets),
     market_set: targetMarketSet,
+    pnl: targetPnl,
+    intent_usdc: targetIntentUsdc,
+    resolved_via_ds_uid: targetDsUid,
   };
   logEvent("evaluator.target.complete", {
     wallet: args.targetWallet,
+    ds_uid: targetDsUid,
     buckets: targetBuckets.length,
     final_volume_usdc:
       target.cumulative_usdc[target.cumulative_usdc.length - 1]?.value ?? 0,
     target_markets: targetMarketSet.length,
+    target_intent_usdc: targetIntentUsdc,
+    target_realized_pnl_usdc: targetPnl.realized_pnl_usdc,
+    target_resolved_markets: targetPnl.resolved_markets,
   });
+
+  // ── Env-discovery gap (Option B) ───────────────────────────────────────────
+  // For each unique env DS, list active poly_copy_trade_targets rows; emit a
+  // ::warning:: for any row whose billing_account_id isn't represented by a
+  // POLY_<env>_TENANT_<role>_* block. Surfaces matrix-charter drift without
+  // changing the env-key discovery scheme.
+  const envGapWarnings: EnvGapWarning[] = [];
+  const envBillingByDs = new Map<string, Set<string>>();
+  for (const t of tenants) {
+    const s = envBillingByDs.get(t.dsUid) ?? new Set<string>();
+    s.add(t.billingAccountId);
+    envBillingByDs.set(t.dsUid, s);
+  }
+  for (const dsUid of envBillingByDs.keys()) {
+    try {
+      const active = await fetchActiveTargetsInEnv(grafana, dsUid);
+      const known = envBillingByDs.get(dsUid) ?? new Set<string>();
+      const envSlug = (tenants.find((t) => t.dsUid === dsUid)?.envSlug ??
+        "candidate-a") as Tenant["envSlug"];
+      for (const row of active) {
+        if (row.target_wallet !== args.targetWallet) continue;
+        if (known.has(row.billing_account_id)) continue;
+        const short = row.billing_account_id.slice(0, 8);
+        envGapWarnings.push({
+          env: envSlug,
+          billing_account_id: row.billing_account_id,
+          target_wallet: row.target_wallet,
+          sizing_policy_kind: row.sizing_policy_kind,
+          short_id: short,
+        });
+        console.error(
+          `::warning::matrix gap: ${envSlug} billing=${row.billing_account_id} (short=${short}) wallet=${row.target_wallet} policy=${row.sizing_policy_kind} — no POLY_${envSlug.toUpperCase().replace(/-/g, "_")}_TENANT_<role>_* env block; tenant excluded from this run`
+        );
+      }
+    } catch (e) {
+      logEvent("evaluator.env_gap_probe_failed", {
+        dsUid,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
 
   const metrics: TenantMetrics[] = [];
   for (const t of tenants) {
@@ -1590,20 +2118,35 @@ async function main(): Promise<void> {
   const prodLiveMetrics = prodLive
     ? metrics.find((m) => m.tenant.envKeyPrefix === prodLive.envKeyPrefix) ?? null
     : null;
+  const prodTrustTwinMetrics = prodTrustTwin
+    ? metrics.find((m) => m.tenant.envKeyPrefix === prodTrustTwin.envKeyPrefix) ?? null
+    : null;
   const abMatrix: Record<string, AbDelta[]> = {};
   for (const m of metrics) {
     if (m.tenant.envKeyPrefix === control.envKeyPrefix) continue;
     abMatrix[m.tenant.envKeyPrefix] = compareTenants(controlMetrics, m);
   }
 
+  // ── Distance-to-target per tenant ──────────────────────────────────────────
+  // The primary ranking surface now: how close does each paper policy hug
+  // swisstony's actual behavior? Lower = better. Aggregate is the mean of the
+  // four axes (PnL %, placement rate, intent ratio, markets-touched ratio).
+  const distances: DistanceToTarget[] = metrics
+    .map((m) => distanceToTarget(m, target))
+    .filter((d) => d.envKeyPrefix !== (prodLive?.envKeyPrefix ?? ""));
+
   // Per-fill decision fidelity check — the true "is twin == live?" answer.
   // Pull decision lists from BOTH tenants and join in JS by fill_id.
+  // Primary pairing: POLY_PROD_TENANT_TRUST_TWIN ↔ POLY_PROD_TENANT_LIVE when
+  // both exist. Fall back to (control ↔ prod_live) for back-compat with the
+  // prior report.
   let fidelity: DecisionFidelity | null = null;
+  const fidelityTwin = prodTrustTwin ?? control;
   if (prodLive) {
     try {
       const twinDecs = await fetchTenantDecisionList(
         grafana,
-        control,
+        fidelityTwin,
         targetId,
         { since: args.since, until: args.until }
       );
@@ -1615,6 +2158,10 @@ async function main(): Promise<void> {
       );
       fidelity = decisionFidelity(twinDecs, liveDecs);
       logEvent("evaluator.fidelity.complete", {
+        twin_role: fidelityTwin.role,
+        twin_env: fidelityTwin.envSlug,
+        live_role: prodLive.role,
+        live_env: prodLive.envSlug,
         shared: fidelity.shared_fills,
         exact: fidelity.exact_match,
         outcome_diff: fidelity.outcome_disagree,
@@ -1628,11 +2175,66 @@ async function main(): Promise<void> {
     }
   }
 
+  // ── Prod-twin fidelity Δ ───────────────────────────────────────────────────
+  // PnL-axis Δ between the prod-twin (paper mirror of derek's wallet) and the
+  // prod-live tenant on shared on-chain fills. Classified per the SKILL.md
+  // contract (🟢 ±5% & shared>50, 🟡 ±20%, 🔴 otherwise). When no
+  // POLY_PROD_TENANT_TRUST_TWIN is configured, the comparison falls back to
+  // (control ↔ prod-live) — same metric, weaker signal.
+  let prodTwinFidelity: ProdTwinFidelity | null = null;
+  if (prodLiveMetrics && (prodTrustTwinMetrics || controlMetrics)) {
+    const twinForFidelity = prodTrustTwinMetrics ?? controlMetrics;
+    const twinPnl = twinForFidelity.pnl.realized_pnl_usdc;
+    const livePnl = prodLiveMetrics.pnl.realized_pnl_usdc;
+    const pnlDelta = twinPnl - livePnl;
+    const pnlDeltaPct =
+      Math.abs(livePnl) < 1e-9 ? null : pnlDelta / Math.abs(livePnl);
+    const shared = fidelity?.shared_fills ?? 0;
+    prodTwinFidelity = {
+      twin_env_key_prefix: twinForFidelity.tenant.envKeyPrefix,
+      live_env_key_prefix: prodLiveMetrics.tenant.envKeyPrefix,
+      shared_fills: shared,
+      pnl_delta_usdc: pnlDelta,
+      pnl_delta_pct: pnlDeltaPct,
+      classification: classifyProdTwinFidelity({
+        shared_fills: shared,
+        pnl_delta_pct: pnlDeltaPct,
+      }),
+      markets_touched_delta:
+        twinForFidelity.fills.markets_count - prodLiveMetrics.fills.markets_count,
+    };
+    logEvent("evaluator.prod_twin_fidelity.complete", {
+      twin: prodTwinFidelity.twin_env_key_prefix,
+      live: prodTwinFidelity.live_env_key_prefix,
+      shared: prodTwinFidelity.shared_fills,
+      pnl_delta: prodTwinFidelity.pnl_delta_usdc,
+      pnl_delta_pct: prodTwinFidelity.pnl_delta_pct,
+      classification: prodTwinFidelity.classification,
+    });
+  }
+
+  // Closest paper tenant to target — aggregated distance ascending. Excludes
+  // prod-live (it IS our wallet, not a paper policy).
+  const closestSorted = [...distances]
+    .filter((d) => d.aggregate_distance !== null)
+    .sort((a, b) => (a.aggregate_distance ?? 0) - (b.aggregate_distance ?? 0));
+  const closest = closestSorted[0] ?? null;
+  const closestMetrics = closest
+    ? metrics.find((m) => m.tenant.envKeyPrefix === closest.envKeyPrefix) ?? null
+    : null;
+
   const capturedAt = new Date().toISOString();
   const tsSafe = capturedAt.replace(/[:.]/g, "-").slice(0, 19);
   const outDir =
     args.outDir ?? join(REPO_ROOT, "nodes/poly/research/tenant-matrix", tsSafe);
   mkdirSync(outDir, { recursive: true });
+
+  const sampleFloorWarning = metrics
+    .filter((m) => m.pnl.resolved_markets < 50)
+    .map((m) => ({
+      envKeyPrefix: m.tenant.envKeyPrefix,
+      resolved_markets: m.pnl.resolved_markets,
+    }));
 
   const html = renderReportHtml({
     capturedAt,
@@ -1645,6 +2247,12 @@ async function main(): Promise<void> {
     target,
     abMatrix,
     fidelity,
+    distances,
+    closest: closestMetrics,
+    closestDistance: closest?.aggregate_distance ?? null,
+    prodTwinFidelity,
+    envGapWarnings,
+    sampleFloorWarning,
   });
   writeFileSync(join(outDir, "report.html"), html);
   logEvent("evaluator.report.written", { path: join(outDir, "report.html") });
@@ -1657,7 +2265,8 @@ async function main(): Promise<void> {
         input: {
           target_wallet: args.targetWallet,
           target_id: targetId,
-          control_env_key_prefix: control.envKeyPrefix,
+          control_tenant_env_key_prefix: control.envKeyPrefix,
+          target_ds_uid: targetDsUid,
         },
         window: { since: args.since, until: args.until },
         tenants: tenants.map((t) => ({
@@ -1667,12 +2276,18 @@ async function main(): Promise<void> {
           billingAccountId: t.billingAccountId,
           dsUid: t.dsUid,
         })),
-        control: control.envKeyPrefix,
+        control_tenant: control.envKeyPrefix,
         prod_live: prodLive?.envKeyPrefix ?? null,
+        prod_trust_twin: prodTrustTwin?.envKeyPrefix ?? null,
         metrics,
         target,
         ab: abMatrix,
         fidelity,
+        prod_twin_fidelity: prodTwinFidelity,
+        distances,
+        closest_to_target: closest,
+        env_gap_warnings: envGapWarnings,
+        sample_floor_warning: sampleFloorWarning,
       },
       null,
       2
@@ -1685,12 +2300,27 @@ async function main(): Promise<void> {
     JSON.stringify(
       {
         report_path: join(outDir, "report.html"),
-        primary_class: "matrix-ab",
+        primary_class: null,
+        primary_class_reason: "LLM fills this in; pick from work/charters/POLY_COPY_DELTA.md D1-D8 or set null+reason",
         primary_confidence: null,
         primary_one_liner: null,
         secondary_class: null,
         secondary_confidence: null,
         secondary_one_liner: null,
+        pareto_next_fix: null,
+        evidence: { code_path: null },
+        // ─── Structured Δ summary mirrors (machine-readable) ──────────────
+        closest_to_target_role: closestMetrics
+          ? `${closestMetrics.tenant.role}@${closestMetrics.tenant.envSlug}`
+          : null,
+        closest_to_target_env_key_prefix: closest?.envKeyPrefix ?? null,
+        closest_to_target_distance: closest?.aggregate_distance ?? null,
+        prod_twin_fidelity_pct: prodTwinFidelity?.pnl_delta_pct ?? null,
+        prod_twin_fidelity_class: prodTwinFidelity?.classification ?? null,
+        prod_twin_fidelity_shared_fills: prodTwinFidelity?.shared_fills ?? null,
+        sample_floor_warnings: sampleFloorWarning,
+        env_gap_warnings: envGapWarnings,
+        target_ds_uid: targetDsUid,
         authored_at: null,
       },
       null,
@@ -1700,8 +2330,10 @@ async function main(): Promise<void> {
 
   logEvent("evaluator.complete", {
     tenants: metrics.length,
-    control: control.envKeyPrefix,
+    control_tenant: control.envKeyPrefix,
     prod_live: prodLive?.envKeyPrefix ?? null,
+    closest_to_target: closest?.envKeyPrefix ?? null,
+    prod_twin_fidelity_class: prodTwinFidelity?.classification ?? null,
     out: outDir,
   });
   console.error(`[tenant-matrix-evaluator] report.html → ${join(outDir, "report.html")}`);
