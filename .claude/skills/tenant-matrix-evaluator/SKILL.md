@@ -7,6 +7,20 @@ description: "Cross-policy A/B evaluator across every per-(env, tenant) paper-tr
 
 > Zoom level: cross-policy A/B across every charter-listed tenant on ONE target wallet. **Tool emits graphs; agent emits ONE finding.**
 
+## Terminology — read this before reading the report
+
+The word "trust twin" is overloaded in this repo. The two meanings are NOT interchangeable; conflating them is how the previous evaluator pass produced a wrong takeaway.
+
+- **Fidelity trust twin** — a paper-side tenant configured with the **identical sizing policy + config** as a live tenant on the same target wallet. The only variable is "paper sidecar vs real CLOB". Answers: _does our paper adapter produce the same orders + fills as live Polymarket when fed the same algorithm?_ This is the only thing that lets you say "paper is a trustworthy substitute for live." Q1 measures fidelity-twin-vs-target proximity; only a `red` Q1 lets you blame the paper adapter.
+- **Policy variant** — a paper-side tenant running a **different** policy than live, often size-matched to the target's book. The label `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN` (position_gap @ $500k) is a policy variant despite the name — it tests a different algorithm, not paper-vs-live adapter fidelity. Its closeness to swisstony in Q2 says "this policy is well-sized for swisstony's book," not "paper trading is trustworthy."
+
+Practical rule: only a tenant whose policy config exactly matches a corresponding live tenant counts as a fidelity twin. If no such pairing exists for the target, Q1 cannot run cleanly — file a charter follow-up to provision one (POLY_PROD_TENANT_TRUST_TWIN sized to the live tenant) rather than abusing an existing policy variant as a fidelity probe.
+
+## Discovery sources (what the tool sees)
+
+- **Env-discovered tenants** — `POLY_<env>_TENANT_<role>_{API_KEY,BILLING_ACCOUNT_ID}` pairs in process.env. Available for both observation AND mutation (PATCH policy, soft-delete, etc).
+- **DB-only tenants** — active rows in `poly_copy_trade_targets` (any env) whose billing_account_id has no matching env block. Available for observation (every read goes through the Grafana service-account, not per-tenant API keys); NOT mutatable from an agent session until an env block is wired up. These are tagged `(DB-only)` in the report and surfaced in the env-gap strip — they are NOT excluded from analysis. Earlier versions of this tool silently dropped them, which understated matrix coverage by ~50% on 2026-05-26.
+
 ## Required reading
 
 - [`docs/spec/poly-tenant-matrix-evaluator.md`](../../../docs/spec/poly-tenant-matrix-evaluator.md) — spec, invariants, done condition
