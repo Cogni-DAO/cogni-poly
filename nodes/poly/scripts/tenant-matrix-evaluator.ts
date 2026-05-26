@@ -890,6 +890,52 @@ async function fetchTargetRealizedPnl(
   };
 }
 
+// Per-env freshness — max(decided_at) on poly_copy_trade_decisions, env-wide.
+// Promoted to first-class metric after the 2026-05-26 incident where the
+// preview mirror coordinator silently stopped firing for 48 hours but
+// wallet-watch kept writing target rows. The tool showed lines plateauing
+// mid-chart and we initially read it as a visualization bug; it was actually
+// a dead-env condition the report had no way to surface. This check makes
+// it loud.
+export type EnvFreshness = {
+  dsUid: string;
+  envSlug: Tenant["envSlug"];
+  last_decision_at: string | null; // null = no rows ever in this env
+  staleness_seconds: number | null; // seconds between window.until and last_decision_at
+  is_stale: boolean; // staleness > FRESHNESS_TOLERANCE_SEC
+};
+
+// Anything more than 1 hour behind the window's `until` is "stale". The
+// mirror coordinator on candidate-a + preview fires every ~30s normally;
+// 1h gives ample headroom for transient deploys / restart blips.
+export const FRESHNESS_TOLERANCE_SEC = 3600;
+
+async function fetchEnvFreshness(
+  grafana: { url: string; saToken: string },
+  dsUid: string,
+  envSlug: Tenant["envSlug"],
+  windowUntilIso: string
+): Promise<EnvFreshness> {
+  const sql = `SELECT MAX(decided_at) AS last_decision FROM poly_copy_trade_decisions`;
+  const rows = await grafanaPgQuery(grafana.url, grafana.saToken, dsUid, sql);
+  const r = rows[0] ?? {};
+  const lastIso = toIsoMaybe(r.last_decision);
+  let staleness: number | null = null;
+  if (lastIso !== null) {
+    staleness =
+      (new Date(windowUntilIso).getTime() - new Date(lastIso).getTime()) /
+      1000;
+  }
+  return {
+    dsUid,
+    envSlug,
+    last_decision_at: lastIso,
+    staleness_seconds: staleness,
+    is_stale:
+      staleness !== null && staleness > FRESHNESS_TOLERANCE_SEC,
+  };
+}
+
 // Active charter rows per env. Promoted from env-gap warning to a first-class
 // discovery source: the tool now also QUERIES these tenants via the env DS
 // (using the Grafana service-account, no per-tenant API key needed). The
@@ -1347,6 +1393,7 @@ function renderReportHtml(args: {
   prodTwinFidelity: ProdTwinFidelity | null;
   envGapWarnings: EnvGapWarning[];
   sampleFloorWarning: Array<{ envKeyPrefix: string; resolved_markets: number }>;
+  envFreshness: EnvFreshness[];
 }): string {
   const {
     capturedAt,
@@ -1364,6 +1411,7 @@ function renderReportHtml(args: {
     prodTwinFidelity,
     envGapWarnings,
     sampleFloorWarning,
+    envFreshness,
   } = args;
 
   const since = new Date(window.since);
@@ -1579,8 +1627,13 @@ function renderReportHtml(args: {
           ? " (fidelity twin)"
           : "";
       const dbOnlyTag = m.tenant.sourceFromEnv === false ? " (DB-only)" : "";
+      const staleEnvTag = envFreshness.some(
+        (f) => f.envSlug === m.tenant.envSlug && f.is_stale
+      )
+        ? ' <span class="env-stale-tag" title="mirror coordinator on this env stopped writing decisions">🔻 stale env</span>'
+        : "";
       const trophy = idx === 0 ? " 🏆" : "";
-      return `<tr class="${trCls}"><td class="role" style="color:${colorFor(m)}">${escapeHtml(tenantLabel(m))}${fidelityTag}${dbOnlyTag}${trophy}</td><td class="policy">${fmtPolicy(m)}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong>${lowSample ? " 🟡" : ""}</td><td class="num">${m.pnl.resolved_markets}</td><td class="num">${m.pnl.markets_won}/${m.pnl.markets_lost}</td><td class="num">${fmtPct(tenantPnlPct, 2)}</td><td class="num"><strong>${dist === null ? "—" : dist.toFixed(2)}</strong></td><td class="num">$${m.fills.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td class="num">${m.fills.markets_count}</td></tr>`;
+      return `<tr class="${trCls}"><td class="role" style="color:${colorFor(m)}">${escapeHtml(tenantLabel(m))}${fidelityTag}${dbOnlyTag}${staleEnvTag}${trophy}</td><td class="policy">${fmtPolicy(m)}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong>${lowSample ? " 🟡" : ""}</td><td class="num">${m.pnl.resolved_markets}</td><td class="num">${m.pnl.markets_won}/${m.pnl.markets_lost}</td><td class="num">${fmtPct(tenantPnlPct, 2)}</td><td class="num"><strong>${dist === null ? "—" : dist.toFixed(2)}</strong></td><td class="num">$${m.fills.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td class="num">${m.fills.markets_count}</td></tr>`;
     })
     .join("");
   const refRowHtml = prodLiveRow
@@ -1626,39 +1679,71 @@ function renderReportHtml(args: {
   // paper variants only (each on its own scale via per-series normalisation
   // would re-introduce confusion; instead shared linear scale across paper
   // variants — they range $2k → $4M, all readable together).
-  const filledChartTarget = svgLineChart({
-    title: "cumulative $ filled — swisstony actual (real on-chain)",
+  // Single combined chart (the previous two-panel split was a workaround for
+  // a scale problem that wasn't the real issue — the real issue was env
+  // staleness, addressed by the freshness banner + per-env stale-line
+  // annotation on each tenant's series).
+  const filledChartAllTenants = svgLineChart({
+    title: "cumulative $ filled — swisstony vs all paper variants",
     series: [
       {
-        label: "🎯 swisstony",
+        label: "🎯 swisstony (target)",
         color: SERIES_COLORS[2]!,
         points: target.cumulative_usdc,
       },
+      ...metrics
+        .filter((m) => !isProdLive(m))
+        .map((m, i) => ({
+          label: tenantLabel(m),
+          color: SERIES_COLORS[(i + 3) % SERIES_COLORS.length]!,
+          points: m.cumulative.realized_usdc,
+        })),
     ],
     xRange: { since, until },
-    height: 220,
-  });
-  const filledChartPaperOnly = svgLineChart({
-    title: "cumulative $ filled — paper variants only (own scale)",
-    series: metrics
-      .filter((m) => !isProdLive(m))
-      .map((m, i) => ({
-        label: tenantLabel(m),
-        color: SERIES_COLORS[(i + 1) % SERIES_COLORS.length]!,
-        points: m.cumulative.realized_usdc,
-      })),
-    xRange: { since, until },
-    height: 280,
+    height: 320,
   });
 
-  // Data-completeness banner — explicit acknowledgement of every active
-  // tenant on the target. Lists DB-only tenants inline so the reader can
-  // verify nothing's missing at a glance.
+  // ── Data-completeness banner ─────────────────────────────────────────────
+  // Two-line surface: the scope of what's queried, AND env-freshness so
+  // dead-env conditions are loud. The freshness line goes red when any env
+  // has been silent for >1h before window.until — the canonical signal that
+  // the mirror coordinator on that env stopped firing while wallet-watch
+  // kept observing target activity (the 2026-05-26 preview incident).
   const totalActive = metrics.filter((m) => !isProdLive(m)).length;
   const dbOnlyCount = envGapWarnings.length;
   const envBlockCount = totalActive - dbOnlyCount;
-  const completenessBanner = `<div class="completeness">
-  <strong>Data scope</strong> · ${totalActive} active paper tenant${totalActive === 1 ? "" : "s"} on this target (${envBlockCount} env-discovered + ${dbOnlyCount} DB-only via Grafana SA) · prod LIVE: <code>${prodLiveActive ? `${prodLive!.fills.fills_count} fills` : "0 decisions in window (copy-trade disabled)"}</code>
+  const fmtAgo = (sec: number | null): string => {
+    if (sec === null) return "—";
+    if (sec < 120) return `${Math.round(sec)}s ago`;
+    if (sec < 7200) return `${Math.round(sec / 60)}m ago`;
+    if (sec < 172800) return `${Math.round(sec / 3600)}h ago`;
+    return `${Math.round(sec / 86400)}d ago`;
+  };
+  const freshnessLine = envFreshness
+    .sort((a, b) => a.envSlug.localeCompare(b.envSlug))
+    .map((f) => {
+      const tag = f.is_stale
+        ? `<span class="env-stale">🔻 ${escapeHtml(f.envSlug)} STALE</span>`
+        : f.last_decision_at === null
+          ? `<span class="env-empty">⚪ ${escapeHtml(f.envSlug)} no data</span>`
+          : `<span class="env-fresh">🟢 ${escapeHtml(f.envSlug)}</span>`;
+      const ago =
+        f.last_decision_at === null
+          ? "never"
+          : fmtAgo(f.staleness_seconds);
+      return `${tag} <code>${ago}</code>`;
+    })
+    .join(" · ");
+  const staleEnvs = envFreshness.filter((f) => f.is_stale);
+  const bannerClass = staleEnvs.length > 0 ? "completeness stale" : "completeness";
+  const completenessBanner = `<div class="${bannerClass}">
+  <div><strong>Data scope</strong> · ${totalActive} active paper tenant${totalActive === 1 ? "" : "s"} on this target (${envBlockCount} env-discovered + ${dbOnlyCount} DB-only via Grafana SA) · prod LIVE: <code>${prodLiveActive ? `${prodLive!.fills.fills_count} fills` : "0 decisions in window (copy-trade disabled)"}</code></div>
+  <div style="margin-top: 4px"><strong>Env freshness</strong> · last decision: ${freshnessLine}</div>
+  ${
+    staleEnvs.length > 0
+      ? `<div style="margin-top: 6px; color: #fbbf24; font-size: 11px;">⚠ <strong>${staleEnvs.map((f) => f.envSlug.toUpperCase()).join(", ")} mirror coordinator stopped writing decisions</strong> ${Math.round((staleEnvs[0]!.staleness_seconds ?? 0) / 3600)}h ago — every tenant in ${staleEnvs.length > 1 ? "those envs" : "that env"} has cumulative data that ends at <code>${escapeHtml(staleEnvs[0]!.last_decision_at ?? "?")}</code>. The chart lines stop there because the data does. Wallet-watch (target observation) is unaffected.</div>`
+      : ""
+  }
 </div>`;
 
   const decisionsRefRows = [...metrics]
@@ -1745,9 +1830,15 @@ table.ab.algo tr.ref td.role { color: #94a3b8 !important; font-style: italic; }
 .line-chart .legend { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
 .footer-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid #1f2937; font-size: 10px; color: #6b7280; }
 .footer-note a { color: #60a5fa; }
-.completeness { background: #0e1422; border: 1px solid #1f2937; border-left: 3px solid #34d399; border-radius: 6px; padding: 8px 12px; margin: 0 0 14px; font-size: 11px; color: #cbd5e1; }
+.completeness { background: #0e1422; border: 1px solid #1f2937; border-left: 3px solid #34d399; border-radius: 6px; padding: 10px 14px; margin: 0 0 14px; font-size: 12px; color: #cbd5e1; }
+.completeness.stale { border-left-color: #ef4444; }
 .completeness strong { color: #34d399; margin-right: 6px; }
+.completeness.stale strong { color: #fbbf24; }
 .completeness code { background: #131826; padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 10px; }
+.completeness .env-fresh { color: #22c55e; font-weight: 600; }
+.completeness .env-stale { color: #ef4444; font-weight: 700; }
+.completeness .env-empty { color: #94a3b8; font-weight: 600; }
+.env-stale-tag { color: #ef4444; font-size: 10px; font-weight: 700; margin-left: 4px; }
 .finding-detail p { margin: 0 0 10px; font-size: 13px; line-height: 1.5; }
 .finding-detail strong { color: #fbbf24; }
 .finding-detail .placeholder { color: #64748b; font-style: italic; }
@@ -1765,6 +1856,8 @@ table.ab.algo tr.ref td.role { color: #94a3b8 !important; font-style: italic; }
 <div class="header-sub">
   Target: <code>${escapeHtml(targetWallet)}</code> · Window: <code>${escapeHtml(window.since)}</code> → <code>${escapeHtml(window.until)}</code> · ${metrics.length} tenants · target DS <code>${escapeHtml(target.resolved_via_ds_uid ?? "—")}</code> · <a href="#appendix">↓ jump to appendix</a>
 </div>
+
+${completenessBanner}
 
 <!-- TAKEAWAY:START -->
 <div class="takeaway">
@@ -1786,8 +1879,6 @@ table.ab.algo tr.ref td.role { color: #94a3b8 !important; font-style: italic; }
   <div class="q-verdict">${escapeHtml(q2Verdict)}</div>
   <div class="q-ref">${q2Ref}</div>
 </div>
-
-${completenessBanner}
 
 <a id="appendix"></a>
 
@@ -1813,9 +1904,8 @@ ${completenessBanner}
   <div class="details-body">
     <p class="muted">Sorted by aggregate distance to target ascending. <code>PnL %</code> = realized PnL ÷ intent $. <code>gap to 🎯</code> is the mean of fractional gaps across PnL %, placement rate, intent ratio, and markets-touched ratio. 🟡 = resolved markets &lt; 50.</p>
     ${algoTable}
-    <p class="muted" style="margin-top:14px">Cumulative fill trajectories on separate scales — swisstony's $7.86M dwarfs every paper variant ($2k → $4M) so they share no useful axis.</p>
-    <div class="chart">${filledChartTarget}</div>
-    <div class="chart">${filledChartPaperOnly}</div>
+    <p class="muted" style="margin-top:14px">Cumulative $ filled — swisstony vs every paper variant on one shared scale. Lines that stop mid-chart are <em>not</em> a chart bug — they reflect real upstream data: the mirror coordinator on that env stopped writing. See the Env freshness banner above the takeaway.</p>
+    <div class="chart">${filledChartAllTenants}</div>
   </div>
 </details>
 
@@ -2232,6 +2322,41 @@ async function main(): Promise<void> {
     target_resolved_markets: targetPnl.resolved_markets,
   });
 
+  // ── Per-env freshness ─────────────────────────────────────────────────────
+  // Detect dead-env state (mirror coordinator stopped writing decisions while
+  // wallet-watch keeps observing target activity). The previous tool version
+  // silently rendered flat lines for stale envs; this surfaces the gap as a
+  // first-class signal.
+  const envFreshness: EnvFreshness[] = [];
+  const envSlugByDs = new Map<string, Tenant["envSlug"]>();
+  for (const t of tenants) envSlugByDs.set(t.dsUid, t.envSlug);
+  for (const [dsUid, envSlug] of envSlugByDs.entries()) {
+    try {
+      const f = await fetchEnvFreshness(grafana, dsUid, envSlug, args.until);
+      envFreshness.push(f);
+      logEvent("evaluator.env_freshness", {
+        ds_uid: dsUid,
+        env: envSlug,
+        last_decision_at: f.last_decision_at,
+        staleness_seconds: f.staleness_seconds,
+        is_stale: f.is_stale,
+      });
+    } catch (e) {
+      logEvent("evaluator.env_freshness_failed", {
+        dsUid,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+  const staleEnvs = envFreshness.filter((f) => f.is_stale);
+  if (staleEnvs.length > 0) {
+    for (const f of staleEnvs) {
+      console.error(
+        `::warning::env stale: ${f.envSlug} mirror coordinator last wrote ${f.last_decision_at} (${Math.round((f.staleness_seconds ?? 0) / 3600)}h ago) — every paper tenant in this env will show cumulative lines that stop at that timestamp`
+      );
+    }
+  }
+
   // ── Charter discovery (DB-side) ────────────────────────────────────────────
   // For each unique env DS, list active poly_copy_trade_targets rows on this
   // target wallet. Any billing_account_id NOT already represented by a
@@ -2449,6 +2574,7 @@ async function main(): Promise<void> {
     prodTwinFidelity,
     envGapWarnings,
     sampleFloorWarning,
+    envFreshness,
   });
   writeFileSync(join(outDir, "report.html"), html);
   logEvent("evaluator.report.written", { path: join(outDir, "report.html") });
@@ -2484,6 +2610,7 @@ async function main(): Promise<void> {
         closest_to_target: closest,
         env_gap_warnings: envGapWarnings,
         sample_floor_warning: sampleFloorWarning,
+        env_freshness: envFreshness,
       },
       null,
       2
@@ -2516,6 +2643,12 @@ async function main(): Promise<void> {
         prod_twin_fidelity_shared_fills: prodTwinFidelity?.shared_fills ?? null,
         sample_floor_warnings: sampleFloorWarning,
         env_gap_warnings: envGapWarnings,
+        env_freshness: envFreshness,
+        env_stale: envFreshness.filter((f) => f.is_stale).map((f) => ({
+          env: f.envSlug,
+          last_decision_at: f.last_decision_at,
+          staleness_hours: f.staleness_seconds === null ? null : Math.round(f.staleness_seconds / 3600),
+        })),
         target_ds_uid: targetDsUid,
         authored_at: null,
       },
