@@ -260,8 +260,7 @@ export function buildMirrorTargetConfig(params: {
       : {}),
     ...(params.mirrorMaxAllocPerConditionUsdc !== undefined
       ? {
-          mirrorMaxAllocPerConditionUsdc:
-            params.mirrorMaxAllocPerConditionUsdc,
+          mirrorMaxAllocPerConditionUsdc: params.mirrorMaxAllocPerConditionUsdc,
         }
       : {}),
   });

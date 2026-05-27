@@ -121,10 +121,35 @@ describe("planMirrorFromFill() — sizing policy: kind=mirror_fill_exact", () =>
     expect(d.intent.size_usdc).toBeCloseTo(50_000, 6);
   });
 
-  it("clamps up to market floor when fill notional is sub-floor (max(minShares×price, minUsdcNotional))", () => {
-    // fill.size_usdc = 0.50 ; minUsdcNotional = $1 ; minShares×price = 5×0.10 = $0.50.
-    // applyMarketFloors floors to max(minUsdcNotional, minShares×price) = $1.
+  it("skips below_market_min when fill notional is sub-floor — does NOT clamp up", () => {
+    // fill.size_usdc = $0.50; effective floor = max(minShares×price, minUsdcNotional)
+    // = max(5×$0.10, $1) = $1. Verbatim mirror is unachievable below the floor;
+    // clamping up would silently amplify (bet 2× target's notional) and
+    // distort ROI parity — the eval signal this policy is designed to
+    // capture. Mirrors `position_gap`'s pre-floor skip (same rationale).
     const fill = makeFill({ price: 0.1, size_usdc: 0.5, fillSuffix: "3" });
+    const d = planMirrorFromFill({
+      fill,
+      config: configForTarget(),
+      state: baseState(),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
+      min_shares: 5,
+      min_usdc_notional: 1,
+    });
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "below_market_min",
+      position_branch: "new_entry",
+    });
+  });
+
+  it("at-floor fill places verbatim (boundary check)", () => {
+    // fill.size_usdc = $1.00 exactly = floor. Boundary — should place, not skip.
+    const fill = makeFill({ price: 0.1, size_usdc: 1.0, fillSuffix: "floor" });
     const d = planMirrorFromFill({
       fill,
       config: configForTarget(),

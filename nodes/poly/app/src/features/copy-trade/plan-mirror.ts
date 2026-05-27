@@ -127,9 +127,24 @@ function sizeFromPolicy(
     }
     case "mirror_fill_exact": {
       // Verbatim per-fill mirror. `targetSizeUsdc` is `fill.size_usdc` (see
-      // `targetSizingUsdcForFill`); pass `+Infinity` as the per-trade ceiling
-      // so only the market-floor LOWER bound applies. Same shape as
-      // `applyPositionGapSizing`'s no-cap call into `applyMarketFloors`.
+      // `targetSizingUsdcForFill`). Skip — do NOT clamp up — when target's
+      // fill is below the effective market floor; clamping up would bet
+      // strictly more than target did, silently distorting the ROI-parity
+      // measurement this policy exists to capture. Mirrors
+      // `applyPositionGapSizing`'s pre-floor check (lines below): the gap IS
+      // the target, overpaying defeats the purpose. Pass `+Infinity` as the
+      // upper bound so when above-floor, `applyMarketFloors` only enforces
+      // the lower clamp (and never amplifies, since `desiredSizeUsdc >=
+      // floor` is already true).
+      if (minUsdcNotional !== undefined) {
+        const effectiveFloorUsdc = Math.max(
+          (minShares ?? 0) * price,
+          minUsdcNotional
+        );
+        if (targetSizeUsdc < effectiveFloorUsdc) {
+          return { ok: false, reason: "below_market_min" };
+        }
+      }
       return applyMarketFloors(
         targetSizeUsdc,
         price,
