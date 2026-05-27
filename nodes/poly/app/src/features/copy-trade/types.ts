@@ -123,11 +123,40 @@ export type PositionGapSizingPolicy = z.infer<
   typeof PositionGapSizingPolicySchema
 >;
 
+/**
+ * Verbatim per-fill mirror — `size_usdc = fill.size_usdc`,
+ * `limit_price = fill.price`, market-floor clamp only. No percentile gate,
+ * no scaling, no cap, no follow-up branches, no dominance/VWAP filters.
+ *
+ * **Why.** Polymarket's wire is `(price, shares)`; `OrderIntent.size_usdc`
+ * splits back to `shares = size_usdc / price` at the adapter. So setting
+ * USDC and price equal to the target's reproduces target's exact wire
+ * order at our credentials — verbatim mirror with zero algorithmic layer
+ * between target and us.
+ *
+ * **No self-healing.** Missed fills (our limit doesn't fill, price moved,
+ * liquidity gone) are NOT clawed back by subsequent fills — each fill is
+ * sized to its own notional, independent of our current position. Opposite
+ * of `position_gap`, which converges via `desired − ours`. The missed-fill
+ * fraction IS the eval signal: "can we land target's orders at her prices?"
+ *
+ * **Use case.** Algorithm-validity evaluation — strips every conviction
+ * filter so the ROI gap vs target localizes to *execution quality*, not
+ * decision quality. See chr.poly-algo-tenant-matrix.
+ */
+export const MirrorFillExactSizingPolicySchema = z.object({
+  kind: z.literal("mirror_fill_exact"),
+});
+export type MirrorFillExactSizingPolicy = z.infer<
+  typeof MirrorFillExactSizingPolicySchema
+>;
+
 export const SizingPolicySchema = z.discriminatedUnion("kind", [
   MinBetSizingPolicySchema,
   TargetPercentileSizingPolicySchema,
   TargetPercentileScaledSizingPolicySchema,
   PositionGapSizingPolicySchema,
+  MirrorFillExactSizingPolicySchema,
 ]);
 export type SizingPolicy = z.infer<typeof SizingPolicySchema>;
 

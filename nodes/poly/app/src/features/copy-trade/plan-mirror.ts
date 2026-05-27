@@ -68,11 +68,13 @@ export function applySizingPolicy(
     targetSideFraction
   );
   if (!sized.ok) return sized;
-  // `position_gap` doesn't carry `max_usdc_per_condition` (no per-trade cap
-  // under proportional book copy — anti-tracking). Its own sizer runs
-  // upstream via `applyPositionGapSizing`; this helper is only reachable for
-  // legacy policies.
-  if (policy.kind !== "position_gap") {
+  // `position_gap` and `mirror_fill_exact` don't carry
+  // `max_usdc_per_condition` — proportional book copy and verbatim mirror are
+  // both anti-tracking under a per-trade cap. (`position_gap` runs its own
+  // sizer upstream via `applyPositionGapSizing`; `mirror_fill_exact` reaches
+  // the switch above with `+Infinity` as the per-trade ceiling. This helper
+  // is only reachable for legacy capped policies.)
+  if (policy.kind !== "position_gap" && policy.kind !== "mirror_fill_exact") {
     if (
       cumulativeIntentForToken !== undefined &&
       cumulativeIntentForToken + sized.size_usdc > policy.max_usdc_per_condition
@@ -122,6 +124,19 @@ function sizeFromPolicy(
       // Defensive fall-through: treat the same as an unsized fill so the
       // planner stays a total function. Phase 4 deletes this branch entirely.
       return { ok: false, reason: "below_market_min" };
+    }
+    case "mirror_fill_exact": {
+      // Verbatim per-fill mirror. `targetSizeUsdc` is `fill.size_usdc` (see
+      // `targetSizingUsdcForFill`); pass `+Infinity` as the per-trade ceiling
+      // so only the market-floor LOWER bound applies. Same shape as
+      // `applyPositionGapSizing`'s no-cap call into `applyMarketFloors`.
+      return applyMarketFloors(
+        targetSizeUsdc,
+        price,
+        minShares,
+        minUsdcNotional,
+        Number.POSITIVE_INFINITY
+      );
     }
     case "target_percentile_scaled": {
       if (targetSizeUsdc < policy.statistic.min_target_usdc) {
@@ -676,10 +691,17 @@ function decideMirrorBranch(
   // short-circuit the fill-driven layer/hedge dispatch and always route
   // through new_entry. Phase 4 (`GapExecutor`) dissolves layer/hedge
   // entirely.
-  const isPositionGap = config.sizing.kind === "position_gap";
+  //
+  // MIRROR_FILL_EXACT_IS_VERBATIM: `mirror_fill_exact` mirrors each fill 1-1
+  // by construction — every fill is its own `new_entry`-shaped order at the
+  // fill's price/size. Layer/hedge follow-up sizing would inject conviction
+  // gates this policy explicitly rejects.
+  const skipFollowupDispatch =
+    config.sizing.kind === "position_gap" ||
+    config.sizing.kind === "mirror_fill_exact";
   if (
     isLayer &&
-    !isPositionGap &&
+    !skipFollowupDispatch &&
     followup?.enabled &&
     fill.side === "BUY" &&
     position !== undefined
@@ -694,7 +716,7 @@ function decideMirrorBranch(
   }
   if (
     isHedge &&
-    !isPositionGap &&
+    !skipFollowupDispatch &&
     followup?.enabled &&
     fill.side === "BUY" &&
     position?.our_token_id !== undefined
@@ -852,7 +874,12 @@ function targetSizingUsdcForFill(
   state: PlanMirrorInput["state"],
   policy: SizingPolicy
 ): number {
-  if (policy.kind === "min_bet") return fill.size_usdc;
+  // `min_bet` reads the fill notional but its sizer ignores it (returns
+  // market floor). `mirror_fill_exact` reads it AND its sizer outputs it
+  // verbatim — that's the whole policy.
+  if (policy.kind === "min_bet" || policy.kind === "mirror_fill_exact") {
+    return fill.size_usdc;
+  }
   const tokenId =
     typeof fill.attributes?.asset === "string" ? fill.attributes.asset : "";
   // `position_gap` defers to its own sizer and shouldn't reach this helper
@@ -887,6 +914,7 @@ function targetFollowupThreshold(policy: SizingPolicy): number {
       return policy.statistic.min_target_usdc;
     case "min_bet":
     case "position_gap":
+    case "mirror_fill_exact":
       return 0;
   }
 }
@@ -953,10 +981,13 @@ function applyFollowupSizing(params: {
   cumulativeIntentForToken: number | undefined;
 }): SizingResult {
   // Layer/hedge follow-up is short-circuited under `position_gap` (gap math
-  // produces layering via desired − ours), so this helper should never see
-  // a `position_gap` policy. Narrow defensively + fail-closed if a future
-  // refactor breaks that invariant.
-  if (params.policy.kind === "position_gap") {
+  // produces layering via desired − ours) and `mirror_fill_exact` (verbatim
+  // per-fill). This helper should never see either; narrow defensively +
+  // fail-closed if a future refactor breaks that invariant.
+  if (
+    params.policy.kind === "position_gap" ||
+    params.policy.kind === "mirror_fill_exact"
+  ) {
     return { ok: false, reason: "followup_not_needed" };
   }
   const maxUsdc = Math.min(

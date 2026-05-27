@@ -49,6 +49,21 @@ const sizingPolicyKindSchema = z.enum([
   "min_bet",
   "target_percentile_scaled",
   "position_gap",
+  /**
+   * Verbatim per-fill mirror — `size_usdc = fill.size_usdc`,
+   * `limit_price = fill.price`, market-floor clamp only. No percentile,
+   * scaling, cap, or follow-up branches. Polymarket's wire is
+   * `(price, shares)`; setting USDC and price equal to the target's
+   * reproduces target's exact wire order. Used for algorithm-validity
+   * evaluation: strips conviction filters so any PnL gap vs target
+   * localizes to execution quality.
+   *
+   * `mirror_filter_percentile` and `mirror_max_usdc_per_trade` remain
+   * wire-required but are IGNORED when policy resolves to this kind.
+   * `mirror_capital_alloc_usdc` is also ignored (this kind has no
+   * book-scale parameter).
+   */
+  "mirror_fill_exact",
 ]);
 
 /**

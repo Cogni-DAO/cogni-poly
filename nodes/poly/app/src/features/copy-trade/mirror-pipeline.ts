@@ -57,13 +57,24 @@ type PlacementWire = "limit" | "market_fok";
  * Representative per-intent USDC ceiling for a sizing policy. Used by SELL-close
  * caps and audit-log skip blobs. Per-fill size is computed in `plan-mirror`.
  *
- * `position_gap` (task.5014 rewrite) surfaces `mirror_max_alloc_per_condition_usdc`
- * — the per-condition cap that the range-relative math walks toward.
+ * - Legacy policies (`min_bet`, `target_percentile`, `target_percentile_scaled`):
+ *   `max_usdc_per_condition` is the per-trade cap.
+ * - `position_gap` (task.5014 rewrite): surfaces
+ *   `mirror_max_alloc_per_condition_usdc` — the per-condition cap that the
+ *   range-relative math walks toward.
+ * - `mirror_fill_exact`: no policy-level ceiling; the verbatim notional IS
+ *   `fill.size_usdc`. SELL-close caps at the target's actual sell notional,
+ *   bounded downstream by `closePosition` against our actual holdings.
  */
-function nominalSizeUsdc(sizing: SizingPolicy): number {
-  return sizing.kind === "position_gap"
-    ? sizing.mirror_max_alloc_per_condition_usdc
-    : sizing.max_usdc_per_condition;
+function nominalSizeUsdc(sizing: SizingPolicy, fillSizeUsdc: number): number {
+  switch (sizing.kind) {
+    case "position_gap":
+      return sizing.mirror_max_alloc_per_condition_usdc;
+    case "mirror_fill_exact":
+      return fillSizeUsdc;
+    default:
+      return sizing.max_usdc_per_condition;
+  }
 }
 
 /**
@@ -814,7 +825,7 @@ function buildDecisionLogFields(args: {
     // internal type is `max_usdc_per_condition` for legacy policies; for
     // `position_gap` we surface `capital_alloc_usdc` (the per-target whole-
     // book ceiling) under the same observability label.
-    mirror_max_usdc_per_trade: nominalSizeUsdc(target.sizing),
+    mirror_max_usdc_per_trade: nominalSizeUsdc(target.sizing, fill.size_usdc),
     sizing_percentile:
       "statistic" in target.sizing ? target.sizing.statistic.percentile : null,
     sizing_min_target_usdc:
@@ -1072,7 +1083,7 @@ async function processSellFill(args: {
   const closeExecutor = (intent: OrderIntent): Promise<OrderReceipt> =>
     boundClose({
       tokenId: intent.attributes?.token_id as string,
-      max_size_usdc: nominalSizeUsdc(deps.target.sizing),
+      max_size_usdc: nominalSizeUsdc(deps.target.sizing, fill.size_usdc),
       limit_price: fill.price,
       client_order_id,
     });
@@ -1082,7 +1093,7 @@ async function processSellFill(args: {
     market_id: fill.market_id,
     outcome: fill.outcome,
     side: "SELL",
-    size_usdc: nominalSizeUsdc(deps.target.sizing),
+    size_usdc: nominalSizeUsdc(deps.target.sizing, fill.size_usdc),
     limit_price: fill.price,
     client_order_id,
     attributes: {
@@ -1215,7 +1226,12 @@ async function executeMirrorOrder(
       observed_at: new Date(fill.observed_at),
       intent,
       ...(intent.side === "BUY"
-        ? { max_market_intent_usdc: nominalSizeUsdc(deps.target.sizing) }
+        ? {
+            max_market_intent_usdc: nominalSizeUsdc(
+              deps.target.sizing,
+              fill.size_usdc
+            ),
+          }
         : {}),
     });
   } catch (err: unknown) {
@@ -1474,7 +1490,7 @@ function buildDecisionIntentBlob(
     side: fill.side,
     fill_size_usdc_target: fill.size_usdc,
     fill_price_target: fill.price,
-    mirror_usdc: nominalSizeUsdc(target.sizing),
+    mirror_usdc: nominalSizeUsdc(target.sizing, fill.size_usdc),
     client_order_id,
     ...extra,
   };
