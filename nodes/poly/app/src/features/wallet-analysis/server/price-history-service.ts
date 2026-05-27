@@ -96,13 +96,15 @@ export async function runPriceHistoryTick(
   const client = deps.clobClient ?? getClobPublicClient();
   const concurrency = deps.concurrency ?? DEFAULT_CONCURRENCY;
   const outboundLogger: PriceHistoryOutboundLogger = {
+    // Emitted per-asset per-tick across thousands of assets — debug-level here
+    // keeps the scanner-loop signal queryable without flooding info-tier Loki.
     info: (payload: {
       event: "poly.market-price-history.outbound";
       component: string;
       asset: string;
       interval?: string;
       fidelity?: number;
-    }) => log.info(payload, "price-history outbound"),
+    }) => log.debug(payload, "price-history outbound"),
   };
 
   const assets = await listAssetsToPoll(deps.db);

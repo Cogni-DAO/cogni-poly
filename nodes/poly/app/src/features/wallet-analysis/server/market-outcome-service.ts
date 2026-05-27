@@ -186,7 +186,9 @@ export async function runMarketOutcomeTick(
         }
         resolutionsByCondition.set(conditionId, resolution);
         if (statusCode !== "error") {
-          log.info(
+          // Per-condition per-tick liveness. Errors keep their own log.error
+          // path above; this success branch is debug to bound Loki volume.
+          log.debug(
             {
               event: "poly.market-outcome.outbound",
               phase: "ok",

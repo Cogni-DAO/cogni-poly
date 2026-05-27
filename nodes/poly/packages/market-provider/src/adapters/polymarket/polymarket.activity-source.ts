@@ -170,7 +170,10 @@ export function createPolymarketActivitySource(
 
       deps.metrics.incr(POLYMARKET_ACTIVITY_SOURCE_METRICS.fillsTotal, {});
 
-      log.info(
+      // Per-poll liveness — fires every tick per tracked wallet. Actionable
+      // fills propagate downstream via `poly.mirror.decision`; this branch is
+      // the empty-or-bookkeeping case and stays debug-level.
+      log.debug(
         {
           ...baseFields,
           phase: "ok",

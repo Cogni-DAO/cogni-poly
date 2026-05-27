@@ -34,6 +34,7 @@ type Db =
   | PostgresJsDatabase<Record<string, unknown>>;
 
 type LoggerPort = {
+  debug: (obj: Record<string, unknown>, msg?: string) => void;
   info: (obj: Record<string, unknown>, msg?: string) => void;
   warn: (obj: Record<string, unknown>, msg?: string) => void;
   error: (obj: Record<string, unknown>, msg?: string) => void;
@@ -104,7 +105,8 @@ export async function refreshMarketMetadata(deps: {
     );
     return { scanned: 0, written: 0 };
   }
-  deps.logger.info(
+  // Scheduled-tick liveness; projection_error above stays at warn.
+  deps.logger.debug(
     {
       event: "poly.market_metadata.refresh",
       phase: "tick_ok",

@@ -196,7 +196,7 @@ describe("runPriceHistoryTick", () => {
     const childLogger = {
       ...logger,
       child: () => childLogger,
-      info: outboundLog.info,
+      debug: outboundLog.info,
     } as unknown as Parameters<typeof runPriceHistoryTick>[0]["logger"];
 
     const getPriceHistory = vi.fn(
