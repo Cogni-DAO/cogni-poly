@@ -110,48 +110,14 @@ export type TargetPercentileScaledSizingPolicy = z.infer<
 >;
 
 /**
- * Position-gap sizing (D2 phase 2, 2026-05-18 redesign locked).
- *
- * **North star** — hold a miniature of target's BOOK. As target grows /
- * shrinks / rotates, our positions track theirs in proportion, scaled to
- * `capital_alloc_usdc`. Per-fill recompute.
- *
- * **Math:**
- *   scale          = capital_alloc_usdc / Σ target_total_open_book_cost_usdc
- *   desired_shares = target_shares × scale            (per token target holds)
- *   gap_shares     = desired_shares − our_shares
- *   intent_usdc    = gap_shares × fill.price          → clamp to market_min only
- *
- * **One knob (`capital_alloc_usdc`).** Asymmetric target positions no longer
- * invert the mirror's per-side weighting (cf. swisstony ATP Sinner/Ruud
- * 2026-05-17, target 99.5/0.5 → legacy mirror 28/72; position_gap collapses
- * the minority side to `below_market_min` before placement). Implicit
- * threshold derived for free: `market_min × target_book / alloc`.
- *
- * **No per-trade cap.** `mirror_max_usdc_per_trade` would throttle the
- * proportional copy mechanism (anti-tracking). The planner passes
- * `+Infinity` as the per-fill ceiling to `applyMarketFloors`, so only the
- * market-floor LOWER bound applies. Wire-level safety lives downstream in
- * `poly_wallet_grants` (`CAPS_LIVE_IN_GRANT`). This schema deliberately omits
- * the `max_usdc_per_condition` field that other variants carry — `alloc` is
- * the per-target whole-book budget, NOT a per-trade ceiling.
- *
- * Phase-2 scope: gap math is computed only for the new_entry path
- * (`decideMirrorBranch` short-circuits layer/hedge routing when this kind is
- * active — gap math naturally produces layering via `desired − ours`). Phase 4
- * dissolves the layer/hedge branches entirely under `GapExecutor`.
- *
- * See docs/spec/poly-copy-trade-position-mirror.md (locked design status note).
+ * Position-gap sizing — task.5014 range-relative + forward-only baseline
+ * rewrite. See docs/research/poly/range-relative-mirror-2026-05-26.md for the
+ * design (math, invariants, parameterization).
  */
 export const PositionGapSizingPolicySchema = z.object({
   kind: z.literal("position_gap"),
-  /**
-   * Per-target dollar budget for the whole-book proportional copy. "I'm
-   * betting $C of my book tracking this target's whole book." Drives
-   * `scale = capital_alloc_usdc / Σ target_total_open_book_cost_usdc`.
-   * Persisted on `poly_copy_trade_targets.mirror_capital_alloc_usdc`.
-   */
-  capital_alloc_usdc: z.number().positive(),
+  target_range_max_usdc: z.number().positive(),
+  mirror_max_alloc_per_condition_usdc: z.number().positive(),
 });
 export type PositionGapSizingPolicy = z.infer<
   typeof PositionGapSizingPolicySchema
@@ -425,19 +391,24 @@ export const RuntimeStateSchema = z.object({
    */
   target_position: TargetConditionPositionViewSchema.optional(),
   /**
-   * Total cost-basis (sum of `cost_usdc`) across ALL of target's currently-
-   * open positions, every condition. Hydrated by the pipeline per fill
-   * (cached ~30s in bootstrap). Drives `position_gap` proportional scale
-   * derivation: `scale = policy.capital_alloc_usdc / target_total_open_book_cost_usdc`.
-   *
-   * Optional / fail-open: when omitted or ≤ 0, the `position_gap` planner
-   * branch skips with `target_position_below_threshold` rather than dividing
-   * by zero. Other sizing policies (`min_bet`, `target_percentile_scaled`)
-   * never read this field.
-   *
-   * Locked design 2026-05-18; see docs/spec/poly-copy-trade-position-mirror.md.
+   * Target's cumulative position USDC (cost basis) on this fill's
+   * `condition_id` RIGHT NOW. Sum across all of target's tokens on the
+   * condition (correct for binary, true multi-outcome, and neg-risk
+   * sub-conditions per the 2026-05-26 design). Hydrated by the pipeline from
+   * `state.target_position.tokens[].cost_usdc`; absent ⇒ `position_gap`
+   * skips `target_position_below_threshold`. task.5014.
    */
-  target_total_open_book_cost_usdc: z.number().nonnegative().optional(),
+  target_position_usdc_on_condition: z.number().nonnegative().optional(),
+  /**
+   * Persisted baseline snapshot for `(billing_account_id, target_id, condition_id)`
+   * from `poly_copy_target_condition_baseline.baseline_target_position_usdc`.
+   * Absent ⇒ this is the first post-activation observation for this triple;
+   * the pipeline will INSERT the row (capturing
+   * `target_position_usdc_on_condition` as the baseline) and the planner
+   * MUST skip `before_baseline_snapshot` — `delta` is 0 by construction on
+   * the triggering fill. task.5014.
+   */
+  target_condition_baseline_usdc: z.number().nonnegative().optional(),
 });
 export type RuntimeState = z.infer<typeof RuntimeStateSchema>;
 
@@ -518,6 +489,14 @@ export const MirrorReasonSchema = z.enum([
    * We refuse to place above target's average entry on this token.
    */
   "vwap_floor_breach",
+  /**
+   * task.5014 — first post-activation observation on a (billing, target,
+   * condition) triple. The pipeline just captured the baseline snapshot; the
+   * triggering fill has `delta = 0` by construction so the planner skips.
+   * Bounded cost: ~1 missed entry per (target, condition) lifetime. Do NOT
+   * optimize without re-litigating B1.
+   */
+  "before_baseline_snapshot",
 ]);
 export type MirrorReason = z.infer<typeof MirrorReasonSchema>;
 
@@ -593,5 +572,6 @@ export type SizingResult =
         | "below_target_percentile"
         | "followup_position_too_small"
         | "target_position_below_threshold"
-        | "followup_not_needed";
+        | "followup_not_needed"
+        | "before_baseline_snapshot";
     };

@@ -57,14 +57,12 @@ type PlacementWire = "limit" | "market_fok";
  * Representative per-intent USDC ceiling for a sizing policy. Used by SELL-close
  * caps and audit-log skip blobs. Per-fill size is computed in `plan-mirror`.
  *
- * `position_gap` deliberately has no per-trade cap — the per-target whole-book
- * alloc IS the implicit ceiling. Return it here so SELL-close + audit log
- * carry a sane "what's the most this target could intend per fill" number
- * without re-introducing a per-trade throttle.
+ * `position_gap` (task.5014 rewrite) surfaces `mirror_max_alloc_per_condition_usdc`
+ * — the per-condition cap that the range-relative math walks toward.
  */
 function nominalSizeUsdc(sizing: SizingPolicy): number {
   return sizing.kind === "position_gap"
-    ? sizing.capital_alloc_usdc
+    ? sizing.mirror_max_alloc_per_condition_usdc
     : sizing.max_usdc_per_condition;
 }
 
@@ -192,19 +190,24 @@ export interface MirrorPipelineDeps {
       }) => Promise<TargetConditionPositionView | undefined>)
     | undefined;
   /**
-   * Optional whole-book cost-basis read seam — sum of `cost_usdc` across ALL
-   * of target's currently-open positions (every condition). Required by
-   * `position_gap` proportional sizing (`scale = capital_alloc_usdc / Σ`).
-   * v0 production wiring uses Polymarket Data API
-   * `/positions?user=<target>&sizeThreshold=0` paginated via
-   * `listAllUserPositions`, cached ~30s per target.
-   *
-   * Returns `undefined` on hydration failure → planner's Σ-guard skips with
-   * `target_position_below_threshold` (fail-closed). Never read by `min_bet`
-   * or `target_percentile_scaled`.
+   * task.5014 — capture-once per-(billing, target, condition) baseline of
+   * target's cumulative position USDC at first post-activation observation.
+   * Required by `position_gap` (range-relative, forward-only). The pipeline
+   * calls this on every BUY fill under `position_gap`; the adapter performs
+   * `INSERT ... ON CONFLICT DO NOTHING RETURNING` and reads back the row on
+   * conflict. Returns the persisted baseline (whether just inserted or
+   * already there) so the planner can compute `delta = current − baseline`.
+   * `undefined` ⇒ hydration error → planner skips `before_baseline_snapshot`
+   * and retries next tick.
    */
-  getTargetTotalBookCost?:
-    | ((params: { targetWallet: string }) => Promise<number | undefined>)
+  getOrInsertConditionBaseline?:
+    | ((params: {
+        billingAccountId: string;
+        targetId: string;
+        conditionId: string;
+        observedTargetUsdc: number;
+        capturedAtFillId: string;
+      }) => Promise<number | undefined>)
     | undefined;
   /** Per-target config. */
   target: MirrorTargetConfig;
@@ -412,11 +415,29 @@ async function processFill(
     fill,
     log,
   });
-  const targetTotalBookCost = await fetchTargetTotalBookCost({
-    deps,
-    fill,
-    log,
-  });
+  // task.5014 — per-condition sum from the hydrated target position. Used by
+  // `position_gap` to compute delta-since-baseline and the matching
+  // `target_position_usdc_on_condition` planner input.
+  const targetConditionUsdc = sumTargetConditionUsdc(targetPosition);
+  const conditionId = targetConditionIdForFill(fill);
+  // B1 poisoned-baseline guard. `targetPosition === undefined` ⇒ Data-API
+  // hydration failed (or the gate didn't apply). Writing a baseline at this
+  // point would persist 0 — sticky — and re-enable the exact cold-start
+  // catch-up failure mode B1 was designed to dissolve: next tick the API
+  // recovers, target's pre-existing $X position reads as `delta = X − 0`,
+  // and we mirror the full $X at current price. Defer baseline capture to a
+  // future tick when hydration succeeds. The planner already fails closed
+  // (`target_position_below_threshold`) for this fill.
+  const baselineUsdc =
+    targetPosition !== undefined
+      ? await fetchOrInsertConditionBaseline({
+          deps,
+          fill,
+          conditionId,
+          observedTargetUsdc: targetConditionUsdc,
+          log,
+        })
+      : undefined;
 
   const fillEndDate = fill.attributes?.end_date;
   if (typeof fillEndDate !== "string" || fillEndDate.length === 0) {
@@ -441,10 +462,13 @@ async function processFill(
       cumulative_intent_usdc_for_token,
       position,
       ...(targetPosition !== undefined
-        ? { target_position: targetPosition }
+        ? {
+            target_position: targetPosition,
+            target_position_usdc_on_condition: targetConditionUsdc,
+          }
         : {}),
-      ...(targetTotalBookCost !== undefined
-        ? { target_total_open_book_cost_usdc: targetTotalBookCost }
+      ...(baselineUsdc !== undefined
+        ? { target_condition_baseline_usdc: baselineUsdc }
         : {}),
     },
     client_order_id,
@@ -453,6 +477,29 @@ async function processFill(
     tick_size,
     now_ms: Date.now(),
   });
+
+  // task.5014 — emit `poly.mirror.range_breach` when target's delta-since-
+  // baseline meets-or-exceeds the per-target range ceiling. Operator's signal
+  // to PATCH `target_range_max_usdc` upward (or accept the clamp). One emit
+  // per breaching fill; bounded by per-target fill cadence at v0 volumes.
+  if (
+    deps.target.sizing.kind === "position_gap" &&
+    baselineUsdc !== undefined &&
+    targetConditionUsdc - baselineUsdc >=
+      deps.target.sizing.target_range_max_usdc
+  ) {
+    log.info(
+      {
+        event: "poly.mirror.range_breach",
+        target_wallet: deps.target.target_wallet,
+        condition_id: conditionId ?? null,
+        target_position_usdc: targetConditionUsdc,
+        target_range_max_usdc: deps.target.sizing.target_range_max_usdc,
+        baseline_target_position_usdc: baselineUsdc,
+      },
+      "mirror pipeline: target delta breached range ceiling; relative clamped to 1.0"
+    );
+  }
 
   const wrongSideHoldingDetected =
     plan.kind === "place" && plan.wrong_side_holding_detected === true;
@@ -657,34 +704,53 @@ async function fetchTargetConditionPosition(args: {
 }
 
 /**
- * Whole-book cost hydration for `position_gap` proportional sizing.
- * Returns `undefined` on miss or hydration error — the planner's Σ-guard
- * then skips the fill with `target_position_below_threshold`. Only fires
- * for BUY fills under `position_gap`; other policies short-circuit at the
- * `needsTotalBookCost` gate.
+ * task.5014 — sum target's cost basis across all tokens on this fill's
+ * condition, hydrated from the live target-position view. Returns 0 when
+ * target_position is absent so callers can disambiguate "no data" from
+ * "target has no exposure" via the `targetPosition !== undefined` check.
  */
-async function fetchTargetTotalBookCost(args: {
+function sumTargetConditionUsdc(
+  targetPosition: TargetConditionPositionView | undefined
+): number {
+  if (!targetPosition) return 0;
+  return targetPosition.tokens.reduce((sum, token) => sum + token.cost_usdc, 0);
+}
+
+/**
+ * task.5014 — capture-or-read per-(billing, target, condition) baseline.
+ * Returns `undefined` when the dep is absent (legacy/test config) or when
+ * hydration errors; the planner then skips `before_baseline_snapshot` and
+ * the next tick retries. Only fires for BUY fills under `position_gap`.
+ */
+async function fetchOrInsertConditionBaseline(args: {
   deps: MirrorPipelineDeps;
   fill: import("@cogni/poly-market-provider").Fill;
+  conditionId: string | undefined;
+  observedTargetUsdc: number;
   log: LoggerPort;
 }): Promise<number | undefined> {
-  const { deps, fill, log } = args;
+  const { deps, fill, conditionId, observedTargetUsdc, log } = args;
   if (deps.target.sizing.kind !== "position_gap") return undefined;
-  if (!deps.getTargetTotalBookCost) return undefined;
+  if (!deps.getOrInsertConditionBaseline) return undefined;
   if (fill.side !== "BUY") return undefined;
+  if (!conditionId) return undefined;
   try {
-    return await deps.getTargetTotalBookCost({
-      targetWallet: deps.target.target_wallet,
+    return await deps.getOrInsertConditionBaseline({
+      billingAccountId: deps.target.billing_account_id,
+      targetId: deps.target.target_id,
+      conditionId,
+      observedTargetUsdc,
+      capturedAtFillId: fill.fill_id,
     });
   } catch (err) {
     log.warn(
       {
-        event: "poly.mirror.target_book_cost.fetch_error",
+        event: "poly.mirror.condition_baseline.fetch_error",
         fill_id: fill.fill_id,
         market_id: fill.market_id,
         err: err instanceof Error ? err.message : String(err),
       },
-      "mirror pipeline: target whole-book cost hydration failed; position_gap will fail closed"
+      "mirror pipeline: condition baseline hydration failed; position_gap will skip before_baseline_snapshot"
     );
     return undefined;
   }

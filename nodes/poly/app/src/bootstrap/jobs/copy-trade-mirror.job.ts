@@ -124,11 +124,16 @@ function buildSizingPolicy(params: {
   /** Per-target opt-in; `'auto'` (default) preserves snapshot-derived behavior. */
   sizingPolicyKind: SizingPolicyKindInput;
   /**
-   * Per-target whole-book proportional alloc for `position_gap`. Required
-   * when `resolvedKind === 'position_gap'`; throws otherwise. Locked design
-   * 2026-05-18 — no fallback constant, no default.
+   * Per-target assumed per-condition position ceiling for `position_gap`.
+   * Required when `resolvedKind === 'position_gap'`; throws otherwise.
+   * task.5014 range-relative rewrite — no fallback constant, no default.
    */
-  capitalAllocUsdc?: number;
+  targetRangeMaxUsdc?: number;
+  /**
+   * Per-condition USDC cap for `position_gap`. Required when
+   * `resolvedKind === 'position_gap'`; throws otherwise. task.5014.
+   */
+  mirrorMaxAllocPerConditionUsdc?: number;
 }): SizingPolicy {
   const snapshot = snapshotForTargetWallet(params.targetWallet);
   const resolvedKind: Exclude<SizingPolicyKindInput, "auto"> =
@@ -142,16 +147,26 @@ function buildSizingPolicy(params: {
   }
   if (resolvedKind === "position_gap") {
     if (
-      params.capitalAllocUsdc === undefined ||
-      !(params.capitalAllocUsdc > 0)
+      params.targetRangeMaxUsdc === undefined ||
+      !(params.targetRangeMaxUsdc > 0)
     ) {
       throw new Error(
-        `position_gap target ${params.targetWallet} missing mirror_capital_alloc_usdc — CHECK constraint should have caught this at the DB layer`
+        `position_gap target ${params.targetWallet} missing target_range_max_usdc — CHECK constraint should have caught this at the DB layer`
+      );
+    }
+    if (
+      params.mirrorMaxAllocPerConditionUsdc === undefined ||
+      !(params.mirrorMaxAllocPerConditionUsdc > 0)
+    ) {
+      throw new Error(
+        `position_gap target ${params.targetWallet} missing mirror_max_alloc_per_condition_usdc — CHECK constraint should have caught this at the DB layer`
       );
     }
     return {
       kind: "position_gap",
-      capital_alloc_usdc: params.capitalAllocUsdc,
+      target_range_max_usdc: params.targetRangeMaxUsdc,
+      mirror_max_alloc_per_condition_usdc:
+        params.mirrorMaxAllocPerConditionUsdc,
     };
   }
   // `target_percentile_scaled` requires a snapshot. If the user explicitly
@@ -209,13 +224,19 @@ export function buildMirrorTargetConfig(params: {
    */
   sizingPolicyKind?: SizingPolicyKindInput;
   /**
-   * Per-target whole-book proportional alloc for `position_gap`. Read from
-   * `poly_copy_trade_targets.mirror_capital_alloc_usdc` by the enumerator.
-   * Required when `sizingPolicyKind === 'position_gap'` (CHECK constraint
-   * enforced at the DB layer). Throws at `buildSizingPolicy` time if absent
-   * for a `position_gap` target — locked design 2026-05-18, no fallback.
+   * Per-target assumed per-condition position ceiling for `position_gap`.
+   * Read from `poly_copy_trade_targets.target_range_max_usdc` by the
+   * enumerator. Required when `sizingPolicyKind === 'position_gap'` (CHECK
+   * enforced at the DB layer). task.5014.
    */
-  capitalAllocUsdc?: number;
+  targetRangeMaxUsdc?: number;
+  /**
+   * Per-condition USDC cap for `position_gap`. Read from
+   * `poly_copy_trade_targets.mirror_max_alloc_per_condition_usdc` by the
+   * enumerator. Required when `sizingPolicyKind === 'position_gap'`.
+   * task.5014.
+   */
+  mirrorMaxAllocPerConditionUsdc?: number;
 }): MirrorTargetConfig {
   const mirrorFilterPercentile =
     params.mirrorFilterPercentile ?? DEFAULT_CONVICTION_FILTER_PERCENTILE;
@@ -231,8 +252,14 @@ export function buildMirrorTargetConfig(params: {
       mirrorFilterPercentile,
       mirrorMaxUsdcPerTrade,
       sizingPolicyKind: params.sizingPolicyKind ?? "auto",
-      ...(params.capitalAllocUsdc !== undefined
-        ? { capitalAllocUsdc: params.capitalAllocUsdc }
+      ...(params.targetRangeMaxUsdc !== undefined
+        ? { targetRangeMaxUsdc: params.targetRangeMaxUsdc }
+        : {}),
+      ...(params.mirrorMaxAllocPerConditionUsdc !== undefined
+        ? {
+            mirrorMaxAllocPerConditionUsdc:
+              params.mirrorMaxAllocPerConditionUsdc,
+          }
         : {}),
     }),
     // task.5001 — default to mirror_limit (resting GTC at target's entry).
@@ -301,12 +328,11 @@ export interface MirrorJobDeps {
   /** Optional target-position read; v0 production uses Polymarket Data API. */
   getTargetConditionPosition?: MirrorPipelineDeps["getTargetConditionPosition"];
   /**
-   * Optional whole-book cost-basis read for `position_gap` proportional sizing
-   * (Σ over target's open positions across every condition). v0 production
-   * uses `PolymarketDataApiClient.listAllUserPositions` behind a 30s shared
-   * cache. See `MirrorPipelineDeps.getTargetTotalBookCost` for semantics.
+   * Optional per-(billing, target, condition) baseline writer for `position_gap`
+   * (task.5014 range-relative rewrite). See
+   * `MirrorPipelineDeps.getOrInsertConditionBaseline` for semantics.
    */
-  getTargetTotalBookCost?: MirrorPipelineDeps["getTargetTotalBookCost"];
+  getOrInsertConditionBaseline?: MirrorPipelineDeps["getOrInsertConditionBaseline"];
   /** Structured log sink. */
   logger: LoggerPort;
   /** Metrics sink. */
@@ -368,7 +394,7 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
       : {}),
     getMarketConstraints: deps.getMarketConstraints,
     getTargetConditionPosition: deps.getTargetConditionPosition,
-    getTargetTotalBookCost: deps.getTargetTotalBookCost,
+    getOrInsertConditionBaseline: deps.getOrInsertConditionBaseline,
     target: deps.target,
     getCursor: () => cursor,
     setCursor: (n) => {

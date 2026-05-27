@@ -52,24 +52,40 @@ const sizingPolicyKindSchema = z.enum([
 ]);
 
 /**
- * Per-target whole-book proportional alloc for `position_gap` — "$C of my
- * book follows this target's whole book." Drives
- * `scale = capital_alloc_usdc / Σ target_total_open_book_cost_usdc` in
- * `applyPositionGapSizing`. NULLable on the row; required (DB CHECK) when
- * `sizing_policy_kind = 'position_gap'`. Same shape as
+ * Per-target assumed per-condition position ceiling for `position_gap`. Drives
+ * `relative = min(delta / target_range_max_usdc, 1.0)` in
+ * `applyPositionGapSizing`. Parameterized to swisstony/RN1's p95 of
+ * per-condition peak cost-basis (~$10k); operator PATCHes upward when
+ * `poly.mirror.range_breach` alerts fire. NULLable on the row; required (DB
+ * CHECK) when `sizing_policy_kind = 'position_gap'`. Same shape as
  * `mirror_max_usdc_per_trade` (positive USDC, ≤ 2 decimals).
  *
- * Locked design 2026-05-18; see docs/spec/poly-copy-trade-position-mirror.md.
+ * task.5014 — see docs/research/poly/range-relative-mirror-2026-05-26.md.
  */
-const capitalAllocUsdcSchema = mirrorMaxUsdcPerTradeSchema;
+const targetRangeMaxUsdcSchema = mirrorMaxUsdcPerTradeSchema;
+
+/**
+ * Per-condition USDC ceiling this mirror commits per condition under
+ * `position_gap`. Drives `desired_usdc = mirror_max_alloc_per_condition_usdc ×
+ * relative`. NULLable on the row; required (DB CHECK) when
+ * `sizing_policy_kind = 'position_gap'`. Aggregate exposure scales as
+ * `max_alloc × N_active_conditions`; wire-level safety lives in
+ * `poly_wallet_grants` (`CAPS_LIVE_IN_GRANT`).
+ *
+ * task.5014 — see docs/research/poly/range-relative-mirror-2026-05-26.md.
+ */
+const mirrorMaxAllocPerConditionUsdcSchema = mirrorMaxUsdcPerTradeSchema;
 
 const targetPolicySchema = z.object({
   mirror_filter_percentile: z.number().int().min(50).max(99),
   mirror_max_usdc_per_trade: mirrorMaxUsdcPerTradeSchema,
   /** Optional override; omit (or `'auto'`) to keep legacy snapshot inference. */
   sizing_policy_kind: sizingPolicyKindSchema.optional(),
-  /** Per-target whole-book alloc for `position_gap`. Required when policy resolves to `position_gap` (server-side CHECK). Omit to keep current value (PATCH) or leave NULL (POST for non-position_gap rows). */
-  mirror_capital_alloc_usdc: capitalAllocUsdcSchema.optional(),
+  /** Per-target assumed per-condition position ceiling for `position_gap`. Required when policy resolves to `position_gap` (server-side CHECK). Omit to keep current value (PATCH) or leave NULL (POST for non-position_gap rows). */
+  target_range_max_usdc: targetRangeMaxUsdcSchema.optional(),
+  /** Per-condition USDC cap for `position_gap`. Required when policy resolves to `position_gap` (server-side CHECK). Omit to keep current value (PATCH) or leave NULL (POST for non-position_gap rows). */
+  mirror_max_alloc_per_condition_usdc:
+    mirrorMaxAllocPerConditionUsdcSchema.optional(),
 });
 
 const targetSchema = z.object({
@@ -96,8 +112,11 @@ const targetSchema = z.object({
    * of snapshot availability.
    */
   sizing_policy_kind: sizingPolicyKindSchema,
-  /** Per-target whole-book alloc for `position_gap`. Null on rows where the policy isn't `position_gap`; required (DB CHECK) when it is. */
-  mirror_capital_alloc_usdc: capitalAllocUsdcSchema.nullable(),
+  /** Per-target assumed per-condition position ceiling for `position_gap`. Null on rows where the policy isn't `position_gap`; required (DB CHECK) when it is. */
+  target_range_max_usdc: targetRangeMaxUsdcSchema.nullable(),
+  /** Per-condition USDC cap for `position_gap`. Null on rows where the policy isn't `position_gap`; required (DB CHECK) when it is. */
+  mirror_max_alloc_per_condition_usdc:
+    mirrorMaxAllocPerConditionUsdcSchema.nullable(),
   /** Provenance: `"env"` for the local-dev fallback; `"db"` once `dbTargetSource` is wired. */
   source: z.enum(["env", "db"]),
 });
@@ -121,11 +140,18 @@ const targetCreateInputSchema = z.object({
    */
   sizing_policy_kind: sizingPolicyKindSchema.optional(),
   /**
-   * Initial whole-book alloc for `position_gap`. Required when
-   * `sizing_policy_kind === 'position_gap'` (server-side CHECK rejects
-   * otherwise). NULLable for other kinds.
+   * Initial assumed per-condition position ceiling for `position_gap`.
+   * Required (server-side CHECK) when `sizing_policy_kind === 'position_gap'`;
+   * NULLable for other kinds. task.5014.
    */
-  mirror_capital_alloc_usdc: capitalAllocUsdcSchema.optional(),
+  target_range_max_usdc: targetRangeMaxUsdcSchema.optional(),
+  /**
+   * Initial per-condition USDC cap for `position_gap`. Required (server-side
+   * CHECK) when `sizing_policy_kind === 'position_gap'`; NULLable for other
+   * kinds. task.5014.
+   */
+  mirror_max_alloc_per_condition_usdc:
+    mirrorMaxAllocPerConditionUsdcSchema.optional(),
 });
 
 export const polyCopyTradeTargetCreateOperation = {
@@ -163,28 +189,36 @@ export const polyCopyTradeTargetUpdateOperation = {
 
 /**
  * Cross-field rule that the DB CHECK constraint enforces at write-time:
- * `position_gap` targets MUST carry an explicit `mirror_capital_alloc_usdc`.
- * The route uses this to return a 400 (instead of letting the DB 500 with a
- * CHECK violation). Tests pin the rule on inputs that look valid to the Zod
- * schema but violate the cross-field invariant.
+ * `position_gap` targets MUST carry BOTH an explicit `target_range_max_usdc`
+ * AND an explicit `mirror_max_alloc_per_condition_usdc`. The route uses this
+ * to return a 400 (instead of letting the DB 500 with a CHECK violation).
+ * Tests pin the rule on inputs that look valid to the Zod schema but violate
+ * the cross-field invariant.
  *
  * Returns `null` when the input is valid, or a stable string code when not.
  * No throwing — the caller wraps the code into its preferred HTTP error shape.
  *
+ * task.5014 — replaces the legacy `validatePositionGapCapitalAlloc` rule.
+ *
  * @public
  */
-export type CapitalAllocRuleViolation =
-  "position_gap_requires_capital_alloc_usdc";
+export type RangeKnobsRuleViolation =
+  | "position_gap_requires_target_range_max_usdc"
+  | "position_gap_requires_mirror_max_alloc_per_condition_usdc";
 
-export function validatePositionGapCapitalAlloc(input: {
+export function validatePositionGapRangeKnobs(input: {
   sizing_policy_kind?: SizingPolicyKind | undefined;
-  mirror_capital_alloc_usdc?: number | undefined;
-}): CapitalAllocRuleViolation | null {
-  if (
-    input.sizing_policy_kind === "position_gap" &&
-    input.mirror_capital_alloc_usdc === undefined
-  ) {
-    return "position_gap_requires_capital_alloc_usdc";
+  target_range_max_usdc?: number | undefined;
+  mirror_max_alloc_per_condition_usdc?: number | undefined;
+}): RangeKnobsRuleViolation | null {
+  if (input.sizing_policy_kind !== "position_gap") {
+    return null;
+  }
+  if (input.target_range_max_usdc === undefined) {
+    return "position_gap_requires_target_range_max_usdc";
+  }
+  if (input.mirror_max_alloc_per_condition_usdc === undefined) {
+    return "position_gap_requires_mirror_max_alloc_per_condition_usdc";
   }
   return null;
 }

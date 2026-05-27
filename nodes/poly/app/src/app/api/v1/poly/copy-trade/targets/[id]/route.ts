@@ -138,9 +138,13 @@ export const PATCH = wrapRouteHandlerWithLogging<{
     if (parsed.data.sizing_policy_kind !== undefined) {
       updateSet.sizingPolicyKind = parsed.data.sizing_policy_kind;
     }
-    if (parsed.data.mirror_capital_alloc_usdc !== undefined) {
-      updateSet.mirrorCapitalAllocUsdc =
-        parsed.data.mirror_capital_alloc_usdc.toFixed(2);
+    if (parsed.data.target_range_max_usdc !== undefined) {
+      updateSet.targetRangeMaxUsdc =
+        parsed.data.target_range_max_usdc.toFixed(2);
+    }
+    if (parsed.data.mirror_max_alloc_per_condition_usdc !== undefined) {
+      updateSet.mirrorMaxAllocPerConditionUsdc =
+        parsed.data.mirror_max_alloc_per_condition_usdc.toFixed(2);
     }
 
     const updatedRows = await withTenantScope(appDb, actorId, async (tx) =>
@@ -159,8 +163,9 @@ export const PATCH = wrapRouteHandlerWithLogging<{
           mirror_filter_percentile: polyCopyTradeTargets.mirrorFilterPercentile,
           mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
           sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
-          mirror_capital_alloc_usdc:
-            polyCopyTradeTargets.mirrorCapitalAllocUsdc,
+          target_range_max_usdc: polyCopyTradeTargets.targetRangeMaxUsdc,
+          mirror_max_alloc_per_condition_usdc:
+            polyCopyTradeTargets.mirrorMaxAllocPerConditionUsdc,
         })
     );
 
@@ -179,10 +184,14 @@ export const PATCH = wrapRouteHandlerWithLogging<{
       row.target_wallet as `0x${string}`,
       storedSizingPolicyKind
     );
-    const capitalAllocUsdc =
-      row.mirror_capital_alloc_usdc === null
+    const targetRangeMaxUsdc =
+      row.target_range_max_usdc === null
         ? null
-        : Number(row.mirror_capital_alloc_usdc);
+        : Number(row.target_range_max_usdc);
+    const mirrorMaxAllocPerConditionUsdc =
+      row.mirror_max_alloc_per_condition_usdc === null
+        ? null
+        : Number(row.mirror_max_alloc_per_condition_usdc);
 
     ctx.log.info(
       {
@@ -190,18 +199,18 @@ export const PATCH = wrapRouteHandlerWithLogging<{
         mirror_filter_percentile: row.mirror_filter_percentile,
         mirror_max_usdc_per_trade: row.mirror_max_usdc_per_trade,
         sizing_policy_kind: storedSizingPolicyKind,
-        mirror_capital_alloc_usdc: capitalAllocUsdc,
+        target_range_max_usdc: targetRangeMaxUsdc,
+        mirror_max_alloc_per_condition_usdc: mirrorMaxAllocPerConditionUsdc,
       },
       "poly.copy_trade.targets.update_success"
     );
 
-    // For position_gap rows the per-leg cap is meaningless; the per-target
-    // whole-book alloc is the implicit ceiling. Surface alloc as
-    // `mirror_usdc` so dashboards display the right "what's the most this
-    // target intends per fill" number.
+    // task.5014 — under `position_gap`, the per-condition cap is the
+    // representative per-fill notional for dashboards.
     const mirrorUsdc =
       effectiveKind === "position_gap"
-        ? (capitalAllocUsdc ?? Number(row.mirror_max_usdc_per_trade))
+        ? (mirrorMaxAllocPerConditionUsdc ??
+          Number(row.mirror_max_usdc_per_trade))
         : Number(row.mirror_max_usdc_per_trade);
 
     return NextResponse.json(
@@ -213,7 +222,8 @@ export const PATCH = wrapRouteHandlerWithLogging<{
           mirror_filter_percentile: row.mirror_filter_percentile,
           mirror_max_usdc_per_trade: Number(row.mirror_max_usdc_per_trade),
           sizing_policy_kind: effectiveKind,
-          mirror_capital_alloc_usdc: capitalAllocUsdc,
+          target_range_max_usdc: targetRangeMaxUsdc,
+          mirror_max_alloc_per_condition_usdc: mirrorMaxAllocPerConditionUsdc,
           source: "db",
         },
       })

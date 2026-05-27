@@ -42,7 +42,8 @@ describe("envTargetSource", () => {
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
         sizingPolicyKind: "auto",
-        capitalAllocUsdc: null,
+        targetRangeMaxUsdc: null,
+        mirrorMaxAllocPerConditionUsdc: null,
       },
       {
         id: targetIdFromWallet(W2),
@@ -50,7 +51,8 @@ describe("envTargetSource", () => {
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
         sizingPolicyKind: "auto",
-        capitalAllocUsdc: null,
+        targetRangeMaxUsdc: null,
+        mirrorMaxAllocPerConditionUsdc: null,
       },
     ]);
   });
@@ -65,7 +67,8 @@ describe("envTargetSource", () => {
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
         sizingPolicyKind: "auto",
-        capitalAllocUsdc: null,
+        targetRangeMaxUsdc: null,
+        mirrorMaxAllocPerConditionUsdc: null,
       })
     ).toThrow();
     const second = await src.listForActor(ANY_ACTOR);
@@ -83,7 +86,8 @@ describe("envTargetSource", () => {
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
         sizingPolicyKind: "auto",
-        capitalAllocUsdc: null,
+        targetRangeMaxUsdc: null,
+        mirrorMaxAllocPerConditionUsdc: null,
       },
       {
         billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
@@ -92,7 +96,8 @@ describe("envTargetSource", () => {
         mirrorFilterPercentile: 75,
         mirrorMaxUsdcPerTrade: 5,
         sizingPolicyKind: "auto",
-        capitalAllocUsdc: null,
+        targetRangeMaxUsdc: null,
+        mirrorMaxAllocPerConditionUsdc: null,
       },
     ]);
   });
