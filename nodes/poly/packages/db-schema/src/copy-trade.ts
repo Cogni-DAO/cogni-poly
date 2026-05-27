@@ -81,30 +81,23 @@ export const polyCopyTradeTargets = pgTable(
      * docs/spec/poly-copy-trade-position-mirror.md (Phase 1).
      */
     sizingPolicyKind: text("sizing_policy_kind").notNull().default("auto"),
-    /**
-     * Per-target dollar budget for `position_gap` proportional book copy —
-     * "I'm betting $C of my book tracking this target's whole book." Drives
-     * `scale = capital_alloc_usdc / Σ target_total_open_book_cost_usdc`,
-     * applied uniformly across every token target holds. Per-fill recompute.
-     *
-     * NULLable on the row so non-`position_gap` policies (`min_bet`,
-     * `target_percentile_scaled`, `auto`) don't carry a meaningless default.
-     * The conditional CHECK constraint below requires NOT NULL when
-     * `sizing_policy_kind = 'position_gap'`; misconfigured tenants fail at
-     * bootstrap rather than silently inheriting an arbitrary value.
-     *
-     * No `mirror_max_usdc_per_trade` is read under `position_gap` —
-     * per-trade caps would throttle the proportional copy mechanism that is
-     * the whole point of book-matching. Wire-level safety lives in
-     * `poly_wallet_grants` (`CAPS_LIVE_IN_GRANT`).
-     *
-     * See docs/spec/poly-copy-trade-position-mirror.md (2026-05-18 locked
-     * design status note) for the full rationale.
-     */
-    mirrorCapitalAllocUsdc: numeric("mirror_capital_alloc_usdc", {
-      precision: 10,
+    /** task.5014 — assumed per-condition position ceiling for `position_gap`. See docs/research/poly/range-relative-mirror-2026-05-26.md. */
+    targetRangeMaxUsdc: numeric("target_range_max_usdc", {
+      precision: 12,
       scale: 2,
     }),
+    /** task.5014 — per-condition USDC cap for `position_gap`. */
+    mirrorMaxAllocPerConditionUsdc: numeric(
+      "mirror_max_alloc_per_condition_usdc",
+      {
+        precision: 10,
+        scale: 2,
+      }
+    ),
+    /** task.5014 — cold-start fence; defines "first post-activation fill" for the baseline snapshot in `poly_copy_target_condition_baseline`. */
+    mirrorActivatedAt: timestamp("mirror_activated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -129,14 +122,19 @@ export const polyCopyTradeTargets = pgTable(
       sql`${table.sizingPolicyKind} IN ('auto','min_bet','target_percentile_scaled','position_gap')`
     ),
     check(
-      "poly_copy_trade_targets_capital_alloc_positive",
-      sql`${table.mirrorCapitalAllocUsdc} IS NULL OR ${table.mirrorCapitalAllocUsdc} > 0`
+      "poly_copy_trade_targets_range_max_positive",
+      sql`${table.targetRangeMaxUsdc} IS NULL OR ${table.targetRangeMaxUsdc} > 0`
     ),
-    // 2026-05-18 locked design: position_gap requires an explicit alloc. No
-    // default — misconfigured tenants fail fast at bootstrap.
     check(
-      "poly_copy_trade_targets_position_gap_requires_alloc",
-      sql`${table.sizingPolicyKind} <> 'position_gap' OR ${table.mirrorCapitalAllocUsdc} IS NOT NULL`
+      "poly_copy_trade_targets_alloc_per_condition_positive",
+      sql`${table.mirrorMaxAllocPerConditionUsdc} IS NULL OR ${table.mirrorMaxAllocPerConditionUsdc} > 0`
+    ),
+    // task.5014: active position_gap rows need both range knobs. Disabled rows
+    // are grandfathered (legacy Σ-book rows can keep their stale state under
+    // disabled_at without violating the new shape).
+    check(
+      "poly_copy_trade_targets_position_gap_requires_range_knobs",
+      sql`${table.sizingPolicyKind} <> 'position_gap' OR ${table.disabledAt} IS NOT NULL OR (${table.targetRangeMaxUsdc} IS NOT NULL AND ${table.mirrorMaxAllocPerConditionUsdc} IS NOT NULL)`
     ),
     // One active row per (tenant, wallet). Soft-deleted rows allowed to coexist
     // so a previously-disabled wallet can be re-added without violating uniqueness.
@@ -363,6 +361,40 @@ export const polyCopyTradeDecisions = pgTable(
   ]
 );
 
+/**
+ * task.5014 — per-(billing_account, target, condition) baseline snapshot of
+ * target's cumulative position USDC at first post-activation observation.
+ * Insert-once via `ON CONFLICT DO NOTHING`. Read by `applyPositionGapSizing`.
+ * See docs/research/poly/range-relative-mirror-2026-05-26.md.
+ *
+ * @public
+ */
+export const polyCopyTargetConditionBaseline = pgTable(
+  "poly_copy_target_condition_baseline",
+  {
+    billingAccountId: text("billing_account_id").notNull(),
+    targetId: uuid("target_id").notNull(),
+    conditionId: text("condition_id").notNull(),
+    baselineTargetPositionUsdc: numeric("baseline_target_position_usdc", {
+      precision: 12,
+      scale: 2,
+    }).notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    capturedAtFillId: text("captured_at_fill_id").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.billingAccountId, table.targetId, table.conditionId],
+    }),
+    check(
+      "poly_copy_target_condition_baseline_usdc_non_negative",
+      sql`${table.baselineTargetPositionUsdc} >= 0`
+    ),
+  ]
+);
+
 export type PolyCopyTradeTarget = typeof polyCopyTradeTargets.$inferSelect;
 export type NewPolyCopyTradeTarget = typeof polyCopyTradeTargets.$inferInsert;
 export type PolyCopyTradeFill = typeof polyCopyTradeFills.$inferSelect;
@@ -370,3 +402,7 @@ export type NewPolyCopyTradeFill = typeof polyCopyTradeFills.$inferInsert;
 export type PolyCopyTradeDecision = typeof polyCopyTradeDecisions.$inferSelect;
 export type NewPolyCopyTradeDecision =
   typeof polyCopyTradeDecisions.$inferInsert;
+export type PolyCopyTargetConditionBaseline =
+  typeof polyCopyTargetConditionBaseline.$inferSelect;
+export type NewPolyCopyTargetConditionBaseline =
+  typeof polyCopyTargetConditionBaseline.$inferInsert;

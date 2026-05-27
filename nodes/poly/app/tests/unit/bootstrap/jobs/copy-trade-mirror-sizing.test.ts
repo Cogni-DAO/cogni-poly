@@ -129,44 +129,57 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
     expect(config.position_followup).toBeUndefined();
   });
 
-  it("position_gap with explicit alloc builds the new-shape policy", () => {
+  it("position_gap with both range knobs builds the new-shape policy", () => {
     const config = buildMirrorTargetConfig({
       targetWallet: SWISSTONY,
       billingAccountId: BILLING_ACCOUNT_ID,
       createdByUserId: CREATED_BY_USER_ID,
       sizingPolicyKind: "position_gap",
-      capitalAllocUsdc: 50,
+      targetRangeMaxUsdc: 10_000,
+      mirrorMaxAllocPerConditionUsdc: 20,
     });
     expect(config.sizing).toEqual({
       kind: "position_gap",
-      capital_alloc_usdc: 50,
+      target_range_max_usdc: 10_000,
+      mirror_max_alloc_per_condition_usdc: 20,
     });
   });
 
-  it("position_gap without alloc throws (CHECK constraint mirror, no fallback)", () => {
-    // Locked design 2026-05-18 — `buildSizingPolicy` is the user's last-line
-    // defence after the DB CHECK. No `FALLBACK_POSITION_GAP_TARGET_SCALE`,
-    // no default — misconfigured tenants fail fast at bootstrap.
+  it("position_gap missing target_range_max_usdc throws (CHECK mirror, no fallback)", () => {
     expect(() =>
       buildMirrorTargetConfig({
         targetWallet: SWISSTONY,
         billingAccountId: BILLING_ACCOUNT_ID,
         createdByUserId: CREATED_BY_USER_ID,
         sizingPolicyKind: "position_gap",
+        mirrorMaxAllocPerConditionUsdc: 20,
       })
-    ).toThrow(/mirror_capital_alloc_usdc/);
+    ).toThrow(/target_range_max_usdc/);
   });
 
-  it("position_gap with non-positive alloc throws (defensive belt to the CHECK)", () => {
+  it("position_gap missing mirror_max_alloc_per_condition_usdc throws", () => {
     expect(() =>
       buildMirrorTargetConfig({
         targetWallet: SWISSTONY,
         billingAccountId: BILLING_ACCOUNT_ID,
         createdByUserId: CREATED_BY_USER_ID,
         sizingPolicyKind: "position_gap",
-        capitalAllocUsdc: 0,
+        targetRangeMaxUsdc: 10_000,
       })
-    ).toThrow(/mirror_capital_alloc_usdc/);
+    ).toThrow(/mirror_max_alloc_per_condition_usdc/);
+  });
+
+  it("position_gap with non-positive range_max throws (defensive belt to the CHECK)", () => {
+    expect(() =>
+      buildMirrorTargetConfig({
+        targetWallet: SWISSTONY,
+        billingAccountId: BILLING_ACCOUNT_ID,
+        createdByUserId: CREATED_BY_USER_ID,
+        sizingPolicyKind: "position_gap",
+        targetRangeMaxUsdc: 0,
+        mirrorMaxAllocPerConditionUsdc: 20,
+      })
+    ).toThrow(/target_range_max_usdc/);
   });
 });
 

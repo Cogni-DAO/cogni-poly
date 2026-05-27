@@ -173,28 +173,43 @@ function sizeFromPolicy(
 }
 
 /**
- * 2026-05-18 redesign — proportional book copy for `kind: "position_gap"`.
+ * 2026-05-26 rewrite — range-relative + forward-only baseline (task.5014).
  *
- * **North star.** Hold a miniature of target's WHOLE BOOK. Mirror's desired
- * share count on the fill's token is `target_shares × scale`, where
- * `scale = capital_alloc_usdc / Σ target_total_open_book_cost_usdc`. The gap
- * is `desired − ours`. Fill price converts gap-shares to USDC; market floor
- * is the only clamp.
+ * **North star.** Anchor desired exposure to where target sits in their
+ * ASSUMED per-condition position range (hardcoded ceiling), measured
+ * relative to the per-(billing, target, condition) baseline snapshot taken at
+ * first post-activation observation. We mirror forward growth only.
  *
- * **No per-trade cap.** `position_gap` deliberately omits
- * `max_usdc_per_condition` — capping per-fill would throttle the proportional
- * copy mechanism and is anti-tracking. Wire-level safety lives in
- * `poly_wallet_grants` (`CAPS_LIVE_IN_GRANT`).
+ * **Math (per fill):**
+ *   delta          = max(0, target_position_usdc_on_condition − baseline)
+ *   relative       = min(delta / target_range_max_usdc, 1.0)
+ *   desired_usdc   = mirror_max_alloc_per_condition_usdc × relative
+ *   desired_shares = desired_usdc / fill.price
+ *   gap_shares     = desired_shares − our_shares
+ *   gap ≤ 0  → skip followup_not_needed                    (NO SELL)
  *
- * **Σ ≤ 0 guard.** When `state.target_total_open_book_cost_usdc` is missing
- * or zero (target closed everything, live read failed) we skip
- * `target_position_below_threshold` rather than divide by zero. Fail-closed.
+ * **Forward-only via baseline (FORWARD_ONLY_VIA_BASELINE).** When
+ * `state.target_condition_baseline_usdc` is absent, the pipeline just captured
+ * the baseline (INSERT ON CONFLICT DO NOTHING into
+ * `poly_copy_target_condition_baseline`). The triggering fill itself has
+ * `delta = 0` by construction → skip `before_baseline_snapshot`. ~1 missed
+ * entry per (target, condition) lifetime; bounded cost, do not "optimize".
  *
- * Inputs are restricted to state the planner already receives — no I/O. Layer
- * accumulation falls out naturally: as our shares grow the gap shrinks, and
- * once `gap ≤ 0` the planner skips `followup_not_needed`.
+ * **Range breach.** When `delta ≥ target_range_max_usdc`, clamp `relative = 1.0`
+ * and emit `poly.mirror.range_breach` (operator's signal to raise the ceiling
+ * if appropriate).
  *
- * See docs/spec/poly-copy-trade-position-mirror.md (locked design status note).
+ * **No per-trade cap.** `position_gap` passes `+Infinity` to
+ * `applyMarketFloors` so only the market-floor LOWER bound applies. Wire-level
+ * safety lives in `poly_wallet_grants` (`CAPS_LIVE_IN_GRANT`).
+ *
+ * **Multi-outcome and neg-risk.** No special case. Per-condition-sum scale
+ * (in `target_position_usdc_on_condition`) handles binary, true multi-outcome
+ * (>2 tokens), and neg-risk parent-event sub-conditions identically — each
+ * fill places against the specific token's price and our specific token gap.
+ *
+ * See docs/research/poly/range-relative-mirror-2026-05-26.md (design),
+ *     docs/research/poly/range-relative-parameterization-2026-05-26.md (knob values).
  */
 function applyPositionGapSizing(
   policy: PositionGapSizingPolicy,
@@ -208,21 +223,40 @@ function applyPositionGapSizing(
   if (tokenId === "") {
     return { ok: false, reason: "below_market_min" };
   }
-  // Σ ≤ 0 guard — target's whole-book cost must be hydrated and positive for
-  // the proportional scale to be defined. Skip rather than divide by zero.
-  const targetBookCost = state.target_total_open_book_cost_usdc;
-  if (targetBookCost === undefined || targetBookCost <= 0) {
+  // FORWARD_ONLY_VIA_BASELINE — no baseline persisted yet means this is the
+  // first post-activation fill on (billing, target, condition). The pipeline
+  // is responsible for capturing the baseline via INSERT ON CONFLICT DO
+  // NOTHING; this planner returns the bounded skip reason. `delta = 0` by
+  // construction on the trigger fill (baseline captures the post-fill state),
+  // so even without this guard the math below would yield `desired = 0`.
+  // Explicit skip lets the pipeline distinguish "first observation" from
+  // "ongoing followup that produced no gap".
+  if (state.target_condition_baseline_usdc === undefined) {
+    return { ok: false, reason: "before_baseline_snapshot" };
+  }
+  // Σ ≤ 0 guard — target must have a hydrated per-condition position. Skip
+  // rather than treat absence as zero (would emit spurious place attempts on
+  // markets we have no target signal for).
+  const targetPositionUsdc = state.target_position_usdc_on_condition;
+  if (targetPositionUsdc === undefined || targetPositionUsdc <= 0) {
     return { ok: false, reason: "target_position_below_threshold" };
   }
-  const targetShares =
-    state.target_position?.tokens.find((t) => t.token_id === tokenId)
-      ?.size_shares ?? 0;
+  // RANGE_DRIVES_DESIRED — relative walks 0..1 from baseline to ceiling.
+  const delta = Math.max(
+    0,
+    targetPositionUsdc - state.target_condition_baseline_usdc
+  );
+  const relative = Math.min(delta / policy.target_range_max_usdc, 1.0);
+  const desiredUsdc = policy.mirror_max_alloc_per_condition_usdc * relative;
+  if (desiredUsdc <= 0) {
+    // delta ≤ 0 → target hasn't grown past baseline (or has reduced). NO SELL.
+    return { ok: false, reason: "followup_not_needed" };
+  }
+  const desiredShares = desiredUsdc / fill.price;
   const ourShares =
     state.position?.our_token_id === tokenId
       ? state.position.our_qty_shares
       : 0;
-  const scale = policy.capital_alloc_usdc / targetBookCost;
-  const desiredShares = targetShares * scale;
   const gapShares = desiredShares - ourShares;
   if (gapShares <= 0) {
     return { ok: false, reason: "followup_not_needed" };
@@ -246,14 +280,10 @@ function applyPositionGapSizing(
       return { ok: false, reason: "below_market_min" };
     }
   }
-  // **NO per-trade ceiling under `position_gap`** (locked design 2026-05-18).
-  // A per-fill clamp would throttle proportional tracking — when target
-  // averages up at a higher price than their cost-basis VWAP, `gapUsdc` can
-  // exceed `capital_alloc_usdc` legitimately, and clamping there would
-  // under-mirror the position. The grant chain (`poly_wallet_grants`,
-  // `CAPS_LIVE_IN_GRANT`) is the only cross-fill safety stop; per-tick
-  // staleness is bounded by the Σ-guard above. Pass `+Infinity` so
-  // `applyMarketFloors` only enforces the lower bound (market floor).
+  // **NO per-trade ceiling under `position_gap`** — per-fill clamps would
+  // throttle proportional tracking. The grant chain (`poly_wallet_grants`,
+  // `CAPS_LIVE_IN_GRANT`) is the only cross-fill safety stop. Pass `+Infinity`
+  // so `applyMarketFloors` only enforces the lower bound (market floor).
   return applyMarketFloors(
     gapUsdc,
     fill.price,

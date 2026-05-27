@@ -36,7 +36,7 @@ import {
   type PolyCopyTradeTarget,
   polyCopyTradeTargetCreateOperation,
   polyCopyTradeTargetsOperation,
-  validatePositionGapCapitalAlloc,
+  validatePositionGapRangeKnobs,
 } from "@cogni/poly-node-contracts";
 import { and, eq, isNull } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
@@ -69,22 +69,20 @@ function buildTargetView(params: {
     | "min_bet"
     | "target_percentile_scaled"
     | "position_gap";
-  capitalAllocUsdc: number | null;
+  targetRangeMaxUsdc: number | null;
+  mirrorMaxAllocPerConditionUsdc: number | null;
   source: "env" | "db";
 }): PolyCopyTradeTarget {
-  // For `position_gap` rows the per-leg cap is meaningless (anti-tracking
-  // under book matching); the per-target whole-book alloc IS the implicit
-  // ceiling. For legacy policies, the per-trade cap stays as the ceiling.
-  // Resolve a representative `mirror_usdc` without invoking
-  // `buildMirrorTargetConfig`, which would throw for an unallocated
-  // position_gap row (no fallback, no default — locked design 2026-05-18).
+  // task.5014 — under `position_gap`, the per-condition cap IS the
+  // representative per-fill notional that dashboards display. Legacy policies
+  // continue to surface `mirror_max_usdc_per_trade`.
   const effectiveKind = sizingPolicyKindForTargetWallet(
     params.targetWallet,
     params.sizingPolicyKind
   );
   const mirrorUsdc =
     effectiveKind === "position_gap"
-      ? (params.capitalAllocUsdc ?? params.mirrorMaxUsdcPerTrade)
+      ? (params.mirrorMaxAllocPerConditionUsdc ?? params.mirrorMaxUsdcPerTrade)
       : params.mirrorMaxUsdcPerTrade;
   return {
     target_id: params.id,
@@ -93,7 +91,8 @@ function buildTargetView(params: {
     mirror_filter_percentile: params.mirrorFilterPercentile,
     mirror_max_usdc_per_trade: params.mirrorMaxUsdcPerTrade,
     sizing_policy_kind: effectiveKind,
-    mirror_capital_alloc_usdc: params.capitalAllocUsdc,
+    target_range_max_usdc: params.targetRangeMaxUsdc,
+    mirror_max_alloc_per_condition_usdc: params.mirrorMaxAllocPerConditionUsdc,
     source: params.source,
   };
 }
@@ -134,7 +133,8 @@ export const GET = wrapRouteHandlerWithLogging(
         mirrorFilterPercentile: row.mirrorFilterPercentile,
         mirrorMaxUsdcPerTrade: row.mirrorMaxUsdcPerTrade,
         sizingPolicyKind: row.sizingPolicyKind,
-        capitalAllocUsdc: row.capitalAllocUsdc,
+        targetRangeMaxUsdc: row.targetRangeMaxUsdc,
+        mirrorMaxAllocPerConditionUsdc: row.mirrorMaxAllocPerConditionUsdc,
         source: "db",
       })
     );
@@ -172,23 +172,30 @@ export const POST = wrapRouteHandlerWithLogging(
     }
     const targetWallet = parsed.data.target_wallet as `0x${string}`;
     const sizingPolicyKindInput = parsed.data.sizing_policy_kind ?? "auto";
-    const capitalAllocInput = parsed.data.mirror_capital_alloc_usdc;
+    const targetRangeMaxInput = parsed.data.target_range_max_usdc;
+    const mirrorMaxAllocPerConditionInput =
+      parsed.data.mirror_max_alloc_per_condition_usdc;
 
     // Server-side mirror of the DB CHECK so we return a 400 instead of a
-    // 500 on misuse (POST a position_gap target without alloc). Shared
-    // predicate lives in the contract package so it's testable in isolation.
-    const allocRuleError = validatePositionGapCapitalAlloc({
+    // 500 on misuse (POST a position_gap target without both range knobs).
+    const rangeRuleError = validatePositionGapRangeKnobs({
       sizing_policy_kind: sizingPolicyKindInput,
-      ...(capitalAllocInput !== undefined
-        ? { mirror_capital_alloc_usdc: capitalAllocInput }
+      ...(targetRangeMaxInput !== undefined
+        ? { target_range_max_usdc: targetRangeMaxInput }
+        : {}),
+      ...(mirrorMaxAllocPerConditionInput !== undefined
+        ? {
+            mirror_max_alloc_per_condition_usdc:
+              mirrorMaxAllocPerConditionInput,
+          }
         : {}),
     });
-    if (allocRuleError !== null) {
+    if (rangeRuleError !== null) {
       return NextResponse.json(
         {
           error:
-            "position_gap targets require mirror_capital_alloc_usdc — no default, set explicitly",
-          code: allocRuleError,
+            "position_gap targets require both target_range_max_usdc and mirror_max_alloc_per_condition_usdc — no defaults, set explicitly",
+          code: rangeRuleError,
         },
         { status: 400 }
       );
@@ -215,8 +222,14 @@ export const POST = wrapRouteHandlerWithLogging(
           createdByUserId: sessionUser.id,
           targetWallet,
           sizingPolicyKind: sizingPolicyKindInput,
-          ...(capitalAllocInput !== undefined
-            ? { mirrorCapitalAllocUsdc: capitalAllocInput.toString() }
+          ...(targetRangeMaxInput !== undefined
+            ? { targetRangeMaxUsdc: targetRangeMaxInput.toString() }
+            : {}),
+          ...(mirrorMaxAllocPerConditionInput !== undefined
+            ? {
+                mirrorMaxAllocPerConditionUsdc:
+                  mirrorMaxAllocPerConditionInput.toString(),
+              }
             : {}),
         })
         // Conflict resolves against the partial unique index
@@ -229,8 +242,9 @@ export const POST = wrapRouteHandlerWithLogging(
           mirror_filter_percentile: polyCopyTradeTargets.mirrorFilterPercentile,
           mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
           sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
-          mirror_capital_alloc_usdc:
-            polyCopyTradeTargets.mirrorCapitalAllocUsdc,
+          target_range_max_usdc: polyCopyTradeTargets.targetRangeMaxUsdc,
+          mirror_max_alloc_per_condition_usdc:
+            polyCopyTradeTargets.mirrorMaxAllocPerConditionUsdc,
         })
     );
 
@@ -248,8 +262,9 @@ export const POST = wrapRouteHandlerWithLogging(
             mirror_max_usdc_per_trade:
               polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
             sizing_policy_kind: polyCopyTradeTargets.sizingPolicyKind,
-            mirror_capital_alloc_usdc:
-              polyCopyTradeTargets.mirrorCapitalAllocUsdc,
+            target_range_max_usdc: polyCopyTradeTargets.targetRangeMaxUsdc,
+            mirror_max_alloc_per_condition_usdc:
+              polyCopyTradeTargets.mirrorMaxAllocPerConditionUsdc,
           })
           .from(polyCopyTradeTargets)
           .where(
@@ -295,10 +310,14 @@ export const POST = wrapRouteHandlerWithLogging(
       sizingPolicyKind: coerceStoredSizingPolicyKind(
         inserted.sizing_policy_kind
       ),
-      capitalAllocUsdc:
-        inserted.mirror_capital_alloc_usdc === null
+      targetRangeMaxUsdc:
+        inserted.target_range_max_usdc === null
           ? null
-          : Number(inserted.mirror_capital_alloc_usdc),
+          : Number(inserted.target_range_max_usdc),
+      mirrorMaxAllocPerConditionUsdc:
+        inserted.mirror_max_alloc_per_condition_usdc === null
+          ? null
+          : Number(inserted.mirror_max_alloc_per_condition_usdc),
       source: "db",
     });
 

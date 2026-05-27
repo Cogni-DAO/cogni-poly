@@ -3,23 +3,16 @@
 
 /**
  * Module: `@tests/unit/features/copy-trade/plan-mirror-sizing-position-gap`
- * Purpose: Cover the `kind: "position_gap"` branch of the planner (2026-05-18
- * locked redesign). Proportional whole-book copy: hold a miniature of target's
- * BOOK. Scale derived per-fill from `capital_alloc_usdc / Σ target_total_open_book_cost_usdc`.
- * Replays the swisstony ATP Sinner/Ruud incident (2026-05-17): target's final
- * position was 88,931 sh Sinner / 14,925 sh Ruud (~99.5%/0.5% by shares). Under
- * the legacy `target_percentile_scaled` policy the mirror inverted to 28%/72%
- * and paid 5.75× target's VWAP on Ruud. Under `position_gap` with alloc=$50
- * and a representative whole-book cost-basis the Sinner fills size to a few
- * dollars and the Ruud fills collapse to `below_market_min`.
- * Scope: Pure function; no I/O. Exercises proportional gap math, Σ=0 guard,
- * layer accumulation via desired − ours, short-circuit of layer/hedge
- * dispatch when `position_gap` is active.
- * Invariants: GAP_DRIVES_SIZING, PLAN_IS_PURE, MIRROR_REASON_BOUNDED,
- *             CAPS_LIVE_IN_GRANT.
- * Side-effects: none
- * Links: docs/spec/poly-copy-trade-position-mirror.md (locked design note),
- *        work/charters/POLY_COPY_DELTA.md (D2)
+ * Purpose: Cover `kind: "position_gap"` (task.5014 range-relative + forward-
+ *          only baseline rewrite). Math: `delta = max(0, target_position -
+ *          baseline)`, `relative = min(delta / target_range_max, 1.0)`,
+ *          `desired = mirror_max_alloc_per_condition × relative`. NO SELL.
+ *          See docs/research/poly/range-relative-mirror-2026-05-26.md.
+ * Scope: Pure function; no I/O. Exercises the five canonical paths:
+ *        baseline-absent, clean cold-start, late activation, range breach,
+ *        no-sell-on-target-reduction.
+ * Invariants: FORWARD_ONLY_VIA_BASELINE, RANGE_DRIVES_DESIRED,
+ *             NO_SELL_IN_MIRROR, PLAN_IS_PURE, MIRROR_REASON_BOUNDED.
  */
 
 import { clientOrderIdFor, type Fill } from "@cogni/poly-market-provider";
@@ -37,19 +30,12 @@ const CREATED_BY_USER_ID = "00000000-0000-4000-a000-000000000001";
 const TARGET_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea" as const;
 
 const CONDITION_ID = "0xcondition";
-const SINNER_TOKEN_ID = "0xsinner";
-const RUUD_TOKEN_ID = "0xruud";
+const TOKEN_ID = "0xsinner";
+const FILL_PRICE = 0.85;
 
-const SINNER_TARGET_SHARES = 88_931;
-const RUUD_TARGET_SHARES = 14_925;
-const SINNER_PRICE = 0.85;
-const RUUD_PRICE = 0.16;
-// Sinner cost: 88_931 × $0.84 ≈ $74,702 ; Ruud cost: 14_925 × $0.031 ≈ $463.
-// Whole-book Σ for these two tokens ≈ $75,165. We use a slightly inflated
-// $750,000 in some tests to model a target whose Sinner/Ruud condition is one
-// of many open positions (illustrates the proportional shrink in a busy book).
-const SINNER_RUUD_CONDITION_COST =
-  SINNER_TARGET_SHARES * 0.84 + RUUD_TARGET_SHARES * 0.031;
+// Locked deploy values from range-relative-parameterization-2026-05-26.md.
+const TARGET_RANGE_MAX_USDC = 10_000;
+const MIRROR_MAX_ALLOC_PER_CONDITION_USDC = 20;
 
 function configForTarget(
   overrides: Partial<MirrorTargetConfig> = {}
@@ -61,247 +47,96 @@ function configForTarget(
     created_by_user_id: CREATED_BY_USER_ID,
     sizing: {
       kind: "position_gap",
-      capital_alloc_usdc: 50,
+      target_range_max_usdc: TARGET_RANGE_MAX_USDC,
+      mirror_max_alloc_per_condition_usdc: MIRROR_MAX_ALLOC_PER_CONDITION_USDC,
     },
     placement: { kind: "mirror_limit" },
     ...overrides,
   };
 }
 
-function sinnerRuudTargetPosition(): RuntimeState["target_position"] {
-  return {
-    condition_id: CONDITION_ID,
-    tokens: [
-      {
-        token_id: SINNER_TOKEN_ID,
-        size_shares: SINNER_TARGET_SHARES,
-        cost_usdc: SINNER_TARGET_SHARES * 0.84,
-        current_value_usdc: SINNER_TARGET_SHARES * SINNER_PRICE,
-      },
-      {
-        token_id: RUUD_TOKEN_ID,
-        size_shares: RUUD_TARGET_SHARES,
-        cost_usdc: RUUD_TARGET_SHARES * 0.031,
-        current_value_usdc: RUUD_TARGET_SHARES * RUUD_PRICE,
-      },
-    ],
-  };
-}
-
-function makeFill(params: {
-  tokenId: string;
-  side?: "BUY" | "SELL";
-  price: number;
-  size_usdc?: number;
-  fillSuffix?: string;
-}): Fill {
+function makeFill(suffix: string): Fill {
   return {
     target_wallet: TARGET_WALLET,
-    fill_id: `data-api:0xtx:${params.tokenId}:${params.side ?? "BUY"}:${
-      params.fillSuffix ?? "0"
-    }`,
+    fill_id: `data-api:0xtx:${TOKEN_ID}:BUY:${suffix}`,
     source: "data-api",
     market_id: CONDITION_ID,
-    outcome: params.tokenId === SINNER_TOKEN_ID ? "YES" : "NO",
-    side: params.side ?? "BUY",
-    price: params.price,
-    size_usdc: params.size_usdc ?? 100,
-    observed_at: "2026-05-17T15:35:00.000Z",
+    outcome: "YES",
+    side: "BUY",
+    price: FILL_PRICE,
+    size_usdc: 100,
+    observed_at: "2026-05-26T15:35:00.000Z",
     attributes: {
-      asset: params.tokenId,
+      asset: TOKEN_ID,
       condition_id: CONDITION_ID,
     },
   };
 }
 
-function baseState(overrides: Partial<RuntimeState> = {}): RuntimeState {
+interface StateInput {
+  baselineUsdc?: number | undefined;
+  targetPositionUsdc?: number | undefined;
+  ourShares?: number;
+}
+
+function makeState(input: StateInput): RuntimeState {
   return {
     already_placed_ids: [],
     placed_fill_ids: [],
-    target_position: sinnerRuudTargetPosition(),
-    // Default: target's whole book = the Sinner/Ruud condition (single-market
-    // tape). Tests that need a fatter book override this.
-    target_total_open_book_cost_usdc: SINNER_RUUD_CONDITION_COST,
-    ...overrides,
+    ...(input.targetPositionUsdc !== undefined
+      ? { target_position_usdc_on_condition: input.targetPositionUsdc }
+      : {}),
+    ...(input.baselineUsdc !== undefined
+      ? { target_condition_baseline_usdc: input.baselineUsdc }
+      : {}),
+    ...(input.ourShares !== undefined && input.ourShares > 0
+      ? {
+          position: {
+            condition_id: CONDITION_ID,
+            our_token_id: TOKEN_ID,
+            our_qty_shares: input.ourShares,
+            opposite_qty_shares: 0,
+          },
+        }
+      : {}),
   };
 }
 
-describe("planMirrorFromFill() — sizing policy: kind=position_gap (2026-05-18 redesign)", () => {
-  it("scale = alloc / Σ target_book_cost; places dominant-side intent at fill.price (Sinner $0.85)", () => {
-    const fill = makeFill({
-      tokenId: SINNER_TOKEN_ID,
-      price: SINNER_PRICE,
-      fillSuffix: "sinner-1",
-    });
+describe("planMirrorFromFill() — sizing policy: kind=position_gap (task.5014)", () => {
+  it("baseline absent → skip before_baseline_snapshot (FORWARD_ONLY_VIA_BASELINE)", () => {
+    const fill = makeFill("first-observation");
     const d = planMirrorFromFill({
       fill,
       config: configForTarget(),
-      state: baseState(),
-      client_order_id: clientOrderIdFor(
-        BILLING_ACCOUNT_ID,
-        TARGET_ID,
-        fill.fill_id
-      ),
-      min_shares: 5,
-      min_usdc_notional: 1,
-    });
-    if (d.kind !== "place") throw new Error(`expected place, got ${d.reason}`);
-    expect(d.position_branch).toBe("new_entry");
-    // scale = 50 / 75,165.075 ≈ 0.000665
-    // desired = 88_931 × 0.000665 ≈ 59.13 sh ; gap_usdc ≈ 59.13 × 0.85 ≈ $50.26
-    // No per-trade clamp — planner passes +Infinity ceiling so intent lands
-    // at the full gap × fill.price (matches the locked spec).
-    expect(d.intent.size_usdc).toBeCloseTo(50.26, 1);
-  });
-
-  it("skips below_market_min on minority side (Ruud $0.16) — book-proportional slice collapses below floor", () => {
-    const fill = makeFill({
-      tokenId: RUUD_TOKEN_ID,
-      price: RUUD_PRICE,
-      fillSuffix: "ruud-1",
-    });
-    const d = planMirrorFromFill({
-      fill,
-      // Disable the dominance gate so the minority leg reaches sizing.
-      config: configForTarget({ min_target_side_fraction: undefined }),
-      // Bump book cost so Ruud's slice falls below the $1 floor — simulates
-      // the realistic case where target's whole book is much larger than this
-      // one condition.
-      state: baseState({ target_total_open_book_cost_usdc: 750_000 }),
-      client_order_id: clientOrderIdFor(
-        BILLING_ACCOUNT_ID,
-        TARGET_ID,
-        fill.fill_id
-      ),
-      min_shares: 5,
-      min_usdc_notional: 1,
-    });
-    // scale = 50 / 750_000 ≈ 6.67e-5; desired Ruud = 14_925 × 6.67e-5 ≈ 0.995 sh
-    // gap_usdc ≈ 0.995 × 0.16 ≈ $0.159 → below $1 floor → skip.
-    expect(d).toEqual({
-      kind: "skip",
-      reason: "below_market_min",
-      position_branch: "new_entry",
-    });
-  });
-
-  it("Σ = 0 guard: skips target_position_below_threshold when whole-book cost is missing", () => {
-    const fill = makeFill({
-      tokenId: SINNER_TOKEN_ID,
-      price: SINNER_PRICE,
-      fillSuffix: "sinner-no-book",
-    });
-    const d = planMirrorFromFill({
-      fill,
-      config: configForTarget(),
-      // Drop `target_total_open_book_cost_usdc` — simulates hydration failure
-      // (Data-API down, or target closed everything between snapshot + fill).
-      state: baseState({ target_total_open_book_cost_usdc: undefined }),
-      client_order_id: clientOrderIdFor(
-        BILLING_ACCOUNT_ID,
-        TARGET_ID,
-        fill.fill_id
-      ),
-      min_shares: 5,
-      min_usdc_notional: 1,
-    });
-    expect(d).toEqual({
-      kind: "skip",
-      reason: "target_position_below_threshold",
-      position_branch: "new_entry",
-    });
-  });
-
-  it("Σ = 0 guard: also skips when whole-book cost is explicitly 0", () => {
-    const fill = makeFill({
-      tokenId: SINNER_TOKEN_ID,
-      price: SINNER_PRICE,
-      fillSuffix: "sinner-zero-book",
-    });
-    const d = planMirrorFromFill({
-      fill,
-      config: configForTarget(),
-      state: baseState({ target_total_open_book_cost_usdc: 0 }),
-      client_order_id: clientOrderIdFor(
-        BILLING_ACCOUNT_ID,
-        TARGET_ID,
-        fill.fill_id
-      ),
-      min_shares: 5,
-      min_usdc_notional: 1,
-    });
-    expect(d).toEqual({
-      kind: "skip",
-      reason: "target_position_below_threshold",
-      position_branch: "new_entry",
-    });
-  });
-
-  it("skips followup_not_needed when our shares already meet desired", () => {
-    const fill = makeFill({
-      tokenId: SINNER_TOKEN_ID,
-      price: SINNER_PRICE,
-      fillSuffix: "sinner-saturated",
-    });
-    const d = planMirrorFromFill({
-      fill,
-      config: configForTarget(),
-      state: {
-        ...baseState(),
-        position: {
-          condition_id: CONDITION_ID,
-          our_token_id: SINNER_TOKEN_ID,
-          // Already hold more than desired (~59 sh).
-          our_qty_shares: 100,
-          opposite_qty_shares: 0,
-        },
-      },
-      client_order_id: clientOrderIdFor(
-        BILLING_ACCOUNT_ID,
-        TARGET_ID,
-        fill.fill_id
-      ),
-      min_shares: 5,
-      min_usdc_notional: 1,
-    });
-    expect(d).toEqual({
-      kind: "skip",
-      reason: "followup_not_needed",
-      position_branch: "new_entry",
-    });
-  });
-
-  it("layer-accumulates via desired − ours and short-circuits the legacy layer branch", () => {
-    // ourShares = 30 → gap ≈ 29.13 sh → gap_usdc ≈ 24.76. PLACED at new_entry,
-    // not layer (proves the legacy layer dispatch is short-circuited under
-    // position_gap).
-    const fill = makeFill({
-      tokenId: SINNER_TOKEN_ID,
-      price: SINNER_PRICE,
-      fillSuffix: "sinner-layer",
-    });
-    const d = planMirrorFromFill({
-      fill,
-      config: configForTarget({
-        position_followup: {
-          enabled: true,
-          min_mirror_position_usdc: 1,
-          market_floor_multiple: 1,
-          min_target_hedge_ratio: 0,
-          min_target_hedge_usdc: 0,
-          max_hedge_fraction_of_position: 1,
-          max_layer_fraction_of_position: 1,
-        },
+      state: makeState({
+        targetPositionUsdc: 3_050,
+        // baselineUsdc intentionally absent — the pipeline just captured the
+        // baseline row but the planner hasn't been re-handed it yet.
       }),
-      state: {
-        ...baseState(),
-        position: {
-          condition_id: CONDITION_ID,
-          our_token_id: SINNER_TOKEN_ID,
-          our_qty_shares: 30,
-          opposite_qty_shares: 0,
-        },
-      },
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
+      min_shares: 1,
+      min_usdc_notional: 1,
+    });
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "before_baseline_snapshot",
+      position_branch: "new_entry",
+    });
+  });
+
+  it("clean cold-start (baseline=0, target grows): relative walks proportionally and places", () => {
+    // delta = 8000 - 0 = 8000 ; relative = 8000/10000 = 0.8
+    // desired_usdc = 20 × 0.8 = $16 ; desired_shares = 16/0.85 ≈ 18.82
+    // our_shares = 0 → gap_usdc = $16 → place.
+    const fill = makeFill("cold-start");
+    const d = planMirrorFromFill({
+      fill,
+      config: configForTarget(),
+      state: makeState({ baselineUsdc: 0, targetPositionUsdc: 8_000 }),
       client_order_id: clientOrderIdFor(
         BILLING_ACCOUNT_ID,
         TARGET_ID,
@@ -313,66 +148,42 @@ describe("planMirrorFromFill() — sizing policy: kind=position_gap (2026-05-18 
     if (d.kind !== "place") throw new Error(`expected place, got ${d.reason}`);
     expect(d.position_branch).toBe("new_entry");
     expect(d.reason).toBe("ok");
-    expect(d.intent.size_usdc).toBeCloseTo(24.76, 1);
+    expect(d.intent.size_usdc).toBeCloseTo(16, 2);
   });
 
-  it("low-tick markets: gap above minUsdcNotional but below minShares×price still skips below_market_min", () => {
-    // Low-tick markets: minShares × price > minUsdcNotional, so the effective
-    // floor exceeds the USDC floor alone. A naive pre-check against
-    // minUsdcNotional would let this fill through and `applyMarketFloors`
-    // would clamp the gap UP to the share-floor — re-introducing the
-    // inverted-weighting failure mode this policy exists to prevent.
-    //
-    // Fixture: bump book cost so Sinner desired = a few shares.
-    //   scale     = 50 / 1_500_000 ≈ 3.33e-5
-    //   desired   = 88_931 × 3.33e-5 ≈ 2.96 sh
-    //   gap_usdc  = 2.96 × $0.85 ≈ $2.52
-    //   minUsdcNotional         = $1     (gap > this, naive pre-check passes)
-    //   minShares × price       = $4.25  (gap < this, share-floor clamps up)
-    // Effective floor must be used → skip below_market_min.
-    const fill = makeFill({
-      tokenId: SINNER_TOKEN_ID,
-      price: SINNER_PRICE,
-      fillSuffix: "sinner-floor",
-    });
+  it("late activation (baseline = target_position): delta=0 → skip followup_not_needed", () => {
+    // Operator added a tenant AFTER target already held $3,000 on this
+    // condition. First post-activation fill captured baseline = $3,000.
+    // Next fill arrives with target_position still ~= $3,000 → delta = 0.
+    // We never catch up to the pre-existing position.
+    const fill = makeFill("late-activation");
     const d = planMirrorFromFill({
       fill,
       config: configForTarget(),
-      state: baseState({ target_total_open_book_cost_usdc: 1_500_000 }),
+      state: makeState({ baselineUsdc: 3_000, targetPositionUsdc: 3_000 }),
       client_order_id: clientOrderIdFor(
         BILLING_ACCOUNT_ID,
         TARGET_ID,
         fill.fill_id
       ),
-      min_shares: 5,
+      min_shares: 1,
       min_usdc_notional: 1,
     });
     expect(d).toEqual({
       kind: "skip",
-      reason: "below_market_min",
+      reason: "followup_not_needed",
       position_branch: "new_entry",
     });
   });
 
-  it("does NOT clamp an over-budget gap — no per-trade ceiling under position_gap", () => {
-    // Pathological-but-valid case: target averaged up past their cost-basis
-    // VWAP, so `gap_usdc = (target_shares × alloc / target_book) × fill.price`
-    // exceeds `alloc`. Locked spec: place the full gap × fill.price —
-    // proportional tracking is the priority, cross-fill safety lives at the
-    // grant. Verifies the +Infinity ceiling passed to applyMarketFloors.
-    const fill = makeFill({
-      tokenId: SINNER_TOKEN_ID,
-      price: SINNER_PRICE,
-      fillSuffix: "sinner-over-alloc",
-    });
+  it("range breach (delta ≥ range_max): clamp relative=1.0, place at full per-condition alloc", () => {
+    // delta = 15000 - 0 = 15000 ; relative = min(15000/10000, 1) = 1.0
+    // desired_usdc = 20 × 1.0 = $20 ; gap_usdc = $20 (our_shares = 0) → place.
+    const fill = makeFill("range-breach");
     const d = planMirrorFromFill({
       fill,
-      config: configForTarget({
-        sizing: { kind: "position_gap", capital_alloc_usdc: 5 },
-      }),
-      // book = $50 → scale = 5/50 = 0.1 → desired = 88_931 × 0.1 = 8_893 sh
-      // gap_usdc = 8_893 × 0.85 = $7,559 → NOT clamped (no per-trade ceiling).
-      state: baseState({ target_total_open_book_cost_usdc: 50 }),
+      config: configForTarget(),
+      state: makeState({ baselineUsdc: 0, targetPositionUsdc: 15_000 }),
       client_order_id: clientOrderIdFor(
         BILLING_ACCOUNT_ID,
         TARGET_ID,
@@ -382,36 +193,107 @@ describe("planMirrorFromFill() — sizing policy: kind=position_gap (2026-05-18 
       min_usdc_notional: 1,
     });
     if (d.kind !== "place") throw new Error(`expected place, got ${d.reason}`);
-    // 8893.1 sh × $0.85 = $7,559.135 — placed as-is, no clamp.
-    expect(d.intent.size_usdc).toBeCloseTo(7559.135, 1);
-    expect(d.intent.size_usdc).toBeGreaterThan(5);
+    expect(d.intent.size_usdc).toBeCloseTo(
+      MIRROR_MAX_ALLOC_PER_CONDITION_USDC,
+      2
+    );
   });
 
-  it("does NOT consult cumulative_intent_usdc_for_token (no per-trade cap under position_gap)", () => {
-    // Under the legacy per-leg cap, accumulated intent past
-    // `max_usdc_per_condition` would skip `position_cap_reached`. Under
-    // position_gap there is no per-leg cap — the alloc + grant chain handles
-    // bounding. Same fixture as the dominant-side test, with cumulative
-    // intent intentionally past any plausible legacy cap.
-    const fill = makeFill({
-      tokenId: SINNER_TOKEN_ID,
-      price: SINNER_PRICE,
-      fillSuffix: "sinner-no-perleg-cap",
-    });
+  it("NO SELL (target reduces below baseline): delta clamped to 0 → skip followup_not_needed", () => {
+    // baseline = 5000 ; target_position now = 3000 (target sold or redeemed
+    // partial). delta = max(0, 3000 - 5000) = 0 → desired = 0 → skip. We hold
+    // our existing position to resolution; NO mirror SELL.
+    const fill = makeFill("target-reduced");
     const d = planMirrorFromFill({
       fill,
       config: configForTarget(),
-      state: baseState({ cumulative_intent_usdc_for_token: 9_999 }),
+      state: makeState({
+        baselineUsdc: 5_000,
+        targetPositionUsdc: 3_000,
+        ourShares: 10,
+      }),
       client_order_id: clientOrderIdFor(
         BILLING_ACCOUNT_ID,
         TARGET_ID,
         fill.fill_id
       ),
-      min_shares: 5,
+      min_shares: 1,
       min_usdc_notional: 1,
     });
-    if (d.kind !== "place")
-      throw new Error(`expected place under position_gap, got ${d.reason}`);
-    expect(d.intent.size_usdc).toBeCloseTo(50.26, 1);
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "followup_not_needed",
+      position_branch: "new_entry",
+    });
+  });
+
+  it("target_position absent → skip target_position_below_threshold (fail-closed)", () => {
+    const fill = makeFill("no-target-data");
+    const d = planMirrorFromFill({
+      fill,
+      config: configForTarget(),
+      state: makeState({ baselineUsdc: 0 }),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
+      min_shares: 1,
+      min_usdc_notional: 1,
+    });
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "target_position_below_threshold",
+      position_branch: "new_entry",
+    });
+  });
+
+  it("our_shares already meet desired → skip followup_not_needed", () => {
+    // Same fixture as cold-start but we already own 100 shares (> 18.82 desired).
+    const fill = makeFill("saturated");
+    const d = planMirrorFromFill({
+      fill,
+      config: configForTarget(),
+      state: makeState({
+        baselineUsdc: 0,
+        targetPositionUsdc: 8_000,
+        ourShares: 100,
+      }),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
+      min_shares: 1,
+      min_usdc_notional: 1,
+    });
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "followup_not_needed",
+      position_branch: "new_entry",
+    });
+  });
+
+  it("gap below effective market floor → skip below_market_min (no clamp-up)", () => {
+    // delta = 100 ; relative = 0.01 ; desired_usdc = $0.20 ; gap_shares =
+    // 0.20/0.85 ≈ 0.235 ; gap_usdc < $1 floor → skip rather than overpay.
+    const fill = makeFill("tiny-delta");
+    const d = planMirrorFromFill({
+      fill,
+      config: configForTarget(),
+      state: makeState({ baselineUsdc: 0, targetPositionUsdc: 100 }),
+      client_order_id: clientOrderIdFor(
+        BILLING_ACCOUNT_ID,
+        TARGET_ID,
+        fill.fill_id
+      ),
+      min_shares: 1,
+      min_usdc_notional: 1,
+    });
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "below_market_min",
+      position_branch: "new_entry",
+    });
   });
 });
