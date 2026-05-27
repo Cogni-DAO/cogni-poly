@@ -23,16 +23,25 @@ ALTER TABLE "poly_copy_trade_targets" DROP COLUMN "mirror_capital_alloc_usdc";--
 
 -- Disable any active `position_gap` rows so the new CHECK can apply. The
 -- handoff's "operator action via existing API" plan is impossible in
--- practice — migration runs before the new code (or any cross-tenant admin
--- surface) is reachable, and active rows exist across owner accounts the
--- deploy operator can't all soft-delete. Disabling here preserves all data
--- (only flips `disabled_at`) and matches the design intent (legacy
--- Σ-book-shaped rows soft-deleted; operator POSTs fresh rows with the new
--- knobs after deploy). Idempotent — no-op on subsequent runs and on envs
--- with no active position_gap rows (e.g. prod today).
+-- practice — migration runs before the new code is reachable, and active
+-- rows exist across owner accounts the deploy operator can't all
+-- soft-delete. Disabling here preserves all data (only flips
+-- `disabled_at`) and matches the design intent (legacy Σ-book-shaped rows
+-- soft-deleted; operator POSTs fresh rows with the new knobs after deploy).
+-- Idempotent — no-op on subsequent runs and on envs with no active
+-- position_gap rows (e.g. prod today).
+--
+-- RLS NOTE: `poly_copy_trade_targets` has `FORCE ROW LEVEL SECURITY`
+-- (migration 0029), so the migrator (no `app.current_user_id` set) is
+-- RLS-clamped to zero rows by default — verified empirically on candidate-a
+-- flights 1+2 of this PR, where the UPDATE matched 0 rows and the CHECK
+-- below failed against unupdated rows. Toggle FORCE off for the UPDATE
+-- only, then restore. Same pattern as migration 0055.
+ALTER TABLE "poly_copy_trade_targets" NO FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 UPDATE "poly_copy_trade_targets"
   SET "disabled_at" = now()
   WHERE "sizing_policy_kind" = 'position_gap' AND "disabled_at" IS NULL;--> statement-breakpoint
+ALTER TABLE "poly_copy_trade_targets" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 
 ALTER TABLE "poly_copy_trade_targets" ADD CONSTRAINT "poly_copy_trade_targets_range_max_positive" CHECK ("poly_copy_trade_targets"."target_range_max_usdc" IS NULL OR "poly_copy_trade_targets"."target_range_max_usdc" > 0);--> statement-breakpoint
 ALTER TABLE "poly_copy_trade_targets" ADD CONSTRAINT "poly_copy_trade_targets_alloc_per_condition_positive" CHECK ("poly_copy_trade_targets"."mirror_max_alloc_per_condition_usdc" IS NULL OR "poly_copy_trade_targets"."mirror_max_alloc_per_condition_usdc" > 0);--> statement-breakpoint
