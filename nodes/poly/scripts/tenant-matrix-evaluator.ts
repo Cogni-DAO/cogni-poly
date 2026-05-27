@@ -260,6 +260,17 @@ export type FillsAgg = {
   realized_size_usdc: number;
   first_fill_at: string | null;
   last_fill_at: string | null;
+  // fill_rate = filled_count / (filled_count + canceled_count + error_count).
+  // The denominator deliberately excludes 'open' / 'pending' (still in
+  // flight). null when no terminal-state rows exist. 2026-05-24 incident
+  // ground-truth: a tenant placing 949 orders/hour with 1 filled would
+  // show fill_rate=0.1% here — the headline signal the prior report
+  // couldn't surface.
+  fill_rate: number | null;
+  // Top 3 cancel reasons + counts. Distinguishes "ttl_expired" (sidecar
+  // didn't match) from "stale_resting_layer_up" (price moved away) from
+  // "wrong_side" / domain-specific cancels.
+  top_cancel_reasons: Array<{ reason: string; count: number }>;
 };
 
 export type PnlAgg = {
@@ -471,18 +482,57 @@ async function fetchTenantFillsAgg(
   `;
   const rows = await grafanaPgQuery(grafana.url, grafana.saToken, tenant.dsUid, sql);
   const r = rows[0] ?? {};
+
+  // Second query: top cancel reasons. The 2026-05-24 preview incident
+  // showed every tenant TTL-expiring 97% of placements — only visible if
+  // we surface the reason breakdown. attributes->>'reason' is set by
+  // OrderLedger.markCanceled (resting-sweep ttl_expired, stale_resting_layer_up,
+  // target_exited_market, etc).
+  let topCancelReasons: Array<{ reason: string; count: number }> = [];
+  try {
+    const reasonSql = `
+      SELECT
+        COALESCE(NULLIF(attributes->>'reason', ''), '_no_reason') AS reason,
+        COUNT(*)::int AS n
+      FROM poly_copy_trade_fills
+      WHERE billing_account_id = '${tenant.billingAccountId}'
+        AND target_id = '${targetId}'
+        AND observed_at >= '${window.since}'::timestamptz
+        AND observed_at <  '${window.until}'::timestamptz
+        AND status = 'canceled'
+      GROUP BY 1
+      ORDER BY 2 DESC
+      LIMIT 3
+    `;
+    const reasonRows = await grafanaPgQuery(grafana.url, grafana.saToken, tenant.dsUid, reasonSql);
+    topCancelReasons = reasonRows.map((row) => ({
+      reason: typeof row.reason === "string" ? row.reason : "_unknown",
+      count: Number(row.n) || 0,
+    }));
+  } catch {
+    // Non-fatal — the rest of the agg is the headline; leave reasons empty.
+  }
+
+  const filledCount = Number(r.filled_count) || 0;
+  const canceledCount = Number(r.canceled_count) || 0;
+  const errorCount = Number(r.error_count) || 0;
+  const terminalCount = filledCount + canceledCount + errorCount;
+  const fillRate = terminalCount > 0 ? filledCount / terminalCount : null;
+
   return {
     fills_count: Number(r.fills_count) || 0,
-    filled_count: Number(r.filled_count) || 0,
+    filled_count: filledCount,
     open_count: Number(r.open_count) || 0,
-    canceled_count: Number(r.canceled_count) || 0,
-    error_count: Number(r.error_count) || 0,
+    canceled_count: canceledCount,
+    error_count: errorCount,
     markets_count: Number(r.markets_count) || 0,
     markets_with_open_position: Number(r.markets_with_open_position) || 0,
     intent_usdc: Number(r.intent_usdc) || 0,
     realized_size_usdc: Number(r.realized_size_usdc) || 0,
     first_fill_at: toIsoMaybe(r.first_fill_at),
     last_fill_at: toIsoMaybe(r.last_fill_at),
+    fill_rate: fillRate,
+    top_cancel_reasons: topCancelReasons,
   };
 }
 
@@ -1609,7 +1659,32 @@ function renderReportHtml(args: {
     }
     return `<code>${escapeHtml(p.kind || "—")}</code>`;
   };
-  const targetRow = `<tr class="target"><td class="role">🎯 swisstony · target</td><td class="policy"><em>real on-chain</em></td><td class="num pos"><strong>${fmtPnl(target.pnl.realized_pnl_usdc)}</strong></td><td class="num">${target.pnl.resolved_markets}</td><td class="num">${target.pnl.markets_won}/${target.pnl.markets_lost}</td><td class="num">${fmtPct(targetPctOverallEarly, 2)}</td><td class="num">—</td><td class="num">$${target.intent_usdc.toLocaleString()}</td><td class="num">${target.market_set.length}</td></tr>`;
+  // fmt for fill-rate column — bold ❌ when very low, ⚠ when degraded.
+  // The 2026-05-24 preview incident showed paper sidecar at 0.1% fill rate
+  // for 70+ hours while the prior tool reported only "0 fills" — the
+  // human couldn't tell "no placements" from "lots of placements all
+  // ttl_expired". This column closes that gap.
+  // Thresholds calibrated from 2026-05-24 preview incident + candidate-a
+  // healthy baseline: candidate-a runs 47-55%, preview during the cliff hit
+  // 0.1%, post-restart preview sits at ~28%. So:
+  //   <10% = ❌ (incident-level: paper sidecar effectively dead)
+  //   <30% = ⚠  (degraded vs ~50% healthy baseline)
+  //   ≥30% = 🟢 (close to candidate-a)
+  const fmtFillRate = (r: number | null, terminalN: number): string => {
+    if (r === null || terminalN === 0) return "—";
+    const pctStr = `${(r * 100).toFixed(1)}%`;
+    if (r < 0.1) return `<span class="fill-rate-red"><strong>❌ ${pctStr}</strong></span>`;
+    if (r < 0.3) return `<span class="fill-rate-amber">⚠ ${pctStr}</span>`;
+    return `<span class="fill-rate-ok">${pctStr}</span>`;
+  };
+  const fmtTopCancel = (reasons: Array<{ reason: string; count: number }>): string => {
+    if (reasons.length === 0) return "—";
+    return reasons
+      .slice(0, 2)
+      .map((r) => `<code title="${escapeHtml(r.reason)}">${escapeHtml(r.reason.slice(0, 22))}=${r.count}</code>`)
+      .join(" ");
+  };
+  const targetRow = `<tr class="target"><td class="role">🎯 swisstony · target</td><td class="policy"><em>real on-chain</em></td><td class="num"><em>—</em></td><td class="num"><em>—</em></td><td class="num"><em>—</em></td><td class="cancel-reasons"><em>n/a (real CLOB)</em></td><td class="num pos"><strong>${fmtPnl(target.pnl.realized_pnl_usdc)}</strong></td><td class="num">${target.pnl.resolved_markets}</td><td class="num">${target.pnl.markets_won}/${target.pnl.markets_lost}</td><td class="num">${fmtPct(targetPctOverallEarly, 2)}</td><td class="num">—</td><td class="num">$${target.intent_usdc.toLocaleString()}</td><td class="num">${target.market_set.length}</td></tr>`;
   const paperTableRows = paperRowsSorted
     .map((row, idx) => {
       const m = row.m;
@@ -1633,7 +1708,10 @@ function renderReportHtml(args: {
         ? ' <span class="env-stale-tag" title="mirror coordinator on this env stopped writing decisions">🔻 stale env</span>'
         : "";
       const trophy = idx === 0 ? " 🏆" : "";
-      return `<tr class="${trCls}"><td class="role" style="color:${colorFor(m)}">${escapeHtml(tenantLabel(m))}${fidelityTag}${dbOnlyTag}${staleEnvTag}${trophy}</td><td class="policy">${fmtPolicy(m)}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong>${lowSample ? " 🟡" : ""}</td><td class="num">${m.pnl.resolved_markets}</td><td class="num">${m.pnl.markets_won}/${m.pnl.markets_lost}</td><td class="num">${fmtPct(tenantPnlPct, 2)}</td><td class="num"><strong>${dist === null ? "—" : dist.toFixed(2)}</strong></td><td class="num">$${m.fills.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td class="num">${m.fills.markets_count}</td></tr>`;
+      const placedN = m.fills.filled_count + m.fills.canceled_count + m.fills.error_count;
+      const fillRateCell = fmtFillRate(m.fills.fill_rate, placedN);
+      const cancelCell = fmtTopCancel(m.fills.top_cancel_reasons);
+      return `<tr class="${trCls}"><td class="role" style="color:${colorFor(m)}">${escapeHtml(tenantLabel(m))}${fidelityTag}${dbOnlyTag}${staleEnvTag}${trophy}</td><td class="policy">${fmtPolicy(m)}</td><td class="num">${placedN.toLocaleString()}</td><td class="num">${m.fills.filled_count.toLocaleString()}</td><td class="num">${fillRateCell}</td><td class="cancel-reasons">${cancelCell}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong>${lowSample ? " 🟡" : ""}</td><td class="num">${m.pnl.resolved_markets}</td><td class="num">${m.pnl.markets_won}/${m.pnl.markets_lost}</td><td class="num">${fmtPct(tenantPnlPct, 2)}</td><td class="num"><strong>${dist === null ? "—" : dist.toFixed(2)}</strong></td><td class="num">$${m.fills.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td class="num">${m.fills.markets_count}</td></tr>`;
     })
     .join("");
   const refRowHtml = prodLiveRow
@@ -1644,10 +1722,11 @@ function renderReportHtml(args: {
           prodLiveRow.fills.intent_usdc > 0
             ? pnl / prodLiveRow.fills.intent_usdc
             : null;
-        return `<tr class="ref"><td class="role">${escapeHtml(tenantLabel(prodLiveRow))} (prod ref)</td><td class="policy">${fmtPolicy(prodLiveRow)}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong></td><td class="num">${prodLiveRow.pnl.resolved_markets}</td><td class="num">${prodLiveRow.pnl.markets_won}/${prodLiveRow.pnl.markets_lost}</td><td class="num">${fmtPct(refPct, 2)}</td><td class="num">—</td><td class="num">$${prodLiveRow.fills.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td class="num">${prodLiveRow.fills.markets_count}</td></tr>`;
+        const placedN = prodLiveRow.fills.filled_count + prodLiveRow.fills.canceled_count + prodLiveRow.fills.error_count;
+        return `<tr class="ref"><td class="role">${escapeHtml(tenantLabel(prodLiveRow))} (prod ref)</td><td class="policy">${fmtPolicy(prodLiveRow)}</td><td class="num">${placedN.toLocaleString()}</td><td class="num">${prodLiveRow.fills.filled_count.toLocaleString()}</td><td class="num">${fmtFillRate(prodLiveRow.fills.fill_rate, placedN)}</td><td class="cancel-reasons">${fmtTopCancel(prodLiveRow.fills.top_cancel_reasons)}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong></td><td class="num">${prodLiveRow.pnl.resolved_markets}</td><td class="num">${prodLiveRow.pnl.markets_won}/${prodLiveRow.pnl.markets_lost}</td><td class="num">${fmtPct(refPct, 2)}</td><td class="num">—</td><td class="num">$${prodLiveRow.fills.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td class="num">${prodLiveRow.fills.markets_count}</td></tr>`;
       })()
     : "";
-  const algoTable = `<table class="ab algo"><thead><tr><th>tenant</th><th>policy</th><th class="num">PnL $</th><th class="num">resolved</th><th class="num">W/L</th><th class="num">PnL %</th><th class="num">gap to 🎯</th><th class="num">intent $</th><th class="num">markets</th></tr></thead><tbody>${targetRow}${paperTableRows}${refRowHtml}</tbody></table>`;
+  const algoTable = `<table class="ab algo"><thead><tr><th>tenant</th><th>policy</th><th class="num" title="orders that reached terminal state: filled + canceled + error">placed</th><th class="num">filled</th><th class="num" title="filled / (filled + canceled + error)">fill rate</th><th title="top 2 cancel reasons + counts (most common first)">top cancel reasons</th><th class="num">PnL $</th><th class="num">resolved</th><th class="num">W/L</th><th class="num">PnL %</th><th class="num">gap to 🎯</th><th class="num">intent $</th><th class="num">markets</th></tr></thead><tbody>${targetRow}${paperTableRows}${refRowHtml}</tbody></table>`;
 
   // ── Q1 detail — fidelity twin vs prod LIVE line chart ───────────────────
   // The Q1 fidelity question is paper-vs-live on identical policy. Chart
@@ -1839,6 +1918,12 @@ table.ab.algo tr.ref td.role { color: #94a3b8 !important; font-style: italic; }
 .completeness .env-stale { color: #ef4444; font-weight: 700; }
 .completeness .env-empty { color: #94a3b8; font-weight: 600; }
 .env-stale-tag { color: #ef4444; font-size: 10px; font-weight: 700; margin-left: 4px; }
+.fill-rate-red { color: #ef4444; font-weight: 700; }
+.fill-rate-amber { color: #f59e0b; font-weight: 600; }
+.fill-rate-ok { color: #22c55e; }
+table.ab td.cancel-reasons { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: #cbd5e1; max-width: 220px; }
+table.ab td.cancel-reasons code { background: #131826; padding: 1px 4px; border-radius: 3px; color: #fde68a; font-size: 10px; margin-right: 3px; display: inline-block; }
+table.ab td.cancel-reasons em { color: #6b7280; font-style: italic; }
 .finding-detail p { margin: 0 0 10px; font-size: 13px; line-height: 1.5; }
 .finding-detail strong { color: #fbbf24; }
 .finding-detail .placeholder { color: #64748b; font-style: italic; }
@@ -2074,6 +2159,8 @@ async function fetchTenant(
     realized_size_usdc: 0,
     first_fill_at: null,
     last_fill_at: null,
+    fill_rate: null,
+    top_cancel_reasons: [],
   };
   let buckets: {
     intent: Array<{ ts: string; value: number }>;
