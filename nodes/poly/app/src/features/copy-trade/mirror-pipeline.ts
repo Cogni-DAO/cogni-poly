@@ -420,13 +420,24 @@ async function processFill(
   // `target_position_usdc_on_condition` planner input.
   const targetConditionUsdc = sumTargetConditionUsdc(targetPosition);
   const conditionId = targetConditionIdForFill(fill);
-  const baselineUsdc = await fetchOrInsertConditionBaseline({
-    deps,
-    fill,
-    conditionId,
-    observedTargetUsdc: targetConditionUsdc,
-    log,
-  });
+  // B1 poisoned-baseline guard. `targetPosition === undefined` ⇒ Data-API
+  // hydration failed (or the gate didn't apply). Writing a baseline at this
+  // point would persist 0 — sticky — and re-enable the exact cold-start
+  // catch-up failure mode B1 was designed to dissolve: next tick the API
+  // recovers, target's pre-existing $X position reads as `delta = X − 0`,
+  // and we mirror the full $X at current price. Defer baseline capture to a
+  // future tick when hydration succeeds. The planner already fails closed
+  // (`target_position_below_threshold`) for this fill.
+  const baselineUsdc =
+    targetPosition !== undefined
+      ? await fetchOrInsertConditionBaseline({
+          deps,
+          fill,
+          conditionId,
+          observedTargetUsdc: targetConditionUsdc,
+          log,
+        })
+      : undefined;
 
   const fillEndDate = fill.attributes?.end_date;
   if (typeof fillEndDate !== "string" || fillEndDate.length === 0) {
