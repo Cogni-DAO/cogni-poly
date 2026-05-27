@@ -21,6 +21,19 @@ ALTER TABLE "poly_copy_trade_targets" ADD COLUMN "mirror_max_alloc_per_condition
 ALTER TABLE "poly_copy_trade_targets" ADD COLUMN "mirror_activated_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
 ALTER TABLE "poly_copy_trade_targets" DROP COLUMN "mirror_capital_alloc_usdc";--> statement-breakpoint
 
+-- Disable any active `position_gap` rows so the new CHECK can apply. The
+-- handoff's "operator action via existing API" plan is impossible in
+-- practice — migration runs before the new code (or any cross-tenant admin
+-- surface) is reachable, and active rows exist across owner accounts the
+-- deploy operator can't all soft-delete. Disabling here preserves all data
+-- (only flips `disabled_at`) and matches the design intent (legacy
+-- Σ-book-shaped rows soft-deleted; operator POSTs fresh rows with the new
+-- knobs after deploy). Idempotent — no-op on subsequent runs and on envs
+-- with no active position_gap rows (e.g. prod today).
+UPDATE "poly_copy_trade_targets"
+  SET "disabled_at" = now()
+  WHERE "sizing_policy_kind" = 'position_gap' AND "disabled_at" IS NULL;--> statement-breakpoint
+
 ALTER TABLE "poly_copy_trade_targets" ADD CONSTRAINT "poly_copy_trade_targets_range_max_positive" CHECK ("poly_copy_trade_targets"."target_range_max_usdc" IS NULL OR "poly_copy_trade_targets"."target_range_max_usdc" > 0);--> statement-breakpoint
 ALTER TABLE "poly_copy_trade_targets" ADD CONSTRAINT "poly_copy_trade_targets_alloc_per_condition_positive" CHECK ("poly_copy_trade_targets"."mirror_max_alloc_per_condition_usdc" IS NULL OR "poly_copy_trade_targets"."mirror_max_alloc_per_condition_usdc" > 0);--> statement-breakpoint
 -- Grandfather disabled rows: legacy position_gap rows (running on the dropped
