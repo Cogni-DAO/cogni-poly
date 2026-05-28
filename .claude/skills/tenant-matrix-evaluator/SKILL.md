@@ -15,10 +15,10 @@ When prod LIVE is trading-disabled (current state on this repo, 2026-05-26), **t
 
 **Other paper tenants are NOT trust twins**, regardless of what their env-block name says:
 
-- `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN` runs `position_gap @ $500k` to model swisstony's book size. That is a **budget mirror** — a paper variant whose capital allocation matches the target wallet's book. It tells you whether the policy is correctly sized; it does NOT tell you whether paper trading is trustworthy. The "trust twin" suffix in the env-block name is a misnomer; the tool aliases the display label to `SWISSTONY_BUDGET_MIRROR`. Renaming the env block itself is a follow-up.
+- `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN` is the env block historically registered to model swisstony's book size via a `position_gap` policy variant. That makes it a **budget modeler** — a paper variant whose sizing knobs are tuned to the target wallet's book scale, NOT a trust twin. The tool aliases the display label to `SWISSTONY_BUDGET_MODELER` to stop propagating the misnomer; renaming the env block in `.env.cogni` is a follow-up.
 - Every other paper tenant (`GAP`, `VALIDATION`, the candidate-a duplicates, etc.) is a **policy variant** — different policy, different cap, different filter. They're useful for Q2 (ranking which algo comes closest to swisstony's actual behavior), not Q1.
 
-Practical rule: **only the policy-match-to-prod-LIVE tenant counts as a trust twin.** Q1 picks it automatically by comparing each preview tenant's `(sizing_policy_kind, mirror_max_usdc_per_trade, mirror_capital_alloc_usdc, mirror_filter_percentile)` against prod LIVE's row in `poly_copy_trade_targets`. If no exact match exists, Q1 = `⚪ NOT TESTABLE — no fidelity twin configured`.
+Practical rule: **only the policy-match-to-prod-LIVE tenant counts as a trust twin.** Q1 picks it automatically by comparing each preview tenant's `(sizing_policy_kind, mirror_max_usdc_per_trade, target_range_max_usdc, mirror_max_alloc_per_condition_usdc, mirror_filter_percentile)` against prod LIVE's row in `poly_copy_trade_targets`. If no exact match exists, Q1 = `⚪ NOT TESTABLE — no fidelity twin configured`.
 
 ## Discovery sources (what the tool sees)
 

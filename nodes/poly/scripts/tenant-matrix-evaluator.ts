@@ -1467,13 +1467,15 @@ function renderReportHtml(args: {
   const since = new Date(window.since);
   const until = new Date(window.until);
 
-  // Display alias: SWISSTONY_TRUST_TWIN is misnamed — it's a position_gap @
-  // $500k policy variant that mirrors swisstony's BUDGET, not a fidelity
-  // trust twin (which would require same policy as prod LIVE). Display it
-  // as SWISSTONY_BUDGET_MIRROR so the report doesn't propagate the
-  // misnomer. Env-block rename is a follow-up (touches .env.cogni).
+  // Display alias: SWISSTONY_TRUST_TWIN is misnamed. A *trust twin* is a
+  // paper tenant whose sizing policy + config exactly match prod LIVE, run
+  // to test paper-vs-live result parity. The env block actually carries a
+  // position_gap policy variant modeling swisstony's BUDGET — different
+  // policy than prod, no parity test possible. Display it as
+  // SWISSTONY_BUDGET_MODELER so the report doesn't propagate the misnomer.
+  // Env-block rename is a follow-up (touches .env.cogni).
   const aliasRole = (role: string): string =>
-    role === "SWISSTONY_TRUST_TWIN" ? "SWISSTONY_BUDGET_MIRROR" : role;
+    role === "SWISSTONY_TRUST_TWIN" ? "SWISSTONY_BUDGET_MODELER" : role;
   const tenantLabel = (m: TenantMetrics): string =>
     `${aliasRole(m.tenant.role)} · ${m.tenant.envSlug}`;
   const colorFor = (m: TenantMetrics): string => {
@@ -1639,7 +1641,7 @@ function renderReportHtml(args: {
   const q2Verdict = winner
     ? `Closest paper variant to swisstony: ${tenantLabel(winner)}${winnerPnlPct !== null && targetPctOverallEarly !== null ? ` — earned ${fmtPct(winnerPnlPct, 2)} vs swisstony's ${fmtPct(targetPctOverallEarly, 2)}` : ""}.`
     : "No paper tenants in this matrix.";
-  const q2Ref = `🎯 swisstony actual: <code>${fmtPnl(target.pnl.realized_pnl_usdc)}</code> on <code>$${target.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</code> intent (<code>${fmtPct(targetPctOverallEarly, 2)}</code>) across <code>${target.market_set.length}</code> markets · <code>${target.pnl.resolved_markets}</code> resolved.${q1NotTestable ? ` <span class="muted">Paper-vs-live fidelity untested this window (Q1 ⚪) — treat ranking as advisory.</span>` : ""}`;
+  const q2Ref = `🎯 swisstony <strong>realized-only</strong> PnL on <code>${target.pnl.resolved_markets}</code>/<code>${target.market_set.length}</code> resolved markets: <code>${fmtPnl(target.pnl.realized_pnl_usdc)}</code> on <code>$${target.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</code> BUY intent (<code>${fmtPct(targetPctOverallEarly, 2)}</code>). <span class="muted">Excludes unrealized mark-to-market on open positions; will NOT match Polymarket's 1D P/L card.</span>${q1NotTestable ? ` <span class="muted">Paper-vs-live fidelity untested this window (Q1 ⚪) — treat ranking as advisory.</span>` : ""}`;
 
   // ── Algo table: swisstony 🎯 row at top, paper variants sorted by distance,
   // prod LIVE pinned at bottom. Policy column shows the actual sizing knobs
@@ -1726,7 +1728,7 @@ function renderReportHtml(args: {
         return `<tr class="ref"><td class="role">${escapeHtml(tenantLabel(prodLiveRow))} (prod ref)</td><td class="policy">${fmtPolicy(prodLiveRow)}</td><td class="num">${placedN.toLocaleString()}</td><td class="num">${prodLiveRow.fills.filled_count.toLocaleString()}</td><td class="num">${fmtFillRate(prodLiveRow.fills.fill_rate, placedN)}</td><td class="cancel-reasons">${fmtTopCancel(prodLiveRow.fills.top_cancel_reasons)}</td><td class="num ${pnlCls}"><strong>${fmtPnl(pnl)}</strong></td><td class="num">${prodLiveRow.pnl.resolved_markets}</td><td class="num">${prodLiveRow.pnl.markets_won}/${prodLiveRow.pnl.markets_lost}</td><td class="num">${fmtPct(refPct, 2)}</td><td class="num">—</td><td class="num">$${prodLiveRow.fills.intent_usdc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td class="num">${prodLiveRow.fills.markets_count}</td></tr>`;
       })()
     : "";
-  const algoTable = `<table class="ab algo"><thead><tr><th>tenant</th><th>policy</th><th class="num" title="orders that reached terminal state: filled + canceled + error">placed</th><th class="num">filled</th><th class="num" title="filled / (filled + canceled + error)">fill rate</th><th title="top 2 cancel reasons + counts (most common first)">top cancel reasons</th><th class="num">PnL $</th><th class="num">resolved</th><th class="num">W/L</th><th class="num">PnL %</th><th class="num">gap to 🎯</th><th class="num">intent $</th><th class="num">markets</th></tr></thead><tbody>${targetRow}${paperTableRows}${refRowHtml}</tbody></table>`;
+  const algoTable = `<table class="ab algo"><thead><tr><th>tenant</th><th>policy</th><th class="num" title="orders that reached terminal state: filled + canceled + error">placed</th><th class="num">filled</th><th class="num" title="filled / (filled + canceled + error)">fill rate</th><th title="top 2 cancel reasons + counts (most common first)">top cancel reasons</th><th class="num" title="Realized PnL on resolved markets only — BUY-side. Excludes mark-to-market on open positions; does NOT match Polymarket's 1D P/L card.">realized $ (resolved)</th><th class="num">resolved</th><th class="num">W/L</th><th class="num" title="realized $ ÷ BUY intent $ — resolved-only, not mark-to-market">realized %</th><th class="num">gap to 🎯</th><th class="num">intent $</th><th class="num">markets</th></tr></thead><tbody>${targetRow}${paperTableRows}${refRowHtml}</tbody></table>`;
 
   // ── Q1 detail — fidelity twin vs prod LIVE line chart ───────────────────
   // The Q1 fidelity question is paper-vs-live on identical policy. Chart
@@ -1987,7 +1989,7 @@ ${completenessBanner}
 <details open>
   <summary>📊 Q2 detail — full ranking (swisstony 🎯 → paper variants → prod ref)</summary>
   <div class="details-body">
-    <p class="muted">Sorted by aggregate distance to target ascending. <code>PnL %</code> = realized PnL ÷ intent $. <code>gap to 🎯</code> is the mean of fractional gaps across PnL %, placement rate, intent ratio, and markets-touched ratio. 🟡 = resolved markets &lt; 50.</p>
+    <p class="muted">Sorted by aggregate distance to target ascending. <code>realized $ (resolved)</code> and <code>realized %</code> exclude unrealized mark-to-market on open positions and BUY/SELL net-out — they will <strong>not</strong> match Polymarket's 1D P/L card on the target wallet. Apples-to-apples across paper variants, not apples-to-apples vs the UI. <code>gap to 🎯</code> = mean of fractional gaps across realized %, placement rate, intent ratio, markets-touched ratio. 🟡 = resolved markets &lt; 50.</p>
     ${algoTable}
     <p class="muted" style="margin-top:14px">Cumulative $ filled — swisstony vs every paper variant on one shared scale. Lines that stop mid-chart are <em>not</em> a chart bug — they reflect real upstream data: the mirror coordinator on that env stopped writing. See the Env freshness banner above the takeaway.</p>
     <div class="chart">${filledChartAllTenants}</div>
