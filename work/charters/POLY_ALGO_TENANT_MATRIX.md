@@ -3,151 +3,182 @@ id: chr.poly-algo-tenant-matrix
 type: charter
 title: "Poly Algo Testing Tenant Matrix"
 state: Draft
-summary: "Living matrix of the per-(env, tenant) paper-trading accounts we operate for algo iteration + observation. Tracks which sizing policy / target wallet / capital allocation each tenant runs, what hypothesis it serves, and who owns it. Candidate-a is freely mutable (devs A/B at will); preview is the stable prod-twin layer where only thought-through policy changes land. Companion to chr.poly-copy-delta (the failure-mode taxonomy this matrix runs experiments against)."
+summary: "Living matrix of the per-(env, tenant) paper-trading accounts we operate for algo iteration + observation. Tracks which sizing policy / target wallet / sizing knobs each tenant runs, what hypothesis it serves, and who owns it. Candidate-a is freely mutable (devs A/B at will); preview is the stable layer where only thought-through policy changes land. Companion to chr.poly-copy-delta (the failure-mode taxonomy this matrix runs experiments against)."
 created: 2026-05-17
-updated: 2026-05-19
-last_evaluated: 2026-05-19
-evaluations: 3
+updated: 2026-05-28
+last_evaluated: 2026-05-28
+evaluations: 4
 ---
 
 # Poly Algo Testing Tenant Matrix
 
-> **Status: DRAFT.** The matrix below is a true snapshot. PR #96 (this file) MUST NOT merge until both stability gates clear: (a) the matrix is validated against the live ledger by an independent re-query, (b) `.env.cogni.example` carries every key the matrix references. Per-row experiment outcomes (e.g. RN1's 0-placements under `position_gap`) are matrix observations, NOT charter blockers — the charter governs how we run experiments, not whether any specific one is green.
+> **Status: DRAFT.** Matrix below is a true snapshot at `updated:` date. Re-run the audit query in `## Stability gates` before relying on it — every `POST /api/v1/poly/copy-trade/targets`, `DELETE`, or migration touching `poly_copy_trade_targets` invalidates it.
 
 ## Goal
 
-Stand up and maintain a small, deliberate set of paper-trading tenants across `candidate-a` and `preview` so that **every algo change can be A/B'd against a baseline before it touches production**. Each row in the matrix is a (env, tenant, target wallet, sizing policy) tuple with a stated hypothesis. When a delta-minimizer report or charter-D-class finding implies an algo change, the matrix is the substrate that proves the change worked (or didn't).
+Stand up and maintain a deliberate set of paper-trading tenants across `candidate-a` and `preview` so **every algo change can be A/B'd against a baseline before it touches production**. Each row is a (env, tenant, target wallet, sizing policy, sizing knobs) tuple with a stated hypothesis. When a delta-minimizer report or charter-D-class finding implies an algo change, the matrix is the substrate that proves it worked.
+
+## Trust twin vs budget modeler — definitions (read first)
+
+These two terms are persistently conflated in older code/env-var names. The matrix tool aliases display labels to enforce the correct usage:
+
+- **Trust twin** — a paper tenant whose `(sizing_policy_kind, mirror_max_usdc_per_trade, target_range_max_usdc, mirror_max_alloc_per_condition_usdc, mirror_filter_percentile)` is a 1-to-1 match with a prod LIVE row. Single purpose: hold the algorithm constant and test whether the **paper sidecar produces the same fills as the real CLOB** when fed identical decisions. Currently **none exists** because prod has 0 active target rows (see Production table below). Provision one only when prod resumes trading.
+- **Budget modeler** — a paper tenant whose sizing knobs are tuned to model the **target wallet's book scale** under a chosen policy (e.g. `position_gap` with `target_range_max_usdc` matching swisstony's typical position size). Tells you whether the policy is correctly sized for that wallet; does NOT test paper-vs-live fidelity. The env block `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN_*` is historically a budget modeler — its env-var name is a misnomer that propagated. Tool aliases the display role to `SWISSTONY_BUDGET_MODELER`; env-block rename is a follow-up.
+- **Policy variant** — every other paper tenant. Different policy or knobs vs the control; useful for ranking ("which policy comes closest to the target's behavior?") but never a fidelity test.
 
 ## How to use this charter
 
-- **When proposing an algo change** (new `SizingPolicy` variant, new gate, new threshold): identify which matrix row is the control, propose which row(s) the change should be tested on, and what observation closes the loop.
-- **When closing a delta-minimizer incident**: link the proof tape to the matrix row whose observation surfaced the divergence.
-- **When the matrix grows**: every new tenant gets a row here with `purpose`, `policy`, `env_key`, and `cleanup_when`. Tenants without a row in this charter are throwaway and subject to cleanup.
-- **Before relying on this charter's matrix for any decision**: re-run the audit query in `## Stability gates`. The data goes stale on every `POST /api/v1/poly/copy-trade/targets` against any env.
-
-## Audit method (and a correction)
-
-The matrix below is built from `poly_copy_trade_decisions` grouped by `billing_account_id` over the last 24h, NOT from a JOIN against `poly_copy_trade_targets.id`. The ledger's `target_id` column is the deterministic `uuidv5(target_wallet)`, shared across tenants — **not** the row PK of the target record. An earlier draft of this charter joined on the row PK and incorrectly concluded that 4 active candidate-a tenants had zero activity. They do not; they're producing tens of thousands of decisions per day. The correct correlation is `(billing_account_id, target_wallet)`. Every "activity" cell in the tables below was sourced from the ledger directly.
+- **Proposing an algo change**: identify the control row, propose which row(s) the change should land on, state the observation that closes the loop.
+- **Closing a delta-minimizer or fill-rate incident**: link the proof tape to the matrix row whose observation surfaced the signal.
+- **Adding a new tenant**: give it a row here with `purpose`, `policy`, `knobs`, `env_key`, `cleanup_when`. Tenants without a row are throwaway and subject to consolidation.
 
 ## Discipline by environment
 
-| ENV                                      | DISCIPLINE                                                                                       | WHO MUTATES                | WHAT FLOWS                                                    |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------- | ------------------------------------------------------------- |
-| `candidate-a` (`poly-test.cognidao.org`) | freely mutable — devs flip policies, register/delete tenants at will                             | any agent or human dev     | every code change in any open PR after `candidate-flight`     |
-| `preview` (`poly-preview.cognidao.org`)  | stable, deliberate — policy changes require a charter update first                               | curated set of agents only | code merged to main; promoted via the preview-flight pipeline |
-| `production` (`poly.cognidao.org`)       | append-only history — never used for A/B; lives behind charter `chr.poly-copy-delta` proof gates | derek's real wallet only   | code that survived ≥1 preview matrix cycle                    |
+| ENV                                      | DISCIPLINE                                                                                | WHO MUTATES                | WHAT FLOWS                                                |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------- | --------------------------------------------------------- |
+| `candidate-a` (`poly-test.cognidao.org`) | freely mutable — devs flip policies, register/delete tenants at will                      | any agent or human dev     | every code change in any open PR after `candidate-flight` |
+| `preview` (`poly-preview.cognidao.org`)  | stable, deliberate — policy changes require a charter update first                        | curated set of agents only | code merged to main; promoted via preview-flight pipeline |
+| `production` (`poly.cognidao.org`)       | append-only history — never A/B'd; lives behind charter `chr.poly-copy-delta` proof gates | derek's real wallet only   | code that survived ≥1 preview matrix cycle                |
 
-**Why the candidate-a / preview split matters:** candidate-a is for "did the code path execute the way I expected?" (per-PR `/validate-candidate` exercises). Preview is for "did the algo behave the way I expected over hours/days of real target activity?" (cross-PR, accumulating evidence). Mixing the two collapses both questions and we lose the signal.
+**Why split:** candidate-a answers "did the code execute as expected?" (per-PR `/validate-candidate`). Preview answers "did the algo behave as expected over hours/days of real target activity?" (cross-PR, accumulating). Mixing collapses both signals.
+
+## Audit method
+
+Matrix below is built from `poly_copy_trade_targets` joined to a `poly_copy_trade_decisions` 24h aggregate, both grouped by `billing_account_id`. The ledger's `target_id` column is `uuidv5(target_wallet)` — shared across tenants on the same wallet, **not** the row PK. Earlier drafts joined on the PK and incorrectly concluded ~4 active tenants were inert; they were not. Current audit uses `(billing_account_id, target_wallet)` pairing — confirmed against ledger directly via the matrix tool.
+
+**Material events since prior audit (2026-05-19):**
+
+- **2026-05-24 19:00 UTC** — preview paper sidecar fill-rate cliff (40% → 0.1% in 1h, lasted 70+h). Code unchanged (`f620cc8c` ran continuously). Cause unproven; theories in `nodes/poly/research/preview-data-health-handoff-2026-05-28.md`.
+- **2026-05-27 17:59 UTC** — preview pod restart (concurrent with task.5014 / PR #141 deploy) restored ~50% fill-rate. Migration 0057 simultaneously **force-disabled every active `position_gap` row** because task.5014 dropped `mirror_capital_alloc_usdc` and added `target_range_max_usdc` + `mirror_max_alloc_per_condition_usdc` under a CHECK that legacy rows couldn't satisfy.
 
 ## Projects
 
-Each row below is a live paper-trading tenant — the unit of A/B iteration this charter governs. Activity is the ledger count from the last 24h.
+**Current state as of 2026-05-28.**
 
-### Candidate-a — freely mutable
+### Production
 
-| TENANT (short) | TARGET WALLET       | ALGO POLICY REF                                                   | ALGO POLICY CONFIG              | OWNER ENV-KEY                          | DECISIONS / PLACED (24h) | DISPOSITION                                                                                                                                   |
-| -------------- | ------------------- | ----------------------------------------------------------------- | ------------------------------- | -------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `20fdb57a`     | swisstony           | `target_percentile_scaled` (via `auto`)                           | p75 / $5                        | **none — orphan**                      | 36,603 / 2,309           | **consolidation candidate** — three identical-policy rows below produce duplicate signal; collapse to one canonical                           |
-| `acd63233`     | swisstony           | `target_percentile_scaled` (via `auto`)                           | p75 / $5                        | **none — orphan**                      | 34,158 / 2,302           | **consolidation candidate** (same)                                                                                                            |
-| `809e37f7`     | swisstony           | `target_percentile_scaled` (via `auto`)                           | p75 / $5                        | **none — orphan**                      | 34,169 / 2,304           | **consolidation candidate** (same)                                                                                                            |
-| `f472b6ad`     | RN1 (`0x2005…75ea`) | `position_gap`                                                    | p80 / $15 / `target_scale=1e-4` | **none — orphan**                      | 1,190 / **0**            | 🔴 D2 phase-2 experiment producing 0 placements — gap math may be below market floor for RN1's volume; investigation pending                  |
-| `1890787d`     | swisstony           | `target_percentile_scaled` (via `auto`)                           | p80 / $15                       | `POLY_CANDIDATE_A_TENANT_VALIDATION_*` | (just registered)        | 🟡 cand-a counterpart to the preview trust-twin; drives `/validate-candidate` exercises                                                       |
-| `d66032aa`     | swisstony           | `target_percentile_scaled` (via `auto`) — slot for `position_gap` | p75 / $5 (default until PATCH)  | `POLY_CANDIDATE_A_TENANT_GAP_*`        | (just registered)        | 🟡 PENDING — cand-a is on stale SHA `414d2439` (PR #93 head, pre-PR #92 contract); after re-flight from main, PATCH to `position_gap` p80/$15 |
+| TENANT | TARGET WALLET | ALGO POLICY | KNOBS | OWNER ENV-KEY                   | STATE | NOTE                                                                                                      |
+| ------ | ------------- | ----------- | ----- | ------------------------------- | ----- | --------------------------------------------------------------------------------------------------------- |
+| —      | —             | —           | —     | `POLY_PROD_TENANT_LIVE_*` (set) | NONE  | **Zero active target rows.** Last decision 2026-05-12. No fidelity twin provisionable until prod resumes. |
 
-**What "orphan" means here (corrected):** no entry in `.env.cogni` carries this tenant's agent API key. The tenant is still active — the cross-tenant mirror enumerator (`dbTargetSource.listAllActive`, BYPASSRLS) runs it regardless of whether anyone has the key. "Orphan" = "no agent can drive PATCH/DELETE against it from outside session-cookie HTTP." It does NOT mean "inert."
+### Candidate-a — freely mutable (active rows only)
 
-### Preview — stable, deliberate
+| TENANT (short) | TARGET WALLET | ALGO POLICY                             | KNOBS     | OWNER ENV-KEY                          | DECISIONS / PLACED (24h) | DISPOSITION                                                                        |
+| -------------- | ------------- | --------------------------------------- | --------- | -------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------- |
+| `1890787d`     | swisstony     | `target_percentile_scaled` (via `auto`) | p80 / $15 | `POLY_CANDIDATE_A_TENANT_VALIDATION_*` | 16,258 / 136             | 🟢 control — matches preview TRUST_TWIN. Drives `/validate-candidate` exercises.   |
+| `20fdb57a`     | swisstony     | `target_percentile_scaled` (via `auto`) | p75 / $5  | **orphan**                             | 16,257 / 167             | 🟡 consolidation candidate — three identical p75/$5 rows produce duplicate signal. |
+| `acd63233`     | swisstony     | `target_percentile_scaled` (via `auto`) | p75 / $5  | **orphan**                             | 16,257 / 168             | 🟡 consolidation candidate (same).                                                 |
+| `809e37f7`     | swisstony     | `target_percentile_scaled` (via `auto`) | p75 / $5  | **orphan**                             | 16,258 / 166             | 🟡 consolidation candidate (same).                                                 |
 
-| TENANT (short)                    | TARGET WALLET | ALGO POLICY REF                         | ALGO POLICY CONFIG                                  | OWNER ENV-KEY                                | DECISIONS / PLACED (24h) | DISPOSITION                                                                                                                                                                                                                                                                                                                                             |
-| --------------------------------- | ------------- | --------------------------------------- | --------------------------------------------------- | -------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fb8f65d5` (trust-twin)           | swisstony     | `target_percentile_scaled` (via `auto`) | p80 / $15                                           | `POLY_PREVIEW_TENANT_TRUST_TWIN_*`           | 8,580 / 43               | 🟡 **HARD LOCKED** — paper-mirror of derek's prod wallet on the legacy policy; THE control. Never PATCH this row's policy/config.                                                                                                                                                                                                                       |
-| `376c594c` (swiss-gap)            | swisstony     | `position_gap`                          | `capital_alloc_usdc=` (bootstrap default, deferred) | `POLY_PREVIEW_TENANT_GAP_*`                  | 1,344 / 0                | 🟡 first allowed preview experiment; bootstrap default produces 0 placements (capital_alloc too small for swisstony's book scale)                                                                                                                                                                                                                       |
-| `13c81ec7` (swisstony-trust-twin) | swisstony     | `position_gap`                          | `capital_alloc_usdc=500000`                         | `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN_*` | 2,298 / 317              | 🟡 NEW (2026-05-19) — production-volume position_gap mirror of swisstony. $500k alloc sits mid-range of swisstony's typical $300-600k book → scale oscillates ~0.83–1.67 around 1.0 (currently 1.33x at $375k book). Realized $182,910 in first ~3h vs $42 on prod LIVE — proves the $15-per-trade legacy cap is the gating constraint, not the policy. |
+**Candidate-a disabled rows (recent + relevant):** 5 disabled — 2 ancient `auto` (fba44c50, 9ca836cf), 1 RN1 position_gap (f472b6ad), 3 position_gap on `d66032aa` (last two carry the new task.5014 knobs `range_max=10000/15000`, `max_per_cond=20/25` — failed experiments left in soft-deleted state).
 
-### Gap
+### Preview — stable, deliberate (active rows only)
 
-🟡 **Preview matrix now 3 rows** — control (trust-twin, tps), bootstrap-scale experiment (swiss-gap, position_gap @ default alloc), and production-volume experiment (swisstony-trust-twin, position_gap @ $500k alloc). Diff substrate is in place; needs ≥24h of activity before `paper-twin-diff.ts` produces a meaningful comparison across all three.
-🔴 **`position_gap` @ bootstrap-default alloc produces ZERO placements** on both `f472b6ad` (cand-a, RN1) and `376c594c` (preview, swisstony). PR #103 dropped `target_scale` in favor of `mirror_capital_alloc_usdc` as the single proportionality knob — the bootstrap default is too low for either target's book size, so the planner skips with `below_market_min`/`below_target_percentile` on every fill. The `swisstony-trust-twin` row at `$500k` directly tests the hypothesis that scale, not policy, is the gating factor.
+| TENANT (short) | TARGET WALLET | ALGO POLICY                             | KNOBS      | OWNER ENV-KEY                      | DECISIONS / PLACED (24h) | DISPOSITION                                                                                                                                  |
+| -------------- | ------------- | --------------------------------------- | ---------- | ---------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `eae447b1`     | swisstony     | `target_percentile_scaled` (via `auto`) | p80 / $15  | `POLY_PREVIEW_TENANT_TRUST_TWIN_*` | 8,969 / 64               | 🟡 **HARD LOCKED control** — matches candidate-a `1890787d`. Env-block name is "TRUST_TWIN" but it is NOT a fidelity twin (see top of file). |
+| `fb8f65d5`     | swisstony     | `target_percentile_scaled` (via `auto`) | p80 / $100 | **orphan**                         | 8,969 / 157              | 🟡 large-cap auto variant — tests whether lifting the per-trade cap from $15 → $100 changes signal. Mutable only via Grafana SA SQL.         |
 
-## Target preview matrix (the "stable, deliberate" side we're building toward)
+**Preview disabled rows (force-disabled 2026-05-27 17:59 UTC by migration 0057):**
 
-Three preview paper tenants, all mirroring swisstony (NOT RN1 — swisstony has the volume to produce meaningful per-policy delta) on the same percentile + max-bet so the only variable is the sizing kind. Diff between any two = the policy delta.
+| TENANT (short) | OLD POLICY                          | OLD KNOBS   | OWNER ENV-KEY                                | REVIVAL PATH                                                                               |
+| -------------- | ----------------------------------- | ----------- | -------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `0e16cf1a`     | `position_gap` (no task.5014 knobs) | p80 / max15 | `POLY_PREVIEW_TENANT_GAP_*`                  | POST new row with `target_range_max_usdc` + `mirror_max_alloc_per_condition_usdc` set.     |
+| `b0ca1bce`     | `position_gap` (no task.5014 knobs) | p75 / max5  | `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN_*` | Same. **This is the budget modeler**, not a trust twin — see definitions.                  |
+| `376c594c`     | `position_gap` (no task.5014 knobs) | p80 / max15 | **orphan (no env block)**                    | Same, but no agent API key available from `.env.cogni` — needs env-block wire-up first.    |
+| `13c81ec7`     | `position_gap` (no task.5014 knobs) | p75 / max5  | none                                         | Ancient (disabled 2026-05-19), pre-task.5014. Do not revive — replaced by `b0ca1bce` slot. |
 
-| ROLE                   | TENANT                                                                           | POLICY                                                         | PURPOSE                                                                                      | EXPECTED OUTCOME                                                                                                                                                                                     |
-| ---------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `swiss-tps-control`    | reuse `fb8f65d5` (exists; pin from `auto` → explicit `target_percentile_scaled`) | `target_percentile_scaled` p80 / $15                           | baseline — what production runs today                                                        | mirrors derek's prod wallet within `paper-twin-diff` tolerance                                                                                                                                       |
-| `swiss-gap-bootstrap`  | reuse `376c594c` (exists)                                                        | `position_gap` @ bootstrap-default `mirror_capital_alloc_usdc` | floor experiment — proves position_gap can route even at the smallest allocation             | likely zero placements until alloc is bumped; the matrix's "what does too-small alloc look like" data point                                                                                          |
-| `swisstony-trust-twin` | reuse `13c81ec7` (exists)                                                        | `position_gap` @ `mirror_capital_alloc_usdc=500000` (paper)    | production-volume experiment — tests D2 phase 2 at the upper-mid of swisstony's typical book | scale oscillates ~0.83–1.67 around 1.0 over the natural $300-600k book range; placement volume dwarfs the legacy-cap'd control by 1000×, quantifying how much signal the $15 cap is dropping on prod |
-| `swiss-minbet-floor`   | NEW                                                                              | `min_bet` $5                                                   | sanity floor — should under-mirror everything, marks the lower-bound shape                   | tiny positions on every fill regardless of target shape; never beats the baseline                                                                                                                    |
+The `disabled_at IS NULL` WHERE clause on the PATCH endpoint means revival is via **POST a fresh row** (preserves attribution history). Per the task.5014 server validator, position_gap POSTs require both new knobs or 400.
 
-`paper-twin-diff.ts` (shipped via PR #93 once it lands) reports each tenant against the prod control.
+## Target preview matrix — proposed next state
+
+Three preview rows on swisstony, identical `mirror_max_alloc_per_condition_usdc=15` cap so the variable is the saturation range. Diff across rows = sensitivity to the new task.5014 range knob.
+
+| ROLE                        | TENANT (POST-new)                                   | POLICY         | KNOBS                                                             | PURPOSE                                                                                                                |
+| --------------------------- | --------------------------------------------------- | -------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `swiss-tps-control`         | reuse `eae447b1`                                    | `auto` (= tps) | p80 / max15                                                       | baseline — what the surviving preview tenant runs today.                                                               |
+| `swiss-gap-tight`           | new on `POLY_PREVIEW_TENANT_GAP_*`                  | `position_gap` | `target_range_max_usdc=10000`, `max_alloc_per_condition_usdc=15`  | tight saturation — relative=1.0 once swisstony's position in a market crosses $10k.                                    |
+| `swiss-budget-modeler-500k` | new on `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN_*` | `position_gap` | `target_range_max_usdc=500000`, `max_alloc_per_condition_usdc=15` | loose saturation — matches swisstony's book-scale (positions can run into hundreds of $k); the budget-modeler concept. |
+
+`376c594c` slot omitted from the new matrix unless someone wires an env block for it.
+
+When prod resumes trading, a true **trust twin** row gets added separately with `(sizing_policy_kind, mirror_max_usdc_per_trade, target_range_max_usdc, mirror_max_alloc_per_condition_usdc, mirror_filter_percentile)` matching prod LIVE byte-for-byte. The matrix tool's Q1 picks it automatically via exact-match scan.
 
 ## Constraints
 
-What blocks driving the preview matrix from 1 tenant to the 3-row target state, AND what blocks merging this charter:
+- **Preview cliff cause unproven.** The 2026-05-24 fill-rate collapse has 4 ranked theories (handoff 2026-05-28), none validated; old pod is gone. If it recurs, snapshot pm_trader SQLite + fill_loop heartbeats BEFORE restart per the handoff §1 recipe.
+- **No `.env.cogni.example`.** No checked-in template of the per-tenant key shape. Future agents can't discover what keys the matrix expects.
+- **No standard recipe for issuing agent API keys to new paper tenants.** Existing env blocks were registered ad-hoc.
+- **No standing observation surface for the matrix.** `/validate-candidate` is per-PR. `tenant-matrix-evaluator.ts` is per-invocation. Continuous observation needs either a scheduled `/loop` or a Grafana dashboard backed by `poly_copy_trade_decisions` filtered by `(env, billing_account_id)`. Neither exists yet.
+- **Three duplicate swisstony rows on candidate-a** (`20fdb57a`, `acd63233`, `809e37f7`) produce nearly identical 16k-decision streams. Consolidation to one canonical row would cut noise; needs soft-delete.
 
-- **`position_gap` produces zero placements on the only live experiment.** Until the candidate-a RN1 row (`f472b6ad`) shows >0 placed decisions OR the zero is explained as expected behavior, standing up a `position_gap` row on preview is premature — it would just replicate the same zero.
-- **No `.env.cogni.example`.** The current `.env.cogni` is real-only; there is no checked-in template documenting the per-tenant key shape (`POLY_<ENV>_<ROLE>_{API_KEY,USER_ID,BILLING_ACCOUNT_ID,TARGET_ID,TARGET_WALLET,CONFIG}`). Without that, future agents can't discover what keys the matrix expects, and the matrix degrades on every new tenant.
-- **No standard recipe for issuing agent API keys to new paper tenants.** The `POLY_PREVIEW_TENANT_TRUST_TWIN_*` env vars exist because someone went through the `/contribute-to-cogni` register flow once. Repeating that for two more tenants is not yet documented; the registration sequence should be a one-line script or a runbook.
-- **No standing observation surface for the matrix.** `/validate-candidate` is per-PR. `paper-twin-diff.ts` is per-invocation. Continuous matrix observation (the thing this charter wants) requires either a scheduled `/loop` job or a Grafana dashboard backed by `poly_copy_trade_decisions` filtered by `(env, billing_account_id, target_wallet)`. Neither exists yet.
-- **v0 capital cap of $15 per trade on preview tenants** (legacy policies only). Hard cap from `mirror_max_usdc_per_trade` still applies under `target_percentile_scaled` / `auto`. Under `position_gap` (PR #103), `mirror_max_usdc_per_trade` is ignored — the only sizing knob is `mirror_capital_alloc_usdc` (whole-book budget). Per-tenant daily/hourly caps live downstream at `authorizeIntent` via `poly_wallet_grants`. The matrix measures _delta from target_, not P/L magnitude.
-- **Three duplicate swisstony rows on candidate-a producing nearly identical decision streams.** Wasteful — same policy, same target, same fills → ~33k decisions each, all the same shape. Consolidation to one canonical row would cut the noise; deletion of the duplicates needs a soft-delete (preserves ledger history).
+## Stability gates
 
-## Stability gates (must clear before PR #96 merges)
+Two gates. Both about whether this charter can be trusted as governance.
 
-Two gates. Both are about whether this charter can be trusted as governance, not about whether any specific experiment is green.
-
-- [ ] Audit query below re-run by an independent agent or human; activity counts in the Projects tables match (±10% drift acceptable).
-- [ ] `.env.cogni.example` checked in, documenting every `POLY_<ENV>_<ROLE>_*` key the matrix references (real values redacted, shape complete).
-
-Per-row outcomes (RN1's 0-placements, PR #93 not yet shipped, etc.) live in "Open items" and accumulate over time. They never block the charter itself.
+- [x] Audit query re-run independently — counts in the Projects tables match (re-issued via `tenant-matrix-evaluator.ts` 2026-05-28T19-43 + direct Grafana DS queries).
+- [ ] `.env.cogni.example` checked in, documenting every `POLY_<ENV>_<ROLE>_*` key the matrix references (shape, redacted values).
 
 ### Audit query
 
 ```sql
--- Run against each env (candidate-a, preview) via scripts/grafana-postgres-query.sh.
--- The 'orphan' status is derived from .env.cogni at audit time, not the DB.
-SELECT
-  billing_account_id,
-  COUNT(*) AS decisions,
-  COUNT(*) FILTER (WHERE outcome = 'placed') AS placed,
-  MAX(decided_at) AS latest
-FROM poly_copy_trade_decisions
-WHERE decided_at > NOW() - INTERVAL '24 hours'
-GROUP BY billing_account_id
-ORDER BY decisions DESC;
+-- Per env (candidate-a, preview), via scripts/grafana-postgres-query.sh.
+WITH d AS (
+  SELECT billing_account_id, COUNT(*) AS decisions,
+    COUNT(*) FILTER (WHERE outcome='placed') AS placed,
+    MAX(decided_at) AS latest
+  FROM poly_copy_trade_decisions
+  WHERE decided_at > NOW() - INTERVAL '24 hours'
+  GROUP BY 1
+)
+SELECT substr(t.billing_account_id, 1, 8) AS billing,
+  t.sizing_policy_kind AS policy,
+  t.mirror_max_usdc_per_trade AS max_trade,
+  t.target_range_max_usdc AS range_max,
+  t.mirror_max_alloc_per_condition_usdc AS max_per_cond,
+  t.mirror_filter_percentile AS pct,
+  CASE WHEN t.disabled_at IS NULL THEN 'ACTIVE' ELSE 'disabled' END AS state,
+  COALESCE(d.decisions, 0) AS decisions_24h,
+  COALESCE(d.placed, 0) AS placed_24h
+FROM poly_copy_trade_targets t
+LEFT JOIN d ON d.billing_account_id = t.billing_account_id
+ORDER BY t.disabled_at NULLS FIRST, t.billing_account_id;
 ```
 
 ## Cleanup / consolidation policy
 
 A tenant is a **consolidation candidate** when ALL of:
 
-- It has no row in this charter's current matrix.
-- Another tenant on the same env runs the same `(target_wallet, sizing_policy_kind, mirror_*)` configuration.
-- The owner is `none` (no env key in `.env.cogni`).
+- No row in this charter's current matrix.
+- Another tenant on the same env runs the same `(target_wallet, sizing_policy_kind, knobs)` config.
+- Owner is `none` (no env key in `.env.cogni`).
 
-**Consolidation action:** soft-delete via direct `UPDATE poly_copy_trade_targets SET disabled_at = NOW() WHERE id = …` (the API DELETE path also works if you have a session). NEVER hard-delete — ledger rows reference `(billing_account_id, target_id)` and lose provenance on row removal. Soft-delete is reversible; hard-delete is not.
+**Action:** soft-delete via API DELETE (if you have a session) or direct `UPDATE … SET disabled_at = NOW() WHERE id = …`. NEVER hard-delete — ledger rows reference `(billing_account_id, target_id)` and lose provenance on removal.
 
-**Consolidation cadence:** opportunistic + before every new matrix row is added (so the matrix stays a true picture). Not a scheduled job in v0.
+**Cadence:** opportunistic + before every new matrix row is added. Not scheduled in v0.
 
-**Caveat — candidate-a is freely mutable by design.** Consolidation on candidate-a is hygiene, not correctness. On preview, the same policy is stricter: any tenant without a charter row is suspect because preview is supposed to be deliberate.
+**Caveat:** candidate-a consolidation is hygiene, not correctness. On preview, stricter: any active tenant without a charter row is suspect.
 
 ## Open items
 
-- **2026-05-17 (open, separate dev assigned):** **`mode` column anti-pattern.** `poly_copy_trade_targets.mode` defaults to `'live'` and is NOT restamped when `PAPER_ENFORCE_MODE=paper` actually routes the executor through the paper sidecar. So on candidate-a + preview, every target row reads `mode='live'` even though every placement is paper. Effects: (a) `paper-twin-diff.ts` default `mode=paper` filter returns 0 rows on cand-a (it filters by the column, not by actual routing) and needs `mode=all`, (b) charter matrix's "mode" column is meaningless until this resolves. Surfaced by PR #93 /validate-candidate scorecard. Other dev is on it.
-- **2026-05-17 → 2026-05-19 (superseded by PR #103 + swisstony-trust-twin row):** **Investigate why `f472b6ad` (RN1 / position_gap) has 1,190 decisions and 0 placements.** Original hypothesis was that `target_scale = 1e-4` was too small. PR #103 dropped `target_scale` entirely and replaced it with `mirror_capital_alloc_usdc`. The `swisstony-trust-twin` row at $500k alloc is now the direct test of "is allocation the gating factor"; if it places at scale comparable to trust-twin, the bootstrap-default rows can be re-allocated rather than the policy redesigned again.
-- **2026-05-17:** Draft `.env.cogni.example` with the full `POLY_<ENV>_<ROLE>_*` key shape. Required for stability gate #2.
-- **2026-05-17:** Decide consolidation policy for the 3 duplicate swisstony rows on candidate-a. They produce identical signal; consolidating to 1 canonical row reduces noise but loses some redundancy. Recommend: keep one, soft-delete two, but only AFTER the position_gap investigation closes (in case any of them turn out to be useful as additional experiments).
-- **TBD:** branch `/validate-candidate` into `/validate-paper-matrix` — a recurring observation that enumerates this matrix's preview rows + queries Loki + the diff tool per row.
-- **TBD:** Grafana dashboard for matrix observation — single panel per row, decisions/placed/skip-reasons over time, side-by-side.
+- **2026-05-28 (open):** Wire the proposed preview matrix (`swiss-gap-tight` + `swiss-budget-modeler-500k`) via POST + the task.5014 knobs. Pending user go-ahead on values.
+- **2026-05-28 (open):** Rename env block `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN_*` → `POLY_PREVIEW_TENANT_SWISSTONY_BUDGET_MODELER_*` in `.env.cogni`. Touches: matrix tool's alias map, this charter, the handoff doc. Independent of the POSTs above (the new row inherits whatever billing_account_id the env block carries, regardless of the var name).
+- **2026-05-28 (open):** Sidecar instrumentation PR per `preview-data-health-handoff-2026-05-28.md` §2 — `sqlite_pending_count` in heartbeat, `_maker_fill_last_scan` cursor lag log, unconditional cursor bound. Three small additions to `nodes/poly/sidecars/paper-trader/server.py` + `vendor/pm_trader/.../engine.py`. Defensive obs for the next cliff; not a blocker.
+- **2026-05-17 → 2026-05-28 (still open):** Consolidate the 3 duplicate swisstony p75/$5 candidate-a rows. Hold pending the position_gap experiment producing useful diff.
+- **2026-05-17:** Draft `.env.cogni.example`. Stability gate #2.
+- **TBD:** Branch `/validate-candidate` into `/validate-paper-matrix` — recurring observation enumerating preview rows + Loki + diff tool per row.
+- **TBD:** Grafana dashboard for matrix observation — one panel per row, decisions/placed/skip-reasons over time, side-by-side.
 
 ## Pointers
 
-- `chr.poly-copy-delta` — the failure-mode taxonomy this matrix runs experiments against
-- `docs/spec/poly-copy-trade-position-mirror.md` — the D2 phase plan whose phase-2 done condition lives in this matrix
+- `chr.poly-copy-delta` — failure-mode taxonomy this matrix runs experiments against
+- `docs/spec/poly-copy-trade-execution.md` — D2 phase plan whose phase-2 done condition lives in this matrix
+- `nodes/poly/research/preview-data-health-handoff-2026-05-28.md` — current open thread on the cliff cause + next-steps
+- `nodes/poly/scripts/tenant-matrix-evaluator.ts` — the cross-policy A/B tool that consumes this matrix
+- `.claude/skills/tenant-matrix-evaluator/SKILL.md` — invocation contract + the trust-twin vs budget-modeler definitions enforced by display alias
 - `.claude/skills/validate-candidate/SKILL.md` — per-PR exercise; this matrix is the cross-PR continuous version
-- `.claude/skills/paper-trade-diff-analysis/SKILL.md` — the diff tool that consumes matrix rows
-- `nodes/poly/scripts/paper-twin-diff.ts` — implementation (lands via PR #93)
-- `.env.cogni` — current per-env API keys (POLY*PROD_TENANT*_, POLY*PREVIEW_TRUST_TWIN*_); MUST be mirrored by `.env.cogni.example` per stability gate #2
-- `nodes/poly/app/src/features/copy-trade/target-source.ts` — `dbTargetSource.listAllActive` (the BYPASSRLS enumerator that runs every active target regardless of agent API key ownership)
-- `nodes/poly/packages/db-schema/src/copy-trade.ts` — `poly_copy_trade_targets` row PK vs ledger `target_id` (= deterministic uuidv5(target_wallet)); confusing the two was the source of an earlier wrong audit
+- `.claude/skills/paper-trade-diff-analysis/SKILL.md` — diff tool that consumes matrix rows
+- `.env.cogni` — per-env API keys (`POLY_<ENV>_TENANT_<ROLE>_*`); MUST be mirrored by `.env.cogni.example`
+- `nodes/poly/app/src/features/copy-trade/plan-mirror.ts:249-250` — position_gap sizing formula (`relative = min(delta/target_range_max_usdc, 1)`, `desired_usdc = max_alloc_per_condition_usdc × relative`)
+- `nodes/poly/app/src/app/api/v1/poly/copy-trade/targets/route.ts` — POST (creates active row; partial-unique against active only) and `[id]/route.ts` PATCH (active-only, can't revive)
+- `nodes/poly/app/src/adapters/server/db/migrations/0057_*.sql` — task.5014 schema rewrite; force-disables legacy position_gap rows

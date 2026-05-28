@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Tenant Matrix · 0x204f72f3</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0 auto; padding: 22px; max-width: 1100px; line-height: 1.45; }
+h1 { font-size: 20px; font-weight: 600; margin: 0 0 2px; }
+.header-sub { color: #6b7280; font-size: 11px; margin-bottom: 16px; }
+.header-sub code { background: #131826; padding: 1px 5px; border-radius: 3px; }
+.header-sub a { color: #60a5fa; }
+.q { background: linear-gradient(180deg, #0f172a 0%, #131826 100%); border: 2px solid #475569; border-radius: 10px; padding: 22px 26px; margin: 0 0 16px; }
+.q.pos { border-color: #22c55e; }
+.q.neg { border-color: #ef4444; }
+.q.gated { border-color: #6b7280; border-style: dashed; opacity: 0.85; }
+.q-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; }
+.q-number { font-size: 56px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.0; margin: 6px 0 0; color: #e5e7eb; }
+.q.pos .q-number { color: #22c55e; }
+.q.neg .q-number { color: #ef4444; }
+.q.gated .q-number { color: #94a3b8; font-size: 36px; letter-spacing: 0.04em; }
+.q .q-number.q-word { font-size: 38px; letter-spacing: 0.02em; }
+.q.pos .q-number.q-word { color: #22c55e; }
+.q.neg .q-number.q-word { color: #ef4444; }
+table.ab td.policy { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: #cbd5e1; }
+table.ab td.policy code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; color: #fbbf24; }
+table.ab td.policy em { color: #34d399; font-style: italic; }
+.q-verdict { font-size: 15px; font-weight: 600; color: #e5e7eb; margin: 4px 0 8px; }
+.q-cause { font-size: 12px; color: #cbd5e1; }
+.q-cause code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 11px; }
+.q-ref { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+.q-ref code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; color: #cbd5e1; }
+.takeaway { background: linear-gradient(180deg, #1f1410 0%, #131826 100%); border: 1px solid #f59e0b; border-radius: 8px; padding: 14px 18px; margin: 0 0 16px; }
+.takeaway h2 { margin: 0 0 8px; font-size: 11px; color: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.takeaway .placeholder { color: #64748b; font-style: italic; font-size: 11px; }
+details { background: #0e1422; border: 1px solid #1f2937; border-radius: 6px; padding: 0; margin: 10px 0; }
+details > summary { cursor: pointer; padding: 12px 16px; font-size: 12px; color: #cbd5e1; font-weight: 600; user-select: none; }
+details > summary:hover { background: #131826; }
+details[open] > summary { border-bottom: 1px solid #1f2937; color: #fbbf24; }
+details > .details-body { padding: 14px 16px; }
+.muted { color: #6b7280; font-size: 11px; }
+.muted code { background: #131826; padding: 1px 4px; border-radius: 3px; color: #cbd5e1; }
+table.ab { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+table.ab th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: 7px 9px; background: #131826; border-bottom: 1px solid #1f2937; }
+table.ab td { padding: 7px 9px; border-bottom: 1px solid #1f2937; font-variant-numeric: tabular-nums; }
+table.ab td.num { text-align: right; font-family: 'SF Mono', Menlo, monospace; }
+table.ab td.role { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; }
+table.ab td.skips { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: #94a3b8; max-width: 380px; }
+table.ab.algo tr.rank-1 td { background: rgba(251,191,36,0.08); }
+table.ab.algo tr.rank-1 td.role { color: #fbbf24 !important; font-weight: 600; }
+table.ab.algo tr.target td { background: rgba(52,211,153,0.08); border-top: 2px solid #1f2937; }
+table.ab.algo tr.target td.role { color: #34d399 !important; font-weight: 700; }
+table.ab.algo tr.ref td { background: rgba(148,163,184,0.05); border-top: 1px dashed #1f2937; }
+table.ab.algo tr.ref td.role { color: #94a3b8 !important; font-style: italic; }
+.pos { color: #22c55e; } .neg { color: #ef4444; }
+.chart { background: #0e1422; border: 1px solid #1f2937; border-radius: 6px; padding: 6px; margin: 10px 0; }
+.chart svg { display: block; width: 100%; height: auto; }
+.line-chart .chart-title { fill: #cbd5e1; font-size: 13px; font-weight: 600; }
+.line-chart .axis { fill: #94a3b8; font-size: 10px; font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, monospace; }
+.line-chart .legend { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
+.footer-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid #1f2937; font-size: 10px; color: #6b7280; }
+.footer-note a { color: #60a5fa; }
+.completeness { background: #0e1422; border: 1px solid #1f2937; border-left: 3px solid #34d399; border-radius: 6px; padding: 10px 14px; margin: 0 0 14px; font-size: 12px; color: #cbd5e1; }
+.completeness.stale { border-left-color: #ef4444; }
+.completeness strong { color: #34d399; margin-right: 6px; }
+.completeness.stale strong { color: #fbbf24; }
+.completeness code { background: #131826; padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 10px; }
+.completeness .env-fresh { color: #22c55e; font-weight: 600; }
+.completeness .env-stale { color: #ef4444; font-weight: 700; }
+.completeness .env-empty { color: #94a3b8; font-weight: 600; }
+.env-stale-tag { color: #ef4444; font-size: 10px; font-weight: 700; margin-left: 4px; }
+.fill-rate-red { color: #ef4444; font-weight: 700; }
+.fill-rate-amber { color: #f59e0b; font-weight: 600; }
+.fill-rate-ok { color: #22c55e; }
+table.ab td.cancel-reasons { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: #cbd5e1; max-width: 220px; }
+table.ab td.cancel-reasons code { background: #131826; padding: 1px 4px; border-radius: 3px; color: #fde68a; font-size: 10px; margin-right: 3px; display: inline-block; }
+table.ab td.cancel-reasons em { color: #6b7280; font-style: italic; }
+.finding-detail p { margin: 0 0 10px; font-size: 13px; line-height: 1.5; }
+.finding-detail strong { color: #fbbf24; }
+.finding-detail .placeholder { color: #64748b; font-style: italic; }
+.finding-detail code { background: #131826; padding: 1px 5px; border-radius: 3px; color: #cbd5e1; font-size: 11px; }</style>
+</head>
+<body>
+<h1>Tenant Matrix Evaluator</h1>
+<div class="header-sub">
+  Target: <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code> · Window: <code>2026-05-27T21:07:37.687Z</code> → <code>2026-05-28T21:07:37.687Z</code> · 10 tenants · target DS <code>cogni-candidate-a-poly-postgres</code> · <a href="#appendix">↓ jump to appendix</a>
+</div>
+
+<div class="completeness stale">
+  <div><strong>Data scope</strong> · 9 active paper tenants on this target (5 env-discovered + 4 DB-only via Grafana SA) · prod LIVE: <code>0 decisions in window (copy-trade disabled)</code></div>
+  <div style="margin-top: 4px"><strong>Env freshness</strong> · last decision: <span class="env-fresh">🟢 candidate-a</span> <code>28s ago</code> · <span class="env-fresh">🟢 preview</span> <code>28s ago</code> · <span class="env-stale">🔻 production STALE</span> <code>17d ago</code></div>
+  <div style="margin-top: 6px; color: #fbbf24; font-size: 11px;">⚠ <strong>PRODUCTION mirror coordinator stopped writing decisions</strong> 403h ago — every tenant in that env has cumulative data that ends at <code>2026-05-12T01:45:47.133Z</code>. The chart lines stop there because the data does. Wallet-watch (target observation) is unaffected.</div>
+</div>
+
+<!-- TAKEAWAY:START -->
+<div class="takeaway">
+  <h2>↗ LLM takeaway</h2>
+  <div class="placeholder">One primary finding, ≤20 words, in bold. Optional muted-text postfix: % confidence · cause · next-fix · see Finding detail.</div>
+</div>
+<!-- TAKEAWAY:END -->
+
+<div class="q gated">
+  <div class="q-label">Q1 · Does paper trading match LIVE trading on the same algorithm? (fidelity twin)</div>
+  <div class="q-number q-word">⚪ NOT TESTABLE</div>
+  <div class="q-verdict">Cannot test paper-vs-live trustworthiness right now: prod LIVE has 0 decisions in this window — copy-trade currently disabled on derek's prod wallet, no live signal to compare against. Q1 will become answerable when prod LIVE resumes trading with a policy-matched fidelity twin.</div>
+  <div class="q-cause"><em>To enable Q1:</em> (a) resume copy-trading on derek's prod wallet, AND (b) ensure a preview tenant runs the IDENTICAL sizing policy + caps as prod LIVE. The current preview matrix has multiple paper variants but none of them is a policy-match fidelity twin.</div>
+</div>
+
+<div class="q pos">
+  <div class="q-label">Q2 · Which paper algorithm comes closest to real swisstony?</div>
+  <div class="q-number">0.62%</div>
+  <div class="q-verdict">Closest paper variant to swisstony: DB_ONLY_acd63233 · candidate-a — earned 0.62% vs swisstony&#39;s 0.45%.</div>
+  <div class="q-ref">🎯 swisstony <strong>realized-only</strong> PnL on <code>80</code>/<code>769</code> resolved markets: <code>+$6858.37</code> on <code>$1,523,921</code> BUY intent (<code>0.45%</code>). <span class="muted">Excludes unrealized mark-to-market on open positions; will NOT match Polymarket's 1D P/L card.</span> <span class="muted">Paper-vs-live fidelity untested this window (Q1 ⚪) — treat ranking as advisory.</span></div>
+</div>
+
+<a id="appendix"></a>
+
+<details open>
+  <summary>📊 Q1 detail — paper fidelity twin vs prod LIVE (identical policy)</summary>
+  <div class="details-body">
+    <p class="muted">No per-fill outcome-fidelity check this run — prod LIVE has <code>0</code> shared fills with the twin in window (i.e. derek's prod wallet did not trade).</p>
+    <p class="muted">No paper tenant is configured with the IDENTICAL sizing policy as prod LIVE — there is no fidelity twin to test. To enable Q1, add a preview tenant whose <code>sizing_policy_kind</code> + <code>mirror_max_usdc_per_trade</code> + <code>mirror_capital_alloc_usdc</code> + <code>mirror_filter_percentile</code> exactly match prod LIVE's row in <code>poly_copy_trade_targets</code>.</p>
+    <p class="muted"><em>Prod LIVE has 0 decisions and 0 fills in this window — copy-trading is currently disabled on derek's prod wallet. Without live data, Q1 cannot run regardless of whether a fidelity twin is configured.</em></p>
+  </div>
+</details>
+
+<details open>
+  <summary>📊 Q2 detail — full ranking (swisstony 🎯 → paper variants → prod ref)</summary>
+  <div class="details-body">
+    <p class="muted">Sorted by aggregate distance to target ascending. <code>realized $ (resolved)</code> and <code>realized %</code> exclude unrealized mark-to-market on open positions and BUY/SELL net-out — they will <strong>not</strong> match Polymarket's 1D P/L card on the target wallet. Apples-to-apples across paper variants, not apples-to-apples vs the UI. <code>gap to 🎯</code> = mean of fractional gaps across realized %, placement rate, intent ratio, markets-touched ratio. 🟡 = resolved markets &lt; 50.</p>
+    <table class="ab algo"><thead><tr><th>tenant</th><th>policy</th><th class="num" title="orders that reached terminal state: filled + canceled + error">placed</th><th class="num">filled</th><th class="num" title="filled / (filled + canceled + error)">fill rate</th><th title="top 2 cancel reasons + counts (most common first)">top cancel reasons</th><th class="num" title="Realized PnL on resolved markets only — BUY-side. Excludes mark-to-market on open positions; does NOT match Polymarket's 1D P/L card.">realized $ (resolved)</th><th class="num">resolved</th><th class="num">W/L</th><th class="num" title="realized $ ÷ BUY intent $ — resolved-only, not mark-to-market">realized %</th><th class="num">gap to 🎯</th><th class="num">intent $</th><th class="num">markets</th></tr></thead><tbody><tr class="target"><td class="role">🎯 swisstony · target</td><td class="policy"><em>real on-chain</em></td><td class="num"><em>—</em></td><td class="num"><em>—</em></td><td class="num"><em>—</em></td><td class="cancel-reasons"><em>n/a (real CLOB)</em></td><td class="num pos"><strong>+$6858.37</strong></td><td class="num">80</td><td class="num">54/54</td><td class="num">0.45%</td><td class="num">—</td><td class="num">$1,523,920.71</td><td class="num">769</td></tr><tr class="rank-1"><td class="role" style="color:#fbbf24">DB_ONLY_acd63233 · candidate-a (DB-only) 🏆</td><td class="policy"><code>auto</code> p75 / $5</td><td class="num">168</td><td class="num">67</td><td class="num"><span class="fill-rate-ok">39.9%</span></td><td class="cancel-reasons"><code title="ttl_expired">ttl_expired=101</code></td><td class="num pos"><strong>+$3.15</strong> 🟡</td><td class="num">4</td><td class="num">3/1</td><td class="num">0.62%</td><td class="num"><strong>0.82</strong></td><td class="num">$505</td><td class="num">84</td></tr><tr class=""><td class="role" style="color:#60a5fa">DB_ONLY_809e37f7 · candidate-a (DB-only)</td><td class="policy"><code>auto</code> p75 / $5</td><td class="num">166</td><td class="num">66</td><td class="num"><span class="fill-rate-ok">39.8%</span></td><td class="cancel-reasons"><code title="ttl_expired">ttl_expired=100</code></td><td class="num pos"><strong>+$0.62</strong> 🟡</td><td class="num">4</td><td class="num">3/1</td><td class="num">0.12%</td><td class="num"><strong>0.90</strong></td><td class="num">$500</td><td class="num">84</td></tr><tr class=""><td class="role" style="color:#22d3ee">DB_ONLY_20fdb57a · candidate-a (DB-only)</td><td class="policy"><code>auto</code> p75 / $5</td><td class="num">167</td><td class="num">68</td><td class="num"><span class="fill-rate-ok">40.7%</span></td><td class="cancel-reasons"><code title="ttl_expired">ttl_expired=99</code></td><td class="num pos"><strong>+$0.45</strong> 🟡</td><td class="num">3</td><td class="num">2/1</td><td class="num">0.09%</td><td class="num"><strong>0.92</strong></td><td class="num">$501</td><td class="num">84</td></tr><tr class=""><td class="role" style="color:#60a5fa">GAP · candidate-a</td><td class="policy">—</td><td class="num">0</td><td class="num">0</td><td class="num">—</td><td class="cancel-reasons">—</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">—</td><td class="num"><strong>1.00</strong></td><td class="num">$0</td><td class="num">0</td></tr><tr class=""><td class="role" style="color:#f472b6">GAP · preview</td><td class="policy">—</td><td class="num">0</td><td class="num">0</td><td class="num">—</td><td class="cancel-reasons">—</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">—</td><td class="num"><strong>1.00</strong></td><td class="num">$0</td><td class="num">0</td></tr><tr class=""><td class="role" style="color:#a78bfa">SWISSTONY_BUDGET_MODELER · preview</td><td class="policy">—</td><td class="num">0</td><td class="num">0</td><td class="num">—</td><td class="cancel-reasons">—</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">—</td><td class="num"><strong>1.00</strong></td><td class="num">$0</td><td class="num">0</td></tr><tr class=""><td class="role" style="color:#34d399">DB_ONLY_fb8f65d5 · preview (DB-only)</td><td class="policy"><code>auto</code> p80 / $100</td><td class="num">157</td><td class="num">71</td><td class="num"><span class="fill-rate-ok">45.2%</span></td><td class="cancel-reasons"><code title="ttl_expired">ttl_expired=68</code> <code title="stale_resting_layer_up">stale_resting_layer_up=18</code></td><td class="num pos"><strong>+$9.63</strong> 🟡</td><td class="num">10</td><td class="num">5/5</td><td class="num">0.98%</td><td class="num"><strong>1.03</strong></td><td class="num">$978</td><td class="num">27</td></tr><tr class=""><td class="role" style="color:#34d399">VALIDATION · candidate-a</td><td class="policy"><code>auto</code> p80 / $15</td><td class="num">136</td><td class="num">69</td><td class="num"><span class="fill-rate-ok">50.7%</span></td><td class="cancel-reasons"><code title="ttl_expired">ttl_expired=65</code> <code title="stale_resting_layer_up">stale_resting_layer_up=2</code></td><td class="num pos"><strong>+$6.95</strong> 🟡</td><td class="num">3</td><td class="num">3/0</td><td class="num">1.34%</td><td class="num"><strong>1.23</strong></td><td class="num">$518</td><td class="num">51</td></tr><tr class=""><td class="role" style="color:#fbbf24">TRUST_TWIN · preview</td><td class="policy"><code>auto</code> p80 / $15</td><td class="num">64</td><td class="num">27</td><td class="num"><span class="fill-rate-ok">42.2%</span></td><td class="cancel-reasons"><code title="ttl_expired">ttl_expired=37</code></td><td class="num pos"><strong>+$3.71</strong> 🟡</td><td class="num">9</td><td class="num">5/4</td><td class="num">1.51%</td><td class="num"><strong>1.33</strong></td><td class="num">$246</td><td class="num">25</td></tr><tr class="ref"><td class="role">LIVE · production (prod ref)</td><td class="policy">—</td><td class="num">0</td><td class="num">0</td><td class="num">—</td><td class="cancel-reasons">—</td><td class="num "><strong>$0.00</strong></td><td class="num">0</td><td class="num">0/0</td><td class="num">—</td><td class="num">—</td><td class="num">$0</td><td class="num">0</td></tr></tbody></table>
+    <p class="muted" style="margin-top:14px">Cumulative $ filled — swisstony vs every paper variant on one shared scale. Lines that stop mid-chart are <em>not</em> a chart bug — they reflect real upstream data: the mirror coordinator on that env stopped writing. See the Env freshness banner above the takeaway.</p>
+    <div class="chart"><svg viewBox="0 0 1100 320" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="line-chart">
+  <defs><linearGradient id="grad-0" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-2" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-5" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-6" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#60a5fa" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-7" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-8" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f472b6" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#f472b6" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-9" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.0"/>
+    </linearGradient></defs>
+  <text x="12" y="20" class="chart-title">cumulative $ filled — swisstony vs all paper variants</text>
+  <g transform="translate(76, 22)">
+        <rect width="10" height="10" rx="2" fill="#34d399"/>
+        <text x="16" y="9" class="legend">🎯 swisstony (target)</text>
+      </g><g transform="translate(244, 22)">
+        <rect width="10" height="10" rx="2" fill="#f472b6"/>
+        <text x="16" y="9" class="legend">GAP · candidate-a</text>
+      </g><g transform="translate(412, 22)">
+        <rect width="10" height="10" rx="2" fill="#a78bfa"/>
+        <text x="16" y="9" class="legend">VALIDATION · candidate-a</text>
+      </g><g transform="translate(580, 22)">
+        <rect width="10" height="10" rx="2" fill="#fb7185"/>
+        <text x="16" y="9" class="legend">GAP · preview</text>
+      </g><g transform="translate(748, 22)">
+        <rect width="10" height="10" rx="2" fill="#22d3ee"/>
+        <text x="16" y="9" class="legend">SWISSTONY_BUDGET_MODELER · preview</text>
+      </g><g transform="translate(916, 22)">
+        <rect width="10" height="10" rx="2" fill="#fbbf24"/>
+        <text x="16" y="9" class="legend">TRUST_TWIN · preview</text>
+      </g><g transform="translate(1084, 22)">
+        <rect width="10" height="10" rx="2" fill="#60a5fa"/>
+        <text x="16" y="9" class="legend">DB_ONLY_20fdb57a · candidate-a</text>
+      </g><g transform="translate(1252, 22)">
+        <rect width="10" height="10" rx="2" fill="#34d399"/>
+        <text x="16" y="9" class="legend">DB_ONLY_acd63233 · candidate-a</text>
+      </g><g transform="translate(1420, 22)">
+        <rect width="10" height="10" rx="2" fill="#f472b6"/>
+        <text x="16" y="9" class="legend">DB_ONLY_809e37f7 · candidate-a</text>
+      </g><g transform="translate(1588, 22)">
+        <rect width="10" height="10" rx="2" fill="#a78bfa"/>
+        <text x="16" y="9" class="legend">DB_ONLY_fb8f65d5 · preview</text>
+      </g>
+  <line x1="76" y1="284" x2="1076" y2="284" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="224" x2="1076" y2="224" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="164" x2="1076" y2="164" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="104" x2="1076" y2="104" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="44" x2="1076" y2="44" stroke="#1f2937" stroke-width="0.5"/>
+  <line x1="76" y1="284" x2="1076" y2="284" stroke="#475569" stroke-width="1"/>
+  <path d="M 70.70269675925925,284 L 70.70269675925925,277.32642542505766 L 112.36936342592593,266.5509767924301 L 154.0360300925926,256.2902634978957 L 195.70269675925925,243.90442893002972 L 237.3693634259259,225.89019745934073 L 279.03603009259257,216.61194210181773 L 320.70269675925925,212.06786958072564 L 362.36936342592594,209.49850505272025 L 404.03603009259257,208.79704541309127 L 445.70269675925925,207.78714502785056 L 487.36936342592594,206.72673614250468 L 529.0360300925926,202.9021202198947 L 570.7026967592592,196.41515174837014 L 612.3693634259259,182.90510470192783 L 654.0360300925927,169.50479182371484 L 695.7026967592593,160.86223998502135 L 737.3693634259259,149.15766374497693 L 779.0360300925927,134.27718307744968 L 820.7026967592593,124.31467940599296 L 862.3693634259259,106.05526085147662 L 904.0360300925927,92.81064410332164 L 945.7026967592593,77.93765006624855 L 987.3693634259259,60.277179937347995 L 1029.0360300925927,44.85042495209902 L 1070.7026967592592,44 L 1070.7026967592592,284 Z" fill="url(#grad-0)" /><polyline points="70.70269675925925,277.32642542505766 112.36936342592593,266.5509767924301 154.0360300925926,256.2902634978957 195.70269675925925,243.90442893002972 237.3693634259259,225.89019745934073 279.03603009259257,216.61194210181773 320.70269675925925,212.06786958072564 362.36936342592594,209.49850505272025 404.03603009259257,208.79704541309127 445.70269675925925,207.78714502785056 487.36936342592594,206.72673614250468 529.0360300925926,202.9021202198947 570.7026967592592,196.41515174837014 612.3693634259259,182.90510470192783 654.0360300925927,169.50479182371484 695.7026967592593,160.86223998502135 737.3693634259259,149.15766374497693 779.0360300925927,134.27718307744968 820.7026967592593,124.31467940599296 862.3693634259259,106.05526085147662 904.0360300925927,92.81064410332164 945.7026967592593,77.93765006624855 987.3693634259259,60.277179937347995 1029.0360300925927,44.85042495209902 1070.7026967592592,44" fill="none" stroke="#34d399" stroke-width="1.75" stroke-linejoin="round"/><path d="M 70.70269675925925,284 L 70.70269675925925,283.99911018992606 L 154.0360300925926,283.9989731749235 L 195.70269675925925,283.9980035003434 L 237.3693634259259,283.9953795369545 L 279.03603009259257,283.99515839109023 L 320.70269675925925,283.9943866973978 L 362.36936342592594,283.9943866973978 L 529.0360300925926,283.9943866973978 L 570.7026967592592,283.99290943697673 L 612.3693634259259,283.98975542172354 L 654.0360300925927,283.98758205293774 L 695.7026967592593,283.9868847668165 L 737.3693634259259,283.9827727487713 L 779.0360300925927,283.9793988231768 L 820.7026967592593,283.97785111411014 L 862.3693634259259,283.97463652532093 L 904.0360300925927,283.97241155367954 L 945.7026967592593,283.96920694529854 L 987.3693634259259,283.967393211 L 1029.0360300925927,283.9656461959828 L 1029.0360300925927,284 Z" fill="url(#grad-2)" /><polyline points="70.70269675925925,283.99911018992606 154.0360300925926,283.9989731749235 195.70269675925925,283.9980035003434 237.3693634259259,283.9953795369545 279.03603009259257,283.99515839109023 320.70269675925925,283.9943866973978 362.36936342592594,283.9943866973978 529.0360300925926,283.9943866973978 570.7026967592592,283.99290943697673 612.3693634259259,283.98975542172354 654.0360300925927,283.98758205293774 695.7026967592593,283.9868847668165 737.3693634259259,283.9827727487713 779.0360300925927,283.9793988231768 820.7026967592593,283.97785111411014 862.3693634259259,283.97463652532093 904.0360300925927,283.97241155367954 945.7026967592593,283.96920694529854 987.3693634259259,283.967393211 1029.0360300925927,283.9656461959828" fill="none" stroke="#a78bfa" stroke-width="1.75" stroke-linejoin="round"/><path d="M 70.70269675925925,284 L 70.70269675925925,283.9994645390705 L 154.0360300925926,283.9994645390705 L 195.70269675925925,283.99832252481536 L 237.3693634259259,283.99717285870213 L 279.03603009259257,283.99695171283787 L 320.70269675925925,283.9964569947366 L 570.7026967592592,283.9964569947366 L 612.3693634259259,283.9964569947366 L 654.0360300925927,283.99532868516275 L 695.7026967592593,283.9946313990415 L 737.3693634259259,283.99305280677106 L 779.0360300925927,283.99090308862776 L 820.7026967592593,283.9900446050436 L 862.3693634259259,283.9900446050436 L 904.0360300925927,283.98903530576234 L 945.7026967592593,283.9865382983612 L 987.3693634259259,283.98622332134374 L 1029.0360300925927,283.98622332134374 L 1029.0360300925927,284 Z" fill="url(#grad-5)" /><polyline points="70.70269675925925,283.9994645390705 154.0360300925926,283.9994645390705 195.70269675925925,283.99832252481536 237.3693634259259,283.99717285870213 279.03603009259257,283.99695171283787 320.70269675925925,283.9964569947366 570.7026967592592,283.9964569947366 612.3693634259259,283.9964569947366 654.0360300925927,283.99532868516275 695.7026967592593,283.9946313990415 737.3693634259259,283.99305280677106 779.0360300925927,283.99090308862776 820.7026967592593,283.9900446050436 862.3693634259259,283.9900446050436 904.0360300925927,283.98903530576234 945.7026967592593,283.9865382983612 987.3693634259259,283.98622332134374 1029.0360300925927,283.98622332134374" fill="none" stroke="#fbbf24" stroke-width="1.75" stroke-linejoin="round"/><path d="M 70.70269675925925,284 L 70.70269675925925,283.99892120371567 L 112.36936342592593,283.9979841470891 L 154.0360300925926,283.9963305177481 L 195.70269675925925,283.9951345327084 L 237.3693634259259,283.9922779431428 L 279.03603009259257,283.99163563170816 L 320.70269675925925,283.99055683542383 L 362.36936342592594,283.99055683542383 L 445.70269675925925,283.99055683542383 L 487.36936342592594,283.9905310073084 L 529.0360300925926,283.9899448476213 L 570.7026967592592,283.98749590131155 L 612.3693634259259,283.98510763748186 L 654.0360300925927,283.9834421825746 L 695.7026967592593,283.98259219812644 L 737.3693634259259,283.97995891611146 L 779.0360300925927,283.97832891004674 L 820.7026967592593,283.97749422095086 L 862.3693634259259,283.97622136300737 L 904.0360300925927,283.9739974992742 L 945.7026967592593,283.97129061605756 L 987.3693634259259,283.9695325598645 L 1029.0360300925927,283.9695325598645 L 1070.7026967592592,283.9695325598645 L 1070.7026967592592,284 Z" fill="url(#grad-6)" /><polyline points="70.70269675925925,283.99892120371567 112.36936342592593,283.9979841470891 154.0360300925926,283.9963305177481 195.70269675925925,283.9951345327084 237.3693634259259,283.9922779431428 279.03603009259257,283.99163563170816 320.70269675925925,283.99055683542383 362.36936342592594,283.99055683542383 445.70269675925925,283.99055683542383 487.36936342592594,283.9905310073084 529.0360300925926,283.9899448476213 570.7026967592592,283.98749590131155 612.3693634259259,283.98510763748186 654.0360300925927,283.9834421825746 695.7026967592593,283.98259219812644 737.3693634259259,283.97995891611146 779.0360300925927,283.97832891004674 820.7026967592593,283.97749422095086 862.3693634259259,283.97622136300737 904.0360300925927,283.9739974992742 945.7026967592593,283.97129061605756 987.3693634259259,283.9695325598645 1029.0360300925927,283.9695325598645 1070.7026967592592,283.9695325598645" fill="none" stroke="#60a5fa" stroke-width="1.75" stroke-linejoin="round"/><path d="M 70.70269675925925,284 L 70.70269675925925,283.99892120371567 L 112.36936342592593,283.9979841470891 L 154.0360300925926,283.9963305177481 L 195.70269675925925,283.9951345327084 L 237.3693634259259,283.9919157195729 L 279.03603009259257,283.9912734081382 L 320.70269675925925,283.9901946118539 L 362.36936342592594,283.9901946118539 L 445.70269675925925,283.9901946118539 L 487.36936342592594,283.98980876500764 L 529.0360300925926,283.98922260532055 L 570.7026967592592,283.98677365901085 L 612.3693634259259,283.98503109806666 L 654.0360300925927,283.9833656431594 L 695.7026967592593,283.98280960600175 L 737.3693634259259,283.9800755156969 L 779.0360300925927,283.97829526559497 L 820.7026967592593,283.97712341787286 L 862.3693634259259,283.9763387743062 L 904.0360300925927,283.9738302343448 L 945.7026967592593,283.9715239969104 L 987.3693634259259,283.9697659407173 L 1029.0360300925927,283.9697659407173 L 1070.7026967592592,283.9697659407173 L 1070.7026967592592,284 Z" fill="url(#grad-7)" /><polyline points="70.70269675925925,283.99892120371567 112.36936342592593,283.9979841470891 154.0360300925926,283.9963305177481 195.70269675925925,283.9951345327084 237.3693634259259,283.9919157195729 279.03603009259257,283.9912734081382 320.70269675925925,283.9901946118539 362.36936342592594,283.9901946118539 445.70269675925925,283.9901946118539 487.36936342592594,283.98980876500764 529.0360300925926,283.98922260532055 570.7026967592592,283.98677365901085 612.3693634259259,283.98503109806666 654.0360300925927,283.9833656431594 695.7026967592593,283.98280960600175 737.3693634259259,283.9800755156969 779.0360300925927,283.97829526559497 820.7026967592593,283.97712341787286 862.3693634259259,283.9763387743062 904.0360300925927,283.9738302343448 945.7026967592593,283.9715239969104 987.3693634259259,283.9697659407173 1029.0360300925927,283.9697659407173 1070.7026967592592,283.9697659407173" fill="none" stroke="#34d399" stroke-width="1.75" stroke-linejoin="round"/><path d="M 70.70269675925925,284 L 70.70269675925925,283.99892120371567 L 112.36936342592593,283.9979841470891 L 154.0360300925926,283.9962996964466 L 195.70269675925925,283.9951037114069 L 237.3693634259259,283.99234440249313 L 279.03603009259257,283.99170209105847 L 320.70269675925925,283.99062329477414 L 362.36936342592594,283.99062329477414 L 445.70269675925925,283.99062329477414 L 487.36936342592594,283.99053918016165 L 529.0360300925926,283.98995302047456 L 570.7026967592592,283.9875040741648 L 612.3693634259259,283.98577980372767 L 654.0360300925927,283.9841143488204 L 695.7026967592593,283.98317795615463 L 737.3693634259259,283.98086523152335 L 779.0360300925927,283.97923522545864 L 820.7026967592593,283.97840053636276 L 862.3693634259259,283.9776158927961 L 904.0360300925927,283.97508820223203 L 945.7026967592593,283.97197184889285 L 987.3693634259259,283.9703733405299 L 1029.0360300925927,283.9703733405299 L 1070.7026967592592,283.9703733405299 L 1070.7026967592592,284 Z" fill="url(#grad-8)" /><polyline points="70.70269675925925,283.99892120371567 112.36936342592593,283.9979841470891 154.0360300925926,283.9962996964466 195.70269675925925,283.9951037114069 237.3693634259259,283.99234440249313 279.03603009259257,283.99170209105847 320.70269675925925,283.99062329477414 362.36936342592594,283.99062329477414 445.70269675925925,283.99062329477414 487.36936342592594,283.99053918016165 529.0360300925926,283.98995302047456 570.7026967592592,283.9875040741648 612.3693634259259,283.98577980372767 654.0360300925927,283.9841143488204 695.7026967592593,283.98317795615463 737.3693634259259,283.98086523152335 779.0360300925927,283.97923522545864 820.7026967592593,283.97840053636276 862.3693634259259,283.9776158927961 904.0360300925927,283.97508820223203 945.7026967592593,283.97197184889285 987.3693634259259,283.9703733405299 1029.0360300925927,283.9703733405299 1070.7026967592592,283.9703733405299" fill="none" stroke="#f472b6" stroke-width="1.75" stroke-linejoin="round"/><path d="M 70.70269675925925,284 L 70.70269675925925,283.99813401315396 L 112.36936342592593,283.99751980797015 L 154.0360300925926,283.99751980797015 L 195.70269675925925,283.99197614829046 L 237.3693634259259,283.9907587982069 L 279.03603009259257,283.99007099889525 L 320.70269675925925,283.9875874964765 L 570.7026967592592,283.98743271677023 L 612.3693634259259,283.9871931767485 L 654.0360300925927,283.9819097130318 L 695.7026967592593,283.9813348799752 L 737.3693634259259,283.9750597959477 L 779.0360300925927,283.9694249580403 L 820.7026967592593,283.9672381756398 L 862.3693634259259,283.9672381756398 L 904.0360300925927,283.96560152159964 L 945.7026967592593,283.96353820165217 L 987.3693634259259,283.9628531266394 L 1029.0360300925927,283.95993475433187 L 1029.0360300925927,284 Z" fill="url(#grad-9)" /><polyline points="70.70269675925925,283.99813401315396 112.36936342592593,283.99751980797015 154.0360300925926,283.99751980797015 195.70269675925925,283.99197614829046 237.3693634259259,283.9907587982069 279.03603009259257,283.99007099889525 320.70269675925925,283.9875874964765 570.7026967592592,283.98743271677023 612.3693634259259,283.9871931767485 654.0360300925927,283.9819097130318 695.7026967592593,283.9813348799752 737.3693634259259,283.9750597959477 779.0360300925927,283.9694249580403 820.7026967592593,283.9672381756398 862.3693634259259,283.9672381756398 904.0360300925927,283.96560152159964 945.7026967592593,283.96353820165217 987.3693634259259,283.9628531266394 1029.0360300925927,283.95993475433187" fill="none" stroke="#a78bfa" stroke-width="1.75" stroke-linejoin="round"/>
+  <text x="68" y="288" text-anchor="end" class="axis">$0.00</text><text x="68" y="228" text-anchor="end" class="axis">$381.0k</text><text x="68" y="168" text-anchor="end" class="axis">$762.0k</text><text x="68" y="108" text-anchor="end" class="axis">$1142.9k</text><text x="68" y="48" text-anchor="end" class="axis">$1523.9k</text>
+  <text x="76" y="304" text-anchor="middle" class="axis">May 27 21:00</text><text x="326" y="304" text-anchor="middle" class="axis">May 28 03:00</text><text x="576" y="304" text-anchor="middle" class="axis">May 28 09:00</text><text x="826" y="304" text-anchor="middle" class="axis">May 28 15:00</text><text x="1076" y="304" text-anchor="middle" class="axis">May 28 21:00</text>
+</svg></div>
+  </div>
+</details>
+
+<details>
+  <summary>🔍 Decisions reference — skip-reason breakdown per tenant</summary>
+  <div class="details-body">
+    <p class="muted">Why did orders not place? Decision-side counts and top 3 skip reasons per tenant. Explanatory only — NOT a ranking surface.</p>
+    <table class="ab">
+      <thead><tr><th>tenant</th><th class="num">decisions</th><th class="num">placed</th><th class="num">placement rate</th><th class="num">Δ rate vs Q1 twin</th><th>top skip reasons</th></tr></thead>
+      <tbody><tr><td class="role" style="color:#fbbf24">TRUST_TWIN · preview</td><td class="num">8952</td><td class="num">64</td><td class="num">0.71%</td><td class="num">—</td><td class="skips">vwap_floor_breach=3510 · below_target_percentile=2562 · target_dominant_other_side=1561</td></tr><tr><td class="role" style="color:#22d3ee">DB_ONLY_20fdb57a · candidate-a</td><td class="num">16240</td><td class="num">167</td><td class="num">1.03%</td><td class="num">43.8%</td><td class="skips">vwap_floor_breach=6178 · below_target_percentile=4494 · target_dominant_other_side=3185</td></tr><tr><td class="role" style="color:#60a5fa">DB_ONLY_809e37f7 · candidate-a</td><td class="num">16241</td><td class="num">166</td><td class="num">1.02%</td><td class="num">43.0%</td><td class="skips">vwap_floor_breach=6179 · below_target_percentile=4493 · target_dominant_other_side=3187</td></tr><tr><td class="role" style="color:#fbbf24">DB_ONLY_acd63233 · candidate-a</td><td class="num">16240</td><td class="num">168</td><td class="num">1.03%</td><td class="num">44.7%</td><td class="skips">vwap_floor_breach=6178 · below_target_percentile=4493 · target_dominant_other_side=3186</td></tr><tr><td class="role" style="color:#34d399">DB_ONLY_fb8f65d5 · preview</td><td class="num">8952</td><td class="num">157</td><td class="num">1.75%</td><td class="num">145.3%</td><td class="skips">vwap_floor_breach=3511 · below_target_percentile=2562 · target_dominant_other_side=1560</td></tr><tr><td class="role" style="color:#60a5fa">GAP · candidate-a 🟡</td><td class="num">0</td><td class="num">0</td><td class="num">—</td><td class="num">—</td><td class="skips"></td></tr><tr><td class="role" style="color:#34d399">VALIDATION · candidate-a</td><td class="num">16241</td><td class="num">136</td><td class="num">0.84%</td><td class="num">17.1%</td><td class="skips">vwap_floor_breach=6177 · below_target_percentile=4907 · target_dominant_other_side=3187</td></tr><tr><td class="role" style="color:#f472b6">GAP · preview 🟡</td><td class="num">0</td><td class="num">0</td><td class="num">—</td><td class="num">—</td><td class="skips"></td></tr><tr><td class="role" style="color:#a78bfa">SWISSTONY_BUDGET_MODELER · preview 🟡</td><td class="num">0</td><td class="num">0</td><td class="num">—</td><td class="num">—</td><td class="skips"></td></tr><tr><td class="role" style="color:#fb7185">LIVE · production 🟡</td><td class="num">0</td><td class="num">0</td><td class="num">—</td><td class="num">—</td><td class="skips"></td></tr></tbody>
+    </table>
+  </div>
+</details>
+
+<details open>
+  <summary>🔎 Finding detail</summary>
+  <!-- FINDING:START -->
+  <div class="details-body finding-detail">
+    <p class="muted"><em>LLM-authored: one focused paragraph each — what the signal is, where in code, what to do next. Replace this stub.</em></p>
+    <p><strong>What:</strong> <span class="placeholder">describe the dominant signal in one sentence — which Q is the gate, which row(s) carry it, why the rest follows.</span></p>
+    <p><strong>Why (code path):</strong> <span class="placeholder">cite <code>file:line</code> for the planner or sidecar code that produces the divergence. No file:line = not done.</span></p>
+    <p><strong>Next fix:</strong> <span class="placeholder">the smallest concrete edit that would move the dominant axis. Link the spec or charter row that authorizes it.</span></p>
+    <p class="muted">Full structured data: <a href="bundle.json">bundle.json</a> · <a href="findings.json">findings.json</a>.</p>
+  </div>
+  <!-- FINDING:END -->
+</details>
+
+<div class="footer-note">
+  Tool: <code>nodes/poly/scripts/tenant-matrix-evaluator.ts</code> · Skill: <code>/tenant-matrix-evaluator</code> · Captured: <code>2026-05-28T21:08:38.901Z</code>
+</div>
+
+</body>
+</html>

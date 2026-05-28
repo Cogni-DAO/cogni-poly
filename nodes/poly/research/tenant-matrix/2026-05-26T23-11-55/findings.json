@@ -1,0 +1,100 @@
+{
+  "report_path": "/Users/derek/conductor/workspaces/cogni-poly/worcester/nodes/poly/research/tenant-matrix/2026-05-26T23-11-55/report.html",
+  "primary_class": null,
+  "primary_class_reason": "LLM fills this in; pick from work/charters/POLY_COPY_DELTA.md D1-D8 or set null+reason",
+  "primary_confidence": null,
+  "primary_one_liner": null,
+  "secondary_class": null,
+  "secondary_confidence": null,
+  "secondary_one_liner": null,
+  "pareto_next_fix": null,
+  "evidence": {
+    "code_path": null
+  },
+  "closest_to_target_role": "SWISSTONY_TRUST_TWIN@preview",
+  "closest_to_target_env_key_prefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+  "closest_to_target_distance": 0.8992356336234222,
+  "prod_twin_fidelity_pct": null,
+  "prod_twin_fidelity_class": "no_data",
+  "prod_twin_fidelity_shared_fills": 0,
+  "sample_floor_warnings": [
+    {
+      "envKeyPrefix": "POLY_PROD_TENANT_LIVE",
+      "resolved_markets": 0
+    }
+  ],
+  "env_gap_warnings": [
+    {
+      "env": "candidate-a",
+      "billing_account_id": "20fdb57a-4db2-4669-8abc-20cf4d6b8862",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "20fdb57a"
+    },
+    {
+      "env": "candidate-a",
+      "billing_account_id": "acd63233-764b-46a6-8d91-b645cc3417bd",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "acd63233"
+    },
+    {
+      "env": "candidate-a",
+      "billing_account_id": "809e37f7-40b3-403d-a354-79a547bae48a",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "809e37f7"
+    },
+    {
+      "env": "preview",
+      "billing_account_id": "376c594c-e6e1-44b2-aafb-366382032461",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "position_gap",
+      "short_id": "376c594c"
+    },
+    {
+      "env": "preview",
+      "billing_account_id": "fb8f65d5-29e4-446a-8753-280d5328b2a2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "fb8f65d5"
+    }
+  ],
+  "env_freshness": [
+    {
+      "dsUid": "cogni-candidate-a-poly-postgres",
+      "envSlug": "candidate-a",
+      "last_decision_at": "2026-05-26T23:11:01.313Z",
+      "staleness_seconds": -9.797,
+      "is_stale": false
+    },
+    {
+      "dsUid": "cogni-preview-poly-postgres",
+      "envSlug": "preview",
+      "last_decision_at": "2026-05-24T22:32:27.559Z",
+      "staleness_seconds": 175103.957,
+      "is_stale": true
+    },
+    {
+      "dsUid": "cogni-production-poly-postgres",
+      "envSlug": "production",
+      "last_decision_at": "2026-05-12T01:45:47.133Z",
+      "staleness_seconds": 1286704.383,
+      "is_stale": true
+    }
+  ],
+  "env_stale": [
+    {
+      "env": "preview",
+      "last_decision_at": "2026-05-24T22:32:27.559Z",
+      "staleness_hours": 49
+    },
+    {
+      "env": "production",
+      "last_decision_at": "2026-05-12T01:45:47.133Z",
+      "staleness_hours": 357
+    }
+  ],
+  "target_ds_uid": "cogni-candidate-a-poly-postgres",
+  "authored_at": null
+}

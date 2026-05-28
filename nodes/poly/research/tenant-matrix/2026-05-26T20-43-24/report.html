@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Tenant Matrix · 0x204f72f3</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e5e7eb; margin: 0 auto; padding: 22px; max-width: 1100px; line-height: 1.45; }
+h1 { font-size: 20px; font-weight: 600; margin: 0 0 2px; }
+.header-sub { color: #6b7280; font-size: 11px; margin-bottom: 16px; }
+.header-sub code { background: #131826; padding: 1px 5px; border-radius: 3px; }
+.header-sub a { color: #60a5fa; }
+.q { background: linear-gradient(180deg, #0f172a 0%, #131826 100%); border: 2px solid #475569; border-radius: 10px; padding: 22px 26px; margin: 0 0 16px; }
+.q.pos { border-color: #22c55e; }
+.q.neg { border-color: #ef4444; }
+.q.gated { border-color: #6b7280; border-style: dashed; opacity: 0.85; }
+.q-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; }
+.q-number { font-size: 56px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.0; margin: 6px 0 0; color: #e5e7eb; }
+.q.pos .q-number { color: #22c55e; }
+.q.neg .q-number { color: #ef4444; }
+.q.gated .q-number { color: #94a3b8; font-size: 36px; letter-spacing: 0.04em; }
+.q-verdict { font-size: 15px; font-weight: 600; color: #e5e7eb; margin: 4px 0 8px; }
+.q-cause { font-size: 12px; color: #cbd5e1; }
+.q-cause code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 11px; }
+.q-ref { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+.q-ref code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; color: #cbd5e1; }
+.takeaway { background: linear-gradient(180deg, #1f1410 0%, #131826 100%); border: 1px solid #f59e0b; border-radius: 8px; padding: 14px 18px; margin: 0 0 16px; }
+.takeaway h2 { margin: 0 0 8px; font-size: 11px; color: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.takeaway .placeholder { color: #64748b; font-style: italic; font-size: 11px; }
+details { background: #0e1422; border: 1px solid #1f2937; border-radius: 6px; padding: 0; margin: 10px 0; }
+details > summary { cursor: pointer; padding: 12px 16px; font-size: 12px; color: #cbd5e1; font-weight: 600; user-select: none; }
+details > summary:hover { background: #131826; }
+details[open] > summary { border-bottom: 1px solid #1f2937; color: #fbbf24; }
+details > .details-body { padding: 14px 16px; }
+.muted { color: #6b7280; font-size: 11px; }
+.muted code { background: #131826; padding: 1px 4px; border-radius: 3px; color: #cbd5e1; }
+table.ab { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+table.ab th { font-size: 10px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: 7px 9px; background: #131826; border-bottom: 1px solid #1f2937; }
+table.ab td { padding: 7px 9px; border-bottom: 1px solid #1f2937; font-variant-numeric: tabular-nums; }
+table.ab td.num { text-align: right; font-family: 'SF Mono', Menlo, monospace; }
+table.ab td.role { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; }
+table.ab td.skips { font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: #94a3b8; max-width: 380px; }
+table.ab.algo tr.rank-1 td { background: rgba(251,191,36,0.08); }
+table.ab.algo tr.rank-1 td.role { color: #fbbf24 !important; font-weight: 600; }
+table.ab.algo tr.ref td { background: rgba(16,185,129,0.05); border-top: 2px solid #1f2937; }
+table.ab.algo tr.ref td.role { color: #34d399 !important; font-style: italic; }
+.pos { color: #22c55e; } .neg { color: #ef4444; }
+.chart { background: #0e1422; border: 1px solid #1f2937; border-radius: 6px; padding: 6px; margin: 10px 0; }
+.chart svg { display: block; width: 100%; height: auto; }
+.line-chart .chart-title { fill: #cbd5e1; font-size: 13px; font-weight: 600; }
+.line-chart .axis { fill: #94a3b8; font-size: 10px; font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, monospace; }
+.line-chart .legend { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
+.footer-note { margin-top: 18px; padding-top: 12px; border-top: 1px solid #1f2937; font-size: 10px; color: #6b7280; }
+.footer-note a { color: #60a5fa; }
+.delta-summary { background: #0e1422; border: 1px solid #1f2937; border-left: 3px solid #60a5fa; border-radius: 6px; padding: 12px 16px; margin: 0 0 14px; }
+.delta-summary h3 { margin: 0 0 8px; font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; }
+.delta-summary .ds-line { font-size: 12px; color: #e5e7eb; margin: 4px 0; font-family: 'SF Mono', Menlo, monospace; }
+.delta-summary .ds-line code { background: #131826; padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 11px; }
+.delta-summary .env-gaps { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #1f2937; font-size: 11px; color: #cbd5e1; }
+.delta-summary .env-gaps strong { color: #f59e0b; }
+.delta-summary .env-gaps ul { margin: 4px 0 0 18px; padding: 0; }
+.delta-summary .env-gaps li { margin: 2px 0; font-family: 'SF Mono', Menlo, monospace; font-size: 10px; }
+.delta-summary .env-gaps code { background: #131826; padding: 1px 4px; border-radius: 3px; color: #cbd5e1; }
+.leaderboard { display: block; width: 100%; height: auto; }
+.leaderboard .lb-label { fill: #cbd5e1; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }
+.leaderboard .lb-value { fill: #fbbf24; font-size: 11px; font-family: 'SF Mono', Menlo, monospace; }</style>
+</head>
+<body>
+<h1>Tenant Matrix Evaluator</h1>
+<div class="header-sub">
+  Target: <code>0x204f72f35326db932158cba6adff0b9a1da95e14</code> · Window: <code>2026-05-23T00:00:00Z</code> → <code>2026-05-26T20:42:36.524Z</code> · 6 tenants · target DS <code>cogni-candidate-a-poly-postgres</code> · <a href="#appendix">↓ jump to appendix</a>
+</div>
+
+<div class="delta-summary">
+  <h3>Δ summary</h3>
+  <div class="ds-line">🔴 closest to target: <code>SWISSTONY_TRUST_TWIN · preview</code> (distance=<code>0.929</code>)</div>
+  <div class="ds-line">⚪ prod-twin fidelity: shared=<code>0</code>, PnL Δ=<code>-$16</code> (<code>—</code>), classification=⚪</div>
+  <div class="ds-line">🟡 sample-size floor: <code>POLY_PROD_TENANT_LIVE</code> resolved_markets=<code>0</code> (<50 — interpret comparisons cautiously)</div>
+  <div class="env-gaps">
+    <strong>5 matrix gaps</strong> — tenants active in DB without env-key mapping (excluded from this run):
+    <ul><li><code>candidate-a</code> · billing <code>20fdb57a</code> · policy <code>auto</code></li><li><code>candidate-a</code> · billing <code>acd63233</code> · policy <code>auto</code></li><li><code>candidate-a</code> · billing <code>809e37f7</code> · policy <code>auto</code></li><li><code>preview</code> · billing <code>376c594c</code> · policy <code>position_gap</code></li><li><code>preview</code> · billing <code>fb8f65d5</code> · policy <code>auto</code></li></ul>
+  </div>
+</div>
+
+<!-- TAKEAWAY:START -->
+<div class="takeaway">
+  <h2>↗ LLM takeaway</h2>
+  <p style="margin: 0 0 6px; font-size: 15px; line-height: 1.45;"><strong>Every paper variant lost money on a +$113k target — D2 fill-chase is the cause, not policy or allocation.</strong></p>
+  <p style="margin: 0; color: #6b7280; font-size: 11px;">90% confidence · D2 fill-chase architectural (planMirrorFromFill is fill-shaped, not position-shaped) · next-fix: ship position-mirror Phase 3 · see 🔎 Finding detail below.</p>
+</div>
+<!-- TAKEAWAY:END -->
+
+<details open style="margin: 12px 0;">
+  <summary>🔎 Finding detail</summary>
+  <div class="details-body">
+    <p>Over the 2026-05-23 → 2026-05-26 window swisstony made <strong>+$113,219 realized PnL on $7.83M of BUY notional</strong> across 3,189 markets (1.45% return; 2,478 wins / 2,218 losses on 2,752 resolved). Every paper tenant lost money:</p>
+    <ul style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px; line-height: 1.6;">
+      <li><code>POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN</code> (position_gap @ $500k alloc): −$53,408 on $4.3M intent (−1.24%) · 800 resolved · <strong>closest to target</strong> (aggregate distance 0.93)</li>
+      <li><code>POLY_CANDIDATE_A_TENANT_GAP</code> (position_gap @ $1k): −$1,600 on $74k (−2.16%) · 688 resolved</li>
+      <li><code>POLY_PREVIEW_TENANT_GAP</code> (position_gap @ $50k): −$145 on $6.2k (−2.32%) · 242 resolved</li>
+      <li><code>POLY_PREVIEW_TENANT_TRUST_TWIN</code> (auto p80/$15 legacy): −$16 on $2.3k (−0.71%) · 144 resolved</li>
+      <li><code>POLY_CANDIDATE_A_TENANT_VALIDATION</code> (auto p80/$15): −$62 on $2.4k (−2.62%) · 232 resolved</li>
+    </ul>
+    <p><strong>Why this isn't a sample-size or policy-tuning problem.</strong> The matrix spans three sizing policies (auto/$15 legacy, position_gap @ $1k / $50k / $500k allocations) and two envs. Every variant is negative. Scaling cap_alloc from $1k → $500k doesn't flip the sign — it just scales the loss. swisstony's <em>positive</em> PnL is on the same on-chain fills (same markets, same outcomes). The disagreement is on PnL sign at the per-market level, which means the divergence is on entry price (VWAP), not on market selection.</p>
+    <p><strong>D2 fill-chase is the structural cause</strong>, per <code>work/charters/POLY_COPY_DELTA.md</code>: "We react to target's latest fill, which clusters at price spikes. Target's true position has good VWAP because they built quietly; our reactive VWAP is bad by construction." The planner entry point is fill-shaped: <code>nodes/poly/app/src/features/copy-trade/plan-mirror.ts:323 — planMirrorFromFill(input: PlanMirrorInput): MirrorPlan</code>. Each fill is a fresh decision; there is no concept of "target's current position vs ours" that would let the mirror average down or skip already-bad-VWAP entries. The previously committed finding (a94309c65) framed the same data as "position_gap loses 2.5x auto's PnL-rate"; reframed against the target's own truth, the sharper claim is that <em>no</em> sizing policy on the current fill-shaped planner produces positive PnL against a clearly-profitable target.</p>
+    <p><strong>Prod-twin fidelity is ⚪ no_data</strong> — POLY_PROD_TENANT_LIVE has 0 decisions in this window (derek's prod wallet isn't trading), so we have no fresh signal on whether paper-side PnL is a trustworthy mirror of real CLOB execution. <code>fidelity.shared_fills = 0</code> across 43,742 twin-only fills. The leaderboard is therefore <em>not</em> gated red, but every PnL number above inherits the paper-trading biases enumerated in <code>docs/spec/poly-paper-trading-shortcomings.md</code>.</p>
+    <p><strong>Pareto next fix.</strong> Ship position-mirror Phase 3 per <code>docs/spec/poly-copy-trade-position-mirror.md</code>: per-target gap executor that reconciles "our current position vs target's current position" each tick, dissolving D2 (fill-chase), D3 (hedge blindness), and D4 in one design. Tuning <code>mirror_capital_alloc_usdc</code> further is wasted motion until the planner is position-shaped.</p>
+    <p><strong>Matrix gaps</strong> (file follow-up): 5 charter-active tenants on the same target lack <code>POLY_&lt;env&gt;_TENANT_&lt;role&gt;_*</code> env blocks — three duplicate <code>auto</code> rows on candidate-a (<code>20fdb57a</code>, <code>acd63233</code>, <code>809e37f7</code>) and two on preview (<code>376c594c</code> position_gap @ $50k, <code>fb8f65d5</code> auto @ $100). They're producing decisions but excluded from this report. <strong>Tool gap</strong> (file follow-up): the prod-poly Grafana DS schema is stale — <code>poly_copy_trade_targets.sizing_policy_kind</code> column doesn't exist on the production DB at the configured DS UID. That's the same DS-misconfig class that masked target fills before this PR; production schema drift needs its own fix.</p>
+  </div>
+</details>
+
+<div class="q ">
+  <div class="q-label">Q1 · Does paper twin match prod live?</div>
+  <div class="q-number">—</div>
+  <div class="q-verdict">no shared fills to compare</div>
+  <div class="q-cause"></div>
+</div>
+
+<div class="q gated">
+  <div class="q-label">Q2 · Best paper algo (PnL on resolved markets)</div>
+  <div class="q-number">GATED</div>
+  <div class="q-verdict">wait — Q1 must pass first (currently —)</div>
+  <div class="q-ref">prod LIVE reference: <code>$0.00</code> over <code>0</code> resolved markets</div>
+</div>
+
+<details open>
+  <summary>🪞 Prod-twin fidelity Δ — is paper trading a trustworthy A/B substrate?</summary>
+  <div class="details-body">
+    <p class="muted">Compares <code>POLY_PROD_TENANT_TRUST_TWIN</code> (the paper mirror of derek's wallet) to <code>POLY_PROD_TENANT_LIVE</code> (the real wallet) on the same on-chain target. PnL Δ within ±5% with &gt;50 shared fills → 🟢 trustworthy. PnL Δ within ±20% → 🟡. Otherwise → 🔴 paper is not safe to A/B from.</p>
+    <table class="ab"><tbody>
+      <tr><td>twin</td><td><code>POLY_PREVIEW_TENANT_TRUST_TWIN</code></td></tr>
+      <tr><td>live</td><td><code>POLY_PROD_TENANT_LIVE</code></td></tr>
+      <tr><td>shared fills</td><td class="num"><code>0</code></td></tr>
+      <tr><td>per-aggregate PnL Δ (twin − live)</td><td class="num"><code>-$16</code></td></tr>
+      <tr><td>PnL Δ %</td><td class="num"><code>—</code></td></tr>
+      <tr><td>markets touched Δ</td><td class="num"><code>+233</code></td></tr>
+      <tr><td>classification</td><td><strong>⚪ INSUFFICIENT DATA</strong></td></tr>
+    </tbody></table>
+  </div>
+</details>
+
+<details open>
+  <summary>🎯 Distance-to-target leaderboard — closest paper policy to the real wallet</summary>
+  <div class="details-body">
+    <p class="muted">Per-tenant aggregate distance to <code>0x204f72f3</code>'s actual behavior. Axes: realized-PnL % gap, placement-rate, intent-USDC ratio, markets-touched ratio. Lower bar = tighter hug. <strong>The leaderboard winner is the promotion candidate</strong> — provided Q1 (paper fidelity) is green.</p>
+    <div class="chart"><svg viewBox="0 0 1080 144" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="leaderboard">
+  <g transform="translate(0,12)">
+          <text x="256" y="14" text-anchor="end" class="lb-label">SWISSTONY_TRUST_TWIN · preview</text>
+          <rect x="268" y="4" width="483.8162456507958" height="14" rx="2" fill="#34d399"/>
+          <text x="757.8162456507957" y="14" class="lb-value">0.929</text>
+        </g><g transform="translate(0,36)">
+          <text x="256" y="14" text-anchor="end" class="lb-label">TRUST_TWIN · preview</text>
+          <rect x="268" y="4" width="573.3693486212642" height="14" rx="2" fill="#60a5fa"/>
+          <text x="847.3693486212642" y="14" class="lb-value">1.100</text>
+        </g><g transform="translate(0,60)">
+          <text x="256" y="14" text-anchor="end" class="lb-label">GAP · candidate-a</text>
+          <rect x="268" y="4" width="660.9623942739079" height="14" rx="2" fill="#60a5fa"/>
+          <text x="934.9623942739079" y="14" class="lb-value">1.269</text>
+        </g><g transform="translate(0,84)">
+          <text x="256" y="14" text-anchor="end" class="lb-label">GAP · preview</text>
+          <rect x="268" y="4" width="713.4616744765485" height="14" rx="2" fill="#60a5fa"/>
+          <text x="987.4616744765485" y="14" class="lb-value">1.369</text>
+        </g><g transform="translate(0,108)">
+          <text x="256" y="14" text-anchor="end" class="lb-label">VALIDATION · candidate-a</text>
+          <rect x="268" y="4" width="742" height="14" rx="2" fill="#60a5fa"/>
+          <text x="1016" y="14" class="lb-value">1.424</text>
+        </g>
+</svg></div>
+  </div>
+</details>
+
+<a id="appendix"></a>
+
+<details>
+  <summary>📊 Q1 detail — top decision mismatches (twin vs live)</summary>
+  <div class="details-body">
+    <p class="muted">shared fills: <code>0</code> · exact match: <code>0</code> · outcome match but reason differs: <code>0</code> · outcome disagree: <code>0</code> · twin-only: <code>43742</code> · live-only: <code>0</code></p>
+    <p class="muted">no mismatch data</p>
+    <p class="muted" style="margin-top: 12px">Visual sanity check — cumulative <code>$ filled</code> by tenant. Visual diverges from numbers when one tenant filled mostly outside the window; trust the table above.</p>
+    <div class="chart"><svg viewBox="0 0 1100 260" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="line-chart">
+  <defs><linearGradient id="grad-0" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.0"/>
+    </linearGradient></defs>
+  <text x="12" y="20" class="chart-title">$ filled — twin vs live</text>
+  <g transform="translate(76, 22)">
+        <rect width="10" height="10" rx="2" fill="#fbbf24"/>
+        <text x="16" y="9" class="legend">TWIN · paper</text>
+      </g><g transform="translate(244, 22)">
+        <rect width="10" height="10" rx="2" fill="#34d399"/>
+        <text x="16" y="9" class="legend">LIVE · real</text>
+      </g>
+  <line x1="76" y1="224" x2="1076" y2="224" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="179" x2="1076" y2="179" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="134" x2="1076" y2="134" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="89" x2="1076" y2="89" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="44" x2="1076" y2="44" stroke="#1f2937" stroke-width="0.5"/>
+  <line x1="76" y1="224" x2="1076" y2="224" stroke="#475569" stroke-width="1"/>
+  <path d="M 76,224 L 76,218.44816041118833 L 86.78630600790893,213.1669133981525 L 97.57261201581785,210.21253840057642 L 108.35891802372677,209.06973268090414 L 119.1452240316357,204.85315587114306 L 129.93153003954464,203.9740576815314 L 151.50414205536248,201.89429305163387 L 162.2904480632714,201.89429305163387 L 173.07675407118035,200.15884668141973 L 183.86306007908928,199.6842763618082 L 194.6493660869982,197.7002710468085 L 205.43567209490712,193.53602342380327 L 216.22197810281605,184.8818881617339 L 227.008284110725,180.52796401442424 L 237.7945901186339,175.09870570502264 L 248.58089612654285,169.3080060633505 L 259.36720213445176,164.66371871820724 L 270.1535081423607,160.81763096353 L 280.9398141502696,154.3154028720902 L 291.72612015817856,147.33043239364878 L 302.5124261660875,146.34438152519158 L 324.08503818190536,145.1052053698663 L 334.87134418981424,144.2558881297158 L 345.65765019772317,141.39545443420826 L 399.5891802372678,140.69707316107522 L 421.1617922530857,139.68124585469988 L 431.9480982609946,135.4363939848278 L 442.7344042689035,133.1161542353784 L 453.52071027681245,130.40739764674535 L 464.3070162847214,123.59653889910928 L 475.09332229263026,112.85791794602187 L 485.8796283005392,99.77883392408326 L 496.6659343084482,77.86291983777082 L 507.4522403163571,52.02330957321189 L 518.238546324266,46.65533130802385 L 529.024852332175,44 L 539.8111583400839,44 L 550.5974643479929,44 L 561.3837703559018,44 L 572.1700763638107,44 L 572.1700763638107,224 Z" fill="url(#grad-0)" /><polyline points="76,218.44816041118833 86.78630600790893,213.1669133981525 97.57261201581785,210.21253840057642 108.35891802372677,209.06973268090414 119.1452240316357,204.85315587114306 129.93153003954464,203.9740576815314 151.50414205536248,201.89429305163387 162.2904480632714,201.89429305163387 173.07675407118035,200.15884668141973 183.86306007908928,199.6842763618082 194.6493660869982,197.7002710468085 205.43567209490712,193.53602342380327 216.22197810281605,184.8818881617339 227.008284110725,180.52796401442424 237.7945901186339,175.09870570502264 248.58089612654285,169.3080060633505 259.36720213445176,164.66371871820724 270.1535081423607,160.81763096353 280.9398141502696,154.3154028720902 291.72612015817856,147.33043239364878 302.5124261660875,146.34438152519158 324.08503818190536,145.1052053698663 334.87134418981424,144.2558881297158 345.65765019772317,141.39545443420826 399.5891802372678,140.69707316107522 421.1617922530857,139.68124585469988 431.9480982609946,135.4363939848278 442.7344042689035,133.1161542353784 453.52071027681245,130.40739764674535 464.3070162847214,123.59653889910928 475.09332229263026,112.85791794602187 485.8796283005392,99.77883392408326 496.6659343084482,77.86291983777082 507.4522403163571,52.02330957321189 518.238546324266,46.65533130802385 529.024852332175,44 539.8111583400839,44 550.5974643479929,44 561.3837703559018,44 572.1700763638107,44" fill="none" stroke="#fbbf24" stroke-width="1.75" stroke-linejoin="round"/>
+  <text x="68" y="228" text-anchor="end" class="axis">$0.00</text><text x="68" y="183" text-anchor="end" class="axis">$142</text><text x="68" y="138" text-anchor="end" class="axis">$284</text><text x="68" y="93" text-anchor="end" class="axis">$425</text><text x="68" y="48" text-anchor="end" class="axis">$567</text>
+  <text x="76" y="244" text-anchor="middle" class="axis">May 23 00:00</text><text x="326" y="244" text-anchor="middle" class="axis">May 23 23:00</text><text x="576" y="244" text-anchor="middle" class="axis">May 24 22:00</text><text x="826" y="244" text-anchor="middle" class="axis">May 25 21:00</text><text x="1076" y="244" text-anchor="middle" class="axis">May 26 20:00</text>
+</svg></div>
+  </div>
+</details>
+
+<details>
+  <summary>📊 Q2 detail — full ranking (all paper tenants + prod reference)</summary>
+  <div class="details-body">
+    <p class="muted">swisstony traded <code>3189</code> markets totaling <code>$7830330.13</code>. <code>PnL $</code> = realized gain/loss on markets resolved in window. <code>Δ vs swisstony</code> = 100% − (our markets ∩ swisstony's markets) ÷ swisstony's markets.</p>
+    <table class="ab algo"><thead><tr><th>tenant</th><th class="num">PnL $</th><th class="num">resolved</th><th class="num">W/L</th><th class="num">Δ vs swisstony</th><th class="num">$ filled</th><th class="num">capture %</th></tr></thead><tbody><tr class="rank-1"><td class="role" style="color:#fbbf24">TRUST_TWIN · preview (control)</td><td class="num neg"><strong>−$16.25</strong></td><td class="num">144</td><td class="num">76/84</td><td class="num">95.4%</td><td class="num">$567.03</td><td class="num">0.007%</td></tr><tr class=""><td class="role" style="color:#34d399">VALIDATION · candidate-a</td><td class="num neg"><strong>−$62.10</strong></td><td class="num">232</td><td class="num">125/135</td><td class="num">91.5%</td><td class="num">$1161.04</td><td class="num">0.015%</td></tr><tr class=""><td class="role" style="color:#f472b6">GAP · preview</td><td class="num neg"><strong>−$144.95</strong></td><td class="num">242</td><td class="num">124/179</td><td class="num">92.3%</td><td class="num">$2256.12</td><td class="num">0.029%</td></tr><tr class=""><td class="role" style="color:#60a5fa">GAP · candidate-a</td><td class="num neg"><strong>−$1600.33</strong></td><td class="num">688</td><td class="num">386/500</td><td class="num">73.6%</td><td class="num">$28665.84</td><td class="num">0.366%</td></tr><tr class=""><td class="role" style="color:#a78bfa">SWISSTONY_TRUST_TWIN · preview</td><td class="num neg"><strong>−$53407.67</strong></td><td class="num">800</td><td class="num">466/531</td><td class="num">74.5%</td><td class="num">$728118.63</td><td class="num">9.299%</td></tr><tr class="ref"><td class="role" style="color:#fb7185">LIVE · production (prod ref)</td><td class="num "><strong>$0.00</strong> 🟡</td><td class="num">0</td><td class="num">0/0</td><td class="num">100.0%</td><td class="num">$0.00</td><td class="num">0.000%</td></tr></tbody></table>
+    <div class="chart"><svg viewBox="0 0 1100 280" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="line-chart">
+  <defs><linearGradient id="grad-0" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#60a5fa" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-1" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-2" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f472b6" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#f472b6" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-3" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.0"/>
+    </linearGradient><linearGradient id="grad-4" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.0"/>
+    </linearGradient></defs>
+  <text x="12" y="20" class="chart-title">$ filled — all paper tenants</text>
+  <g transform="translate(76, 22)">
+        <rect width="10" height="10" rx="2" fill="#60a5fa"/>
+        <text x="16" y="9" class="legend">GAP · candidate-a</text>
+      </g><g transform="translate(244, 22)">
+        <rect width="10" height="10" rx="2" fill="#34d399"/>
+        <text x="16" y="9" class="legend">VALIDATION · candidate-a</text>
+      </g><g transform="translate(412, 22)">
+        <rect width="10" height="10" rx="2" fill="#f472b6"/>
+        <text x="16" y="9" class="legend">GAP · preview</text>
+      </g><g transform="translate(580, 22)">
+        <rect width="10" height="10" rx="2" fill="#a78bfa"/>
+        <text x="16" y="9" class="legend">SWISSTONY_TRUST_TWIN · preview</text>
+      </g><g transform="translate(748, 22)">
+        <rect width="10" height="10" rx="2" fill="#fbbf24"/>
+        <text x="16" y="9" class="legend">TRUST_TWIN · preview</text>
+      </g><g transform="translate(916, 22)">
+        <rect width="10" height="10" rx="2" fill="#fb7185"/>
+        <text x="16" y="9" class="legend">LIVE · production</text>
+      </g>
+  <line x1="76" y1="244" x2="1076" y2="244" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="194" x2="1076" y2="194" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="144" x2="1076" y2="144" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="94" x2="1076" y2="94" stroke="#1f2937" stroke-width="0.5"/><line x1="76" y1="44" x2="1076" y2="44" stroke="#1f2937" stroke-width="0.5"/>
+  <line x1="76" y1="244" x2="1076" y2="244" stroke="#475569" stroke-width="1"/>
+  <path d="M 76,244 L 76,243.89767892078345 L 86.78630600790893,243.75881307375928 L 97.57261201581785,243.71063994925805 L 108.35891802372677,243.6539151744 L 119.1452240316357,243.57389988266755 L 129.93153003954464,243.5277262274805 L 140.71783604745355,243.4857744300453 L 151.50414205536248,243.42491751553172 L 162.2904480632714,243.37981795305814 L 173.07675407118035,243.36150022653936 L 183.86306007908928,243.31728686130322 L 194.6493660869982,243.23865454884736 L 205.43567209490712,243.08190405441496 L 216.22197810281605,243.0278091867188 L 227.008284110725,242.96300023547624 L 237.7945901186339,242.8784484428265 L 248.58089612654285,242.7774023284189 L 259.36720213445176,242.71554684841567 L 270.1535081423607,242.567871874145 L 280.9398141502696,242.38472486636206 L 291.72612015817856,242.30008871089174 L 302.5124261660875,242.29334619233998 L 313.2987321739964,242.2862133505 L 324.08503818190536,242.229246811814 L 334.87134418981424,242.17071262699912 L 345.65765019772317,242.04585251287918 L 356.4439562056321,242.02033561748127 L 367.23026221354104,242.0167095681013 L 378.01656822145,242.01202543710866 L 388.80287422935885,242.00316888031642 L 399.5891802372678,241.96205078983454 L 410.3754862451767,241.94222145599616 L 421.1617922530857,241.9040491840716 L 431.9480982609946,241.81020149841243 L 442.7344042689035,241.71137761000682 L 453.52071027681245,241.63676692905887 L 464.3070162847214,241.522024178567 L 475.09332229263026,241.41394316982638 L 485.8796283005392,241.26003666481785 L 496.6659343084482,241.0123721319204 L 507.4522403163571,240.7993354467447 L 518.238546324266,240.75772638469704 L 529.024852332175,240.69347022134258 L 539.8111583400839,240.55523599351307 L 550.5974643479929,240.45157084852957 L 561.3837703559018,240.40137775003672 L 572.1700763638107,240.37525966598318 L 582.9563823717197,240.3574721494056 L 593.7426883796285,240.28452642845076 L 604.5289943875374,240.21518054398342 L 615.3153003954463,240.1703395664326 L 626.1016064033553,240.1703395664326 L 636.8879124112642,240.1627936509938 L 647.6742184191731,240.15923528137174 L 658.4605244270821,240.15162188235146 L 669.2468304349909,240.14793085078716 L 680.0331364429,240.12464669048362 L 690.8194424508089,239.91728547086592 L 701.6057484587177,239.86433846846182 L 712.3920544666267,239.75120043939592 L 723.1783604745356,239.6078680984086 L 733.9646664824446,239.45637906189285 L 744.7509724903534,239.32416404027924 L 755.5372784982624,239.16181766025466 L 766.3235845061714,239.11694002199496 L 777.1098905140802,238.9857239418966 L 787.8961965219892,238.78495982937363 L 798.6825025298981,238.60113515557532 L 809.468808537807,238.45048741312144 L 820.255114545716,238.38113138653426 L 831.0414205536249,238.3136747473253 L 841.8277265615338,238.23406974026148 L 852.6140325694428,238.10307519896548 L 863.4003385773517,238.01033241056268 L 874.1866445852605,237.90737752416376 L 884.9729505931696,237.82167819637004 L 895.7592566010784,237.81832531306173 L 906.5455626089873,237.797238648712 L 917.3318686168964,237.794714296199 L 928.1181746248052,237.77796612461543 L 938.9044806327142,237.71094718666723 L 949.6907866406231,237.59781500350186 L 960.477092648532,237.40166110737042 L 971.2633986564409,237.33525770699714 L 982.0497046643499,237.21404263940096 L 992.8360106722588,236.96031416044784 L 1003.6223166801677,236.8185125104773 L 1014.4086226880767,236.64918529576377 L 1025.1949286959857,236.49097616700456 L 1035.9812347038946,236.33705257983056 L 1046.7675407118036,236.23163634427175 L 1057.5538467197125,236.15613295928483 L 1068.3401527276214,236.126051490289 L 1068.3401527276214,244 Z" fill="url(#grad-0)" /><polyline points="76,243.89767892078345 86.78630600790893,243.75881307375928 97.57261201581785,243.71063994925805 108.35891802372677,243.6539151744 119.1452240316357,243.57389988266755 129.93153003954464,243.5277262274805 140.71783604745355,243.4857744300453 151.50414205536248,243.42491751553172 162.2904480632714,243.37981795305814 173.07675407118035,243.36150022653936 183.86306007908928,243.31728686130322 194.6493660869982,243.23865454884736 205.43567209490712,243.08190405441496 216.22197810281605,243.0278091867188 227.008284110725,242.96300023547624 237.7945901186339,242.8784484428265 248.58089612654285,242.7774023284189 259.36720213445176,242.71554684841567 270.1535081423607,242.567871874145 280.9398141502696,242.38472486636206 291.72612015817856,242.30008871089174 302.5124261660875,242.29334619233998 313.2987321739964,242.2862133505 324.08503818190536,242.229246811814 334.87134418981424,242.17071262699912 345.65765019772317,242.04585251287918 356.4439562056321,242.02033561748127 367.23026221354104,242.0167095681013 378.01656822145,242.01202543710866 388.80287422935885,242.00316888031642 399.5891802372678,241.96205078983454 410.3754862451767,241.94222145599616 421.1617922530857,241.9040491840716 431.9480982609946,241.81020149841243 442.7344042689035,241.71137761000682 453.52071027681245,241.63676692905887 464.3070162847214,241.522024178567 475.09332229263026,241.41394316982638 485.8796283005392,241.26003666481785 496.6659343084482,241.0123721319204 507.4522403163571,240.7993354467447 518.238546324266,240.75772638469704 529.024852332175,240.69347022134258 539.8111583400839,240.55523599351307 550.5974643479929,240.45157084852957 561.3837703559018,240.40137775003672 572.1700763638107,240.37525966598318 582.9563823717197,240.3574721494056 593.7426883796285,240.28452642845076 604.5289943875374,240.21518054398342 615.3153003954463,240.1703395664326 626.1016064033553,240.1703395664326 636.8879124112642,240.1627936509938 647.6742184191731,240.15923528137174 658.4605244270821,240.15162188235146 669.2468304349909,240.14793085078716 680.0331364429,240.12464669048362 690.8194424508089,239.91728547086592 701.6057484587177,239.86433846846182 712.3920544666267,239.75120043939592 723.1783604745356,239.6078680984086 733.9646664824446,239.45637906189285 744.7509724903534,239.32416404027924 755.5372784982624,239.16181766025466 766.3235845061714,239.11694002199496 777.1098905140802,238.9857239418966 787.8961965219892,238.78495982937363 798.6825025298981,238.60113515557532 809.468808537807,238.45048741312144 820.255114545716,238.38113138653426 831.0414205536249,238.3136747473253 841.8277265615338,238.23406974026148 852.6140325694428,238.10307519896548 863.4003385773517,238.01033241056268 874.1866445852605,237.90737752416376 884.9729505931696,237.82167819637004 895.7592566010784,237.81832531306173 906.5455626089873,237.797238648712 917.3318686168964,237.794714296199 928.1181746248052,237.77796612461543 938.9044806327142,237.71094718666723 949.6907866406231,237.59781500350186 960.477092648532,237.40166110737042 971.2633986564409,237.33525770699714 982.0497046643499,237.21404263940096 992.8360106722588,236.96031416044784 1003.6223166801677,236.8185125104773 1014.4086226880767,236.64918529576377 1025.1949286959857,236.49097616700456 1035.9812347038946,236.33705257983056 1046.7675407118036,236.23163634427175 1057.5538467197125,236.15613295928483 1068.3401527276214,236.126051490289" fill="none" stroke="#60a5fa" stroke-width="1.75" stroke-linejoin="round"/><path d="M 76,244 L 76,243.99519609005617 L 86.78630600790893,243.98988468175796 L 97.57261201581785,243.98567071343805 L 108.35891802372677,243.98384120090728 L 119.1452240316357,243.98111219250794 L 129.93153003954464,243.9793739846922 L 140.71783604745355,243.97842155617093 L 151.50414205536248,243.9760344502367 L 162.2904480632714,243.97515139261088 L 173.07675407118035,243.97464323365872 L 183.86306007908928,243.9736709519897 L 194.6493660869982,243.96721436897215 L 205.43567209490712,243.95848110720345 L 216.22197810281605,243.9535090746018 L 227.008284110725,243.9512292263299 L 237.7945901186339,243.94502472596974 L 248.58089612654285,243.93836320372185 L 259.36720213445176,243.93201995510242 L 270.1535081423607,243.92640715991783 L 280.9398141502696,243.9184967731586 L 291.72612015817856,243.90797237115424 L 302.5124261660875,243.90723516624286 L 313.2987321739964,243.90723516624286 L 324.08503818190536,243.90616292873318 L 334.87134418981424,243.90473921181768 L 345.65765019772317,243.9022641284415 L 399.5891802372678,243.9016598313092 L 421.1617922530857,243.9016598313092 L 431.9480982609946,243.90009250711196 L 442.7344042689035,243.8972442483791 L 453.52071027681245,243.8972442483791 L 464.3070162847214,243.89504055082946 L 475.09332229263026,243.88792092270216 L 485.8796283005392,243.87584310170757 L 496.6659343084482,243.8466850887051 L 507.4522403163571,243.82312357028877 L 518.238546324266,243.81987515954194 L 529.024852332175,243.81455691974801 L 539.8111583400839,243.79657978953065 L 550.5974643479929,243.78670998123823 L 561.3837703559018,243.78471630628917 L 572.1700763638107,243.7829139352812 L 582.9563823717197,243.78178613270063 L 593.7426883796285,243.77950432485767 L 604.5289943875374,243.77448586452473 L 615.3153003954463,243.77373761387238 L 669.2468304349909,243.77276659530364 L 680.0331364429,243.7715674560719 L 690.8194424508089,243.76899912604347 L 701.6057484587177,243.76838109488543 L 712.3920544666267,243.76517280335466 L 723.1783604745356,243.76215131769308 L 733.9646664824446,243.758544803388 L 744.7509724903534,243.75661129489197 L 755.5372784982624,243.75215670885552 L 766.3235845061714,243.75097395393033 L 777.1098905140802,243.74798750826122 L 787.8961965219892,243.74457913210685 L 798.6825025298981,243.73911355816594 L 809.468808537807,243.7346366306453 L 820.255114545716,243.72947377389164 L 831.0414205536249,243.72814170901214 L 841.8277265615338,243.72792597493589 L 852.6140325694428,243.72332793918355 L 863.4003385773517,243.72304710582534 L 874.1866445852605,243.72156437867727 L 884.9729505931696,243.72046565661853 L 938.9044806327142,243.7190235839164 L 949.6907866406231,243.7163904264533 L 960.477092648532,243.71247099564184 L 971.2633986564409,243.71039715775595 L 982.0497046643499,243.7072862720384 L 992.8360106722588,243.70158410577355 L 1003.6223166801677,243.69963200786293 L 1014.4086226880767,243.69715027006765 L 1025.1949286959857,243.69031174012326 L 1035.9812347038946,243.68527779326436 L 1046.7675407118036,243.68197868800658 L 1057.5538467197125,243.68108597633383 L 1057.5538467197125,244 Z" fill="url(#grad-1)" /><polyline points="76,243.99519609005617 86.78630600790893,243.98988468175796 97.57261201581785,243.98567071343805 108.35891802372677,243.98384120090728 119.1452240316357,243.98111219250794 129.93153003954464,243.9793739846922 140.71783604745355,243.97842155617093 151.50414205536248,243.9760344502367 162.2904480632714,243.97515139261088 173.07675407118035,243.97464323365872 183.86306007908928,243.9736709519897 194.6493660869982,243.96721436897215 205.43567209490712,243.95848110720345 216.22197810281605,243.9535090746018 227.008284110725,243.9512292263299 237.7945901186339,243.94502472596974 248.58089612654285,243.93836320372185 259.36720213445176,243.93201995510242 270.1535081423607,243.92640715991783 280.9398141502696,243.9184967731586 291.72612015817856,243.90797237115424 302.5124261660875,243.90723516624286 313.2987321739964,243.90723516624286 324.08503818190536,243.90616292873318 334.87134418981424,243.90473921181768 345.65765019772317,243.9022641284415 399.5891802372678,243.9016598313092 421.1617922530857,243.9016598313092 431.9480982609946,243.90009250711196 442.7344042689035,243.8972442483791 453.52071027681245,243.8972442483791 464.3070162847214,243.89504055082946 475.09332229263026,243.88792092270216 485.8796283005392,243.87584310170757 496.6659343084482,243.8466850887051 507.4522403163571,243.82312357028877 518.238546324266,243.81987515954194 529.024852332175,243.81455691974801 539.8111583400839,243.79657978953065 550.5974643479929,243.78670998123823 561.3837703559018,243.78471630628917 572.1700763638107,243.7829139352812 582.9563823717197,243.78178613270063 593.7426883796285,243.77950432485767 604.5289943875374,243.77448586452473 615.3153003954463,243.77373761387238 669.2468304349909,243.77276659530364 680.0331364429,243.7715674560719 690.8194424508089,243.76899912604347 701.6057484587177,243.76838109488543 712.3920544666267,243.76517280335466 723.1783604745356,243.76215131769308 733.9646664824446,243.758544803388 744.7509724903534,243.75661129489197 755.5372784982624,243.75215670885552 766.3235845061714,243.75097395393033 777.1098905140802,243.74798750826122 787.8961965219892,243.74457913210685 798.6825025298981,243.73911355816594 809.468808537807,243.7346366306453 820.255114545716,243.72947377389164 831.0414205536249,243.72814170901214 841.8277265615338,243.72792597493589 852.6140325694428,243.72332793918355 863.4003385773517,243.72304710582534 874.1866445852605,243.72156437867727 884.9729505931696,243.72046565661853 938.9044806327142,243.7190235839164 949.6907866406231,243.7163904264533 960.477092648532,243.71247099564184 971.2633986564409,243.71039715775595 982.0497046643499,243.7072862720384 992.8360106722588,243.70158410577355 1003.6223166801677,243.69963200786293 1014.4086226880767,243.69715027006765 1025.1949286959857,243.69031174012326 1035.9812347038946,243.68527779326436 1046.7675407118036,243.68197868800658 1057.5538467197125,243.68108597633383" fill="none" stroke="#34d399" stroke-width="1.75" stroke-linejoin="round"/><path d="M 76,244 L 76,243.97369887705167 L 86.78630600790893,243.95339361868602 L 97.57261201581785,243.9367149419992 L 108.35891802372677,243.92976178820223 L 119.1452240316357,243.9066598557937 L 129.93153003954464,243.89009704471127 L 140.71783604745355,243.88182707040107 L 151.50414205536248,243.86902140599102 L 162.2904480632714,243.8635869200649 L 173.07675407118035,243.8613227205972 L 183.86306007908928,243.85171888597995 L 194.6493660869982,243.83453971062713 L 205.43567209490712,243.80009236696526 L 216.22197810281605,243.78756712127787 L 227.008284110725,243.77130792381269 L 237.7945901186339,243.7581366719544 L 248.58089612654285,243.74037624283176 L 259.36720213445176,243.72996216514187 L 270.1535081423607,243.70863061319227 L 280.9398141502696,243.67930655437564 L 291.72612015817856,243.66812256491565 L 302.5124261660875,243.66812256491565 L 313.2987321739964,243.66812256491565 L 324.08503818190536,243.6576961883619 L 334.87134418981424,243.6502967821845 L 345.65765019772317,243.63096028769235 L 356.4439562056321,243.6258338519754 L 388.80287422935885,243.62536424922288 L 399.5891802372678,243.61619268358336 L 410.3754862451767,243.61268153717748 L 421.1617922530857,243.60023418828192 L 431.9480982609946,243.57549434339523 L 442.7344042689035,243.55425288169351 L 453.52071027681245,243.5400165310889 L 464.3070162847214,243.52349435727726 L 475.09332229263026,243.49702327879947 L 485.8796283005392,243.459290616424 L 496.6659343084482,243.41637691271436 L 507.4522403163571,243.39365697776714 L 518.238546324266,243.38515678984623 L 529.024852332175,243.38028864872018 L 539.8111583400839,243.38028864872018 L 550.5974643479929,243.38028864872018 L 561.3837703559018,243.38028864872018 L 572.1700763638107,243.38028864872018 L 572.1700763638107,244 Z" fill="url(#grad-2)" /><polyline points="76,243.97369887705167 86.78630600790893,243.95339361868602 97.57261201581785,243.9367149419992 108.35891802372677,243.92976178820223 119.1452240316357,243.9066598557937 129.93153003954464,243.89009704471127 140.71783604745355,243.88182707040107 151.50414205536248,243.86902140599102 162.2904480632714,243.8635869200649 173.07675407118035,243.8613227205972 183.86306007908928,243.85171888597995 194.6493660869982,243.83453971062713 205.43567209490712,243.80009236696526 216.22197810281605,243.78756712127787 227.008284110725,243.77130792381269 237.7945901186339,243.7581366719544 248.58089612654285,243.74037624283176 259.36720213445176,243.72996216514187 270.1535081423607,243.70863061319227 280.9398141502696,243.67930655437564 291.72612015817856,243.66812256491565 302.5124261660875,243.66812256491565 313.2987321739964,243.66812256491565 324.08503818190536,243.6576961883619 334.87134418981424,243.6502967821845 345.65765019772317,243.63096028769235 356.4439562056321,243.6258338519754 388.80287422935885,243.62536424922288 399.5891802372678,243.61619268358336 410.3754862451767,243.61268153717748 421.1617922530857,243.60023418828192 431.9480982609946,243.57549434339523 442.7344042689035,243.55425288169351 453.52071027681245,243.5400165310889 464.3070162847214,243.52349435727726 475.09332229263026,243.49702327879947 485.8796283005392,243.459290616424 496.6659343084482,243.41637691271436 507.4522403163571,243.39365697776714 518.238546324266,243.38515678984623 529.024852332175,243.38028864872018 539.8111583400839,243.38028864872018 550.5974643479929,243.38028864872018 561.3837703559018,243.38028864872018 572.1700763638107,243.38028864872018" fill="none" stroke="#f472b6" stroke-width="1.75" stroke-linejoin="round"/><path d="M 76,244 L 76,238.19266382403444 L 86.78630600790893,231.61345084357663 L 97.57261201581785,226.9801737929149 L 108.35891802372677,222.25388913675917 L 119.1452240316357,211.08983939638168 L 129.93153003954464,204.9165171604249 L 140.71783604745355,203.34283248058813 L 151.50414205536248,196.2252106841631 L 162.2904480632714,194.0126890447118 L 173.07675407118035,192.82820284427137 L 183.86306007908928,191.13485529298373 L 194.6493660869982,186.88496025781222 L 205.43567209490712,181.49987877443442 L 216.22197810281605,178.94177450981886 L 227.008284110725,173.70959007315403 L 237.7945901186339,170.2700983329151 L 248.58089612654285,165.79067343049422 L 259.36720213445176,161.87602740759394 L 270.1535081423607,153.57233651643827 L 280.9398141502696,147.20521372064684 L 291.72612015817856,142.99788792985743 L 302.5124261660875,142.86721278737264 L 313.2987321739964,142.2344635601763 L 324.08503818190536,139.58169652458025 L 334.87134418981424,137.33269884388687 L 345.65765019772317,133.60351758804057 L 356.4439562056321,132.77817134115898 L 367.23026221354104,132.594110379935 L 378.01656822145,132.1121700430748 L 388.80287422935885,131.48385779075693 L 399.5891802372678,128.0412319819313 L 410.3754862451767,126.3572202459296 L 421.1617922530857,124.7705403480324 L 431.9480982609946,118.99561694887153 L 442.7344042689035,112.31757432257129 L 453.52071027681245,107.43361326572989 L 464.3070162847214,100.5036466487368 L 475.09332229263026,91.53345265048051 L 485.8796283005392,79.05813225719629 L 496.6659343084482,61.55326290102451 L 507.4522403163571,49.84135241443326 L 518.238546324266,47.2580429681191 L 529.024852332175,44.000000660606986 L 539.8111583400839,44.000000660606986 L 550.5974643479929,44 L 561.3837703559018,44 L 572.1700763638107,44 L 572.1700763638107,244 Z" fill="url(#grad-3)" /><polyline points="76,238.19266382403444 86.78630600790893,231.61345084357663 97.57261201581785,226.9801737929149 108.35891802372677,222.25388913675917 119.1452240316357,211.08983939638168 129.93153003954464,204.9165171604249 140.71783604745355,203.34283248058813 151.50414205536248,196.2252106841631 162.2904480632714,194.0126890447118 173.07675407118035,192.82820284427137 183.86306007908928,191.13485529298373 194.6493660869982,186.88496025781222 205.43567209490712,181.49987877443442 216.22197810281605,178.94177450981886 227.008284110725,173.70959007315403 237.7945901186339,170.2700983329151 248.58089612654285,165.79067343049422 259.36720213445176,161.87602740759394 270.1535081423607,153.57233651643827 280.9398141502696,147.20521372064684 291.72612015817856,142.99788792985743 302.5124261660875,142.86721278737264 313.2987321739964,142.2344635601763 324.08503818190536,139.58169652458025 334.87134418981424,137.33269884388687 345.65765019772317,133.60351758804057 356.4439562056321,132.77817134115898 367.23026221354104,132.594110379935 378.01656822145,132.1121700430748 388.80287422935885,131.48385779075693 399.5891802372678,128.0412319819313 410.3754862451767,126.3572202459296 421.1617922530857,124.7705403480324 431.9480982609946,118.99561694887153 442.7344042689035,112.31757432257129 453.52071027681245,107.43361326572989 464.3070162847214,100.5036466487368 475.09332229263026,91.53345265048051 485.8796283005392,79.05813225719629 496.6659343084482,61.55326290102451 507.4522403163571,49.84135241443326 518.238546324266,47.2580429681191 529.024852332175,44.000000660606986 539.8111583400839,44.000000660606986 550.5974643479929,44 561.3837703559018,44 572.1700763638107,44" fill="none" stroke="#a78bfa" stroke-width="1.75" stroke-linejoin="round"/><path d="M 76,244 L 76,243.99519609005617 L 86.78630600790893,243.99062631914762 L 97.57261201581785,243.98806995000157 L 108.35891802372677,243.98708110014869 L 119.1452240316357,243.98343256979376 L 129.93153003954464,243.98267190146623 L 151.50414205536248,243.98087231741368 L 162.2904480632714,243.98087231741368 L 173.07675407118035,243.97937066594457 L 183.86306007908928,243.97896002852593 L 194.6493660869982,243.977243303338 L 205.43567209490712,243.97364005251552 L 216.22197810281605,243.96615178024544 L 227.008284110725,243.96238440563536 L 237.7945901186339,243.95768656313416 L 248.58089612654285,243.9526759717535 L 259.36720213445176,243.9486573509338 L 270.1535081423607,243.94532939829503 L 280.9398141502696,243.93970313375945 L 291.72612015817856,243.93365916065792 L 302.5124261660875,243.9328059480432 L 324.08503818190536,243.93173371053354 L 334.87134418981424,243.93099881114205 L 345.65765019772317,243.92852372776585 L 399.5891802372678,243.92791943063355 L 421.1617922530857,243.92704045298655 L 431.9480982609946,243.92336745671537 L 442.7344042689035,243.92135979373697 L 453.52071027681245,243.91901595391533 L 464.3070162847214,243.91312263665708 L 475.09332229263026,243.9038306952826 L 485.8796283005392,243.89251359204425 L 496.6659343084482,243.8735501339105 L 507.4522403163571,243.85119156992297 L 518.238546324266,243.84654675197498 L 529.024852332175,243.84424914011666 L 539.8111583400839,243.84424914011666 L 550.5974643479929,243.84424914011666 L 561.3837703559018,243.84424914011666 L 572.1700763638107,243.84424914011666 L 572.1700763638107,244 Z" fill="url(#grad-4)" /><polyline points="76,243.99519609005617 86.78630600790893,243.99062631914762 97.57261201581785,243.98806995000157 108.35891802372677,243.98708110014869 119.1452240316357,243.98343256979376 129.93153003954464,243.98267190146623 151.50414205536248,243.98087231741368 162.2904480632714,243.98087231741368 173.07675407118035,243.97937066594457 183.86306007908928,243.97896002852593 194.6493660869982,243.977243303338 205.43567209490712,243.97364005251552 216.22197810281605,243.96615178024544 227.008284110725,243.96238440563536 237.7945901186339,243.95768656313416 248.58089612654285,243.9526759717535 259.36720213445176,243.9486573509338 270.1535081423607,243.94532939829503 280.9398141502696,243.93970313375945 291.72612015817856,243.93365916065792 302.5124261660875,243.9328059480432 324.08503818190536,243.93173371053354 334.87134418981424,243.93099881114205 345.65765019772317,243.92852372776585 399.5891802372678,243.92791943063355 421.1617922530857,243.92704045298655 431.9480982609946,243.92336745671537 442.7344042689035,243.92135979373697 453.52071027681245,243.91901595391533 464.3070162847214,243.91312263665708 475.09332229263026,243.9038306952826 485.8796283005392,243.89251359204425 496.6659343084482,243.8735501339105 507.4522403163571,243.85119156992297 518.238546324266,243.84654675197498 529.024852332175,243.84424914011666 539.8111583400839,243.84424914011666 550.5974643479929,243.84424914011666 561.3837703559018,243.84424914011666 572.1700763638107,243.84424914011666" fill="none" stroke="#fbbf24" stroke-width="1.75" stroke-linejoin="round"/>
+  <text x="68" y="248" text-anchor="end" class="axis">$0.00</text><text x="68" y="198" text-anchor="end" class="axis">$182.0k</text><text x="68" y="148" text-anchor="end" class="axis">$364.1k</text><text x="68" y="98" text-anchor="end" class="axis">$546.1k</text><text x="68" y="48" text-anchor="end" class="axis">$728.1k</text>
+  <text x="76" y="264" text-anchor="middle" class="axis">May 23 00:00</text><text x="326" y="264" text-anchor="middle" class="axis">May 23 23:00</text><text x="576" y="264" text-anchor="middle" class="axis">May 24 22:00</text><text x="826" y="264" text-anchor="middle" class="axis">May 25 21:00</text><text x="1076" y="264" text-anchor="middle" class="axis">May 26 20:00</text>
+</svg></div>
+  </div>
+</details>
+
+<details>
+  <summary>🔍 Decisions reference — skip-reason breakdown per tenant</summary>
+  <div class="details-body">
+    <p class="muted">Why did orders not place? Decision-side counts and top 3 skip reasons per tenant. Explanatory only — NOT a ranking surface.</p>
+    <table class="ab">
+      <thead><tr><th>tenant</th><th class="num">decisions</th><th class="num">placed</th><th class="num">placement rate</th><th class="num">Δ rate vs control</th><th>top skip reasons</th></tr></thead>
+      <tbody><tr><td class="role" style="color:#fbbf24">TRUST_TWIN · preview</td><td class="num">43742</td><td class="num">662</td><td class="num">1.51%</td><td class="num">—</td><td class="skips">vwap_floor_breach=17132 · below_target_percentile=11813 · target_dominant_other_side=7694</td></tr><tr><td class="role" style="color:#60a5fa">GAP · candidate-a</td><td class="num">72060</td><td class="num">5217</td><td class="num">7.24%</td><td class="num">378.4%</td><td class="skips">vwap_floor_breach=26073 · below_market_min=13963 · target_dominant_other_side=13041</td></tr><tr><td class="role" style="color:#34d399">VALIDATION · candidate-a</td><td class="num">69669</td><td class="num">750</td><td class="num">1.08%</td><td class="num">-28.9%</td><td class="skips">vwap_floor_breach=25270 · below_target_percentile=19847 · target_dominant_other_side=12625</td></tr><tr><td class="role" style="color:#f472b6">GAP · preview</td><td class="num">49363</td><td class="num">1235</td><td class="num">2.50%</td><td class="num">65.3%</td><td class="skips">vwap_floor_breach=19068 · below_market_min=15699 · target_dominant_other_side=8487</td></tr><tr><td class="role" style="color:#a78bfa">SWISSTONY_TRUST_TWIN · preview</td><td class="num">50565</td><td class="num">7409</td><td class="num">14.65%</td><td class="num">868.2%</td><td class="skips">vwap_floor_breach=19478 · target_dominant_other_side=8940 · already_resting=6494</td></tr><tr><td class="role" style="color:#fb7185">LIVE · production 🟡</td><td class="num">0</td><td class="num">0</td><td class="num">—</td><td class="num">—</td><td class="skips"></td></tr></tbody>
+    </table>
+  </div>
+</details>
+
+<details>
+  <summary>🤖 AI agent appendix — what to investigate next</summary>
+  <div class="details-body">
+    <p class="muted">If <strong>Q1 &lt; 99%</strong>: paper sidecar is missing planner gates. Top mismatch reason names the gate (e.g. <code>followup_position_too_small</code> means the paper sidecar's planner is letting through orders the live planner correctly skips). Cite <code>nodes/poly/sidecars/paper-trader/server.py</code> or the planner gate in <code>nodes/poly/app/src/features/copy-trade/plan-mirror.ts</code> in the LLM finding.</p>
+    <p class="muted">If <strong>Q2 is GATED</strong>: do NOT promote any paper policy. Fix Q1 first. If Q2 is ungated and a paper tenant beats prod ref with ≥3 resolved markets, that's the promotion candidate.</p>
+    <p class="muted">Many <strong>live-only fills</strong> (in mismatch summary) = twin's wallet-watch missed entire chunks of target activity. Check poll cadence + websocket health.</p>
+    <p class="muted">Full structured data: <a href="bundle.json">bundle.json</a> · LLM stub: <a href="findings.json">findings.json</a>.</p>
+  </div>
+</details>
+
+<div class="footer-note">
+  Tool: <code>nodes/poly/scripts/tenant-matrix-evaluator.ts</code> · Skill: <code>/tenant-matrix-evaluator</code> · Captured: <code>2026-05-26T20:43:24.519Z</code>
+</div>
+
+</body>
+</html>

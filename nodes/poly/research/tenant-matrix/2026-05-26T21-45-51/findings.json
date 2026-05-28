@@ -1,0 +1,85 @@
+{
+  "report_path": "/Users/derek/conductor/workspaces/cogni-poly/worcester/nodes/poly/research/tenant-matrix/2026-05-26T21-45-51/report.html",
+  "primary_class": "D2",
+  "primary_class_reason": "fill-chase / adverse selection (work/charters/POLY_COPY_DELTA.md:34); compounded by paper-VWAP bias in the sidecar's simulated orderbook (docs/spec/poly-paper-trading-shortcomings.md)",
+  "primary_confidence": 0.9,
+  "primary_one_liner": "Swisstony made +1.7% in 4 days; every paper algo (10 of 10) lost money instead.",
+  "secondary_class": null,
+  "secondary_confidence": null,
+  "secondary_one_liner": "Result holds across every policy + cap_alloc tested ($5 → $500k); not undersizing.",
+  "pareto_next_fix": "Ship position-mirror Phase 3 (docs/spec/poly-copy-trade-position-mirror.md) + provision a true POLY_PROD_TENANT_TRUST_TWIN with prod LIVE's exact policy for isolated sidecar-fidelity measurement.",
+  "evidence": {
+    "code_path": "nodes/poly/app/src/features/copy-trade/plan-mirror.ts:323",
+    "secondary_code_path": "nodes/poly/sidecars/paper-trader/server.py:490"
+  },
+  "headline_metrics": {
+    "target_realized_pnl_usdc": 133259.23,
+    "target_intent_usdc": 7866326.04,
+    "target_pnl_pct": 0.01694,
+    "target_resolved_markets": 2771,
+    "paper_variants_tested": 10,
+    "paper_variants_positive_pnl": 0,
+    "closest_paper_pnl_pct": -0.0122,
+    "closest_paper_env_key_prefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+    "policy_range_tested": [
+      "auto p75/$5",
+      "auto p80/$15",
+      "auto p80/$100",
+      "position_gap $1k",
+      "position_gap $5k",
+      "position_gap $50k",
+      "position_gap $500k"
+    ]
+  },
+  "closest_to_target_role": "SWISSTONY_TRUST_TWIN@preview",
+  "closest_to_target_env_key_prefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+  "closest_to_target_distance": 0.8952165567915702,
+  "prod_twin_fidelity_pct": null,
+  "prod_twin_fidelity_class": "no_data",
+  "prod_twin_fidelity_shared_fills": 0,
+  "sample_floor_warnings": [
+    {
+      "envKeyPrefix": "POLY_PROD_TENANT_LIVE",
+      "resolved_markets": 0
+    }
+  ],
+  "env_gap_warnings": [
+    {
+      "env": "candidate-a",
+      "billing_account_id": "20fdb57a-4db2-4669-8abc-20cf4d6b8862",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "20fdb57a"
+    },
+    {
+      "env": "candidate-a",
+      "billing_account_id": "acd63233-764b-46a6-8d91-b645cc3417bd",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "acd63233"
+    },
+    {
+      "env": "candidate-a",
+      "billing_account_id": "809e37f7-40b3-403d-a354-79a547bae48a",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "809e37f7"
+    },
+    {
+      "env": "preview",
+      "billing_account_id": "376c594c-e6e1-44b2-aafb-366382032461",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "position_gap",
+      "short_id": "376c594c"
+    },
+    {
+      "env": "preview",
+      "billing_account_id": "fb8f65d5-29e4-446a-8753-280d5328b2a2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "fb8f65d5"
+    }
+  ],
+  "target_ds_uid": "cogni-candidate-a-poly-postgres",
+  "authored_at": "2026-05-26T21:50:00Z"
+}
