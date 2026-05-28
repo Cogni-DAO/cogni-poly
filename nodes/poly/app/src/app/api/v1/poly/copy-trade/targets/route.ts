@@ -33,9 +33,11 @@ import { withTenantScope } from "@cogni/db-client";
 import { toUserId, userActor } from "@cogni/ids";
 import { polyCopyTradeTargets } from "@cogni/poly-db-schema";
 import {
+  MIN_ALLOC_TO_RANGE_RATIO,
   type PolyCopyTradeTarget,
   polyCopyTradeTargetCreateOperation,
   polyCopyTradeTargetsOperation,
+  type RangeKnobsRuleViolation,
   validatePositionGapRangeKnobs,
 } from "@cogni/poly-node-contracts";
 import { and, eq, isNull } from "drizzle-orm";
@@ -47,6 +49,19 @@ import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { sizingPolicyKindForTargetWallet } from "@/bootstrap/jobs/copy-trade-mirror.job";
 
 export const dynamic = "force-dynamic";
+
+// Per-violation 400 message. The presence violations are operator-typo-class;
+// the ratio violation is bug.5026 — point at the planner math + the threshold
+// so the operator knows whether to raise `max_alloc` or drop `range_max`.
+function rangeKnobsErrorMessage(code: RangeKnobsRuleViolation): string {
+  switch (code) {
+    case "position_gap_requires_target_range_max_usdc":
+    case "position_gap_requires_mirror_max_alloc_per_condition_usdc":
+      return "position_gap targets require both target_range_max_usdc and mirror_max_alloc_per_condition_usdc — no defaults, set explicitly";
+    case "position_gap_alloc_range_ratio_too_small":
+      return `mirror_max_alloc_per_condition_usdc / target_range_max_usdc < ${MIN_ALLOC_TO_RANGE_RATIO} produces sub-floor sizing every fill (bug.5026). The planner peaks at max_alloc at saturation — set max_alloc closer to target_range_max_usdc for a real proportional mirror, or raise both for fractional`;
+  }
+}
 
 /**
  * `id` is the DB row PK from `poly_copy_trade_targets`, exposed as the
@@ -193,8 +208,7 @@ export const POST = wrapRouteHandlerWithLogging(
     if (rangeRuleError !== null) {
       return NextResponse.json(
         {
-          error:
-            "position_gap targets require both target_range_max_usdc and mirror_max_alloc_per_condition_usdc — no defaults, set explicitly",
+          error: rangeKnobsErrorMessage(rangeRuleError),
           code: rangeRuleError,
         },
         { status: 400 }
