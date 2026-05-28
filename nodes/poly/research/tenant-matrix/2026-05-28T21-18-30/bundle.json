@@ -1,0 +1,1510 @@
+{
+  "captured_at": "2026-05-28T21:18:30.136Z",
+  "input": {
+    "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+    "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+    "control_tenant_env_key_prefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+    "target_ds_uid": "cogni-preview-poly-postgres"
+  },
+  "window": {
+    "since": "2026-05-28T20:47:32.640Z",
+    "until": "2026-05-28T21:17:33.022Z"
+  },
+  "tenants": [
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP",
+      "envSlug": "candidate-a",
+      "role": "GAP",
+      "billingAccountId": "d66032aa-e6d7-4c60-9b41-aea3b0de1692",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION",
+      "envSlug": "candidate-a",
+      "role": "VALIDATION",
+      "billingAccountId": "1890787d-7680-440b-ab1e-519c529bfc6c",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP",
+      "envSlug": "preview",
+      "role": "GAP",
+      "billingAccountId": "0e16cf1a-33ba-488a-9c11-177f87e32513",
+      "dsUid": "cogni-preview-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+      "envSlug": "preview",
+      "role": "SWISSTONY_TRUST_TWIN",
+      "billingAccountId": "b0ca1bce-58f7-453d-a18c-f76c29b66c4d",
+      "dsUid": "cogni-preview-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+      "envSlug": "preview",
+      "role": "TRUST_TWIN",
+      "billingAccountId": "eae447b1-b88d-45a3-a39f-f50a87b0ba2f",
+      "dsUid": "cogni-preview-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PROD_TENANT_LIVE",
+      "envSlug": "production",
+      "role": "LIVE",
+      "billingAccountId": "207795de-891c-4791-9f8b-aa0f0bcc4911",
+      "dsUid": "cogni-production-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_20fdb57a",
+      "envSlug": "candidate-a",
+      "role": "DB_ONLY_20fdb57a",
+      "billingAccountId": "20fdb57a-4db2-4669-8abc-20cf4d6b8862",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_acd63233",
+      "envSlug": "candidate-a",
+      "role": "DB_ONLY_acd63233",
+      "billingAccountId": "acd63233-764b-46a6-8d91-b645cc3417bd",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_809e37f7",
+      "envSlug": "candidate-a",
+      "role": "DB_ONLY_809e37f7",
+      "billingAccountId": "809e37f7-40b3-403d-a354-79a547bae48a",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_PREVIEW_fb8f65d5",
+      "envSlug": "preview",
+      "role": "DB_ONLY_fb8f65d5",
+      "billingAccountId": "fb8f65d5-29e4-446a-8753-280d5328b2a2",
+      "dsUid": "cogni-preview-poly-postgres"
+    }
+  ],
+  "control_tenant": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+  "prod_live": "POLY_PROD_TENANT_LIVE",
+  "prod_trust_twin": null,
+  "metrics": [
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "GAP",
+        "envSlug": "candidate-a",
+        "billingAccountId": "d66032aa-e6d7-4c60-9b41-aea3b0de1692",
+        "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP",
+        "sourceFromEnv": true,
+        "policy": null
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-28T20:47:32.640Z",
+        "until": "2026-05-28T21:17:33.022Z"
+      },
+      "decisions": {
+        "decisions": 0,
+        "placed": 0,
+        "skipped": 0,
+        "errored": 0,
+        "skip_reasons": {},
+        "error_reasons": {}
+      },
+      "placement_rate": null,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null,
+        "fill_rate": null,
+        "top_cancel_reasons": []
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": 0,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "VALIDATION",
+        "envSlug": "candidate-a",
+        "billingAccountId": "1890787d-7680-440b-ab1e-519c529bfc6c",
+        "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION",
+        "sourceFromEnv": true,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 15,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 80
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-28T20:47:32.640Z",
+        "until": "2026-05-28T21:17:33.022Z"
+      },
+      "decisions": {
+        "decisions": 171,
+        "placed": 1,
+        "skipped": 170,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 62,
+          "below_target_percentile": 61,
+          "target_dominant_other_side": 36,
+          "followup_position_too_small": 11
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.005847953216374269,
+      "fills": {
+        "fills_count": 1,
+        "filled_count": 1,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 1,
+        "markets_with_open_position": 1,
+        "intent_usdc": 3.6867713661883967,
+        "realized_size_usdc": 3.6867713629,
+        "first_fill_at": "2026-05-28T21:11:02.000Z",
+        "last_fill_at": "2026-05-28T21:11:02.000Z",
+        "fill_rate": 1,
+        "top_cancel_reasons": []
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x168e6f6b6eb9dc9025ce6543dd7d6574efd1ff90a8aaa35ce799c64cb5ffdab4"
+      ],
+      "market_coverage_pct": 0.037037037037037035,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3.6867713661883967
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3.6867713629
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 1
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "GAP",
+        "envSlug": "preview",
+        "billingAccountId": "0e16cf1a-33ba-488a-9c11-177f87e32513",
+        "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP",
+        "sourceFromEnv": true,
+        "policy": null
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-28T20:47:32.640Z",
+        "until": "2026-05-28T21:17:33.022Z"
+      },
+      "decisions": {
+        "decisions": 0,
+        "placed": 0,
+        "skipped": 0,
+        "errored": 0,
+        "skip_reasons": {},
+        "error_reasons": {}
+      },
+      "placement_rate": null,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null,
+        "fill_rate": null,
+        "top_cancel_reasons": []
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": 0,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "SWISSTONY_TRUST_TWIN",
+        "envSlug": "preview",
+        "billingAccountId": "b0ca1bce-58f7-453d-a18c-f76c29b66c4d",
+        "envKeyPrefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+        "sourceFromEnv": true,
+        "policy": null
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-28T20:47:32.640Z",
+        "until": "2026-05-28T21:17:33.022Z"
+      },
+      "decisions": {
+        "decisions": 0,
+        "placed": 0,
+        "skipped": 0,
+        "errored": 0,
+        "skip_reasons": {},
+        "error_reasons": {}
+      },
+      "placement_rate": null,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null,
+        "fill_rate": null,
+        "top_cancel_reasons": []
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": 0,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "TRUST_TWIN",
+        "envSlug": "preview",
+        "billingAccountId": "eae447b1-b88d-45a3-a39f-f50a87b0ba2f",
+        "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+        "sourceFromEnv": true,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 15,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 80
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-28T20:47:32.640Z",
+        "until": "2026-05-28T21:17:33.022Z"
+      },
+      "decisions": {
+        "decisions": 170,
+        "placed": 1,
+        "skipped": 169,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 62,
+          "below_target_percentile": 61,
+          "target_dominant_other_side": 35,
+          "followup_position_too_small": 11
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.0058823529411764705,
+      "fills": {
+        "fills_count": 1,
+        "filled_count": 1,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 1,
+        "markets_with_open_position": 1,
+        "intent_usdc": 3.6867713661883967,
+        "realized_size_usdc": 3.6867713629,
+        "first_fill_at": "2026-05-28T21:11:02.000Z",
+        "last_fill_at": "2026-05-28T21:11:02.000Z",
+        "fill_rate": 1,
+        "top_cancel_reasons": []
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x168e6f6b6eb9dc9025ce6543dd7d6574efd1ff90a8aaa35ce799c64cb5ffdab4"
+      ],
+      "market_coverage_pct": 0.037037037037037035,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3.6867713661883967
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3.6867713629
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 1
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PROD",
+        "role": "LIVE",
+        "envSlug": "production",
+        "billingAccountId": "207795de-891c-4791-9f8b-aa0f0bcc4911",
+        "envKeyPrefix": "POLY_PROD_TENANT_LIVE",
+        "sourceFromEnv": true,
+        "policy": null
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-28T20:47:32.640Z",
+        "until": "2026-05-28T21:17:33.022Z"
+      },
+      "decisions": {
+        "decisions": 0,
+        "placed": 0,
+        "skipped": 0,
+        "errored": 0,
+        "skip_reasons": {},
+        "error_reasons": {}
+      },
+      "placement_rate": null,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null,
+        "fill_rate": null,
+        "top_cancel_reasons": []
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": 0,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": [
+        "fills_agg_failed: grafana pg query → 400 Bad Request: {\"results\":{\"A\":{\"error\":\"db query error: ERROR: column \\\"price\\\" does not exist (SQLSTATE 42703)\",\"errorSource\":\"downstream\",\"status\":500,\"frames\":[{\"schema\":{\"refId\":\"A\",\"meta\":{\"typeVersion\":[0,0],\"executedQueryString\":\"\\n    WITH rolled AS (\\n      SELECT\\n        market_id,\\n        COUNT(*)::int AS fills_count,\\n        COUNT(*) FILTER (WHERE status = 'filled')::int AS filled_count,\\n        COUNT(*) FILTER (WHERE status = 'open')::int AS open_count,\\n        COUNT(*) FILTER (WHERE status IN ('canceled','partial'))::int AS canceled_count,\\n        COUNT(*) FILTER (WHERE status = 'error')::int AS error_count,\\n        COALESCE(SUM(\\n          CASE WHEN attributes-\\u003e\\u003e'size_usdc' ~ '^[0-9]+(\\\\.[0-9]+)?$'\\n               THEN (attributes-\\u003e\\u003e'size_usdc')::numeric\\n               ELSE 0 END\\n        ), 0)::float8 AS intent_usdc,\\n        COALESCE(SUM(\\n          \\n          \\n          \\n          \\n          \\n          \\n          \\n          \\n          CASE WHEN status IN ('filled','partial')\\n                AND price IS NOT NULL\\n                AND shares IS NOT NULL\\n               THEN price * shares\\n               ELSE 0 END\\n        ), 0)::float8 AS realized_usdc,\\n        BOOL_OR(\\n          (position_lifecycle IS NULL OR position_lifecycle IN ('unresolved','open','closing'))\\n          AND attributes-\\u003e\\u003e'closed_at' IS NULL\\n          AND status IN ('pending','open','partial','filled')\\n        ) AS has_open_position,\\n        MIN(observed_at) AS first_fill_at,\\n        MAX(observed_at) AS last_fill_at\\n      FROM poly_copy_trade_fills\\n      WHERE billing_account_id = '207795de-891c-4791-9f8b-aa0f0bcc4911'\\n        AND target_id = '473e0467-8257-583e-ac93-dea278662cb2'\\n        AND observed_at \\u003e= '2026-05-28T20:47:32.640Z'::timestamptz\\n        AND observed_at \\u003c  '2026-05-28T21:17:33.022Z'::timestamptz\\n      GROUP BY market_id\\n    )\\n    SELECT\\n      COALESCE(SUM(fills_count), 0)::int AS fills_count,\\n      COALESCE(SUM(filled_count), 0)::int AS filled_count,\\n      COALESCE(SUM(open_count), 0)::int AS open_count,\\n      COALESCE(SUM(canceled_count), 0)::int AS canceled_count,\\n      COALESCE(SUM(error_count), 0)::int AS error_count,\\n      COUNT(*)::int AS markets_count,\\n      COUNT(*) FILTER (WHERE has_open_position)::int AS markets_with_open_position,\\n      COALESCE(SUM(intent_usdc), 0)::float8 AS intent_usdc,\\n      COALESCE(SUM(realized_usdc), 0)::float8 AS realized_size_usdc,\\n      MIN(first_fill_at) AS first_fill_at,\\n      MAX(last_fill_at) AS last_fill_at\\n    FROM rolled\\n  \"},\"fields\":[]},\"data\":{\"values\":[]}}]}}}\n",
+        "buckets_query_failed: grafana pg query → 400 Bad Request: {\"results\":{\"A\":{\"error\":\"db query error: ERROR: column \\\"price\\\" does not exist (SQLSTATE 42703)\",\"errorSource\":\"downstream\",\"status\":500,\"frames\":[{\"schema\":{\"refId\":\"A\",\"meta\":{\"typeVersion\":[0,0],\"executedQueryString\":\"\\n    SELECT\\n      date_trunc('hour', observed_at) AS bucket,\\n      COUNT(*)::int AS fills_in_bucket,\\n      COALESCE(SUM(\\n        CASE WHEN attributes-\\u003e\\u003e'size_usdc' ~ '^[0-9]+(\\\\.[0-9]+)?$'\\n             THEN (attributes-\\u003e\\u003e'size_usdc')::numeric\\n             ELSE 0 END\\n      ), 0)::float8 AS intent_in_bucket,\\n      COALESCE(SUM(\\n        \\n        CASE WHEN status IN ('filled','partial')\\n              AND price IS NOT NULL\\n              AND shares IS NOT NULL\\n             THEN price * shares\\n             ELSE 0 END\\n      ), 0)::float8 AS realized_in_bucket\\n    FROM poly_copy_trade_fills\\n    WHERE billing_account_id = '207795de-891c-4791-9f8b-aa0f0bcc4911'\\n      AND target_id = '473e0467-8257-583e-ac93-dea278662cb2'\\n      AND observed_at \\u003e= '2026-05-28T20:47:32.640Z'::timestamptz\\n      AND observed_at \\u003c  '2026-05-28T21:17:33.022Z'::timestamptz\\n    GROUP BY 1\\n    ORDER BY 1\\n  \"},\"fields\":[]},\"data\":{\"values\":[]}}]}}}\n",
+        "pnl_query_failed: grafana pg query → 400 Bad Request: {\"results\":{\"A\":{\"error\":\"db query error: ERROR: column f.shares does not exist (SQLSTATE 42703)\",\"errorSource\":\"downstream\",\"status\":500,\"frames\":[{\"schema\":{\"refId\":\"A\",\"meta\":{\"typeVersion\":[0,0],\"executedQueryString\":\"\\n    SELECT\\n      COALESCE(SUM(\\n        CASE\\n          WHEN o.outcome = 'winner'\\n          THEN f.shares * COALESCE(o.payout, 1.0)::numeric\\n               - f.shares * f.price\\n          WHEN o.outcome = 'loser'\\n          THEN -(f.shares * f.price)\\n          ELSE 0\\n        END\\n      ), 0)::float8 AS realized_pnl_usdc,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome IN ('winner','loser'))::int AS resolved_markets,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome = 'winner')::int AS markets_won,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome = 'loser')::int AS markets_lost\\n    FROM poly_copy_trade_fills f\\n    LEFT JOIN poly_market_outcomes o\\n      ON o.condition_id = f.attributes-\\u003e\\u003e'condition_id'\\n     AND o.token_id     = f.attributes-\\u003e\\u003e'token_id'\\n    WHERE f.billing_account_id = '207795de-891c-4791-9f8b-aa0f0bcc4911'\\n      AND f.target_id = '473e0467-8257-583e-ac93-dea278662cb2'\\n      AND f.observed_at \\u003e= '2026-05-28T20:47:32.640Z'::timestamptz\\n      AND f.observed_at \\u003c  '2026-05-28T21:17:33.022Z'::timestamptz\\n      AND f.status IN ('filled','partial')\\n      AND f.price IS NOT NULL\\n      AND f.shares IS NOT NULL\\n  \"},\"fields\":[]},\"data\":{\"values\":[]}}]}}}\n"
+      ]
+    },
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "DB_ONLY_20fdb57a",
+        "envSlug": "candidate-a",
+        "billingAccountId": "20fdb57a-4db2-4669-8abc-20cf4d6b8862",
+        "envKeyPrefix": "DB_ONLY_CANDIDATE_A_20fdb57a",
+        "sourceFromEnv": false,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 5,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 75
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-28T20:47:32.640Z",
+        "until": "2026-05-28T21:17:33.022Z"
+      },
+      "decisions": {
+        "decisions": 171,
+        "placed": 3,
+        "skipped": 168,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 62,
+          "below_target_percentile": 55,
+          "target_dominant_other_side": 36,
+          "followup_position_too_small": 15
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.017543859649122806,
+      "fills": {
+        "fills_count": 3,
+        "filled_count": 1,
+        "open_count": 0,
+        "canceled_count": 2,
+        "error_count": 0,
+        "markets_count": 2,
+        "markets_with_open_position": 1,
+        "intent_usdc": 11.30327149797343,
+        "realized_size_usdc": 3.6516595236,
+        "first_fill_at": "2026-05-28T20:53:26.000Z",
+        "last_fill_at": "2026-05-28T21:10:55.000Z",
+        "fill_rate": 0.3333333333333333,
+        "top_cancel_reasons": [
+          {
+            "reason": "ttl_expired",
+            "count": 2
+          }
+        ]
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x168e6f6b6eb9dc9025ce6543dd7d6574efd1ff90a8aaa35ce799c64cb5ffdab4"
+      ],
+      "market_coverage_pct": 0.037037037037037035,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 3.651611974780455
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 11.30327149797343
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 0
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3.6516595236
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 1
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "DB_ONLY_acd63233",
+        "envSlug": "candidate-a",
+        "billingAccountId": "acd63233-764b-46a6-8d91-b645cc3417bd",
+        "envKeyPrefix": "DB_ONLY_CANDIDATE_A_acd63233",
+        "sourceFromEnv": false,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 5,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 75
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-28T20:47:32.640Z",
+        "until": "2026-05-28T21:17:33.022Z"
+      },
+      "decisions": {
+        "decisions": 171,
+        "placed": 3,
+        "skipped": 168,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 62,
+          "below_target_percentile": 55,
+          "target_dominant_other_side": 36,
+          "followup_position_too_small": 15
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.017543859649122806,
+      "fills": {
+        "fills_count": 3,
+        "filled_count": 1,
+        "open_count": 0,
+        "canceled_count": 2,
+        "error_count": 0,
+        "markets_count": 2,
+        "markets_with_open_position": 1,
+        "intent_usdc": 11.30327149797343,
+        "realized_size_usdc": 3.6516595236,
+        "first_fill_at": "2026-05-28T20:53:26.000Z",
+        "last_fill_at": "2026-05-28T21:10:55.000Z",
+        "fill_rate": 0.3333333333333333,
+        "top_cancel_reasons": [
+          {
+            "reason": "ttl_expired",
+            "count": 2
+          }
+        ]
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x168e6f6b6eb9dc9025ce6543dd7d6574efd1ff90a8aaa35ce799c64cb5ffdab4"
+      ],
+      "market_coverage_pct": 0.037037037037037035,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 3.651611974780455
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 11.30327149797343
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 0
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3.6516595236
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 1
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "DB_ONLY_809e37f7",
+        "envSlug": "candidate-a",
+        "billingAccountId": "809e37f7-40b3-403d-a354-79a547bae48a",
+        "envKeyPrefix": "DB_ONLY_CANDIDATE_A_809e37f7",
+        "sourceFromEnv": false,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 5,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 75
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-28T20:47:32.640Z",
+        "until": "2026-05-28T21:17:33.022Z"
+      },
+      "decisions": {
+        "decisions": 171,
+        "placed": 3,
+        "skipped": 168,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 62,
+          "below_target_percentile": 55,
+          "target_dominant_other_side": 36,
+          "followup_position_too_small": 15
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.017543859649122806,
+      "fills": {
+        "fills_count": 3,
+        "filled_count": 1,
+        "open_count": 0,
+        "canceled_count": 2,
+        "error_count": 0,
+        "markets_count": 2,
+        "markets_with_open_position": 1,
+        "intent_usdc": 11.30327149797343,
+        "realized_size_usdc": 3.6516595236,
+        "first_fill_at": "2026-05-28T20:53:26.000Z",
+        "last_fill_at": "2026-05-28T21:10:55.000Z",
+        "fill_rate": 0.3333333333333333,
+        "top_cancel_reasons": [
+          {
+            "reason": "ttl_expired",
+            "count": 2
+          }
+        ]
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x168e6f6b6eb9dc9025ce6543dd7d6574efd1ff90a8aaa35ce799c64cb5ffdab4"
+      ],
+      "market_coverage_pct": 0.037037037037037035,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 3.651611974780455
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 11.30327149797343
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 0
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3.6516595236
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 1
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "DB_ONLY_fb8f65d5",
+        "envSlug": "preview",
+        "billingAccountId": "fb8f65d5-29e4-446a-8753-280d5328b2a2",
+        "envKeyPrefix": "DB_ONLY_PREVIEW_fb8f65d5",
+        "sourceFromEnv": false,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 100,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 80
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-28T20:47:32.640Z",
+        "until": "2026-05-28T21:17:33.022Z"
+      },
+      "decisions": {
+        "decisions": 170,
+        "placed": 1,
+        "skipped": 169,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 62,
+          "below_target_percentile": 61,
+          "target_dominant_other_side": 35,
+          "followup_position_too_small": 11
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.0058823529411764705,
+      "fills": {
+        "fills_count": 1,
+        "filled_count": 1,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 1,
+        "markets_with_open_position": 1,
+        "intent_usdc": 3.9621516416081084,
+        "realized_size_usdc": 3.9621516427,
+        "first_fill_at": "2026-05-28T21:11:02.000Z",
+        "last_fill_at": "2026-05-28T21:11:02.000Z",
+        "fill_rate": 1,
+        "top_cancel_reasons": []
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x168e6f6b6eb9dc9025ce6543dd7d6574efd1ff90a8aaa35ce799c64cb5ffdab4"
+      ],
+      "market_coverage_pct": 0.037037037037037035,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3.9621516416081084
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 3.9621516427
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 1
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    }
+  ],
+  "target": {
+    "wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+    "cumulative_usdc": [
+      {
+        "ts": "2026-05-28T20:00:00.000Z",
+        "value": 13791.873263
+      },
+      {
+        "ts": "2026-05-28T21:00:00.000Z",
+        "value": 26316.465484
+      }
+    ],
+    "market_set": [
+      "0x080a082146504eb80c0eb9617a034d0d19043facb5cb875c951543c81e6744dc",
+      "0x0a4b9beb6128863db2b107f185521597a426356f1d9a23c7001401edfd32014b",
+      "0x0ef9d17aff09c873dc47a93cfb13c42ab6274b4493e022fed1f228193714540d",
+      "0x157e9f232a7db8e10e9c582bba47569eeb80ad5113e8a2f1e921ee6c0674745f",
+      "0x168e6f6b6eb9dc9025ce6543dd7d6574efd1ff90a8aaa35ce799c64cb5ffdab4",
+      "0x2816a9fdc313460a7bf7cde3383a4f6221a4c09c35805f75935cfbb74be496a9",
+      "0x2981d807972138f8c8e32f21c836ffe74249c1b9374094f5caa9dfb0bd2d1019",
+      "0x2a739b8c2c6490ce66cd277d3b10decc347a347a53740a219f0e2cc4a50ac2b5",
+      "0x33316c7dba58ccc4f37e7d3814d3d4be83f27ddd1599c8cfef309cbb860337bf",
+      "0x5256dfc89708ca138d1dc892c81991f2798694e077d86843707aeb2b615b1e15",
+      "0x56f01086fbcdea73e573b6fdf7488ca218bf9ea29bf3891d702e22d9a1bde641",
+      "0x5a78d346655d91c894d42ed6713e32b8f7301e307b3a1177ac4d169f3095b1a8",
+      "0x6869dd21e8ca7c8f61cfd1c24bb95bb9325b6b8147ad3b1bfc276e8184f11e65",
+      "0x6d558f130e01d99d4ce3798d328a5d8c91e74a712c47ae2fca8398fb42c615c0",
+      "0x6d77fde9e2370cff8048c586a8e83a92c693ce2cf7becc61dd661e65ecfbb629",
+      "0x7061e7ce4d7744677b6c3a7d1db0f82eb90c342104167386619d75777a6083c1",
+      "0x73fbbe6b48a03e2ad1c3e9060a6f305b665079dccfad5046fc4819e7fb6658f1",
+      "0x85d6396fda98a419f475f55a279eb64079707c1fbf0d4323ccc9751d898292ef",
+      "0x87b556c0e07d3eb957bc9484af7f46aa29683c011f0ac011d7866d51c0d2d03e",
+      "0x8ae3768af1a52c8a169c49e53355b4d1ea468988d5a3019cf02d5a91f3b295b2",
+      "0xa5094271a1e530c924e205d416c11652f83b8bd7e60608d2b12dfbdb8e5823e6",
+      "0xa5e590843e0c155e6b6ece7c942b1e2b342b2704afb9e096e7bce76ead7d5a79",
+      "0xab2e56edeb15b38b656bf5ff954b54badf1228056d9d7a0e4a2cfb724d5ec494",
+      "0xb7287de62be45070efd8b276bd05699aa113448d0aef476240499fc155a6cfcc",
+      "0xd7bb40fb39f3f5aade2c3fc684a9e8f08c970c88a34eac206e2b19f732451ae1",
+      "0xe330223609c322c03115751d9c02f82c76b1254f8a8b0a37c921852a890cb758",
+      "0xebd2aef005c294cfceba4d5aa980cd843d0f1bce08a58e22fe2260286ae41172"
+    ],
+    "pnl": {
+      "realized_pnl_usdc": 0,
+      "resolved_markets": 0,
+      "markets_won": 0,
+      "markets_lost": 0
+    },
+    "intent_usdc": 26316.465484,
+    "resolved_via_ds_uid": "cogni-preview-poly-postgres"
+  },
+  "ab": {
+    "POLY_CANDIDATE_A_TENANT_GAP": [
+      {
+        "axis": "decisions",
+        "control": 170,
+        "treatment": 0,
+        "delta": -170,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0058823529411764705,
+        "treatment": null,
+        "delta": null,
+        "delta_pct": null
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.6867713661883967,
+        "treatment": 0,
+        "delta": -3.6867713661883967,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.6867713629,
+        "treatment": 0,
+        "delta": -3.6867713629,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      }
+    ],
+    "POLY_CANDIDATE_A_TENANT_VALIDATION": [
+      {
+        "axis": "decisions",
+        "control": 170,
+        "treatment": 171,
+        "delta": 1,
+        "delta_pct": 0.0058823529411764705
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 1,
+        "delta": 0,
+        "delta_pct": 0
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0058823529411764705,
+        "treatment": 0.005847953216374269,
+        "delta": -0.000034399724802201825,
+        "delta_pct": -0.00584795321637431
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.6867713661883967,
+        "treatment": 3.6867713661883967,
+        "delta": 0,
+        "delta_pct": 0
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.6867713629,
+        "treatment": 3.6867713629,
+        "delta": 0,
+        "delta_pct": 0
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 1,
+        "delta": 0,
+        "delta_pct": 0
+      }
+    ],
+    "POLY_PREVIEW_TENANT_GAP": [
+      {
+        "axis": "decisions",
+        "control": 170,
+        "treatment": 0,
+        "delta": -170,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0058823529411764705,
+        "treatment": null,
+        "delta": null,
+        "delta_pct": null
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.6867713661883967,
+        "treatment": 0,
+        "delta": -3.6867713661883967,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.6867713629,
+        "treatment": 0,
+        "delta": -3.6867713629,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      }
+    ],
+    "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN": [
+      {
+        "axis": "decisions",
+        "control": 170,
+        "treatment": 0,
+        "delta": -170,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0058823529411764705,
+        "treatment": null,
+        "delta": null,
+        "delta_pct": null
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.6867713661883967,
+        "treatment": 0,
+        "delta": -3.6867713661883967,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.6867713629,
+        "treatment": 0,
+        "delta": -3.6867713629,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      }
+    ],
+    "POLY_PROD_TENANT_LIVE": [
+      {
+        "axis": "decisions",
+        "control": 170,
+        "treatment": 0,
+        "delta": -170,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0058823529411764705,
+        "treatment": null,
+        "delta": null,
+        "delta_pct": null
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.6867713661883967,
+        "treatment": 0,
+        "delta": -3.6867713661883967,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.6867713629,
+        "treatment": 0,
+        "delta": -3.6867713629,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 0,
+        "delta": -1,
+        "delta_pct": -1
+      }
+    ],
+    "DB_ONLY_CANDIDATE_A_20fdb57a": [
+      {
+        "axis": "decisions",
+        "control": 170,
+        "treatment": 171,
+        "delta": 1,
+        "delta_pct": 0.0058823529411764705
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 3,
+        "delta": 2,
+        "delta_pct": 2
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0058823529411764705,
+        "treatment": 0.017543859649122806,
+        "delta": 0.011661506707946336,
+        "delta_pct": 1.9824561403508771
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.6867713661883967,
+        "treatment": 11.30327149797343,
+        "delta": 7.616500131785033,
+        "delta_pct": 2.065899773887911
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.6867713629,
+        "treatment": 3.6516595236,
+        "delta": -0.03511183930000028,
+        "delta_pct": -0.009523736582455563
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 1,
+        "delta": 0,
+        "delta_pct": 0
+      }
+    ],
+    "DB_ONLY_CANDIDATE_A_acd63233": [
+      {
+        "axis": "decisions",
+        "control": 170,
+        "treatment": 171,
+        "delta": 1,
+        "delta_pct": 0.0058823529411764705
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 3,
+        "delta": 2,
+        "delta_pct": 2
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0058823529411764705,
+        "treatment": 0.017543859649122806,
+        "delta": 0.011661506707946336,
+        "delta_pct": 1.9824561403508771
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.6867713661883967,
+        "treatment": 11.30327149797343,
+        "delta": 7.616500131785033,
+        "delta_pct": 2.065899773887911
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.6867713629,
+        "treatment": 3.6516595236,
+        "delta": -0.03511183930000028,
+        "delta_pct": -0.009523736582455563
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 1,
+        "delta": 0,
+        "delta_pct": 0
+      }
+    ],
+    "DB_ONLY_CANDIDATE_A_809e37f7": [
+      {
+        "axis": "decisions",
+        "control": 170,
+        "treatment": 171,
+        "delta": 1,
+        "delta_pct": 0.0058823529411764705
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 3,
+        "delta": 2,
+        "delta_pct": 2
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0058823529411764705,
+        "treatment": 0.017543859649122806,
+        "delta": 0.011661506707946336,
+        "delta_pct": 1.9824561403508771
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.6867713661883967,
+        "treatment": 11.30327149797343,
+        "delta": 7.616500131785033,
+        "delta_pct": 2.065899773887911
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.6867713629,
+        "treatment": 3.6516595236,
+        "delta": -0.03511183930000028,
+        "delta_pct": -0.009523736582455563
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 1,
+        "delta": 0,
+        "delta_pct": 0
+      }
+    ],
+    "DB_ONLY_PREVIEW_fb8f65d5": [
+      {
+        "axis": "decisions",
+        "control": 170,
+        "treatment": 170,
+        "delta": 0,
+        "delta_pct": 0
+      },
+      {
+        "axis": "placed",
+        "control": 1,
+        "treatment": 1,
+        "delta": 0,
+        "delta_pct": 0
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0058823529411764705,
+        "treatment": 0.0058823529411764705,
+        "delta": 0,
+        "delta_pct": 0
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 3.6867713661883967,
+        "treatment": 3.9621516416081084,
+        "delta": 0.27538027541971166,
+        "delta_pct": 0.07469415596129471
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 3.6867713629,
+        "treatment": 3.9621516427,
+        "delta": 0.2753802797999998,
+        "delta_pct": 0.07469415721602729
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 1,
+        "treatment": 1,
+        "delta": 0,
+        "delta_pct": 0
+      }
+    ]
+  },
+  "fidelity": {
+    "shared_fills": 0,
+    "exact_match": 0,
+    "outcome_match_reason_diff": 0,
+    "outcome_disagree": 0,
+    "twin_only_fills": 170,
+    "live_only_fills": 0,
+    "top_mismatches": []
+  },
+  "prod_twin_fidelity": {
+    "twin_env_key_prefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+    "live_env_key_prefix": "POLY_PROD_TENANT_LIVE",
+    "shared_fills": 0,
+    "pnl_delta_usdc": 0,
+    "pnl_delta_pct": null,
+    "classification": "no_data",
+    "markets_touched_delta": 1
+  },
+  "distances": [
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": null,
+      "intent_usdc_ratio_distance": 1,
+      "markets_touched_ratio_distance": 1,
+      "aggregate_distance": 1
+    },
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": 0.9941520467836258,
+      "intent_usdc_ratio_distance": 0.999859906286867,
+      "markets_touched_ratio_distance": 0.9629629629629629,
+      "aggregate_distance": 0.9856583053444852
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": null,
+      "intent_usdc_ratio_distance": 1,
+      "markets_touched_ratio_distance": 1,
+      "aggregate_distance": 1
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": null,
+      "intent_usdc_ratio_distance": 1,
+      "markets_touched_ratio_distance": 1,
+      "aggregate_distance": 1
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": 0.9941176470588236,
+      "intent_usdc_ratio_distance": 0.999859906286867,
+      "markets_touched_ratio_distance": 0.9629629629629629,
+      "aggregate_distance": 0.9856468387695512
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_20fdb57a",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": 0.9824561403508771,
+      "intent_usdc_ratio_distance": 0.9995704867165826,
+      "markets_touched_ratio_distance": 0.9259259259259259,
+      "aggregate_distance": 0.9693175176644618
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_acd63233",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": 0.9824561403508771,
+      "intent_usdc_ratio_distance": 0.9995704867165826,
+      "markets_touched_ratio_distance": 0.9259259259259259,
+      "aggregate_distance": 0.9693175176644618
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_809e37f7",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": 0.9824561403508771,
+      "intent_usdc_ratio_distance": 0.9995704867165826,
+      "markets_touched_ratio_distance": 0.9259259259259259,
+      "aggregate_distance": 0.9693175176644618
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_PREVIEW_fb8f65d5",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": 0.9941176470588236,
+      "intent_usdc_ratio_distance": 0.9998494421052091,
+      "markets_touched_ratio_distance": 0.9629629629629629,
+      "aggregate_distance": 0.9856433507089984
+    }
+  ],
+  "closest_to_target": {
+    "envKeyPrefix": "DB_ONLY_CANDIDATE_A_20fdb57a",
+    "pnl_pct_distance": null,
+    "placement_rate_distance": 0.9824561403508771,
+    "intent_usdc_ratio_distance": 0.9995704867165826,
+    "markets_touched_ratio_distance": 0.9259259259259259,
+    "aggregate_distance": 0.9693175176644618
+  },
+  "env_gap_warnings": [
+    {
+      "env": "candidate-a",
+      "billing_account_id": "20fdb57a-4db2-4669-8abc-20cf4d6b8862",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "20fdb57a"
+    },
+    {
+      "env": "candidate-a",
+      "billing_account_id": "acd63233-764b-46a6-8d91-b645cc3417bd",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "acd63233"
+    },
+    {
+      "env": "candidate-a",
+      "billing_account_id": "809e37f7-40b3-403d-a354-79a547bae48a",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "809e37f7"
+    },
+    {
+      "env": "preview",
+      "billing_account_id": "fb8f65d5-29e4-446a-8753-280d5328b2a2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "fb8f65d5"
+    }
+  ],
+  "sample_floor_warning": [
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "POLY_PROD_TENANT_LIVE",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_20fdb57a",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_acd63233",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_809e37f7",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_PREVIEW_fb8f65d5",
+      "resolved_markets": 0
+    }
+  ],
+  "env_freshness": [
+    {
+      "dsUid": "cogni-candidate-a-poly-postgres",
+      "envSlug": "candidate-a",
+      "last_decision_at": "2026-05-28T21:17:32.798Z",
+      "staleness_seconds": 0.224,
+      "is_stale": false
+    },
+    {
+      "dsUid": "cogni-preview-poly-postgres",
+      "envSlug": "preview",
+      "last_decision_at": "2026-05-28T21:17:32.789Z",
+      "staleness_seconds": 0.233,
+      "is_stale": false
+    },
+    {
+      "dsUid": "cogni-production-poly-postgres",
+      "envSlug": "production",
+      "last_decision_at": "2026-05-12T01:45:47.133Z",
+      "staleness_seconds": 1452705.889,
+      "is_stale": true
+    }
+  ]
+}

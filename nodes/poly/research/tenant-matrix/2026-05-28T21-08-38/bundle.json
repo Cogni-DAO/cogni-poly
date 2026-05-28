@@ -1,0 +1,4098 @@
+{
+  "captured_at": "2026-05-28T21:08:38.901Z",
+  "input": {
+    "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+    "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+    "control_tenant_env_key_prefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+    "target_ds_uid": "cogni-candidate-a-poly-postgres"
+  },
+  "window": {
+    "since": "2026-05-27T21:07:37.687Z",
+    "until": "2026-05-28T21:07:37.687Z"
+  },
+  "tenants": [
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP",
+      "envSlug": "candidate-a",
+      "role": "GAP",
+      "billingAccountId": "d66032aa-e6d7-4c60-9b41-aea3b0de1692",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION",
+      "envSlug": "candidate-a",
+      "role": "VALIDATION",
+      "billingAccountId": "1890787d-7680-440b-ab1e-519c529bfc6c",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP",
+      "envSlug": "preview",
+      "role": "GAP",
+      "billingAccountId": "0e16cf1a-33ba-488a-9c11-177f87e32513",
+      "dsUid": "cogni-preview-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+      "envSlug": "preview",
+      "role": "SWISSTONY_TRUST_TWIN",
+      "billingAccountId": "b0ca1bce-58f7-453d-a18c-f76c29b66c4d",
+      "dsUid": "cogni-preview-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+      "envSlug": "preview",
+      "role": "TRUST_TWIN",
+      "billingAccountId": "eae447b1-b88d-45a3-a39f-f50a87b0ba2f",
+      "dsUid": "cogni-preview-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "POLY_PROD_TENANT_LIVE",
+      "envSlug": "production",
+      "role": "LIVE",
+      "billingAccountId": "207795de-891c-4791-9f8b-aa0f0bcc4911",
+      "dsUid": "cogni-production-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_20fdb57a",
+      "envSlug": "candidate-a",
+      "role": "DB_ONLY_20fdb57a",
+      "billingAccountId": "20fdb57a-4db2-4669-8abc-20cf4d6b8862",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_acd63233",
+      "envSlug": "candidate-a",
+      "role": "DB_ONLY_acd63233",
+      "billingAccountId": "acd63233-764b-46a6-8d91-b645cc3417bd",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_809e37f7",
+      "envSlug": "candidate-a",
+      "role": "DB_ONLY_809e37f7",
+      "billingAccountId": "809e37f7-40b3-403d-a354-79a547bae48a",
+      "dsUid": "cogni-candidate-a-poly-postgres"
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_PREVIEW_fb8f65d5",
+      "envSlug": "preview",
+      "role": "DB_ONLY_fb8f65d5",
+      "billingAccountId": "fb8f65d5-29e4-446a-8753-280d5328b2a2",
+      "dsUid": "cogni-preview-poly-postgres"
+    }
+  ],
+  "control_tenant": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+  "prod_live": "POLY_PROD_TENANT_LIVE",
+  "prod_trust_twin": null,
+  "metrics": [
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "GAP",
+        "envSlug": "candidate-a",
+        "billingAccountId": "d66032aa-e6d7-4c60-9b41-aea3b0de1692",
+        "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP",
+        "sourceFromEnv": true,
+        "policy": null
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-27T21:07:37.687Z",
+        "until": "2026-05-28T21:07:37.687Z"
+      },
+      "decisions": {
+        "decisions": 0,
+        "placed": 0,
+        "skipped": 0,
+        "errored": 0,
+        "skip_reasons": {},
+        "error_reasons": {}
+      },
+      "placement_rate": null,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null,
+        "fill_rate": null,
+        "top_cancel_reasons": []
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": 0,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "VALIDATION",
+        "envSlug": "candidate-a",
+        "billingAccountId": "1890787d-7680-440b-ab1e-519c529bfc6c",
+        "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION",
+        "sourceFromEnv": true,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 15,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 80
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-27T21:07:37.687Z",
+        "until": "2026-05-28T21:07:37.687Z"
+      },
+      "decisions": {
+        "decisions": 16241,
+        "placed": 136,
+        "skipped": 16105,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 6177,
+          "below_target_percentile": 4907,
+          "target_dominant_other_side": 3187,
+          "followup_position_too_small": 815,
+          "market_past_end_date": 743,
+          "position_cap_reached": 128,
+          "below_market_min": 74,
+          "already_resting": 37,
+          "price_outside_clob_bounds": 26,
+          "followup_not_needed": 10,
+          "target_position_below_threshold": 1
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.00837386860414999,
+      "fills": {
+        "fills_count": 136,
+        "filled_count": 69,
+        "open_count": 0,
+        "canceled_count": 67,
+        "error_count": 0,
+        "markets_count": 51,
+        "markets_with_open_position": 44,
+        "intent_usdc": 517.8669162379225,
+        "realized_size_usdc": 218.13530592430007,
+        "first_fill_at": "2026-05-27T21:18:27.000Z",
+        "last_fill_at": "2026-05-28T20:34:53.000Z",
+        "fill_rate": 0.5073529411764706,
+        "top_cancel_reasons": [
+          {
+            "reason": "ttl_expired",
+            "count": 65
+          },
+          {
+            "reason": "stale_resting_layer_up",
+            "count": 2
+          }
+        ]
+      },
+      "pnl": {
+        "realized_pnl_usdc": 6.95,
+        "resolved_markets": 3,
+        "markets_won": 3,
+        "markets_lost": 0
+      },
+      "our_market_set": [
+        "0x005767f467b6e7c71df790ad30e1b96a4ec52b1b17739a103ea990b2ffdd9dfa",
+        "0x073f844171ab7985d5e797523c0879ca717ad6671fb56d95053afb866e600468",
+        "0x0d4913323a8df2db0f1bf1287e5a97a42eefa30d17eb84a5c22dad7932730dde",
+        "0x0dc0dd98942a5c4181d84dc3374426c7b3bd07acabdfce6258f475f7c89c6ad0",
+        "0x0f65f7f055c7208ae048f3c2d156c7cfa6df2f39fa3c694dc3132771af4b5277",
+        "0x16b70a92e8df3191de5ceccd91e61b1a94b053c95f3b408df507518880abf0e2",
+        "0x276b29848429e376a861974b0a2306cab9320b749b13f83914ae47adc967c852",
+        "0x2a739b8c2c6490ce66cd277d3b10decc347a347a53740a219f0e2cc4a50ac2b5",
+        "0x30418f776b2c0b11a690e067cf856ade99f3362e991363dc2d90d230bc3f74a4",
+        "0x30ebda9973ef762b831a44336afc60bf808468fd0400a01d9d5add0a62407833",
+        "0x32bd2d9311e32296cd707308f47be67748a7df1ea04441e81feb3bb11f438067",
+        "0x39d5c964989a4b466bc870285827e475d14290c0e4da8fa6518f5e9856aedd9f",
+        "0x43b17bb0b59e87a770d623fa3211fca8513fcc9b1717c76e65098390627272b1",
+        "0x5e089a21727a0489815da27050cafacabf7d8d322a22e0295dd874dc939f6f75",
+        "0x6869dd21e8ca7c8f61cfd1c24bb95bb9325b6b8147ad3b1bfc276e8184f11e65",
+        "0x848aa4328467aa0ca5bc0ce9a719cced8b2001e9c546c07c11d3471a98547135",
+        "0x8652d78d7814250716cfdfa26b5874a504dce5fa856958f98cb5ed9837bbeba1",
+        "0x88e5add9fe9495b9563ec11e0501afc3d2f3f521a8db01e867a82493513b13c7",
+        "0x8c3b22b22aceb7a92449767ce858f4ae3bc42aa8c89a086db54ebe51966c51c6",
+        "0x8d2d545d99162410074e7e05b7621f321ceab17b74dd42eb6d5bfd19329772fc",
+        "0x94bf44ec3874fd361409ad6877841629b05686007768ab636fb90f28144beeb9",
+        "0x9bffa2fd6e42b8b68c61eb3fcda9801ab22a77fc0005ef387646fa8f8b582678",
+        "0x9d40a76fee6bf50629b2ec03db9e336a87e1e86cf1cc4c58c2f5678e5d6f434f",
+        "0xa519a3e1e152255663e4b073a7859320d11cf01a3bc523eba1fe48246997c1ca",
+        "0xa99f5fbbb198f66e7007ba6d6c65fdf7acdeed6cc080f6c37228496e43a690f2",
+        "0xa9f1a420014557340e034526c306618bc8d7cf045311864591d4bcb5418a1591",
+        "0xab2279fd155871ca6a4aa7680a857c660f4a9028a18e820d78ddc4fe548114f3",
+        "0xab2e56edeb15b38b656bf5ff954b54badf1228056d9d7a0e4a2cfb724d5ec494",
+        "0xb6afc047a7f19fdd0d2227f4c685c36aad93bee5d9c9af448da4c6f7dbf5f0b0",
+        "0xc12050583433e0b78b53273f9703f6d0c910f96b16c3b939dc99581c96542f93",
+        "0xc2854d2afda65b7269b566eaef034ff0334529d90b4d5387bfb60634aeda0b17",
+        "0xd012cb85e8823ca1f8c64250f7885a96eeb3f33d271822738bbe0c5b66b0d8e3",
+        "0xd138accf34df0e7e15a2363655719523b01daa46280b21d306e5fa67c66a9315",
+        "0xdb39d9fb9824d70ce281ea3233794ff18c3c0fd7e75ddc2ffe03d51589230fdb",
+        "0xddcca70d29ae4b92eeb522290bb88372caee780656dc0fd401969173eb869798",
+        "0xe2798da1385d6c354e3e8f21b7c83f33d66059c57a75a736988b86c56ba77a0e",
+        "0xe330223609c322c03115751d9c02f82c76b1254f8a8b0a37c921852a890cb758",
+        "0xe8b190e21c972e601622381310130287074606046ea72f86c1904f32083fb8ab",
+        "0xeb9853c45bc4394849cc2f0fdb72d8939e77942699cf8df0c20e0f26d35c0ad7",
+        "0xf1acd340e8ed4a9815356b85b56f34e7a8ca6444ec50bc306812189ee043f8e4",
+        "0xf1d68269bc149264a1768125733cf15422164230bce10d5676be4147423b0945",
+        "0xf395e6bd5741278009b251a3d6a60bcc6c380081febed64034b5973f650abd00",
+        "0xf55ef5d738856b0ac8bd6389737cb38c601c1997b0da13e20829a661a55bf844",
+        "0xff198b16fbfa22aca25ba338cc50fda1983c6cdff2a5b23b682dfd2381445d42"
+      ],
+      "market_coverage_pct": 0.05721716514954486,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 5.65
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 37.947191103813005
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 50.91764723985665
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 79.29277275813426
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 80.69697593569889
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 95.06206528512473
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 97.31206528512473
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 101.33593610239834
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 121.86050813150462
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 146.99645804329776
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 165.10024333280745
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 172.62777983785946
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 203.12288874844762
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 251.7400780383875
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 301.84132478064834
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 393.818744230445
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 419.3642696688166
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 478.98925745317405
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 501.57789904574554
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 517.8669162379224
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 5.65
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 6.5200000000000005
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 12.6771132292
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 29.3384138608
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 30.7426170381
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 35.6426170381
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 35.6426170381
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 35.6426170381
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 45.0227326638
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 65.0496875187
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 78.8498612853
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 83.2773977903
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 109.3873538756
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 130.8106667456
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 140.6381079967
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 161.04968479320002
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 175.17751964480001
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 195.52572414640002
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 207.04233773250002
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 218.1353059243
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 2
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 7
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 11
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 21
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 22
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 28
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 29
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 30
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 36
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 43
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 47
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 49
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 60
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 75
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 89
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 101
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 107
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 123
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 132
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 136
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "GAP",
+        "envSlug": "preview",
+        "billingAccountId": "0e16cf1a-33ba-488a-9c11-177f87e32513",
+        "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP",
+        "sourceFromEnv": true,
+        "policy": null
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-27T21:07:37.687Z",
+        "until": "2026-05-28T21:07:37.687Z"
+      },
+      "decisions": {
+        "decisions": 0,
+        "placed": 0,
+        "skipped": 0,
+        "errored": 0,
+        "skip_reasons": {},
+        "error_reasons": {}
+      },
+      "placement_rate": null,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null,
+        "fill_rate": null,
+        "top_cancel_reasons": []
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": 0,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "SWISSTONY_TRUST_TWIN",
+        "envSlug": "preview",
+        "billingAccountId": "b0ca1bce-58f7-453d-a18c-f76c29b66c4d",
+        "envKeyPrefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+        "sourceFromEnv": true,
+        "policy": null
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-27T21:07:37.687Z",
+        "until": "2026-05-28T21:07:37.687Z"
+      },
+      "decisions": {
+        "decisions": 0,
+        "placed": 0,
+        "skipped": 0,
+        "errored": 0,
+        "skip_reasons": {},
+        "error_reasons": {}
+      },
+      "placement_rate": null,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null,
+        "fill_rate": null,
+        "top_cancel_reasons": []
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": 0,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "TRUST_TWIN",
+        "envSlug": "preview",
+        "billingAccountId": "eae447b1-b88d-45a3-a39f-f50a87b0ba2f",
+        "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+        "sourceFromEnv": true,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 15,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 80
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-27T21:07:37.687Z",
+        "until": "2026-05-28T21:07:37.687Z"
+      },
+      "decisions": {
+        "decisions": 8952,
+        "placed": 64,
+        "skipped": 8888,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 3510,
+          "below_target_percentile": 2562,
+          "target_dominant_other_side": 1561,
+          "market_past_end_date": 700,
+          "followup_position_too_small": 484,
+          "below_market_min": 45,
+          "price_outside_clob_bounds": 20,
+          "already_resting": 4,
+          "position_cap_reached": 2
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.0071492403932082215,
+      "fills": {
+        "fills_count": 64,
+        "filled_count": 27,
+        "open_count": 0,
+        "canceled_count": 37,
+        "error_count": 0,
+        "markets_count": 25,
+        "markets_with_open_position": 21,
+        "intent_usdc": 245.51128212021365,
+        "realized_size_usdc": 87.4773580183,
+        "first_fill_at": "2026-05-27T21:18:27.000Z",
+        "last_fill_at": "2026-05-28T20:25:39.000Z",
+        "fill_rate": 0.421875,
+        "top_cancel_reasons": [
+          {
+            "reason": "ttl_expired",
+            "count": 37
+          }
+        ]
+      },
+      "pnl": {
+        "realized_pnl_usdc": 3.7148182723,
+        "resolved_markets": 9,
+        "markets_won": 5,
+        "markets_lost": 4
+      },
+      "our_market_set": [
+        "0x005767f467b6e7c71df790ad30e1b96a4ec52b1b17739a103ea990b2ffdd9dfa",
+        "0x073f844171ab7985d5e797523c0879ca717ad6671fb56d95053afb866e600468",
+        "0x0d407291200dfc9c19f864e7107e1bdfa992497a42257658161fc399f3c8dad4",
+        "0x0d4913323a8df2db0f1bf1287e5a97a42eefa30d17eb84a5c22dad7932730dde",
+        "0x0f65f7f055c7208ae048f3c2d156c7cfa6df2f39fa3c694dc3132771af4b5277",
+        "0x16b70a92e8df3191de5ceccd91e61b1a94b053c95f3b408df507518880abf0e2",
+        "0x2a739b8c2c6490ce66cd277d3b10decc347a347a53740a219f0e2cc4a50ac2b5",
+        "0x32bd2d9311e32296cd707308f47be67748a7df1ea04441e81feb3bb11f438067",
+        "0x6869dd21e8ca7c8f61cfd1c24bb95bb9325b6b8147ad3b1bfc276e8184f11e65",
+        "0x848aa4328467aa0ca5bc0ce9a719cced8b2001e9c546c07c11d3471a98547135",
+        "0x88e5add9fe9495b9563ec11e0501afc3d2f3f521a8db01e867a82493513b13c7",
+        "0x8c3b22b22aceb7a92449767ce858f4ae3bc42aa8c89a086db54ebe51966c51c6",
+        "0x8d2d545d99162410074e7e05b7621f321ceab17b74dd42eb6d5bfd19329772fc",
+        "0x94bf44ec3874fd361409ad6877841629b05686007768ab636fb90f28144beeb9",
+        "0x9bffa2fd6e42b8b68c61eb3fcda9801ab22a77fc0005ef387646fa8f8b582678",
+        "0xa519a3e1e152255663e4b073a7859320d11cf01a3bc523eba1fe48246997c1ca",
+        "0xb6afc047a7f19fdd0d2227f4c685c36aad93bee5d9c9af448da4c6f7dbf5f0b0",
+        "0xddcca70d29ae4b92eeb522290bb88372caee780656dc0fd401969173eb869798",
+        "0xe8b190e21c972e601622381310130287074606046ea72f86c1904f32083fb8ab",
+        "0xf1acd340e8ed4a9815356b85b56f34e7a8ca6444ec50bc306812189ee043f8e4",
+        "0xf1d68269bc149264a1768125733cf15422164230bce10d5676be4147423b0945"
+      ],
+      "market_coverage_pct": 0.027308192457737322,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 10.65
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 49.60931617273647
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 62.57977230878012
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 78.02946023888431
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 79.43366341644894
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 85.24875276587477
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 88.29875276587477
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 93.07073617705275
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 100.23512921116654
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 107.76266571621856
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 117.78620511096575
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 138.3380608069213
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 167.11421762562225
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 181.72100227715865
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 199.54740985283763
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 237.1635555988806
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 240.9135555988806
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 245.51128212021368
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 3.4
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 3.4
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 10.6514132292
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 17.9514132292
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 19.3556164065
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 22.4969129077
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 22.4969129077
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 22.4969129077
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 29.6613059383
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 34.0888424433
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 44.112381835600004
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 57.7623818356
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 63.2134689751
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 63.2134689751
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 69.6221859651
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 85.4773580175
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 87.4773580183
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 87.4773580183
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 4
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 10
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 14
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 19
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 20
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 22
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 23
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 24
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 25
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 27
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 29
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 35
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 44
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 48
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 52
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 60
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 63
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 64
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PROD",
+        "role": "LIVE",
+        "envSlug": "production",
+        "billingAccountId": "207795de-891c-4791-9f8b-aa0f0bcc4911",
+        "envKeyPrefix": "POLY_PROD_TENANT_LIVE",
+        "sourceFromEnv": true,
+        "policy": null
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-27T21:07:37.687Z",
+        "until": "2026-05-28T21:07:37.687Z"
+      },
+      "decisions": {
+        "decisions": 0,
+        "placed": 0,
+        "skipped": 0,
+        "errored": 0,
+        "skip_reasons": {},
+        "error_reasons": {}
+      },
+      "placement_rate": null,
+      "fills": {
+        "fills_count": 0,
+        "filled_count": 0,
+        "open_count": 0,
+        "canceled_count": 0,
+        "error_count": 0,
+        "markets_count": 0,
+        "markets_with_open_position": 0,
+        "intent_usdc": 0,
+        "realized_size_usdc": 0,
+        "first_fill_at": null,
+        "last_fill_at": null,
+        "fill_rate": null,
+        "top_cancel_reasons": []
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0,
+        "resolved_markets": 0,
+        "markets_won": 0,
+        "markets_lost": 0
+      },
+      "our_market_set": [],
+      "market_coverage_pct": 0,
+      "cumulative": {
+        "intent_usdc": [],
+        "realized_usdc": [],
+        "fills_count": []
+      },
+      "low_sample": true,
+      "errors": [
+        "fills_agg_failed: grafana pg query → 400 Bad Request: {\"results\":{\"A\":{\"error\":\"db query error: ERROR: column \\\"price\\\" does not exist (SQLSTATE 42703)\",\"errorSource\":\"downstream\",\"status\":500,\"frames\":[{\"schema\":{\"refId\":\"A\",\"meta\":{\"typeVersion\":[0,0],\"executedQueryString\":\"\\n    WITH rolled AS (\\n      SELECT\\n        market_id,\\n        COUNT(*)::int AS fills_count,\\n        COUNT(*) FILTER (WHERE status = 'filled')::int AS filled_count,\\n        COUNT(*) FILTER (WHERE status = 'open')::int AS open_count,\\n        COUNT(*) FILTER (WHERE status IN ('canceled','partial'))::int AS canceled_count,\\n        COUNT(*) FILTER (WHERE status = 'error')::int AS error_count,\\n        COALESCE(SUM(\\n          CASE WHEN attributes-\\u003e\\u003e'size_usdc' ~ '^[0-9]+(\\\\.[0-9]+)?$'\\n               THEN (attributes-\\u003e\\u003e'size_usdc')::numeric\\n               ELSE 0 END\\n        ), 0)::float8 AS intent_usdc,\\n        COALESCE(SUM(\\n          \\n          \\n          \\n          \\n          \\n          \\n          \\n          \\n          CASE WHEN status IN ('filled','partial')\\n                AND price IS NOT NULL\\n                AND shares IS NOT NULL\\n               THEN price * shares\\n               ELSE 0 END\\n        ), 0)::float8 AS realized_usdc,\\n        BOOL_OR(\\n          (position_lifecycle IS NULL OR position_lifecycle IN ('unresolved','open','closing'))\\n          AND attributes-\\u003e\\u003e'closed_at' IS NULL\\n          AND status IN ('pending','open','partial','filled')\\n        ) AS has_open_position,\\n        MIN(observed_at) AS first_fill_at,\\n        MAX(observed_at) AS last_fill_at\\n      FROM poly_copy_trade_fills\\n      WHERE billing_account_id = '207795de-891c-4791-9f8b-aa0f0bcc4911'\\n        AND target_id = '473e0467-8257-583e-ac93-dea278662cb2'\\n        AND observed_at \\u003e= '2026-05-27T21:07:37.687Z'::timestamptz\\n        AND observed_at \\u003c  '2026-05-28T21:07:37.687Z'::timestamptz\\n      GROUP BY market_id\\n    )\\n    SELECT\\n      COALESCE(SUM(fills_count), 0)::int AS fills_count,\\n      COALESCE(SUM(filled_count), 0)::int AS filled_count,\\n      COALESCE(SUM(open_count), 0)::int AS open_count,\\n      COALESCE(SUM(canceled_count), 0)::int AS canceled_count,\\n      COALESCE(SUM(error_count), 0)::int AS error_count,\\n      COUNT(*)::int AS markets_count,\\n      COUNT(*) FILTER (WHERE has_open_position)::int AS markets_with_open_position,\\n      COALESCE(SUM(intent_usdc), 0)::float8 AS intent_usdc,\\n      COALESCE(SUM(realized_usdc), 0)::float8 AS realized_size_usdc,\\n      MIN(first_fill_at) AS first_fill_at,\\n      MAX(last_fill_at) AS last_fill_at\\n    FROM rolled\\n  \"},\"fields\":[]},\"data\":{\"values\":[]}}]}}}\n",
+        "buckets_query_failed: grafana pg query → 400 Bad Request: {\"results\":{\"A\":{\"error\":\"db query error: ERROR: column \\\"price\\\" does not exist (SQLSTATE 42703)\",\"errorSource\":\"downstream\",\"status\":500,\"frames\":[{\"schema\":{\"refId\":\"A\",\"meta\":{\"typeVersion\":[0,0],\"executedQueryString\":\"\\n    SELECT\\n      date_trunc('hour', observed_at) AS bucket,\\n      COUNT(*)::int AS fills_in_bucket,\\n      COALESCE(SUM(\\n        CASE WHEN attributes-\\u003e\\u003e'size_usdc' ~ '^[0-9]+(\\\\.[0-9]+)?$'\\n             THEN (attributes-\\u003e\\u003e'size_usdc')::numeric\\n             ELSE 0 END\\n      ), 0)::float8 AS intent_in_bucket,\\n      COALESCE(SUM(\\n        \\n        CASE WHEN status IN ('filled','partial')\\n              AND price IS NOT NULL\\n              AND shares IS NOT NULL\\n             THEN price * shares\\n             ELSE 0 END\\n      ), 0)::float8 AS realized_in_bucket\\n    FROM poly_copy_trade_fills\\n    WHERE billing_account_id = '207795de-891c-4791-9f8b-aa0f0bcc4911'\\n      AND target_id = '473e0467-8257-583e-ac93-dea278662cb2'\\n      AND observed_at \\u003e= '2026-05-27T21:07:37.687Z'::timestamptz\\n      AND observed_at \\u003c  '2026-05-28T21:07:37.687Z'::timestamptz\\n    GROUP BY 1\\n    ORDER BY 1\\n  \"},\"fields\":[]},\"data\":{\"values\":[]}}]}}}\n",
+        "pnl_query_failed: grafana pg query → 400 Bad Request: {\"results\":{\"A\":{\"error\":\"db query error: ERROR: column f.shares does not exist (SQLSTATE 42703)\",\"errorSource\":\"downstream\",\"status\":500,\"frames\":[{\"schema\":{\"refId\":\"A\",\"meta\":{\"typeVersion\":[0,0],\"executedQueryString\":\"\\n    SELECT\\n      COALESCE(SUM(\\n        CASE\\n          WHEN o.outcome = 'winner'\\n          THEN f.shares * COALESCE(o.payout, 1.0)::numeric\\n               - f.shares * f.price\\n          WHEN o.outcome = 'loser'\\n          THEN -(f.shares * f.price)\\n          ELSE 0\\n        END\\n      ), 0)::float8 AS realized_pnl_usdc,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome IN ('winner','loser'))::int AS resolved_markets,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome = 'winner')::int AS markets_won,\\n      COUNT(DISTINCT f.market_id) FILTER (WHERE o.outcome = 'loser')::int AS markets_lost\\n    FROM poly_copy_trade_fills f\\n    LEFT JOIN poly_market_outcomes o\\n      ON o.condition_id = f.attributes-\\u003e\\u003e'condition_id'\\n     AND o.token_id     = f.attributes-\\u003e\\u003e'token_id'\\n    WHERE f.billing_account_id = '207795de-891c-4791-9f8b-aa0f0bcc4911'\\n      AND f.target_id = '473e0467-8257-583e-ac93-dea278662cb2'\\n      AND f.observed_at \\u003e= '2026-05-27T21:07:37.687Z'::timestamptz\\n      AND f.observed_at \\u003c  '2026-05-28T21:07:37.687Z'::timestamptz\\n      AND f.status IN ('filled','partial')\\n      AND f.price IS NOT NULL\\n      AND f.shares IS NOT NULL\\n  \"},\"fields\":[]},\"data\":{\"values\":[]}}]}}}\n"
+      ]
+    },
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "DB_ONLY_20fdb57a",
+        "envSlug": "candidate-a",
+        "billingAccountId": "20fdb57a-4db2-4669-8abc-20cf4d6b8862",
+        "envKeyPrefix": "DB_ONLY_CANDIDATE_A_20fdb57a",
+        "sourceFromEnv": false,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 5,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 75
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-27T21:07:37.687Z",
+        "until": "2026-05-28T21:07:37.687Z"
+      },
+      "decisions": {
+        "decisions": 16240,
+        "placed": 167,
+        "skipped": 16073,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 6178,
+          "below_target_percentile": 4494,
+          "target_dominant_other_side": 3185,
+          "followup_position_too_small": 1291,
+          "market_past_end_date": 743,
+          "below_market_min": 141,
+          "price_outside_clob_bounds": 26,
+          "position_cap_reached": 12,
+          "already_resting": 3
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.010283251231527093,
+      "fills": {
+        "fills_count": 167,
+        "filled_count": 68,
+        "open_count": 0,
+        "canceled_count": 99,
+        "error_count": 0,
+        "markets_count": 84,
+        "markets_with_open_position": 59,
+        "intent_usdc": 500.53617986096936,
+        "realized_size_usdc": 193.45817922709998,
+        "first_fill_at": "2026-05-27T21:33:56.000Z",
+        "last_fill_at": "2026-05-28T21:02:59.000Z",
+        "fill_rate": 0.40718562874251496,
+        "top_cancel_reasons": [
+          {
+            "reason": "ttl_expired",
+            "count": 99
+          }
+        ]
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0.45,
+        "resolved_markets": 3,
+        "markets_won": 2,
+        "markets_lost": 1
+      },
+      "our_market_set": [
+        "0x005767f467b6e7c71df790ad30e1b96a4ec52b1b17739a103ea990b2ffdd9dfa",
+        "0x073f844171ab7985d5e797523c0879ca717ad6671fb56d95053afb866e600468",
+        "0x0c093398f038750602af43ffb4b67b227921250e296740d0006f966ac551bfc4",
+        "0x0d4913323a8df2db0f1bf1287e5a97a42eefa30d17eb84a5c22dad7932730dde",
+        "0x0dc0dd98942a5c4181d84dc3374426c7b3bd07acabdfce6258f475f7c89c6ad0",
+        "0x0f65f7f055c7208ae048f3c2d156c7cfa6df2f39fa3c694dc3132771af4b5277",
+        "0x11c690896889d86b9aada47cf131930fe380a051394e8d855c3f51c259cfa6c4",
+        "0x16b70a92e8df3191de5ceccd91e61b1a94b053c95f3b408df507518880abf0e2",
+        "0x16d8c25da7f52f0ce2bdef8bf1ff80be5315adc5714be227bbcb08a0c6f78e75",
+        "0x22ad0bbe8d306c58b380088c7d420fe0887240a3f39cf6b472dbcbdbb4520258",
+        "0x276b29848429e376a861974b0a2306cab9320b749b13f83914ae47adc967c852",
+        "0x2a739b8c2c6490ce66cd277d3b10decc347a347a53740a219f0e2cc4a50ac2b5",
+        "0x2e10ad294a2746d38bce6087d7e8c6c7b603b62164b96c0595480a062236eaae",
+        "0x2fa1b7c1de202b3ae8d323fe8de4dfc0c3ed30a1ede8053f2914cba8a2c519c0",
+        "0x30418f776b2c0b11a690e067cf856ade99f3362e991363dc2d90d230bc3f74a4",
+        "0x30ebda9973ef762b831a44336afc60bf808468fd0400a01d9d5add0a62407833",
+        "0x32bd2d9311e32296cd707308f47be67748a7df1ea04441e81feb3bb11f438067",
+        "0x39d5c964989a4b466bc870285827e475d14290c0e4da8fa6518f5e9856aedd9f",
+        "0x43b17bb0b59e87a770d623fa3211fca8513fcc9b1717c76e65098390627272b1",
+        "0x5e089a21727a0489815da27050cafacabf7d8d322a22e0295dd874dc939f6f75",
+        "0x63d8803e6b18ab08ef9b82e38f557fd62b02967df3a96595483f49ab6d649f94",
+        "0x6869dd21e8ca7c8f61cfd1c24bb95bb9325b6b8147ad3b1bfc276e8184f11e65",
+        "0x848aa4328467aa0ca5bc0ce9a719cced8b2001e9c546c07c11d3471a98547135",
+        "0x84bf18d3635a110a837219dd4c4ad4a2552998925505391a44f7dad3d66a5601",
+        "0x8652d78d7814250716cfdfa26b5874a504dce5fa856958f98cb5ed9837bbeba1",
+        "0x8656e3a00f6f373b7a8fb605e436bebf3fda469370e118f6107ee83d72f2b112",
+        "0x88e5add9fe9495b9563ec11e0501afc3d2f3f521a8db01e867a82493513b13c7",
+        "0x8c3b22b22aceb7a92449767ce858f4ae3bc42aa8c89a086db54ebe51966c51c6",
+        "0x8d2d545d99162410074e7e05b7621f321ceab17b74dd42eb6d5bfd19329772fc",
+        "0x907ff0c8bbb4a3edd8e3e9eeba0f61001ae9ace17d326e9e8cc8c0f2c79863d6",
+        "0x94bf44ec3874fd361409ad6877841629b05686007768ab636fb90f28144beeb9",
+        "0x9bffa2fd6e42b8b68c61eb3fcda9801ab22a77fc0005ef387646fa8f8b582678",
+        "0xa519a3e1e152255663e4b073a7859320d11cf01a3bc523eba1fe48246997c1ca",
+        "0xa99f5fbbb198f66e7007ba6d6c65fdf7acdeed6cc080f6c37228496e43a690f2",
+        "0xa9f1a420014557340e034526c306618bc8d7cf045311864591d4bcb5418a1591",
+        "0xab2279fd155871ca6a4aa7680a857c660f4a9028a18e820d78ddc4fe548114f3",
+        "0xab2e56edeb15b38b656bf5ff954b54badf1228056d9d7a0e4a2cfb724d5ec494",
+        "0xab45c885ec399833bfb4b457100a86b8952ebe383087f45973bfb8d8399ceb09",
+        "0xb6afc047a7f19fdd0d2227f4c685c36aad93bee5d9c9af448da4c6f7dbf5f0b0",
+        "0xbf00bd6390bf3def8cfb11c9cea4bcbf0e641e6becb66a43abaa622842cc2f95",
+        "0xc12050583433e0b78b53273f9703f6d0c910f96b16c3b939dc99581c96542f93",
+        "0xc272bccb0b75c597c79a2ea6693017d467ab1580d74ac24194b1fcfae4923709",
+        "0xc2854d2afda65b7269b566eaef034ff0334529d90b4d5387bfb60634aeda0b17",
+        "0xce2dc35036912bbc5dab9f48880d0766f2f3e8f5724e74e01df0a0fe9f10169c",
+        "0xd012cb85e8823ca1f8c64250f7885a96eeb3f33d271822738bbe0c5b66b0d8e3",
+        "0xd138accf34df0e7e15a2363655719523b01daa46280b21d306e5fa67c66a9315",
+        "0xdb39d9fb9824d70ce281ea3233794ff18c3c0fd7e75ddc2ffe03d51589230fdb",
+        "0xdc3b208d3fd182aa413e36d8a9dee94d3bf9df2624a7e42ee00cbdcf9d5ffcc7",
+        "0xddcca70d29ae4b92eeb522290bb88372caee780656dc0fd401969173eb869798",
+        "0xe2798da1385d6c354e3e8f21b7c83f33d66059c57a75a736988b86c56ba77a0e",
+        "0xe330223609c322c03115751d9c02f82c76b1254f8a8b0a37c921852a890cb758",
+        "0xe8b190e21c972e601622381310130287074606046ea72f86c1904f32083fb8ab",
+        "0xeb9853c45bc4394849cc2f0fdb72d8939e77942699cf8df0c20e0f26d35c0ad7",
+        "0xf1acd340e8ed4a9815356b85b56f34e7a8ca6444ec50bc306812189ee043f8e4",
+        "0xf1d68269bc149264a1768125733cf15422164230bce10d5676be4147423b0945",
+        "0xf2d5429a3dd6f7e799df6220b391ac6e9e93c6da2144700ec3995d5634b0ef74",
+        "0xf395e6bd5741278009b251a3d6a60bcc6c380081febed64034b5973f650abd00",
+        "0xf55ef5d738856b0ac8bd6389737cb38c601c1997b0da13e20829a661a55bf844",
+        "0xff198b16fbfa22aca25ba338cc50fda1983c6cdff2a5b23b682dfd2381445d42"
+      ],
+      "market_coverage_pct": 0.07672301690507152,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 10.2
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 19.382595886273
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 62.97958395834725
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 76.52369383677716
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 115.63712295789668
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 126.69268929797951
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 145.0426892979795
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 148.4451423192806
+          },
+          {
+            "ts": "2026-05-28T06:00:00.000Z",
+            "value": 152.9451423192806
+          },
+          {
+            "ts": "2026-05-28T07:00:00.000Z",
+            "value": 157.3451423192806
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 165.02559826081915
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 193.37559826081915
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 212.9025910505502
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 243.39177472020972
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 252.20343076502226
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 268.92390159675676
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 292.0104254342933
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 317.46905616911283
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 352.2154356960942
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 375.24369162114675
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 454.86408874034436
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 483.63456788618896
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 496.5361798609694
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 500.5361798609694
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 6.85
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 12.8
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 23.3
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 30.8941098805
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 49.0325098805
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 53.110975287900004
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 59.960975287900006
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 59.960975287900006
+          },
+          {
+            "ts": "2026-05-28T06:00:00.000Z",
+            "value": 59.960975287900006
+          },
+          {
+            "ts": "2026-05-28T07:00:00.000Z",
+            "value": 60.12497528790001
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 63.84689564930001
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 79.3968956493
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 94.5615819489
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 105.1366703879
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 110.5337908213
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 127.25426165020001
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 137.60426165020002
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 142.90426165020003
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 150.98648907280003
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 165.10728907280003
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 182.29510321630002
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 193.45817922710003
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 193.45817922710003
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 193.45817922710003
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 3
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 7
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 24
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 28
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 40
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 45
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 53
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 55
+          },
+          {
+            "ts": "2026-05-28T06:00:00.000Z",
+            "value": 57
+          },
+          {
+            "ts": "2026-05-28T07:00:00.000Z",
+            "value": 59
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 61
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 71
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 77
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 85
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 88
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 93
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 100
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 109
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 118
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 125
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 151
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 162
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 166
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 167
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "DB_ONLY_acd63233",
+        "envSlug": "candidate-a",
+        "billingAccountId": "acd63233-764b-46a6-8d91-b645cc3417bd",
+        "envKeyPrefix": "DB_ONLY_CANDIDATE_A_acd63233",
+        "sourceFromEnv": false,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 5,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 75
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-27T21:07:37.687Z",
+        "until": "2026-05-28T21:07:37.687Z"
+      },
+      "decisions": {
+        "decisions": 16240,
+        "placed": 168,
+        "skipped": 16072,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 6178,
+          "below_target_percentile": 4493,
+          "target_dominant_other_side": 3186,
+          "followup_position_too_small": 1203,
+          "market_past_end_date": 743,
+          "below_market_min": 141,
+          "position_cap_reached": 99,
+          "price_outside_clob_bounds": 26,
+          "already_resting": 3
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.010344827586206896,
+      "fills": {
+        "fills_count": 168,
+        "filled_count": 67,
+        "open_count": 0,
+        "canceled_count": 101,
+        "error_count": 0,
+        "markets_count": 84,
+        "markets_with_open_position": 58,
+        "intent_usdc": 505.2980108273303,
+        "realized_size_usdc": 191.9762879144,
+        "first_fill_at": "2026-05-27T21:33:56.000Z",
+        "last_fill_at": "2026-05-28T21:02:59.000Z",
+        "fill_rate": 0.39880952380952384,
+        "top_cancel_reasons": [
+          {
+            "reason": "ttl_expired",
+            "count": 101
+          }
+        ]
+      },
+      "pnl": {
+        "realized_pnl_usdc": 3.15,
+        "resolved_markets": 4,
+        "markets_won": 3,
+        "markets_lost": 1
+      },
+      "our_market_set": [
+        "0x005767f467b6e7c71df790ad30e1b96a4ec52b1b17739a103ea990b2ffdd9dfa",
+        "0x073f844171ab7985d5e797523c0879ca717ad6671fb56d95053afb866e600468",
+        "0x0c093398f038750602af43ffb4b67b227921250e296740d0006f966ac551bfc4",
+        "0x0d407291200dfc9c19f864e7107e1bdfa992497a42257658161fc399f3c8dad4",
+        "0x0d4913323a8df2db0f1bf1287e5a97a42eefa30d17eb84a5c22dad7932730dde",
+        "0x0f65f7f055c7208ae048f3c2d156c7cfa6df2f39fa3c694dc3132771af4b5277",
+        "0x11c690896889d86b9aada47cf131930fe380a051394e8d855c3f51c259cfa6c4",
+        "0x16b70a92e8df3191de5ceccd91e61b1a94b053c95f3b408df507518880abf0e2",
+        "0x16d8c25da7f52f0ce2bdef8bf1ff80be5315adc5714be227bbcb08a0c6f78e75",
+        "0x22ad0bbe8d306c58b380088c7d420fe0887240a3f39cf6b472dbcbdbb4520258",
+        "0x276b29848429e376a861974b0a2306cab9320b749b13f83914ae47adc967c852",
+        "0x2a739b8c2c6490ce66cd277d3b10decc347a347a53740a219f0e2cc4a50ac2b5",
+        "0x2e10ad294a2746d38bce6087d7e8c6c7b603b62164b96c0595480a062236eaae",
+        "0x2fa1b7c1de202b3ae8d323fe8de4dfc0c3ed30a1ede8053f2914cba8a2c519c0",
+        "0x30418f776b2c0b11a690e067cf856ade99f3362e991363dc2d90d230bc3f74a4",
+        "0x30ebda9973ef762b831a44336afc60bf808468fd0400a01d9d5add0a62407833",
+        "0x32bd2d9311e32296cd707308f47be67748a7df1ea04441e81feb3bb11f438067",
+        "0x39d5c964989a4b466bc870285827e475d14290c0e4da8fa6518f5e9856aedd9f",
+        "0x43b17bb0b59e87a770d623fa3211fca8513fcc9b1717c76e65098390627272b1",
+        "0x5e089a21727a0489815da27050cafacabf7d8d322a22e0295dd874dc939f6f75",
+        "0x63d8803e6b18ab08ef9b82e38f557fd62b02967df3a96595483f49ab6d649f94",
+        "0x6869dd21e8ca7c8f61cfd1c24bb95bb9325b6b8147ad3b1bfc276e8184f11e65",
+        "0x848aa4328467aa0ca5bc0ce9a719cced8b2001e9c546c07c11d3471a98547135",
+        "0x84bf18d3635a110a837219dd4c4ad4a2552998925505391a44f7dad3d66a5601",
+        "0x8652d78d7814250716cfdfa26b5874a504dce5fa856958f98cb5ed9837bbeba1",
+        "0x8656e3a00f6f373b7a8fb605e436bebf3fda469370e118f6107ee83d72f2b112",
+        "0x88e5add9fe9495b9563ec11e0501afc3d2f3f521a8db01e867a82493513b13c7",
+        "0x8c3b22b22aceb7a92449767ce858f4ae3bc42aa8c89a086db54ebe51966c51c6",
+        "0x8d2d545d99162410074e7e05b7621f321ceab17b74dd42eb6d5bfd19329772fc",
+        "0x907ff0c8bbb4a3edd8e3e9eeba0f61001ae9ace17d326e9e8cc8c0f2c79863d6",
+        "0x94bf44ec3874fd361409ad6877841629b05686007768ab636fb90f28144beeb9",
+        "0x9bffa2fd6e42b8b68c61eb3fcda9801ab22a77fc0005ef387646fa8f8b582678",
+        "0xa519a3e1e152255663e4b073a7859320d11cf01a3bc523eba1fe48246997c1ca",
+        "0xa99f5fbbb198f66e7007ba6d6c65fdf7acdeed6cc080f6c37228496e43a690f2",
+        "0xa9f1a420014557340e034526c306618bc8d7cf045311864591d4bcb5418a1591",
+        "0xab2e56edeb15b38b656bf5ff954b54badf1228056d9d7a0e4a2cfb724d5ec494",
+        "0xab45c885ec399833bfb4b457100a86b8952ebe383087f45973bfb8d8399ceb09",
+        "0xb6afc047a7f19fdd0d2227f4c685c36aad93bee5d9c9af448da4c6f7dbf5f0b0",
+        "0xbf00bd6390bf3def8cfb11c9cea4bcbf0e641e6becb66a43abaa622842cc2f95",
+        "0xc12050583433e0b78b53273f9703f6d0c910f96b16c3b939dc99581c96542f93",
+        "0xc272bccb0b75c597c79a2ea6693017d467ab1580d74ac24194b1fcfae4923709",
+        "0xc2854d2afda65b7269b566eaef034ff0334529d90b4d5387bfb60634aeda0b17",
+        "0xce2dc35036912bbc5dab9f48880d0766f2f3e8f5724e74e01df0a0fe9f10169c",
+        "0xd012cb85e8823ca1f8c64250f7885a96eeb3f33d271822738bbe0c5b66b0d8e3",
+        "0xd138accf34df0e7e15a2363655719523b01daa46280b21d306e5fa67c66a9315",
+        "0xdb39d9fb9824d70ce281ea3233794ff18c3c0fd7e75ddc2ffe03d51589230fdb",
+        "0xdc3b208d3fd182aa413e36d8a9dee94d3bf9df2624a7e42ee00cbdcf9d5ffcc7",
+        "0xddcca70d29ae4b92eeb522290bb88372caee780656dc0fd401969173eb869798",
+        "0xe2798da1385d6c354e3e8f21b7c83f33d66059c57a75a736988b86c56ba77a0e",
+        "0xe330223609c322c03115751d9c02f82c76b1254f8a8b0a37c921852a890cb758",
+        "0xe8b190e21c972e601622381310130287074606046ea72f86c1904f32083fb8ab",
+        "0xeb9853c45bc4394849cc2f0fdb72d8939e77942699cf8df0c20e0f26d35c0ad7",
+        "0xf1acd340e8ed4a9815356b85b56f34e7a8ca6444ec50bc306812189ee043f8e4",
+        "0xf1d68269bc149264a1768125733cf15422164230bce10d5676be4147423b0945",
+        "0xf2d5429a3dd6f7e799df6220b391ac6e9e93c6da2144700ec3995d5634b0ef74",
+        "0xf395e6bd5741278009b251a3d6a60bcc6c380081febed64034b5973f650abd00",
+        "0xf55ef5d738856b0ac8bd6389737cb38c601c1997b0da13e20829a661a55bf844",
+        "0xff198b16fbfa22aca25ba338cc50fda1983c6cdff2a5b23b682dfd2381445d42"
+      ],
+      "market_coverage_pct": 0.0754226267880364,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 10.2
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 19.382595886273
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 62.97958395834725
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 76.52369383677716
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 115.63712295789668
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 126.69268929797951
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 145.0426892979795
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 148.4451423192806
+          },
+          {
+            "ts": "2026-05-28T06:00:00.000Z",
+            "value": 152.9451423192806
+          },
+          {
+            "ts": "2026-05-28T07:00:00.000Z",
+            "value": 162.0451423192806
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 169.72559826081914
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 198.07559826081913
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 217.6025910505502
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 248.0917747202097
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 259.61627175105235
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 281.06472177036693
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 308.19433894625877
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 332.40507546017545
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 362.0647820972296
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 385.0930380222822
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 459.62591970670536
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 488.39639885254996
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 501.2980108273304
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 505.2980108273304
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 6.85
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 12.8
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 23.3
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 30.8941098805
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 51.3325098805
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 55.4109752879
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 62.2609752879
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 62.2609752879
+          },
+          {
+            "ts": "2026-05-28T06:00:00.000Z",
+            "value": 62.2609752879
+          },
+          {
+            "ts": "2026-05-28T07:00:00.000Z",
+            "value": 64.7109752879
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 68.4328956493
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 83.98289564929999
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 95.04758194889999
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 105.62267038789999
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 109.1533226389
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 126.513892804
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 137.817892804
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 145.258738692
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 150.2409661146
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 166.16936611460002
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 180.81321190360003
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 191.97628791440005
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 191.97628791440005
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 191.97628791440005
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 3
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 7
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 24
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 28
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 40
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 45
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 53
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 55
+          },
+          {
+            "ts": "2026-05-28T06:00:00.000Z",
+            "value": 57
+          },
+          {
+            "ts": "2026-05-28T07:00:00.000Z",
+            "value": 61
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 63
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 73
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 79
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 87
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 91
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 98
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 106
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 114
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 121
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 128
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 152
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 163
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 167
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 168
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "CANDIDATE_A",
+        "role": "DB_ONLY_809e37f7",
+        "envSlug": "candidate-a",
+        "billingAccountId": "809e37f7-40b3-403d-a354-79a547bae48a",
+        "envKeyPrefix": "DB_ONLY_CANDIDATE_A_809e37f7",
+        "sourceFromEnv": false,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 5,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 75
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-27T21:07:37.687Z",
+        "until": "2026-05-28T21:07:37.687Z"
+      },
+      "decisions": {
+        "decisions": 16241,
+        "placed": 166,
+        "skipped": 16075,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 6179,
+          "below_target_percentile": 4493,
+          "target_dominant_other_side": 3187,
+          "followup_position_too_small": 1158,
+          "market_past_end_date": 743,
+          "position_cap_reached": 145,
+          "below_market_min": 141,
+          "price_outside_clob_bounds": 26,
+          "already_resting": 3
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.010221045502124253,
+      "fills": {
+        "fills_count": 166,
+        "filled_count": 66,
+        "open_count": 0,
+        "canceled_count": 100,
+        "error_count": 0,
+        "markets_count": 84,
+        "markets_with_open_position": 58,
+        "intent_usdc": 499.56880893229425,
+        "realized_size_usdc": 188.11949977329996,
+        "first_fill_at": "2026-05-27T21:33:56.000Z",
+        "last_fill_at": "2026-05-28T21:02:59.000Z",
+        "fill_rate": 0.39759036144578314,
+        "top_cancel_reasons": [
+          {
+            "reason": "ttl_expired",
+            "count": 100
+          }
+        ]
+      },
+      "pnl": {
+        "realized_pnl_usdc": 0.6174,
+        "resolved_markets": 4,
+        "markets_won": 3,
+        "markets_lost": 1
+      },
+      "our_market_set": [
+        "0x005767f467b6e7c71df790ad30e1b96a4ec52b1b17739a103ea990b2ffdd9dfa",
+        "0x073f844171ab7985d5e797523c0879ca717ad6671fb56d95053afb866e600468",
+        "0x0c093398f038750602af43ffb4b67b227921250e296740d0006f966ac551bfc4",
+        "0x0d407291200dfc9c19f864e7107e1bdfa992497a42257658161fc399f3c8dad4",
+        "0x0d4913323a8df2db0f1bf1287e5a97a42eefa30d17eb84a5c22dad7932730dde",
+        "0x0f65f7f055c7208ae048f3c2d156c7cfa6df2f39fa3c694dc3132771af4b5277",
+        "0x11c690896889d86b9aada47cf131930fe380a051394e8d855c3f51c259cfa6c4",
+        "0x16b70a92e8df3191de5ceccd91e61b1a94b053c95f3b408df507518880abf0e2",
+        "0x16d8c25da7f52f0ce2bdef8bf1ff80be5315adc5714be227bbcb08a0c6f78e75",
+        "0x22ad0bbe8d306c58b380088c7d420fe0887240a3f39cf6b472dbcbdbb4520258",
+        "0x276b29848429e376a861974b0a2306cab9320b749b13f83914ae47adc967c852",
+        "0x2a739b8c2c6490ce66cd277d3b10decc347a347a53740a219f0e2cc4a50ac2b5",
+        "0x2e10ad294a2746d38bce6087d7e8c6c7b603b62164b96c0595480a062236eaae",
+        "0x2fa1b7c1de202b3ae8d323fe8de4dfc0c3ed30a1ede8053f2914cba8a2c519c0",
+        "0x30418f776b2c0b11a690e067cf856ade99f3362e991363dc2d90d230bc3f74a4",
+        "0x30ebda9973ef762b831a44336afc60bf808468fd0400a01d9d5add0a62407833",
+        "0x32bd2d9311e32296cd707308f47be67748a7df1ea04441e81feb3bb11f438067",
+        "0x39d5c964989a4b466bc870285827e475d14290c0e4da8fa6518f5e9856aedd9f",
+        "0x43b17bb0b59e87a770d623fa3211fca8513fcc9b1717c76e65098390627272b1",
+        "0x5e089a21727a0489815da27050cafacabf7d8d322a22e0295dd874dc939f6f75",
+        "0x63d8803e6b18ab08ef9b82e38f557fd62b02967df3a96595483f49ab6d649f94",
+        "0x6869dd21e8ca7c8f61cfd1c24bb95bb9325b6b8147ad3b1bfc276e8184f11e65",
+        "0x848aa4328467aa0ca5bc0ce9a719cced8b2001e9c546c07c11d3471a98547135",
+        "0x84bf18d3635a110a837219dd4c4ad4a2552998925505391a44f7dad3d66a5601",
+        "0x8652d78d7814250716cfdfa26b5874a504dce5fa856958f98cb5ed9837bbeba1",
+        "0x8656e3a00f6f373b7a8fb605e436bebf3fda469370e118f6107ee83d72f2b112",
+        "0x88e5add9fe9495b9563ec11e0501afc3d2f3f521a8db01e867a82493513b13c7",
+        "0x8c3b22b22aceb7a92449767ce858f4ae3bc42aa8c89a086db54ebe51966c51c6",
+        "0x8d2d545d99162410074e7e05b7621f321ceab17b74dd42eb6d5bfd19329772fc",
+        "0x907ff0c8bbb4a3edd8e3e9eeba0f61001ae9ace17d326e9e8cc8c0f2c79863d6",
+        "0x94bf44ec3874fd361409ad6877841629b05686007768ab636fb90f28144beeb9",
+        "0x9bffa2fd6e42b8b68c61eb3fcda9801ab22a77fc0005ef387646fa8f8b582678",
+        "0xa519a3e1e152255663e4b073a7859320d11cf01a3bc523eba1fe48246997c1ca",
+        "0xa99f5fbbb198f66e7007ba6d6c65fdf7acdeed6cc080f6c37228496e43a690f2",
+        "0xa9f1a420014557340e034526c306618bc8d7cf045311864591d4bcb5418a1591",
+        "0xab2e56edeb15b38b656bf5ff954b54badf1228056d9d7a0e4a2cfb724d5ec494",
+        "0xab45c885ec399833bfb4b457100a86b8952ebe383087f45973bfb8d8399ceb09",
+        "0xb6afc047a7f19fdd0d2227f4c685c36aad93bee5d9c9af448da4c6f7dbf5f0b0",
+        "0xbf00bd6390bf3def8cfb11c9cea4bcbf0e641e6becb66a43abaa622842cc2f95",
+        "0xc12050583433e0b78b53273f9703f6d0c910f96b16c3b939dc99581c96542f93",
+        "0xc272bccb0b75c597c79a2ea6693017d467ab1580d74ac24194b1fcfae4923709",
+        "0xc2854d2afda65b7269b566eaef034ff0334529d90b4d5387bfb60634aeda0b17",
+        "0xce2dc35036912bbc5dab9f48880d0766f2f3e8f5724e74e01df0a0fe9f10169c",
+        "0xd012cb85e8823ca1f8c64250f7885a96eeb3f33d271822738bbe0c5b66b0d8e3",
+        "0xd138accf34df0e7e15a2363655719523b01daa46280b21d306e5fa67c66a9315",
+        "0xdb39d9fb9824d70ce281ea3233794ff18c3c0fd7e75ddc2ffe03d51589230fdb",
+        "0xdc3b208d3fd182aa413e36d8a9dee94d3bf9df2624a7e42ee00cbdcf9d5ffcc7",
+        "0xddcca70d29ae4b92eeb522290bb88372caee780656dc0fd401969173eb869798",
+        "0xe2798da1385d6c354e3e8f21b7c83f33d66059c57a75a736988b86c56ba77a0e",
+        "0xe330223609c322c03115751d9c02f82c76b1254f8a8b0a37c921852a890cb758",
+        "0xe8b190e21c972e601622381310130287074606046ea72f86c1904f32083fb8ab",
+        "0xeb9853c45bc4394849cc2f0fdb72d8939e77942699cf8df0c20e0f26d35c0ad7",
+        "0xf1acd340e8ed4a9815356b85b56f34e7a8ca6444ec50bc306812189ee043f8e4",
+        "0xf1d68269bc149264a1768125733cf15422164230bce10d5676be4147423b0945",
+        "0xf2d5429a3dd6f7e799df6220b391ac6e9e93c6da2144700ec3995d5634b0ef74",
+        "0xf395e6bd5741278009b251a3d6a60bcc6c380081febed64034b5973f650abd00",
+        "0xf55ef5d738856b0ac8bd6389737cb38c601c1997b0da13e20829a661a55bf844",
+        "0xff198b16fbfa22aca25ba338cc50fda1983c6cdff2a5b23b682dfd2381445d42"
+      ],
+      "market_coverage_pct": 0.0754226267880364,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 10.2
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 19.382595886273
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 67.52528904011544
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 81.06939891854535
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 113.58282803966488
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 124.63839437974771
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 142.98839437974772
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 146.3908474010488
+          },
+          {
+            "ts": "2026-05-28T06:00:00.000Z",
+            "value": 150.8908474010488
+          },
+          {
+            "ts": "2026-05-28T07:00:00.000Z",
+            "value": 159.9908474010488
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 167.67130334258735
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 196.02130334258734
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 215.5482961323184
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 246.03747980197792
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 254.84913584679046
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 271.56960667852496
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 294.6561305160616
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 320.1147612508811
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 354.86114077786243
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 377.889396702915
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 454.90979382211265
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 482.667196957514
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 495.5688089322945
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 499.5688089322945
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 6.85
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 12.8
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 23.495705082
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 31.0898149625
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 48.610514962500005
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 52.68898036990001
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 59.53898036990001
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 59.53898036990001
+          },
+          {
+            "ts": "2026-05-28T06:00:00.000Z",
+            "value": 59.53898036990001
+          },
+          {
+            "ts": "2026-05-28T07:00:00.000Z",
+            "value": 60.07308036990001
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 63.795000731300014
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 79.34500073130002
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 90.29354835380002
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 100.86863679280002
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 106.81442086140002
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 121.49945820720002
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 131.84945820720003
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 137.14945820720004
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 142.13168562980005
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 158.18168562980006
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 177.96949977330007
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 188.11949977330008
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 188.11949977330008
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 188.11949977330008
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 3
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 7
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 25
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 29
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 39
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 44
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 52
+          },
+          {
+            "ts": "2026-05-28T04:00:00.000Z",
+            "value": 54
+          },
+          {
+            "ts": "2026-05-28T06:00:00.000Z",
+            "value": 56
+          },
+          {
+            "ts": "2026-05-28T07:00:00.000Z",
+            "value": 60
+          },
+          {
+            "ts": "2026-05-28T08:00:00.000Z",
+            "value": 62
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 72
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 78
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 86
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 89
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 94
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 101
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 110
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 119
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 126
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 151
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 161
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 165
+          },
+          {
+            "ts": "2026-05-28T21:00:00.000Z",
+            "value": 166
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    },
+    {
+      "tenant": {
+        "envLabel": "PREVIEW",
+        "role": "DB_ONLY_fb8f65d5",
+        "envSlug": "preview",
+        "billingAccountId": "fb8f65d5-29e4-446a-8753-280d5328b2a2",
+        "envKeyPrefix": "DB_ONLY_PREVIEW_fb8f65d5",
+        "sourceFromEnv": false,
+        "policy": {
+          "kind": "auto",
+          "max_usdc_per_trade": 100,
+          "capital_alloc_usdc": null,
+          "filter_percentile": 80
+        }
+      },
+      "target_id": "473e0467-8257-583e-ac93-dea278662cb2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "window": {
+        "since": "2026-05-27T21:07:37.687Z",
+        "until": "2026-05-28T21:07:37.687Z"
+      },
+      "decisions": {
+        "decisions": 8952,
+        "placed": 157,
+        "skipped": 8795,
+        "errored": 0,
+        "skip_reasons": {
+          "vwap_floor_breach": 3511,
+          "below_target_percentile": 2562,
+          "target_dominant_other_side": 1560,
+          "market_past_end_date": 700,
+          "followup_position_too_small": 180,
+          "already_resting": 176,
+          "below_market_min": 48,
+          "target_position_below_threshold": 35,
+          "price_outside_clob_bounds": 20,
+          "followup_not_needed": 3
+        },
+        "error_reasons": {}
+      },
+      "placement_rate": 0.017537980339588918,
+      "fills": {
+        "fills_count": 157,
+        "filled_count": 71,
+        "open_count": 0,
+        "canceled_count": 86,
+        "error_count": 0,
+        "markets_count": 27,
+        "markets_with_open_position": 24,
+        "intent_usdc": 978.349128798941,
+        "realized_size_usdc": 254.40107349910002,
+        "first_fill_at": "2026-05-27T21:09:05.000Z",
+        "last_fill_at": "2026-05-28T20:46:18.000Z",
+        "fill_rate": 0.45222929936305734,
+        "top_cancel_reasons": [
+          {
+            "reason": "ttl_expired",
+            "count": 68
+          },
+          {
+            "reason": "stale_resting_layer_up",
+            "count": 18
+          }
+        ]
+      },
+      "pnl": {
+        "realized_pnl_usdc": 9.6285794377,
+        "resolved_markets": 10,
+        "markets_won": 5,
+        "markets_lost": 5
+      },
+      "our_market_set": [
+        "0x005767f467b6e7c71df790ad30e1b96a4ec52b1b17739a103ea990b2ffdd9dfa",
+        "0x073f844171ab7985d5e797523c0879ca717ad6671fb56d95053afb866e600468",
+        "0x0d407291200dfc9c19f864e7107e1bdfa992497a42257658161fc399f3c8dad4",
+        "0x0d4913323a8df2db0f1bf1287e5a97a42eefa30d17eb84a5c22dad7932730dde",
+        "0x0f65f7f055c7208ae048f3c2d156c7cfa6df2f39fa3c694dc3132771af4b5277",
+        "0x16b70a92e8df3191de5ceccd91e61b1a94b053c95f3b408df507518880abf0e2",
+        "0x1ed24877a1a095f9737a7ca511799f8f002edf1b838c3b38c2ed3d5fef4031b6",
+        "0x2a739b8c2c6490ce66cd277d3b10decc347a347a53740a219f0e2cc4a50ac2b5",
+        "0x32bd2d9311e32296cd707308f47be67748a7df1ea04441e81feb3bb11f438067",
+        "0x6869dd21e8ca7c8f61cfd1c24bb95bb9325b6b8147ad3b1bfc276e8184f11e65",
+        "0x848aa4328467aa0ca5bc0ce9a719cced8b2001e9c546c07c11d3471a98547135",
+        "0x88e5add9fe9495b9563ec11e0501afc3d2f3f521a8db01e867a82493513b13c7",
+        "0x8c3b22b22aceb7a92449767ce858f4ae3bc42aa8c89a086db54ebe51966c51c6",
+        "0x8d2d545d99162410074e7e05b7621f321ceab17b74dd42eb6d5bfd19329772fc",
+        "0x94bf44ec3874fd361409ad6877841629b05686007768ab636fb90f28144beeb9",
+        "0x9bffa2fd6e42b8b68c61eb3fcda9801ab22a77fc0005ef387646fa8f8b582678",
+        "0xa519a3e1e152255663e4b073a7859320d11cf01a3bc523eba1fe48246997c1ca",
+        "0xb6afc047a7f19fdd0d2227f4c685c36aad93bee5d9c9af448da4c6f7dbf5f0b0",
+        "0xbfeeea3cf12637207676ce37202b450238a902a1ae50b0b44a4a68d89f3cba2f",
+        "0xddcca70d29ae4b92eeb522290bb88372caee780656dc0fd401969173eb869798",
+        "0xe330223609c322c03115751d9c02f82c76b1254f8a8b0a37c921852a890cb758",
+        "0xe8b190e21c972e601622381310130287074606046ea72f86c1904f32083fb8ab",
+        "0xf1acd340e8ed4a9815356b85b56f34e7a8ca6444ec50bc306812189ee043f8e4",
+        "0xf1d68269bc149264a1768125733cf15422164230bce10d5676be4147423b0945"
+      ],
+      "market_coverage_pct": 0.031209362808842653,
+      "cumulative": {
+        "intent_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 33.75
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 37.65
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 209.38736074247248
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 275.84348239082976
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 328.7597063925613
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 333.1270047910616
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 371.5663832614195
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 379.15834776747874
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 395.0982738969787
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 432.5465229853947
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 453.7691266417592
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 493.61383710217467
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 564.7241880527545
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 619.5313830708601
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 661.4916011319452
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 737.6936256633932
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 909.032247619642
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 924.132247619642
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 978.3491287989413
+          }
+        ],
+        "realized_usdc": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 11.8484
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 15.7484
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 15.7484
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 50.9488074881
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 58.6785783385
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 63.045876736900006
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 78.8152966123
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 79.7980966123
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 81.3190966123
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 114.86734569730001
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 118.51734569730002
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 158.36205615080002
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 194.1414152618
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 208.0267610503
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 208.0267610503
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 218.4189734983
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 231.52037349830002
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 235.87037349910003
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 254.40107349910002
+          }
+        ],
+        "fills_count": [
+          {
+            "ts": "2026-05-27T21:00:00.000Z",
+            "value": 12
+          },
+          {
+            "ts": "2026-05-27T22:00:00.000Z",
+            "value": 13
+          },
+          {
+            "ts": "2026-05-27T23:00:00.000Z",
+            "value": 19
+          },
+          {
+            "ts": "2026-05-28T00:00:00.000Z",
+            "value": 32
+          },
+          {
+            "ts": "2026-05-28T01:00:00.000Z",
+            "value": 40
+          },
+          {
+            "ts": "2026-05-28T02:00:00.000Z",
+            "value": 41
+          },
+          {
+            "ts": "2026-05-28T03:00:00.000Z",
+            "value": 54
+          },
+          {
+            "ts": "2026-05-28T09:00:00.000Z",
+            "value": 56
+          },
+          {
+            "ts": "2026-05-28T10:00:00.000Z",
+            "value": 59
+          },
+          {
+            "ts": "2026-05-28T11:00:00.000Z",
+            "value": 61
+          },
+          {
+            "ts": "2026-05-28T12:00:00.000Z",
+            "value": 64
+          },
+          {
+            "ts": "2026-05-28T13:00:00.000Z",
+            "value": 69
+          },
+          {
+            "ts": "2026-05-28T14:00:00.000Z",
+            "value": 87
+          },
+          {
+            "ts": "2026-05-28T15:00:00.000Z",
+            "value": 100
+          },
+          {
+            "ts": "2026-05-28T16:00:00.000Z",
+            "value": 109
+          },
+          {
+            "ts": "2026-05-28T17:00:00.000Z",
+            "value": 117
+          },
+          {
+            "ts": "2026-05-28T18:00:00.000Z",
+            "value": 133
+          },
+          {
+            "ts": "2026-05-28T19:00:00.000Z",
+            "value": 141
+          },
+          {
+            "ts": "2026-05-28T20:00:00.000Z",
+            "value": 157
+          }
+        ]
+      },
+      "low_sample": false,
+      "errors": []
+    }
+  ],
+  "target": {
+    "wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+    "cumulative_usdc": [
+      {
+        "ts": "2026-05-27T21:00:00.000Z",
+        "value": 42374.993779
+      },
+      {
+        "ts": "2026-05-27T22:00:00.000Z",
+        "value": 110795.532674
+      },
+      {
+        "ts": "2026-05-27T23:00:00.000Z",
+        "value": 175947.672227
+      },
+      {
+        "ts": "2026-05-28T00:00:00.000Z",
+        "value": 254593.629782
+      },
+      {
+        "ts": "2026-05-28T01:00:00.000Z",
+        "value": 368978.048197
+      },
+      {
+        "ts": "2026-05-28T02:00:00.000Z",
+        "value": 427891.904428
+      },
+      {
+        "ts": "2026-05-28T03:00:00.000Z",
+        "value": 456745.263696
+      },
+      {
+        "ts": "2026-05-28T04:00:00.000Z",
+        "value": 473059.879599
+      },
+      {
+        "ts": "2026-05-28T05:00:00.000Z",
+        "value": 477513.916567
+      },
+      {
+        "ts": "2026-05-28T06:00:00.000Z",
+        "value": 483926.45036899997
+      },
+      {
+        "ts": "2026-05-28T07:00:00.000Z",
+        "value": 490659.69645999995
+      },
+      {
+        "ts": "2026-05-28T08:00:00.000Z",
+        "value": 514944.74401699996
+      },
+      {
+        "ts": "2026-05-28T09:00:00.000Z",
+        "value": 556134.850689
+      },
+      {
+        "ts": "2026-05-28T10:00:00.000Z",
+        "value": 641919.186073
+      },
+      {
+        "ts": "2026-05-28T11:00:00.000Z",
+        "value": 727006.7457419999
+      },
+      {
+        "ts": "2026-05-28T12:00:00.000Z",
+        "value": 781884.094648
+      },
+      {
+        "ts": "2026-05-28T13:00:00.000Z",
+        "value": 856204.286891
+      },
+      {
+        "ts": "2026-05-28T14:00:00.000Z",
+        "value": 950690.423014
+      },
+      {
+        "ts": "2026-05-28T15:00:00.000Z",
+        "value": 1013949.0299810001
+      },
+      {
+        "ts": "2026-05-28T16:00:00.000Z",
+        "value": 1129890.305375
+      },
+      {
+        "ts": "2026-05-28T17:00:00.000Z",
+        "value": 1213989.246056
+      },
+      {
+        "ts": "2026-05-28T18:00:00.000Z",
+        "value": 1308427.844549
+      },
+      {
+        "ts": "2026-05-28T19:00:00.000Z",
+        "value": 1420565.995317
+      },
+      {
+        "ts": "2026-05-28T20:00:00.000Z",
+        "value": 1518520.7928829999
+      },
+      {
+        "ts": "2026-05-28T21:00:00.000Z",
+        "value": 1523920.7103709998
+      }
+    ],
+    "market_set": [
+      "0x00347858b1aef0f2be882050133f546555d8a316cd321bce82c5e8e031e120c1",
+      "0x005767f467b6e7c71df790ad30e1b96a4ec52b1b17739a103ea990b2ffdd9dfa",
+      "0x005c3a80e0642d68350d8eb151bfd559651fbeb252675ae20d28fbfd7d253d45",
+      "0x005db8703197e62320fd03ce1f3e70d50b97b85bd31a5ce42885bdaf04935c28",
+      "0x010b25c43331a4f99844d64b9327c1cdd2236b9294d3b1ae322caf9be70f68a8",
+      "0x01163533eef8ae753ce9e3af55acf89480c24066fdefeaeb909d78aad6e75be0",
+      "0x011edf651c70a202098712deb12e417581781e4d800edcf3673d6ee318846078",
+      "0x01257e53821c70f298b7606d03c4e78222cdea54be31a97c83e279e0b6ddc5c2",
+      "0x01c67a5002d6e63bfc2df2d80d2483c389d2a38b5e25ee26bb5108c7d7601769",
+      "0x029ad81890db48395bce794460d742a34f173c0827f120c648157bab73592868",
+      "0x02a82a7174ccfe8acfbeb81d61a3b771eed64031243352a4842911e39bab9d49",
+      "0x036b78c51a77cd6b8a01302592e8a97226377f380f91f53682a09e12535c9be8",
+      "0x03db5e2993bc004f766906e8647dfcd54c0887aadc0a8acdfc848eb03a8988da",
+      "0x04137b5409c82e5a21a9f158ee51e28344376855f414af789027c80e61eaee0b",
+      "0x0431fbcb4a065ddcc206a39452962bf3da76f6428685aa3b37d1be93e94a4dc4",
+      "0x04b6d6630d49e6513355ff045c96439c929335cb0d18da7792dea6c2fc717ead",
+      "0x04d7a3bcabb4d0eebc8ee34e765be6cf8fb21f59ff789d0e054012b70ef95d62",
+      "0x054e3d8085c160dc95582ddef8db5274a1270d584c46902da121a70c18f601b6",
+      "0x05a303645ac39405969df3786b6e33c74ec3be9e1779adba11e619a10d1feab0",
+      "0x05e1e1af0eddbdadff2077f65da3b33e3c83a8cd254b9ad76d06b9fa1dfee97a",
+      "0x06aa27d60e4f7109882d395631c61676a089b5bfc27674acd2004b04935bb01e",
+      "0x072b93c804153c1382037a354bbe2948875612d77a870f943b7ea274021b7c07",
+      "0x073f844171ab7985d5e797523c0879ca717ad6671fb56d95053afb866e600468",
+      "0x077ad3a59ca919155b601f8f058ec6586a6bcea38b649c711f5cd788f5ad9292",
+      "0x081c6ff9ac90388062a1cc278974a74b86f3a72630478aff96c0dc722e39351e",
+      "0x0902e6c3705c9d91eadaf1a7cf94a542daa0330e4759b6e9d0085253753415f8",
+      "0x091e3c03ddb52561c5032f27dbac4c22e69b67bac2935c563d265df02607f7d6",
+      "0x098a2d424d87afc7ddc69ee4f7e42979ffb7e5873ec06152a00b6305ba83611c",
+      "0x0a4b9beb6128863db2b107f185521597a426356f1d9a23c7001401edfd32014b",
+      "0x0a8418fdab57de8ce4e0c6042810fc635fb7d5718a86d10104fcd0d8cc5f6be9",
+      "0x0a9ad44762a15834630ab8f88154d1cd6d4a14aeaf84eea8f80395df894493c3",
+      "0x0ad6826ce43334e6cad3a56229018c15c2658ad51e64f8e33b48530a2fe71050",
+      "0x0b16223ad68e9990f929ce2b1d2993785fcf42c58c38a36f859f3f07f6b078ed",
+      "0x0b27dff171fdac6a092faf4fe2b7dae30071eccb30f7701430a10ff8b25a24f2",
+      "0x0b6a87133e6bd78640df8180b9a3d86f907258709bda1bb163efdecd9af71e35",
+      "0x0b993c3a1979682c9278cf7d901e48eb0d7fab759b8ae06994331c43401a4dd4",
+      "0x0c093398f038750602af43ffb4b67b227921250e296740d0006f966ac551bfc4",
+      "0x0c7082a1fffcf0ea9b57816658389f70b8bb6d38a02310f4a55ce781d9cdbd2d",
+      "0x0cc58126b1b1106adac1d1e0ea9ffc8475ebb1ea64d04ac20079b838a9eb9edd",
+      "0x0d10ccc6a3da41ea276b0d4efdd3fe9c96c7e3a5275bf320e0ecaab079397310",
+      "0x0d407291200dfc9c19f864e7107e1bdfa992497a42257658161fc399f3c8dad4",
+      "0x0d4913323a8df2db0f1bf1287e5a97a42eefa30d17eb84a5c22dad7932730dde",
+      "0x0d64df5aa4197acd5aa29ca4a38972dcc70b01343e0454cf1988266b6d5784d3",
+      "0x0d6be76e767e239f426f86179a8aad260aa8f4f6bef5d9b58816e075bc9a9c02",
+      "0x0d9ceec323925d837bd3c05da1e66586fe2b3d36f0e4335a749f929a5b2346e8",
+      "0x0d9ea40ae6ad289a914035a1a7cde6a1179095df6d8457dacc91197e77a7324c",
+      "0x0dc0dd98942a5c4181d84dc3374426c7b3bd07acabdfce6258f475f7c89c6ad0",
+      "0x0e184b802bd1f1ad454cb76a0751d3c23c6c225b21989196951acd443178caf2",
+      "0x0e9e574fac63394a8abe61bb7055d5dadc969abb9be0a0368990ab2d203f43c7",
+      "0x0ee5b6bf84404cb0f0fde3f84cf725f4ff3b31116987ca1c13d9d70b4e5c6f8f",
+      "0x0ee5f52374fefa49988f26d16666dfe455d65af3094bc59fd52d2fd0aa446f9a",
+      "0x0ef34409d18512d669880a701894752dfc179151e5914f20c33b6225b237b311",
+      "0x0ef9d17aff09c873dc47a93cfb13c42ab6274b4493e022fed1f228193714540d",
+      "0x0f65f7f055c7208ae048f3c2d156c7cfa6df2f39fa3c694dc3132771af4b5277",
+      "0x0f83edd3530945f509ee40b7aca96db807a6abf795f6d0817c62b15c6bfdfb6c",
+      "0x10900f9e350b8112c9e755044a3fd5237b15ec41ea6ec5272c64cff23640566c",
+      "0x10b66e302ee548056fd040e81516265bbdec06a8b0fad1d08bf08d7416d503a9",
+      "0x111011c093d1b6482eb67ba2eda51591ffa133a7349422e0b929813d807d59b0",
+      "0x11895f1d95fc8d7f224a9076622d2681e1162cc231bebfc336e460cdc91eade7",
+      "0x11c690896889d86b9aada47cf131930fe380a051394e8d855c3f51c259cfa6c4",
+      "0x12375bc94e98ee735995ae3479f55f5d88db92d862fed14944e7192fa731dd8f",
+      "0x135538027daecfe7185f844fa3980518db7d59238fb5a71cb165646fafa2e20e",
+      "0x137b1bfdb2cbc8baac570be27ae08e49e6ea8dbab799e2899eeb544b192a989d",
+      "0x13c91c7a00b48cb2f4f4378455bfe693900fb32dfc3407dd45e19b21a2fb8bda",
+      "0x14e51cd086c30aff01a94f360ec06a2e1614c2edff248acd4bf17b76af47c104",
+      "0x157e9f232a7db8e10e9c582bba47569eeb80ad5113e8a2f1e921ee6c0674745f",
+      "0x15b6ea19b42939758a8f83c021d5def1dcc4a217e10ec6a4dfe92803ce59753c",
+      "0x16169d5b59b257747250622ec79d701d3879c29ec43e4a8efd6d4eafb19abd73",
+      "0x1656b722c7e822910f75710f5f857feff018d6c171b26b27bd245a894ad518a3",
+      "0x168e6f6b6eb9dc9025ce6543dd7d6574efd1ff90a8aaa35ce799c64cb5ffdab4",
+      "0x16b70a92e8df3191de5ceccd91e61b1a94b053c95f3b408df507518880abf0e2",
+      "0x16d6c2b795ccb170ed3e7df41da7bbed8ea285d846e125bdf4c928e07ceea08e",
+      "0x16d8c25da7f52f0ce2bdef8bf1ff80be5315adc5714be227bbcb08a0c6f78e75",
+      "0x16ed4915af4cb9ae2866b57e0c158df82897c52bb341a5cc552d22e490a42c3c",
+      "0x17483ce9ee1c461608e4193d1cc7650f8135c4108ed88e4577d50c70fc2f5fe1",
+      "0x174a9725c55c834a8d35ead88cb5fe399bf47e493c87a72ce73f5f71aa445a9c",
+      "0x1756d6df51abc871099e12b6a6387d578e174840e26cd6326dac79ab30c110e7",
+      "0x176a4e49a6ddca3b960adc80087986f827b191cc845e90ec685820c5ea1b00ed",
+      "0x17cb9882e085aacee50c6a697cbdb03f85672da081c273e839a6dd56950bea12",
+      "0x17dfc75726fa95d4054d91e80295c8b3e494569617e67a7e620e27562b7952b0",
+      "0x180cf009f69dc391dfabfbdd2583a82ab6e97abcfac3836772bb944ca9ce7e5b",
+      "0x188a59342c55ae25c1af86cf241a69d2362c6e11d42e943652ad77fa7e00e638",
+      "0x18e382e5fd633617b1b33e93669b804fce3d60d8a3a41e7f865296bd671be35e",
+      "0x1932c6b0bed155312ad0ebaad592b1981261c01bb644e87089c12c49838af54f",
+      "0x1a34a74cfd5f74d205a93a853ec30473f1ba00107e4c9f21435690745e762a47",
+      "0x1a4ee3d4a6b4b050603837471fbdf0095a53a3743b1f6187151402d54f512404",
+      "0x1ab31e2b93f41e96efb31e2fd6a6b34c7489bf0d3e21b6d53d98f2009582187f",
+      "0x1b1db42f2ae60d16f290004d37fbb49f4058f6c5cbec87238819c5ecdaf2c98b",
+      "0x1b9f9edeea28e0faf0829fee9091991bb43fae1523e032c26d50db51e2b88cd4",
+      "0x1bf365a19d4b78e062302136c071fe127cc32095c62420207cdb397ec5ead100",
+      "0x1bfd6b4175cfc0f89447d4038416cb201747073aa86ff259e30b9744c336192f",
+      "0x1c3819ff79957a6391ba514f8bf0dd52ec865100e2e2eeef7b7be8d9db595a7c",
+      "0x1d2450034ba2538215c1062edf88713fe9e1a14265f3170802ee9dd158c9c902",
+      "0x1d446ba6b63c0e323f34729f92c7a952847087a0f1b1a7523518ee217f1a73da",
+      "0x1dc025f3916914ae055e07ef9a631d8f20c4afddaef1ddbda1e3f2b4d514cff6",
+      "0x1df7caad0fa3b962aff625f48f4b8b08d4d7e5acbbd34a7531997a969f6cc174",
+      "0x1e1cea835856a7946879caf135934c552df5fb9f65de6e2a9bcfbdf21ccfe881",
+      "0x1e40fed68c56b4ec1bac996c084c9cfacd06883a54ff574ffc7165dba6cc5d64",
+      "0x1ed24877a1a095f9737a7ca511799f8f002edf1b838c3b38c2ed3d5fef4031b6",
+      "0x1f2bb0bfc3c7b3c9ab678ce9e89cf68bd6daa83385c4834f669cb00c540276f2",
+      "0x1fd47204572ff96d4cd44718fcfbee9e2fe60f8dff36452ab026cdec872bdbbd",
+      "0x2153377bdb8920a0d3227e9a2a68ddb9a001025918b695fe55f66677836e62c6",
+      "0x218c516ae6bdfd81da713cd003119e353e75a21ee7a277e2e948c48d91242ecf",
+      "0x21b7b77027cd2e824967da945d32cfc8f150fad1ef1bb5fb4030cfa5759530ae",
+      "0x21cf9493e47bd1f7dec870b6cb6a14acd67a58b718250eb6416804c4df12ab40",
+      "0x226d860366e7f6dc0f927639a9de3128d8aabb827d35fe0b04c47dcf8a2c3104",
+      "0x22ad0bbe8d306c58b380088c7d420fe0887240a3f39cf6b472dbcbdbb4520258",
+      "0x235a1c34d63a4ec7de71aa302872c15d0df17079078c777681f9d35bca3967a4",
+      "0x23b1e8a4acf8c823d4e3512c82603046497f1f24ee268772df8f735ca43ef5fc",
+      "0x24575b60d4c34311cf604472f76f1c7c3071726cd3a161c0c930a76f23887c7a",
+      "0x24a9bfd98e0d035b36814cc2f427beed5028461cfa486738dbbe2656c747158c",
+      "0x24db8dc6b79bc6ed68f5d15080cef45a555ba6d016cd68baafe0dc8ee7769304",
+      "0x255d0c021fac9e975a70cefe79208abfefb31070141e16ccda80e7a4af3c81a2",
+      "0x257b096216f454df49c1c9f3e866694c7d3c5c34838051a169b161ec8e39dd6d",
+      "0x258039466328a35a21c4998ca97dc0f1d60a77c28350912ad3e4d801cf4a2af5",
+      "0x259ad70b314b298a778a8271fbcd02169d1856b47a3740dcafd20d573b1ae93a",
+      "0x26c10c27cde58e2d6214d65ab562d8142d34723b3b6ec3f40836d24f6d22dfc9",
+      "0x2702a7859dd81f81119b1f970b36272b96811ed0b18d18e6234f9a6ce17288e2",
+      "0x276b29848429e376a861974b0a2306cab9320b749b13f83914ae47adc967c852",
+      "0x2775d336c15f53fcd02d47854a996ecea7425724cf321e536c549a69ca2e6400",
+      "0x2776df53993891be48f8ce72eabffe0554372e78a18e0460132e497012470822",
+      "0x2816a9fdc313460a7bf7cde3383a4f6221a4c09c35805f75935cfbb74be496a9",
+      "0x288edbbec2d8e972d3fffb8390956c18f376e7b22848217f61533b835bde0653",
+      "0x28e30ae349b0205850b94ca8e6ae31bc2c92aeb5eb9ea80122d56ae8b75cad70",
+      "0x29116a602c81675358b6248ea085f543fb2cc164f5ffe1e9ab78944eb95c93aa",
+      "0x293cb577866ab62caec11ec773cf63687b8b98797f6528bab3dc458c073e78f5",
+      "0x293ed83ff451fbfd454eb09985f6707c5c33a30cf79ba98bf45ccf2fa553438f",
+      "0x29611a11d5278bc1d2c18ef4a016fa4b857f0206f5d60045abd134662618fda5",
+      "0x29efc6e36b5b78f0408ea31805a90a9a35d1073074da57b312af4c9805791a89",
+      "0x29f39ccea0838da077f382dd9b5c640a546e75875aa74a8ae8bcf0efc3e4c203",
+      "0x2a739b8c2c6490ce66cd277d3b10decc347a347a53740a219f0e2cc4a50ac2b5",
+      "0x2a78cc1cbf566734ac9b518b7058ac2c5b147fe014f4206e803cb112618f7ea9",
+      "0x2b376e8af88bbe5e5f539a33c15a498a534138512530dae9010e4863d4f26026",
+      "0x2bc3f01ea2a4ba06f6259d3336531befd2bdb5ec9432070dbb3392eafdba21ea",
+      "0x2bcd94611071778ba39604aec0aee9173f8578a0c6a23bba2352a01cf938d891",
+      "0x2bf0a2af5ad59380451e838b0d4af91e8e121623490610b78c3e886d1cbd99ad",
+      "0x2bf0c7b1c1a40a58c94364fefd82ca0944d9f8ff4faf663cf746132be5f35110",
+      "0x2cae95c3ffd7c3f22cda052bcf492a6eeed5040f96546926f03348be732ea5bc",
+      "0x2cbdbcc40fb191991d636065e8188e3402e325710cbdf27ee910537f9de97fef",
+      "0x2cec30bd1e7b70fcff770377d8b44d07f24d716a23a68ca6a87c954077a3f087",
+      "0x2d17b7b5c8701296c4348f016076a948f25cb83e23c8b863bfa1e22ed493ae53",
+      "0x2d62139c1eb6337996eaed47e8c13f98c30f7b1cf7797fb548b6fef55d4b803c",
+      "0x2d6a8afe9301cb2bac681face420bf5849a37e584082b565da8b4cd1e8eb1a04",
+      "0x2d8f7b3ad9a2638d25f68c4ba4a4ebc14443a2d9c872ab3572304da3eedbcda4",
+      "0x2e10ad294a2746d38bce6087d7e8c6c7b603b62164b96c0595480a062236eaae",
+      "0x2e1a7a3c805c4ae9737e65e13f0f7a333d0b97ea7809e87966e3f73c0b0a7757",
+      "0x2e780d6899504b96fcbd44540b214fe53478ae5909919e9d0a89c69c967505a2",
+      "0x2e8ad54ecddfb79b1859665465c4e819e4e2e9ff8d9be240b1c2421c9de559c8",
+      "0x2f0d81417255f5a21f03589cf4c82d0dd82d254f5c863dcb24c35aa970ff87f6",
+      "0x2f3363e5f3d244ae6df6d153604c5dd3c5a3f6d1a692875a5f27da1804f89eb9",
+      "0x2f8aa8c40f65b8dab7980fcf25e2ed7ac69e3816de833117e45cd71b3bb98510",
+      "0x2fa1b7c1de202b3ae8d323fe8de4dfc0c3ed30a1ede8053f2914cba8a2c519c0",
+      "0x2fe6b5a73e314a0cb05c0b89164888a5694effce367292bcba7340a0668e9129",
+      "0x2fff26641f8e80a440b9106188a98e1c2124c6cbe4c9e235153610accc67296c",
+      "0x301901b5f75d79b88c1bacab9f4c5da014b6854ad29b679c7843448b995799a7",
+      "0x30418f776b2c0b11a690e067cf856ade99f3362e991363dc2d90d230bc3f74a4",
+      "0x3045a441e5ea4e49468d0fac36d47c32ceae2e572bd7960111187b6630a83b46",
+      "0x30a7c099932b5b8ca4d024f6230ae0c6b802a8871927a5c6d6ff8187e1cd1888",
+      "0x30ebda9973ef762b831a44336afc60bf808468fd0400a01d9d5add0a62407833",
+      "0x316343b5515c3dc4b1f2193bfe41bdaec0b41f49482a5a3ea9c69d1531eb906c",
+      "0x31740fa0e378fd757f68c2c4f264b64797a85c9747fe221d2e5a0b474c136690",
+      "0x31765bc76babb2fa7d2a1f228273166f776b116201b88d3a5a0b9496f644d2ad",
+      "0x3227e7aa4afdadcbc8808eae52b9e9c44abb95a443e345838679f41f82b30d9f",
+      "0x3239d5704ce335a8af9abbd14826ddaf98ff3b5d997b05b241de76353e3b9286",
+      "0x32672b7358b9310e152998e4881fc31db9f4d865f84c7755760445c438547ed1",
+      "0x32998175c43ceca9216d64a179d5bb17e38dd9e3e49d3af5cf7b4851dece2453",
+      "0x32bd2d9311e32296cd707308f47be67748a7df1ea04441e81feb3bb11f438067",
+      "0x336834b9954432226fd94ccfbf299b0a2de3a3f439075140232d022ce0cb48d5",
+      "0x33f89a41ab059ebf33123c4712197f04b9be098f3e61ec777f4d89d7067c190c",
+      "0x3403d81205af682c6a91dab8c7e452617467ec8e307251dbec4178e27af1a6e1",
+      "0x34c75f9a920c8ceef588bae0d8f7e4d041e2fd140bc53d6151e794a67566647f",
+      "0x3673d462b1a377ef541a7a788b053b87152b34909778b9a4e8f22ffe8512d61e",
+      "0x373682ead3fe6317492032935f40607ce89d07c08ef0fe143711a89e223527a0",
+      "0x379b180755027946f048a39bf3da4bc4f6e840e04cca419797c99ecd38a37e8d",
+      "0x37c3ac84272054b668210aefa88fcbf963ff3d740cc099979ee029b9a7ea3ba7",
+      "0x37d1872a34142af26d84946e6c3325f935b16e43514bad3b2a8301b488404b53",
+      "0x3890ee06194b12ce4d3c29de2783bae48f289ef48e781760c825900f38f9660c",
+      "0x38d697981fe51d9592cf3804922c74d9c1d3f43df62744a145ae0eea03a22e63",
+      "0x39bca738f9fa7e8a68b608131d6b41125a020a2510ecc69e539472806d65c53a",
+      "0x39bf401180d21fd0a3416f9fc04920c1c7eb31a5cc0c79cb7393eb9d48b254ae",
+      "0x39d5c964989a4b466bc870285827e475d14290c0e4da8fa6518f5e9856aedd9f",
+      "0x3a14ec775c1cfbb489d21b513104775b52b25e83fb43e83317b3d728701954e7",
+      "0x3a14fb63f836e1fde0f0960454fec590c427df65cab08813d3220e5af9500ca8",
+      "0x3a2a9fb0a9f3e82e841f82166514660458f22ed165e9ed65969f3031fc453963",
+      "0x3a385a1309dea64d64eed4ef83f1a4c62bf1a44918c78bd82fd53caf05b35a51",
+      "0x3a652c8f43bd8c278ce74a5a581d45b009b10373bebaac013a1b62297866aafb",
+      "0x3b0c966d6ce3a95ec4dc6149f123adce601b5c1eb561b65be8b42db16c02e800",
+      "0x3b46745e722aad161ce67d64275a2377755258b8a69c3fdd4ba0a0bf3676afbc",
+      "0x3b6ea6b30374ceb4e7fac40b993308b56c9fc2e8295f4ee01446273e6d7296f6",
+      "0x3bb3f35e86949207b257f1f3288a8ceaf071638cbd10a3c9a8273b4f542d4ee0",
+      "0x3bce10d4f97a41701d1fe51d5ad9c6de0a4b2aef28c6e59c6f2e98b1c3c6269f",
+      "0x3c0c53736dfcec0936d4beb6192642439c5dbf6238be42c8f652565cb0de519a",
+      "0x3c4f79a07e10b8999e07fd7112571bfb70573bbe88bdecc70484c1e012f89e2c",
+      "0x3c5f60614e9e7183c22dd5f54ec05d1cecb5ccdb6b4dfd67683d608b10330999",
+      "0x3c607e5c854694937c0995bf5242bbfc2b8bee8b17472b876bf76307bc25dced",
+      "0x3ceb5b631318be5000758200590efe2b308a581d6787c3e7bc050bfd8f627627",
+      "0x3d1ca4f2f40e8a772918ccd954157d771dbbc00628a9bb6f1633e397c7ab7c50",
+      "0x3d28ab8c7f74cb4f3bc5e7eadfe59934e24c5433a71459ccf5ed1b48d7669563",
+      "0x3d406a943b26b5a2f1d7df4bde91651df962579ed6c3374771ab120277004db8",
+      "0x3dba07b8c6cf2b6186af88ff8178b8b6911cee22274be0a611ee750cba4e0035",
+      "0x3e5ea763cd71dba479c2e93a2ed733ef4bcdf88cebac4e35467c5757fc0176db",
+      "0x3e6926185ef188778dc8175b46f15064a86aafa40632f51b97de6e4f341661c2",
+      "0x3eb8718977ff3942202c1fe71482d55a4b9de22724eedfa21450b81e9590388d",
+      "0x3f0a099a4507811cd92406d300aa17d8db34b89e8d08c350dca31ec2aa8510a9",
+      "0x3f7b96b75c3bb143b528572959dd83a31366f361fa9fc085726cdd1c17d7aa88",
+      "0x40207f2e82a81843e316fb06d8a8f28f69f2853e47f28111202e9c70954aca2b",
+      "0x417e61afaf4423056ddbcbcaf948ab0ac4b3c6c3abcc706bb79deba10bcffec0",
+      "0x417f69aea4d33e92f9a5b3d986f2719d1e743351049ed76b0e9d3a1f6a3550b9",
+      "0x41c920e569cb273e43dbfa8eb8b2e7879abe3493dde621af971fbf3ded59571c",
+      "0x4204e517d9206193205c981301167603d52bb9505441fa9b43315dd130be2ff8",
+      "0x4235f30ffc7ecf38be418a56dc0ea2d282f7c9a7495996e0c8eb7a35ee5fbca1",
+      "0x424d14e1a22b71b9c5431dadf7dba14e2f1e0746fbaa968db0bb445834bcd57f",
+      "0x42755eb9789232273933743c1856ac66a9ae537f553f859a4a1c58ed8d8ed646",
+      "0x42f07add5b2ea4a3501f416d5e7e3c1a3974fca34bcc07d844ab2b6e065dd86f",
+      "0x4365e6cd221c062f8b9c5b25c811a5f6d46785dcd1bf833af18fa8250d3becaf",
+      "0x4383c5131abfd1e2c4d29cefb1bd008292f1adffd1b034e51ccba81179a4ee65",
+      "0x438f27633a92032474272ef132bb7d2a6a40f59cff8968edeefd40152862fdf7",
+      "0x43b17bb0b59e87a770d623fa3211fca8513fcc9b1717c76e65098390627272b1",
+      "0x43f06d784bd1746516166a092b71fb4313247d6f224ab8991af71c1e5b8d3f29",
+      "0x44192ea61e334e5696434c41fe280dbd5720c03d3d9e0698efdfb20d62d6bcdf",
+      "0x44834a69a3c5e5882a98c1278f64294a152bb5a85b24bfc2dfe241954ece25bb",
+      "0x44a24f419afb104bcc23c9d19b6ba9cc8131029bbc4889be9313b56aed227a58",
+      "0x44aea87611ebf90cdc3330b399b4178d3df347582d8159db9f2ddf6a42d4cc7c",
+      "0x45dac9b99a9f870801d5b01222c11c823d8c7ca94abf044021fea81e6ff45a52",
+      "0x4640010f35efdd69b647584df42259bb4ef803d61f383150b95ce257ff2eb3b7",
+      "0x46e7555011a28e224408874f19801a7ad94f78cdcf0b69154bdbfb8cf1a74b55",
+      "0x4738ab806732edf09b6ab0440204675c6dcc2c3aa42ee83415ae838c2304f90e",
+      "0x4764f7c61853ad1c8a9f5c7454e1970f12e98b70f46d0cd6cc17164ee8c9637d",
+      "0x4779ac12bd6661f532652e177a998a3c00e812938b264c5e84928da890570378",
+      "0x47a88a03c3a034e7fbb03a7dd7317ad8c060b3dd0be1469d76ece9512283491d",
+      "0x48d07fc7454fc7b6c6f6824c81391d4d83c8a4cf838c782a66b2105d0511f10d",
+      "0x49334507da471f53c6172afb78d3de05ceb0a5244bbf4632d128b6fd2a00f9bb",
+      "0x4943f5080c5580e76d2cceadf2ae22959be8e5620a9037d3998ee9e7de1a8266",
+      "0x4968d24890fc426a8e7dd9ed4b4f89120a57f3315a559077c5aeddede4991456",
+      "0x49725e9e630acf792bae14445cd9164b0408cb6503746984a732c442f2fca004",
+      "0x4a4027909498272b839163612afb8aae17cd7ec74570db9db21f0924f4c61ce5",
+      "0x4a490963cf00f44f6dc0f766acfbdbc831406de53407ba83049b64c2ee63fb7b",
+      "0x4a9944613d5252a69608768ceda1fcecb8d3ba2fac47859bd84d49af88f9ab40",
+      "0x4ac5f90f4b7a442172d171616b1ffb90cd1d91c082c975da224d113b7691825e",
+      "0x4add9d8046860d15e750b15ffabfa5cc48ea46b4d9a6f5dba21eb87f54d4d4db",
+      "0x4b6644eca7334691f2781119d44b089e4b17755f36c2104fb493c7992fedf53d",
+      "0x4b674e4b8ca83d4bfa4845c1be7ba487a7fa4828336119a8a2110f26a7d47c3d",
+      "0x4b6808c8434e404bf7fcfc016e13963f6b8b130670e0a28848fbc20363d61748",
+      "0x4b83eb5a68b3c5b0d0c59155b6f7eabc69627a8ef9c4ce318066f077f415ffe5",
+      "0x4ba6f56f97685ca516a479e9730065c5278fb24b30c59c475ef02d86dff10ddb",
+      "0x4bc3ea96a6e9db87fedb0b6ed46089c0a7676df002731a6ad30bbf1d7352ffce",
+      "0x4bcd1cff09139f61001382f86f63e6e9745986d1378cfb1ba0422ac58359c64c",
+      "0x4be58b977c3b895e4ea2e2541613cbf3cadce73675b34e599a9ccfbd5c958ab9",
+      "0x4c17b9bae4379a7a4ff52079aa9df0272f75d14d77e3b3fa92beec325c624f83",
+      "0x4c2ff263108f4e20727c98fb0d18f981aecc0713a623172ed0435fb97c0fbb08",
+      "0x4c92d5f84610e58bb0079779e3e53da7900697bfb5d579bb45c6b54d8e13b579",
+      "0x4c9a114827fc0b826994b3211d109b2b78a8e559a5151d0116b334dfb465782b",
+      "0x4cd77d456c83e7d8c569a8fb8f6396c3f40154f657e6d970733e2b1b6a7110ff",
+      "0x4d2972ba43aa53f42acc8e06c80a206930baeb3973b06be40e3bac34fbee3cc5",
+      "0x4d32282db59ec449edbc191b4b487b7f8218c07d6f94b0c01e2e7ddf6964c26d",
+      "0x4d44c549fabf54bfbc624bebe146dacda211696a0f657706e544eccd62748328",
+      "0x4dab7f50649fabe59c2295a6db2a4e6131088e3b07157543797f91458d78b4d8",
+      "0x4eb00b4e2518aaea57f69e63e2f611908d7472bd517c023511eb9364c1d2938c",
+      "0x4f3909e7cb01b9a7af761ceff3da825d1eb2a1a7801036cf5639df6b67456015",
+      "0x4f5c908e1f4586c4365ea01127d5ed3fb6c153657c386e45cf0e9bf9004d61da",
+      "0x4f6113e4c40e27efac06e401f159237f3f79232680bd6116e775a69d8564503f",
+      "0x500366d244238e66f250a3259b563395bf9108dc8f0542ea57219f8f1bed50cc",
+      "0x5007754990c583b9558efb053afc29e408f70eb00715955518d846fdf04b1743",
+      "0x51ad77a8fd22fc3eb9971e37afde8de86ac5609709bdee01ba94917c9b806018",
+      "0x51ae7ad81ff0b74f459b217e279eb461a85d4ddfde6035b2b34a2972a43c3c39",
+      "0x51cc1a6ae8cdd0d63f9081156b66f615ab43d3bf1ee1b9fb3a743225e9d1471d",
+      "0x51fc7cfdaee135d6d0bed053e5fcd3652954414d9b9f4eef5dce2e9ea717f161",
+      "0x523235214dd1815b71839c2a5a478a0388d219ffea9df2d67cb3a7e2624fe97e",
+      "0x5256dfc89708ca138d1dc892c81991f2798694e077d86843707aeb2b615b1e15",
+      "0x527b60539b6ae8fa88b45b6604a2d89918081f739c2d71efc10e40dc0f276c53",
+      "0x527b875129a6acdf0597a71cd9d450b03fcfd54d0d9c4c5fd0829d6428313c91",
+      "0x52b5217562af335f6a59c33c23220ac1068407835c064bcbc4892d7a638fec6f",
+      "0x52bc8d2d58058ba6e147060a5afef8c865cb35cf6aee669a3162a849eeb8d880",
+      "0x5390c114483e302c0f28d68c5795d7960416e2e082bf27ce328759378c840ea4",
+      "0x54508311a892c810c5af6b312907f5484949e1de1dc65837b2cf50e9683b7efe",
+      "0x5483d2bbd47f02409532df59ae7463b9a48339939316614dc3109e4172d20509",
+      "0x54aad159020021a6c89707fb9b05c943f51ecfa128496f1d0ee6aab40e38e99f",
+      "0x553742a7f2a63121b3e5e48108697b32aa389ae70d7b9ef028435c56e00e083a",
+      "0x558009ea206487b6ce1052a9c11494fb41cbf439fcf99c0dd5de4af0a51f79e6",
+      "0x5582c1972ec46ec914fa85a51802155954844aca40faf88d2b7d58e6094ae97e",
+      "0x56bb4c79a55b24cf6bb64ef5d85663fceccbf6e802316efe94942c4a9e320137",
+      "0x56ec410d3390573aa1e5ea1cc49bae90e947f12a81173469528ceb595df0ef4c",
+      "0x56f01086fbcdea73e573b6fdf7488ca218bf9ea29bf3891d702e22d9a1bde641",
+      "0x5719eafaf8a5e7716c5ac773bced2a2ca6826430b743e258285def1b3f0a6f97",
+      "0x57416a66b954d07b9dacafec869a8a9c88ed669ce2a4660ddf86652e3bc6e45e",
+      "0x5792e5a1fe7fa223960f965a1fe45c70de42fed7a544388601f50b2f51b85a78",
+      "0x57b68165d79c8595ceaf038dbc670a1f89d17d7e446764da772bdf678fee3d76",
+      "0x583d3d621aad313c16798e30283f1ff9a597709c6265071c8b31cd1dffb45d27",
+      "0x58551814773fbb081b64412c14074c44752045d1977f992475b04e179ddee5da",
+      "0x58be1d7b506ef330f06f6f37abacd4215b1ca999b219555af88ae4f65b811319",
+      "0x58f3ba9461840564662e60fe8c81d89bf6344c1a84014834aa445101279c53d8",
+      "0x595ae85a03f30f7fdf1929c6e07569210b9ba283977d914cc7b9fa3a412abf57",
+      "0x59622385e39f80c95db2567273b4dbf894f335092177f3c770b0465c314ee6d1",
+      "0x59a0a46a11593760feee4961b7b9fd5c7c62859719e6a3f041f145b45717f7f7",
+      "0x59a1526d1bddf0bb078ebd9cdc4dcfe5271a52cdb2fba7c1feb360b82a78ef7a",
+      "0x5a583fffbf740ccf2016b0b997dd432d14a51589ccb5a2f9b2647f7c17b9a96a",
+      "0x5a68f106321195b7e3be49552f7f271a8a32fceeb6f77af9ce6086fe979c8788",
+      "0x5a78d346655d91c894d42ed6713e32b8f7301e307b3a1177ac4d169f3095b1a8",
+      "0x5ac5f214e36d9b2ec0ad2fde8627502effb66123749809171e8e3ca31dcd2944",
+      "0x5b1bacebc5dfb6fe62c92bc79c377dbfa7b9a9f0b3459ba75216785e77468e0e",
+      "0x5b3fda45f604befdb892225dd97a4135eccb33e823adc3583090262a17f325b8",
+      "0x5b5223d6e6a335a0433b273dad4a159dfcf99bf9d04eb6ec2b4a0e8cf3f13b03",
+      "0x5b86d44ab2dd55bd03f47ef094bf6159a053e3304dd9725d5fdac29f6f50eba3",
+      "0x5b9c9076585704461231a9d3d29c901d293fa41d10b81f7086d62ff6af980038",
+      "0x5c2b6ea26d76ac765443091fdf325eec8afb345c8912923a6ce43d6ec090f1ba",
+      "0x5c2fb8c20f9f0e7f837880785d2b764af54e28693ffd64c641d92a5552725a4a",
+      "0x5c5ecf334b298a4848956ab611dbb227980a15b826d06bbf2067aefd14fab9ca",
+      "0x5ca3b82943c541479374940eff0ea6a4a896c39db8aa37c254ecc9eca99b3f9f",
+      "0x5d50607d01afea859733999b2310ed8f69b9c3a1a2e0224ae7a5fec1b122305c",
+      "0x5de5f14f5c61628bb10bc2d32ce815e8b5c4711b52c6d6fb8f033682402aa871",
+      "0x5e058e0a596ef7226fed8fdb453a31a23d948b32185bdab7b0f66b5f6bba64fc",
+      "0x5e089a21727a0489815da27050cafacabf7d8d322a22e0295dd874dc939f6f75",
+      "0x5e703b4f741bf310550adafc371b78656373d219b2b64e8af472137e45b9989f",
+      "0x5e72633cbb8050778cbcfb7a4940496e6f0adfec04d6a5abf3324132c8fe41b0",
+      "0x5e886a4bdcb2e8bf58d8043dbe8c7eb7b6dae8ec5e2bdf5abc2de220ec9a082c",
+      "0x5eaa6e26de36f778c14409d5e2145fe71fc35db632a2361a7e733171726c697c",
+      "0x5f2c056e58a944f6e029d9c408bb0ce578573d3ca0eca1643f9bfe3bfc36de7f",
+      "0x5fe5e3266554198f12c25a0f7ae93b9d56a9f18b9b2780cde5b47052e4adf7f2",
+      "0x600732592a273230b708a2d048c0cf677be523b0ba805881112aa841d2155be1",
+      "0x611444b486e45275ed18ab1c6206f6bc9f15fde753d9f4ae2b964c27dd54c7ef",
+      "0x611a78cb603959538c23cf289febecea1d9e371f4d5cb3c75696dd721dca0244",
+      "0x628898dcf6582060f6902c825261fa4400c49e69e64bca6d1dd55d6d8a10d25d",
+      "0x62913d97448748bc72f456fbc2b525fa4901cedee4b988cbbb9d83d7a802a055",
+      "0x633d28f498c51a5bc6f428c69903979b7e1369f46e8fd28fb18296ad36cf0df9",
+      "0x633ee3b1e3b68fd002607d30a509e42597a036367e4586921f629f25ce775042",
+      "0x63d8803e6b18ab08ef9b82e38f557fd62b02967df3a96595483f49ab6d649f94",
+      "0x6424837495644e233bfa9d1a37d496cb1a4b6ca07964b2cc8bccc77ba07c922d",
+      "0x64e74b50be49a609ceba91cd0aae394ddeac5b889e93f1227884ee168590dd41",
+      "0x6548d98e1e025fcf48d58e434312a1ce629b5fd2d9844f82e20cc6ece8eacbd1",
+      "0x656620dee48bb402a7c8acd53ad3004f476936a802a1e4d238beda19839cd5e5",
+      "0x66566cee5333a0c307b25ac1c330ed150224d7427d0360b45ef66ce0ef927237",
+      "0x66596f1dfae16e6670987c5451b77bb527b567255624a2e874ad2298428c0e1e",
+      "0x668c361e70bab3879171cfd14e56146a46301ccb107791a0b15ae3c8296d77df",
+      "0x6766d8d8f1ffa4f7b67237ace5f5f8dd404260835c857ac5a1456b3f97073aaf",
+      "0x67b54a044867213da1c7ddfaf65d7724ed9698ff89fca393f73b66ab1647254b",
+      "0x6869dd21e8ca7c8f61cfd1c24bb95bb9325b6b8147ad3b1bfc276e8184f11e65",
+      "0x68986a157817000f61b6f1d6b9ce38acd23622108ba4a0e56d40efe80d1bd8e4",
+      "0x696a7c4943690b3f3998a06c4ab5f681112128affad1b2a0229ca04fb56150fc",
+      "0x69e551871b80e551f6776545267b3aded100ca88e1e304bba34fc7ce210204d8",
+      "0x69e7503c5ff0197f5d25481b5bd770af3270f72ff01bdb5385bbd07cd9d9f8fd",
+      "0x6a034f80eb1e3dbbf6cb8b573dfe4be4e11a052c1e8ed1dcc8d364dea06aca8c",
+      "0x6a6c49556d75df68ffe950ed2d4933c29d518fe44245ef2d36e4647bbc6e1c1e",
+      "0x6b3bd121b6868267f7f643e513b8fc94826dacbe1a1dac7de8853096a6438a9f",
+      "0x6b864f35765706986a861d22fcc207872062186ddcb5fbc20275e991b20ff6ab",
+      "0x6c38c5433b92ac4b45bbe88862ec0dd0872561dfe6ecd3d67b10dce8fd0a2374",
+      "0x6c4c5d7410028bb2d5b44d41d9a97a4de09214c49c3b51594555867803d1a00c",
+      "0x6ca9e32ec3bcf137b7120d50e30686ba365c4102e518731f49e226b60a3d2c64",
+      "0x6d24b21d5236e087600f2e4190db2e1ae4be2942a5b9d1a33258e4467be02ef8",
+      "0x6d77fde9e2370cff8048c586a8e83a92c693ce2cf7becc61dd661e65ecfbb629",
+      "0x6d8ce20f840fddba1dc4f8b1a3dada50fd6d1550545e7092480f864c74995815",
+      "0x6dfbe4c5934a385b298076e814a6a37a1432dc36b234389ba887ba72ed1585f1",
+      "0x6ebb2ca0247bb2193c7f2831604011d6b939a61a05c1d1f7800ef4f068afdb92",
+      "0x6fac5c1a6ce1bd5bb676320bcd5228341b7ed7f214b9aac278fefe200734566f",
+      "0x702e5131005f454a26a02bb8efa77c44652b708067f6b1f13d42ab83396da1e5",
+      "0x7061e7ce4d7744677b6c3a7d1db0f82eb90c342104167386619d75777a6083c1",
+      "0x7164003effdfef62c5ac5b660c40630ecde0890e3c328ef8510f037831c59c0c",
+      "0x71e836e7c3441e90352313065a274f4f48eac487ade566517cb09a906e3cc186",
+      "0x721bf8286635ef812da2f17dd358a3d4470f09a1725c1c015aa60a26a78458b2",
+      "0x72ab9397cb76cc8d8f37f3edccf39506d6db9cd7d93ff0518b3eb5e7d8884db8",
+      "0x72e3c443f60c82f03ed1847be027846b4ac13f943246b0cdd7decee1b5571b81",
+      "0x72e85838dd2fe302a98c3aa0799f10fe0928b50c05d1a3f4f3fb74cefecaa028",
+      "0x72fdaf5f762ec7ccb88211d8aa15ae324082730f4fd3d86e837bad1b28ad54c5",
+      "0x730c8809ebb0db39d585140146c3627a7d3d799f15890461499fc4512651a34b",
+      "0x73e1bccb24d866ef6bc8b68b8226b34460177c005d0e37f7a29d52a3bc7bfc09",
+      "0x73fbbe6b48a03e2ad1c3e9060a6f305b665079dccfad5046fc4819e7fb6658f1",
+      "0x73fc72f2cc5317751b83cbb34af2c8e78dd7f3a2f740495cc9ef2988d8b64a8f",
+      "0x743752d8243a86b08db372ef220777a7008662d4eaa37405cbb232334ea102f4",
+      "0x747f264fcaca0caf62c4610078edc77b44f44c1d6dc417fbb24d312343a5057c",
+      "0x74830232fa0d397174f8b5c323530f67ac3fb71207092f8ebdf98121d7e0c53f",
+      "0x74c87758b88f6a27ccae0947387a66f647b8cd278115bec44c5e48671dac1dba",
+      "0x756dd4db2c3071892c0f60158e555eaa7271455c3db174417ed77233c5b4eb42",
+      "0x75bc423d25c03358e8fa33823a45de345ce660683af2c05f814e5ef7189917c7",
+      "0x76735f4faf2c85921617389b167f1fb9ffa7ca5b082ad4f3a23fc8e175b883ff",
+      "0x767a307f4c6550c28062861da1539d6f2afab63196e401be1803b8976e754ac6",
+      "0x76c43f1af348636a0b2f08c206bb82ab1223d91dfdcfcbc4034c6ea62264d499",
+      "0x76eac1f547cf8092ffb2f71e42653ac4791d2a059dcf4a2f7c5e5d05c81dc231",
+      "0x7735f3cccc308a24d592e8501c4b579043742a0ba30898909eaede914570dfa6",
+      "0x786a1a1735d885a70bcc5953420ea82d1d0a8c5ef694b08578e1e7218b8e2222",
+      "0x7911c52c25003c6a2071dfdc32d0eabe4a6aa0e51c45e41e49eef816e5fe7cde",
+      "0x7967e6d5dbbdaefc65eb8d18dfaa691217ce2c760355032596079c2ca02b2444",
+      "0x7a92f336875495d6eb99a54da66ca730edf75f4d9b7e2ce0beffa7ad3bec2ff0",
+      "0x7aaa03ef18b116231b9a4581d0b1252207c2b2dd72edbc48771fadbe474b5b9b",
+      "0x7b043e790b732a274893af20a3d8b3515a1862a7cbcd12cfc0e63aa55d031205",
+      "0x7b9c13919ccb338e00a541fa7bf54a12d9b85b86b87ba9cd428326820099edf0",
+      "0x7c31280f9ffdb2d125409fe2a7cfd111900d668584186026c8bb2ea90af91f60",
+      "0x7c7ac5e7f9eaf1e03646a3db37d0334aaba2189123f6d03bee0990572fea4b06",
+      "0x7d6d01d5d5c55ac10f9c5d0da00ba72b6f55964ad8a7c80e52c681dd649f8aff",
+      "0x7dab04c23cab8d0d50610c1d0a81deca8edff40d146d783b9db3727eba1aebb8",
+      "0x7dafd3bbe0a1eeeec07507f37721ec4b57c4dd31ddf992fe15275a70eca898c1",
+      "0x7ed992a4df279d3e02c730f999ef164a71e7e82659492eefaaadb477378c0cbd",
+      "0x7ff2ba17bcd8d2646f6a1b4038bb112a886ea650c1452bb23b9f4d73d24498ab",
+      "0x8212e9ae1c7b6f938e2ea8f6cb33d18201f9b80088c072938cc8577b4b3304dc",
+      "0x82436d8f10f9253c497f9195bf63098316b227603c557d257d07f1eee66f6b4d",
+      "0x82ac9f41474fd5dcfd69f2ebb28b9f67236a627a3d7971e73138c37bbf88014d",
+      "0x82d7af4cff5d386c182fc0989864273eed92b34be19095f046f4b0692f1e5ff2",
+      "0x83ad2d3fc1df3ff70fb93ab72013aca86e6c05c4c2e6db9e11b57acd932a42df",
+      "0x848aa4328467aa0ca5bc0ce9a719cced8b2001e9c546c07c11d3471a98547135",
+      "0x84bf18d3635a110a837219dd4c4ad4a2552998925505391a44f7dad3d66a5601",
+      "0x8503c3ffd9078b72b5fc4ebe0242900c24a0b80f6a91590263c71a462ab8a5c3",
+      "0x8543ea9dc79ea38682c30202c87cadc055815dbe937f6db7dacddbe64f336755",
+      "0x855146bf93506f272fff6cfab515cda030a43166b751d6233c88110efb6a6e65",
+      "0x855aac3623bffeb6e7df0d709ac2758105178f9711099e1b72cbcec44c068d36",
+      "0x858fd486373be8515f02c711167c7bde47f1c956b3991d85ce541b3fc248dc55",
+      "0x85c3548485ad562dd09555e0ad6d445b59a89f422c1ab4c4c6002fb244e884c0",
+      "0x85cc5f540eb169bb7c30cfe5c719895cfb8a00832f924aa66b9fbc025e534015",
+      "0x85d6396fda98a419f475f55a279eb64079707c1fbf0d4323ccc9751d898292ef",
+      "0x8652d78d7814250716cfdfa26b5874a504dce5fa856958f98cb5ed9837bbeba1",
+      "0x8656e3a00f6f373b7a8fb605e436bebf3fda469370e118f6107ee83d72f2b112",
+      "0x86d15ac4ff850da9b9a9a0f4fbdbab9a7c9e8eeb0a3c22781e348ecf125dee95",
+      "0x86f102a31cf4b12dbcf31ae8c62c526c0b538d5b7eb1af5947d0b0378522f926",
+      "0x8726fa443d4ec4c8e3e8cbefda104ca8a72fbc57d8ad362f8615a801d3901209",
+      "0x87b556c0e07d3eb957bc9484af7f46aa29683c011f0ac011d7866d51c0d2d03e",
+      "0x87cd1a78d04561e4de5106c5172b6c39d567a9a87afbcb9284a5c802daf3ade5",
+      "0x87fe8aff8cb553fec3222afd3ff57efdd925121991dba11d08522ce943bfb9a1",
+      "0x880ac036d5d83ecaa55d45c1196cabc8be40ea85a34ca7ba6609082fb40ec613",
+      "0x88b073f940e487840ec5fbfee07efb9578159d9b152c46bb0907861122345cf4",
+      "0x88bfdc95c1254ab96adb19fbdcad3d722a492d4789c26cd13f0d7eb62470fc13",
+      "0x88e5add9fe9495b9563ec11e0501afc3d2f3f521a8db01e867a82493513b13c7",
+      "0x896593cde56f7976fa70a1c07230b5797b60d66dd3e29c873e9c9fa46dec2183",
+      "0x89a1e12a5cc14bae7c4aae4dc699e68ae94754c2744cf9891119bddd7d0eedd6",
+      "0x8a680b0d16a6d9dc49db5267d2c8f4f5af16f186c7d055f93e39204679d547f1",
+      "0x8aa8047a637a6b587b5a02a1facf258e3e458695daa30c673ff0cbe17d744c60",
+      "0x8ad32ebe2b9c59b3f90796839e99ca3e12bb807e22c99171141100dad4b84609",
+      "0x8adae985e2fe2a8f8d08f19b0f65acb8c7a9574d69b0b100b59dae83f6ebbe41",
+      "0x8ae3768af1a52c8a169c49e53355b4d1ea468988d5a3019cf02d5a91f3b295b2",
+      "0x8b77484f77f67e5c60064410f9148464f5e8d1a796525926bda46143872f9105",
+      "0x8b8d4d9152f993f5c2b0b1ec57aa9211b46ee7c9604332b0c3760f95d77c7c4c",
+      "0x8ba55423edee132d1a5eab54d66510738436a5fe0c1d540615994d211c3cc1b7",
+      "0x8c3b22b22aceb7a92449767ce858f4ae3bc42aa8c89a086db54ebe51966c51c6",
+      "0x8c4320560fb623622eea7fdc025e41193bc04d7b9136bc2f7032086babd51c02",
+      "0x8c488f609e1482601e54ebe86642ec4e5a8c10376a7afa78d25fb63d3261187b",
+      "0x8c61ed2b40559dbb6c048c41f0ff9ae9bf62e7f3e524d6f6866738dd40a039c4",
+      "0x8d18fa846747e6a9a253f1c8902c19b1522e06097154d9f6ed06e342379813e0",
+      "0x8d1cb9c1d88862084ba7e90f91c23729b67a08e06e23b65ca614627737c5f4ed",
+      "0x8d2d545d99162410074e7e05b7621f321ceab17b74dd42eb6d5bfd19329772fc",
+      "0x8d2ef6365859143dd05f524c08710df18c9e8aab6838bb1f87d2608c98fe4d1e",
+      "0x8d95a3ae0236d7967edbf6ee92924be858b341fb27f7182500c31f2e1389ae75",
+      "0x8dd0927f3a80224bddbddef621bec40fb9bef1d58dbf6921b56f51baa13f4ea9",
+      "0x8de1df27b426e23122dace14e60d2ac92654fac09d1f5c3f4767f56ac403aca2",
+      "0x8f236211c33be4b091af361a4946924c5e1f12fb13340672c3f2cbf2a5c67271",
+      "0x8f2c6ce28fd620b5b1b0ff371c4d463900be00ed700b0b33f17d662980f1a00a",
+      "0x8f3df14da85f0aebbe7c201a6b34f4ddb5a8ab4b58c9a3dde8a8e40a268a5e3f",
+      "0x8f92746709a4fc82f4d454e162046ac3590e3a5a7564540806a6c5f8a87e6738",
+      "0x8fda75169bc2cad4979efd18bef7de7ca2c8845642c9f1c657f6f47e68f8897b",
+      "0x8fe147be1e3b7c15a681b240eed3b715b8bd94defba50e99a7e0376039d6c304",
+      "0x9024ebcdc5698a2f67cc1c2c9516924d2d4ff436eae1587faea8af10c2f3ce01",
+      "0x9028f6267120dfd384d8c7fa36d6c6c9fe1c80abda2f89e15c786265b6c2debe",
+      "0x9056f402c5a8c18f32eece7d41b9a7ef6342810e55b563a7a871ca562f7de8e2",
+      "0x907ff0c8bbb4a3edd8e3e9eeba0f61001ae9ace17d326e9e8cc8c0f2c79863d6",
+      "0x9095c90158355c9c001debdf8b831b5df4c5ae416406ae18d0e4ac86c016ec8e",
+      "0x90ec37d056cf3685faece18b0314c743b6cb3cccc971e6964eb796cfe40d439b",
+      "0x9125f5931021423c5dc5d9a5e45009eec92abd63c2bb8cb075a88b0bcb0ad7df",
+      "0x9146a3098705cf6bb71ab6563e640335a70fb5dbc3a04ff252a76d5748cfae51",
+      "0x914cd357a936723c7238a8c07c0f1e94fae355a5127cbad1a5c5a91cad1d1ca5",
+      "0x91a554a8a734263d94aa730bc0867d985016d4c57aae69302ad30633972c3c57",
+      "0x91f03b91c926249fd442b968c5c48370405331be177132669b51f5bc48ec1db5",
+      "0x924db354fff7f5f3a23beea7c9046e21cf044a178d008df84f03c6b5f7b2a73d",
+      "0x935ebc018e4540eb0dfb05bf1a19403252debdb2657bfa7293f64b2c10f338cd",
+      "0x93a3c8b5dee024c18feff6065af58ff5348de60ba43bf97fc1893aa008bf52b3",
+      "0x9481178267fab6f669b9463ff79b99525908d71f753487b580cc63f3e1331171",
+      "0x94bf44ec3874fd361409ad6877841629b05686007768ab636fb90f28144beeb9",
+      "0x952d0044fc7f3bd07f575d45bcf547b3b41af3ae39ca04396c957e924dc2d01b",
+      "0x95ad3768208142da1e06e3df5f2a38e1ba8d394ce3537747bb98b592ed53b6c1",
+      "0x966c91fa9af19702f99611838a3c5e0a65014f0392bcff24b307dda08909b040",
+      "0x9675d0a5fbf939afd06746d5141462312e759f0dc86d73d94350d3f679319b57",
+      "0x96f62aad9beed31d158f7f0d84ca5bc0e95916121c84f2c6c00d4533387e9457",
+      "0x9733eeec5bd9993f15d2cb42c41c559bee611629ac8f3053929eea0fa791cbf0",
+      "0x97c291994a8f370c18dcb15cc8e213f262f25cdda91ac8a24132ed19b0818241",
+      "0x982ec49997a8f42fa61de409b49c5cf2c559d03904c425d2469a65ff10de72fc",
+      "0x9834a3eafd8fd8f71fa98408be99143e1bfe73ee0a5f3a142826eaa13f9646bf",
+      "0x986a464dff912add2f9cd2cc2e763451efa77420f5b3fa9bea7253d66a3c66d3",
+      "0x98f8a6cf70582c0ba090ba469af2f6b45560e6ad19f663c8c096e4bc71b2705c",
+      "0x992fd8e1e7e31390ad423261f5e4a4af796168e7d27713c6ac97cfab78dfd21c",
+      "0x99c7cf036824ad6a0609ef5c23c63fb3d0a27129b56ec91191a5aa4dc681bdcc",
+      "0x99d1581667fc72e0e5f6588d8e22da389ac2aee4377524869dc60b643e6b80bd",
+      "0x9a212a901b36249a63e0c5f934b48e8268cd2d53cb5400eeb363da8845493691",
+      "0x9a73341dde87ce0e7fcd2381c0f6bff6ffc34ea300774f2a4ae177f4415c7ce0",
+      "0x9ad84532d276316469a5e6e7c38071a00e502b2ba1075a35cd733241dceebaec",
+      "0x9b191cc2c37b8dfe286d0d3201ab3c14936399c5f7d501add32ce2d280420c13",
+      "0x9b6d07403eaf4ca662b0f6139961bcb15c4a3336ec7fcf6b506d4ce82a994bb6",
+      "0x9b7943c295acdc2ffebce00b9d02e2de0ab7a18e38bb9ec5e84779034f501271",
+      "0x9bffa2fd6e42b8b68c61eb3fcda9801ab22a77fc0005ef387646fa8f8b582678",
+      "0x9cde703df350d7fa673f2829d5d68938e9b2d27c01bd40f17a23db773d9c92b9",
+      "0x9ceaac34e0d1334dfb99f115e5ed8d08394fd19c4d857d4687bd86e2cf5f8c53",
+      "0x9d40a76fee6bf50629b2ec03db9e336a87e1e86cf1cc4c58c2f5678e5d6f434f",
+      "0x9dc8e6ebd7261af03f0493107aebbad8bd3fa6935e243a2ffcf5a509c2c6c35d",
+      "0x9e43b84031caea14a6d4a186cdb188ae2e19ab204f7349c15b5bfdaf9b1cccc7",
+      "0x9ea38a58d02b9ada282946726df54116b1d73ea63f424cb5fc802417acf0ba2f",
+      "0x9f1bde1e95b7fee75822e7e11b3bc8a0285f44f4923a00b4dba3dfda5e930424",
+      "0x9f2cf7dcf09871c48ff856f364d09c7284d992b638fe236760b213f81c61243c",
+      "0xa091d956e2bad77e11aceb1d4274d0602ec6cc883a88569432614a0e88266201",
+      "0xa16a7269a25f746cd0aa5d85910de766d940d4dea9bf0cdb6423158b24149be1",
+      "0xa2158dfd2bc8ef98d32a875f14cfd951b64bee3a6deb4afd94c3e3d156a0dc5d",
+      "0xa283775d2f463f56f2a3d3011ed7989da1ba18db019025b802d45a4375d1a63b",
+      "0xa29471a2dcff14c5bdfc6a674129af5c9489292cc38e4b8d0294506da434e4d5",
+      "0xa2a724b87f1713e4a632d82eff6b81c040ca476a64a810f01d97787f98cd6e2e",
+      "0xa2f2a3c7558e24c82ae5c24231c01201edad3410ceddb0f718e436620cb8bf18",
+      "0xa355f1ccbbe5b48aea2c60231301c28873b48db52d355ae246b3fca21abce685",
+      "0xa35ff05756a967b7aae29ac395f82bb83071186f4cd758726b79f69afbe7de7e",
+      "0xa3a3793a5faff7356c66a73893ab4ec5753e8c81c40791b101dcb004e7c5da84",
+      "0xa3d20c12ca00e29925dc1f05efbfaf393fc8b19ca9bc0105d5daeac2b564a314",
+      "0xa3e6b134ac36eca874c71f56746671ccb8a3dc2e5d893c99cdabf8182397559d",
+      "0xa3e72e57e2c7a2b8300980a389a6374c2af8ad741d7ee309209ba0d47b088f5d",
+      "0xa3eda83d016cd8b6992443f6e49bcaa4d0c7edeba3dece4cf97359d5c9407aa2",
+      "0xa4781f5d97b6fe28ca7a69353b89e3401a9483a4c7bfc2f493c6cca138bd9c82",
+      "0xa4cdb5c641dd9ff5cfe12caee5c099a55e7268f7138bab237c3555a9b1ed1b5b",
+      "0xa5094271a1e530c924e205d416c11652f83b8bd7e60608d2b12dfbdb8e5823e6",
+      "0xa519a3e1e152255663e4b073a7859320d11cf01a3bc523eba1fe48246997c1ca",
+      "0xa5a466f0ccd3410cf16c31fbbc29758f23dfc80b8fc9fc0ab91d6af3e54e113e",
+      "0xa5d6cb8d06a2d42d8bbf64d6543a7c66ef6ffa73f164ec673a54edfa7c3ea86d",
+      "0xa5e590843e0c155e6b6ece7c942b1e2b342b2704afb9e096e7bce76ead7d5a79",
+      "0xa680ad851b3bc46c8c84d1f7ba149ea9ca5876332410f266e0c62f6ade65f44f",
+      "0xa714ca58101cf20d7be2021d94cf0284e0412286da377b249b0d7fb18f79ff68",
+      "0xa71f817655a1e3388855598499fbe5dbb1f7904a376b7a792869b19279365dc1",
+      "0xa75053ffa630e41fdc08a0885fe0614716ecb13061ac460914bfe498038d5364",
+      "0xa791de3223f11043b25512d45374cacd14b439c17ac8e80a039eb0d4af727691",
+      "0xa8bfc8693ad74badd1772632ac9a576e43695a71daca764caea56afe926aea73",
+      "0xa8cb2e907e99109a09d82622397c33eedc5c03dd18af29929c360fba70b7d775",
+      "0xa8dbadd1d7c9f59877c82f039048d7705adfb0d38db4791a17c6adadefd03e3a",
+      "0xa954b9526d415025181d629f24152cb5635d7576783767b09ae497e37ed8bfb0",
+      "0xa97edd8852ca59671f9a43341ea1f856d6f8d8601ed4980987f3eb7d37c329ef",
+      "0xa99f5fbbb198f66e7007ba6d6c65fdf7acdeed6cc080f6c37228496e43a690f2",
+      "0xa9db600590209698097db2fb8382989ea1cf6a9b91f0428b2e1d4f35d724c3ff",
+      "0xa9f1a420014557340e034526c306618bc8d7cf045311864591d4bcb5418a1591",
+      "0xa9f58576b43971599ef39c5999e777e4670659fc6cd0006f1d9d3589372386ed",
+      "0xaa21e5e80450c770bc61d6fe87072bc1dfd337520da4fa84de87e4429e1e5ba6",
+      "0xaa932cd759ceebb2ee3d173017073c3db02dd7b09832724f6073391a1f8cb890",
+      "0xaace4906ff0f7598db58b3dbe719724a4569b5fbc2c9e2d8635812a0fe1d0ae2",
+      "0xaaee502e7f2378521ba15c183e2762cecab013dd42f7600f7b35e99e0882f08c",
+      "0xab2279fd155871ca6a4aa7680a857c660f4a9028a18e820d78ddc4fe548114f3",
+      "0xab2beed9552ad0890b9c3de7d0f94188146c64192178596e52b2743b2340c5eb",
+      "0xab2e56edeb15b38b656bf5ff954b54badf1228056d9d7a0e4a2cfb724d5ec494",
+      "0xab45c885ec399833bfb4b457100a86b8952ebe383087f45973bfb8d8399ceb09",
+      "0xab5a220b2dac940e56a63ffd54b6b91ded336320dabe8c9a11f45bd264398e29",
+      "0xabaaa89d4d26fde933ca7c55a43c81872549f01d68cddb6a4b7ce1f1856b9d59",
+      "0xabcf4887311e6fa759fec61e8cd904ddb6c757f7966fa1bbb667a67e0980bf86",
+      "0xac2cb87c68bba7d3996c6849bdae405150ed48717da40027b0992ae516f72c7a",
+      "0xac40fdb83259c2205e3ae66fa9acbe86c28dea619aec91d99d4d23cf246ca0e8",
+      "0xac901ab9d24559f0bd5d38c14cceb0fa94ab6370c5668ff30ed3e19c1173c640",
+      "0xac9d628a8792b714b10915d42d52da979c5a4f4dbe586a5fa4d3161f4e2e0204",
+      "0xace6e342a17568a71bc005db5df3247c63342d6379365a04cdb29672f77fc494",
+      "0xada1f4f0490f444b7400b9222da89379b8b08c0948305b55e7751d0d4383eb79",
+      "0xadba709af279a1745bfa5265ee4c7dc6dc2c88c2ce1e39b15c76fd3290daba09",
+      "0xadd6545ff5f655e0aafef948801671aa0c606077108e758e69d8bd326364efe4",
+      "0xaeec156823f08b1917c7ca7a4ebd47ee6aa7aac8ca77945b65842a5b92548f5a",
+      "0xaf55bc17e4521af6f6bdd636edf10938522ec29ae814766a9d9fd05a301e4869",
+      "0xaf7a255c8e8b754a40c6af16bc316ae757a3541cd979ad89770c4b6c124c4613",
+      "0xb068432f23afbb98b3979fa1246225707655e3d0593802d72abd88eee79f3485",
+      "0xb091faa8a7de70e0009557977b5fdf30fb609d0430bf1f8bdafe3bfda9ab75d9",
+      "0xb15a52ee0679f7fb744582d0722e004bdb3b55b2f52709de4ab0e2d762fe0621",
+      "0xb20f96ba6ccf4555d4e3adcc97a561512ef27af67183b52d32283066d4a81853",
+      "0xb2d9f764cf4635d9ed03f365fd8075fe3a1260c1e4b0107adc20a958e75618ff",
+      "0xb342e7992ae6a40d5d1ddf300e88de3625087a4d6148466846a24f90c1d2649a",
+      "0xb3635af0443db1db5b28f7d8826c586ba64d1a2e5b6aa2b28325a83a0df36d77",
+      "0xb3a98bbe8a70489bd45deaef2111837dfcc9d9485a89cb22da25fe1aeaa8174f",
+      "0xb3af83732f124ad4d46876c501fee839ac5db78132848832b16ff2e10e96c8d3",
+      "0xb3e5963c18d0fbe9285a35e65aa260b304a3cded6aaddab9507122caa33caf44",
+      "0xb45a93b98735d9c7b48a61ae7661bb756ccf5b1529bdf88048bcf5404ad88f13",
+      "0xb5cb9a94206dc77d3e4108cb11c7ad70cd4398e8501be0f961ca330157a53d80",
+      "0xb5d1504179ca92b669753bc175a8a3f85f3f169f2640bb47d456312c81d59bae",
+      "0xb6ac8af72e98f695efc5f5aa34cf923b6b37924bed2ce71b82dc969bb87089c7",
+      "0xb6afc047a7f19fdd0d2227f4c685c36aad93bee5d9c9af448da4c6f7dbf5f0b0",
+      "0xb7287de62be45070efd8b276bd05699aa113448d0aef476240499fc155a6cfcc",
+      "0xb76efc107e54ed71957db0a9ee499cc047e157bb1c5077a47d4c01eb606cf4ce",
+      "0xb7bd5028d19aa0cd8608facf75b07e2309cdf0947d4463f589c3a9e0df27786c",
+      "0xb8e68df6576fe24ebd75868e235886acd5c9acfcd424c2305d00e986045b35c1",
+      "0xb939457f8766fc4c7fa4c269beaabcb1d6a582f1eabaedddd6d67521d0c0fab4",
+      "0xb95b2c7d8b4b3f8c8683cce2e0152bb63ea707fd0bf69c7c4ebb21b13fd07596",
+      "0xb9782192c2fcaa3b550e6c933a9d171a0aef21f41419d7f2d42ac6d93ed897c4",
+      "0xb9f0f1754b2c5bbb7c81144e2202cdc8fd6f26cd974e9a585df1c3e95fa40e37",
+      "0xbabef247e07be55b9ff93a7fbe4d7160345145b9889a6f0f2cf3d10f8172c3cd",
+      "0xbb1ecf7ee063bcbd7b3678739bd6e41c18572e6a2d14949b4524adddcf8d862d",
+      "0xbb711abf6b43e12fcfbbe27b84cef34262945eadf2e0c5ce8081b1cc1b534981",
+      "0xbc37fa2e7f8816d2779dc80135ac549f702573b58c48f610438d332ccb1650a7",
+      "0xbc492d77f79ff6118d6d7eed2feb6f924d911c477d594f33659776a3b22424a4",
+      "0xbc54d73527785bdc7b443cfdf3b0d59558c5ac2bbffca23425ecfbd161b07317",
+      "0xbce9459296b7e9a1d605a490cd59828f86e00aa5966eeb8d634fe59146507ab3",
+      "0xbe259a4ea523e33b43f22b5f7c0592cfc3f9173d24569edd9bdf835e452c80d6",
+      "0xbe2b9c4578512809fca5ea72b3f07cf5a1541dfa773d88b926530a25ab4cbb2e",
+      "0xbf00bd6390bf3def8cfb11c9cea4bcbf0e641e6becb66a43abaa622842cc2f95",
+      "0xbf23041368d55e0effaed9380b1cb5192c39662c0588093e5a9cebdc45643fa4",
+      "0xbfeeea3cf12637207676ce37202b450238a902a1ae50b0b44a4a68d89f3cba2f",
+      "0xbff6fc5acd438ec10528955e12637699687a4b81022426403380a072f6be1334",
+      "0xc09a48e36d36efe9746834c6596e7175cf8fd33d076b42f38f66b0a5204f4a96",
+      "0xc0ea4599172921d34f7dde6af445705478bb0fbdabbc703b2dd61c4d35d6159b",
+      "0xc0f8d09b1bd7710c19dab064608697789f6d92a69203f06e3bad41d108ba3f0c",
+      "0xc1047bdf5d72f40efe122ce79a00e41cede6167b96e0b628722157f1311a86f8",
+      "0xc10e89f0d0b8cd906d575b1cd2d6a75d3f7445e4808289ccdc135331221099a1",
+      "0xc12050583433e0b78b53273f9703f6d0c910f96b16c3b939dc99581c96542f93",
+      "0xc125ca7e29e386d60c776175bd235bcb603eb989969d65f92e09aef0cfc8aed1",
+      "0xc13036ad8a97056c91017c072ae8638393c824eec2564869a4d3b23f7ff4d61d",
+      "0xc1597ee2f9a73ad23a83c826edc39d209dc617347805971952eb04b857f590f6",
+      "0xc160f85909485973a3ee126ff99095b3afd0f5f5d4cc8c0ab740178075ca9a7d",
+      "0xc1627e5a4798ffe58d54ccfab1aa651469ebbd8dbce379d15e3e891a026fcb0e",
+      "0xc17c0b2fbaaf76f218153cc4d4c6c0dca65c9138317e2cbd1903c63ab70dc1ef",
+      "0xc191fc44005a6df7fe45f9ab5865aa094e787f4b5dd75019af8e8b03ab21ad47",
+      "0xc272bccb0b75c597c79a2ea6693017d467ab1580d74ac24194b1fcfae4923709",
+      "0xc2854d2afda65b7269b566eaef034ff0334529d90b4d5387bfb60634aeda0b17",
+      "0xc2b25ce9255faa0c6aa0ae25b46e3952be942051cb0ecfbe751ce7a27988f487",
+      "0xc43db267dd3dc58aa31f429bd054ac96e5877b7bb74bd77e068d8ec54f8ea2e3",
+      "0xc478e63af1a40fc3b7a423345922ad4bd70527e95fa57957be8620d17ce7743f",
+      "0xc49c6c8ab28df0243c616a4618c27a5ad077684e0d44569b9bc6c67e66169de8",
+      "0xc5c075c77d2b8a98606097f5e42c3e907a66debf4a4058131dc0160235fa8fed",
+      "0xc61b10b8836158b7f8d36c5e0bd0140b070b015563b59da8765f6c68f3b687d0",
+      "0xc66cac3f616c52683b6e3a00d927f10f2eecb805d8f68321694c1de81a1f21af",
+      "0xc677dba95b39e620748e15c7db5019e570579e9a4b5f07889c2f6bc70aa50a3b",
+      "0xc69efe342a734b1aa260832d818e39937f2fee385a0dad317ab7378d60f5e5ea",
+      "0xc6d038ed5dbf76a49ced07ac9cffa7d4e5747638ab7397e6b9f1bd33713e3e29",
+      "0xc7222def3366f9a109abedac14342c532dfbf4a86e0959ac4e746864c8691c23",
+      "0xc75a17263f1885a41616a018a2cd0636faeff200fdd7294610f40cc3a0287945",
+      "0xc7737588a747fbc4a4bce18e49e8cebee523551286e1937c9a737af3a6d5d2d0",
+      "0xc7ab83279cff6e4926e105e91c8e62822d4b493d18dc5606858419d28edc4675",
+      "0xc7cf1cff6bc27b004f2b8fef8f72113c7c10d24b14eeca2fe903a04e0def3d40",
+      "0xc848312ccdf77c4077322f177dcbe1a3e572461a6c3ff21eb1afd4b9ff438399",
+      "0xc8973b434939a8b0357dcc79431d9e1ee693d99933de397cc25eb6a690c18634",
+      "0xc8c4341b9bb253b17cef934286ee4b820318ca59e30b5a8f995f65c9fc9bcc8e",
+      "0xc8d39cc3f4c639c16a553b98ad05c5d4a94352a64cf6e31a9c0973c7b3e5a4d8",
+      "0xc95bddad6409d14c643a602c311b97d2485e79240e2c3a0bceffc3104e6cba2d",
+      "0xc9cbc8e69dbbfbe80b67acc32f6cda9b5e4d1573fecd977d0f2f9dbe5f78adcf",
+      "0xca02cdf6295abca82ce44237bd97113bec2f6aa720f29760202aada0c03ff3ac",
+      "0xca7392f7ef09bba26d863adc1151a6a45733c2486aa2b64873875a8873b5598e",
+      "0xca928babe0aea952c2ef10cea6f26de5c891e68e8f79cb57ebd50268ca3f10d5",
+      "0xcb445c8c8f8ee63db5caa752e7184e28213eddfcc5bbdd1d579decd5125544ca",
+      "0xccaf452b10b6dbc074cacd6806b00a2d48f1fe43648218b961f974333e66cdb5",
+      "0xcce8d9139fb22c3f2915977bca538a967338bc3bc3b11bae3cba27bb699fb6e2",
+      "0xcd4cc5ca273cfea27cac213d580e1eded5a02382bad076d8ef2a3f1d2a2278f4",
+      "0xcdbdff9999e908ff0e8cf334c554efed4458b3a2a3c9049214b919ed99494cae",
+      "0xcde7bc802d5d0627158ba4cb299d0f6cb297eeb4fa53964b8cbd59108e624c6f",
+      "0xce2157151636c9c9d88c3c2b5f052dd73c83544142f263347a1204f4cd34c517",
+      "0xce2dc35036912bbc5dab9f48880d0766f2f3e8f5724e74e01df0a0fe9f10169c",
+      "0xcea51353b3459feac0fb6eed593ca28f1cf9af30af803d4c6806907ae4e25ff1",
+      "0xcf694ea1b4e90965e4e14f921485ad7e1d0926c0f29da4562dbc9be32f95b029",
+      "0xcfd6639a446a4ff94ab3aef6eb17b0af8bb92ca8107708799776b86b21888a6b",
+      "0xcfdee567f02851cda468435e88893b3de54b74ceaed1a07bcc6192d99ffc5273",
+      "0xd00a143da25d1d0484b1398debba073daecfdb931bb86ec4323ea2b01367d16c",
+      "0xd012cb85e8823ca1f8c64250f7885a96eeb3f33d271822738bbe0c5b66b0d8e3",
+      "0xd08783d63405b2e98472f8152a51cdefded05d04679f22e730303f24fa90215c",
+      "0xd09007e119d3b7459d09d134b164413b9d22b7f2e78aadde9ea10cbfc3be9dff",
+      "0xd0d2522ed1d46ea3f2aa1810560f04aef66aedeef37f378684e8225f6392d5fa",
+      "0xd0fde611dad6c8cb3c0a080edee9581d7ebc5b441221c6f1047c395a34136f8b",
+      "0xd138accf34df0e7e15a2363655719523b01daa46280b21d306e5fa67c66a9315",
+      "0xd14b9c617bfc18a28124548741016b20a10196cef8123ec3847e4cea870045ec",
+      "0xd1b7ab28ea40d3f3ab3fedf1460c2048d95e01f1c1e7ec73577cdf76cc59b2a6",
+      "0xd24b504a5e4e1cccd3c5f15d4bd771f053887728b1ba846a7b9393ac61a8046c",
+      "0xd2565c49beb5075ad8e939bf9ad44799e651e8d8715b97604e8a30f49a878292",
+      "0xd2a200143740b2c4e1c59271fef9991438da5b272865f54cc5bf4d381e710b09",
+      "0xd2fefab5edd51136073c1fcebd458edf77632ac87137197884b6613ac99e65e7",
+      "0xd315f04b06cb62e947b29885096672b550bedc56273082ad5f7f1f0a21ef1a96",
+      "0xd382538f5603256b52d6bf76f0bf117dd9200eee3f62f6f1743986ba195dc4cc",
+      "0xd3bac601d00f70f150973bbcc2f4a15817bc1c4c481ae843fcb146a570883c83",
+      "0xd3bf67d5f9d298991e6f34ffc737da8ce57b8aa4d8e4f80de8908beb23a8522d",
+      "0xd3c247da433462510fb71d302456b95fba7da12e05b235e357c012a1cfae1bae",
+      "0xd425c04344271ffe3de71fb7b101a6cf942b62a98587b48ff44674e0c9e8eaa9",
+      "0xd4597c9ad4c1f2bc2fb40c4839364c801548d2cfd274db3b0e413f9b1a953bb7",
+      "0xd6149fa15833abcf22eaf66652f6fff4bd3fbf92c9f064be5d355ac5ea75da37",
+      "0xd677c53cddabddb11566057fa69f5aa50cb157bd9a60936e8383577e6cf8bc25",
+      "0xd7bb40fb39f3f5aade2c3fc684a9e8f08c970c88a34eac206e2b19f732451ae1",
+      "0xd8459254e4d605a4f0a5ec420e3d44aa3e0d97d09265820be243dde30186dc78",
+      "0xd8918c4cdfac6798236ed610e0ab13c3042de720d68e4eb51644359c9025350b",
+      "0xd92320b5b17cc0708a6a5bc8808a3fafa733ebe70109d24d2e598fc8ef943525",
+      "0xd958b41537b082d295d06f3afe0226a08125919a5fbd00bf2e636fcd9d97df0b",
+      "0xd95cc2361558e618c321d2cafd857da42318f182c10ed0ae4f9ea1f101422956",
+      "0xd99c60888ea71d9cd9ad5e69f2eae30a2c7439b228827211d880f79c05c376c3",
+      "0xdb05da4e83428e1947fe40c50b04aec37fbb89c75616070fb7dc1e76d9257ad4",
+      "0xdb3137f252297c3c16c34592a98cdb6a65650fd12adafb888a99276b2289c85b",
+      "0xdb39d9fb9824d70ce281ea3233794ff18c3c0fd7e75ddc2ffe03d51589230fdb",
+      "0xdba64bfb739b657857aa6474a0e3a6f1e52bc0fe87925aa814dc2bf45b3be6df",
+      "0xdc3b208d3fd182aa413e36d8a9dee94d3bf9df2624a7e42ee00cbdcf9d5ffcc7",
+      "0xdca5096add5e96312c6114682bffdeec84ea9f412c804143bf050fa70d3de173",
+      "0xdd5fab3ee49942391871ce825ca6c95bb7a632129327e47b63a9c83b72e174cb",
+      "0xdda0c923ae49a34a17941ad2c8fb21c88d28b7f7bcd2b8d20ea4805dfd95574e",
+      "0xddcca70d29ae4b92eeb522290bb88372caee780656dc0fd401969173eb869798",
+      "0xde375ee18780ad9640d642dc5ace37df6ad904e2aac066f1c57d0f9292c66aae",
+      "0xde58d550433b3a31d22d4ac6a214e63ce775514838e147364d9d0ff9e3d74976",
+      "0xde89093b4397653725daac589e35b712dd498786a89b3fec1407f7687ceefa32",
+      "0xdea4248a9eca7460ceec09f340474d50897995f335302100f674afc7302e8145",
+      "0xded51a17ae6d8c398fc49dff0ab855f4f1c1f3d91d64160dc2a5a7ea949d3d0f",
+      "0xdf70757ad479c1f50f1809ca8e130fdb8c6bdbf79b975c6255328c43881754c5",
+      "0xe01597171c07591eb23a94146786dd5640cdd0e7ebfa9a535722f9c963f25eae",
+      "0xe035c564a850f79f9ac9cd3be5284d42a9b7fc29c3fc5c9dca8f7ea03455098b",
+      "0xe06fb3f17d5b11c7137902c5e26e78cd6f1db2836d0ce62ea45a55759ecd500e",
+      "0xe0d1f9dc1abf27b76c87f08c5112acb665652daf2ce7ac611e65620024449b23",
+      "0xe0dc822e1d077f936d3ce534da18296f15cc3fcfabb1334fed671e7125e4f3fb",
+      "0xe121db5c6d754c3b590bd2f950e165b882f11a7fd46220fffe0efd7e86305cd3",
+      "0xe1672a8d526eec2bacdfc6f0f024d9ca273782edcf0df2c0970143a587ed3fb1",
+      "0xe16fdb840d18e96e116689d35e9b23051cec4c557469a0b6b9a3b326d30e92e4",
+      "0xe2798da1385d6c354e3e8f21b7c83f33d66059c57a75a736988b86c56ba77a0e",
+      "0xe32c70043f57f5ec822926e21075880600df4639958b0a33142b9fc695651854",
+      "0xe330223609c322c03115751d9c02f82c76b1254f8a8b0a37c921852a890cb758",
+      "0xe527a88884df07df756dcf4f52867cab27c3aa7a6e71f79aa55811bf824fafd3",
+      "0xe52af5d603227dd24b708be556d3c316ba073418f0caf2e40874e13b54021972",
+      "0xe553c199dc689bafcb5350db1d55840edcec80eac859e23856e3cb993c3ec8a2",
+      "0xe616062dd0fdb69a405cc7e6effdfc8e02856f54b6d4c665e3ba174b9822e68c",
+      "0xe61c5e0f4f144a70a8020565944bd84313637f132ed31e382b394b424bfbc62f",
+      "0xe664dddfd51e6f30144d2d1642e04aaf117b8ecd2ae81c47f190e35d419f6438",
+      "0xe6e4f169180945e38fd25df38bdf47d58141a49f447e3006002dc5d11953de65",
+      "0xe6fa2f8b1f7ae63eae5fded479973e8e46e7bc59495f32efddc07483d7840d35",
+      "0xe6fe38ee2ad9ff9bf39c9fed5cc150a8b60e2b8b55e784cff11892c1906298fb",
+      "0xe70fd51f42e61fc309d8e57019a7b76c8dc7bd19b473351d56ff1e125ae0d9d4",
+      "0xe79988359cb7d7bcf4b8a622f959bebee4b94b07e337430e66a8213949b6d6bc",
+      "0xe8660f0f0b7b736e0e83724474f52df8c6a1519db595d400d17216fc5aa858e4",
+      "0xe8b190e21c972e601622381310130287074606046ea72f86c1904f32083fb8ab",
+      "0xe9fbe292e5dae90c6a712aeeff8ec3ab8b0d95192b12dbe3eda168a1874e14b3",
+      "0xea9ef5e2698c3713b8878b402467b802244fbc6f7b688990b1c5fac5db86cff0",
+      "0xead9a92d40685f290b79322775f8b9f6887a227dea23d6871de371629545f787",
+      "0xeaed7f2319a3bbfaa18c4ef6d1e05c73cf142941f428fe428527819165f6b0d7",
+      "0xeb0de200851ebb80eb722c8b02e2226fe76e91e86a7cfe7e38042632e42d5ae9",
+      "0xeb284b319f4c673d4c31e091001fcf99e3f95ce9860cbbd4626e72287c21eb01",
+      "0xeb28ef96d906139d439848cd7bfeeba6a5fd25e4fa2c7fc1025ed7ae07b7b714",
+      "0xeb4fae1ab58079fd61a92bc764648522787b7bf6522dd901fb3f9c9828fcb4ba",
+      "0xeb8e8c05fbca1857342a66d16fa2a104b7b352919ce8746f3c1791c4680c1b83",
+      "0xeb9853c45bc4394849cc2f0fdb72d8939e77942699cf8df0c20e0f26d35c0ad7",
+      "0xebd2aef005c294cfceba4d5aa980cd843d0f1bce08a58e22fe2260286ae41172",
+      "0xecafcde314b503f9f290592df431f607d6a2435e27bf87550700d6d7ea37910d",
+      "0xed0b3c5e853951a4d41a7f651e92c253ed7e550e7ed622d4e3181a3f2d8d5635",
+      "0xedb7b7fbdf8776090bd81350e2f876c2108af48ad0cc6c21fe2eaa6852a1656f",
+      "0xee119a12bd76bb9d059e4199903d7439eea0b090d04a36f3e4aff728fd2e506f",
+      "0xee48a82dd3e103c6af4717d18b9d1964af320daf17f43127892659208a86acf6",
+      "0xee5c9379b9924f35889166067ef856b2c5648a84f5688589089978b626403303",
+      "0xef6917a686d222a715e1675aea1beca7885c507dc2d29ca78e1a6bd30418316b",
+      "0xef7e8660541d07039dbdc55feea0d828685f999c81f4b4206cbb9f49b2082ee3",
+      "0xef96e7bb0f33126fe20830f0ddb226a109075e6bd377e09860a5a41a9a835129",
+      "0xf00189b47bdf506846de513ae33b8de64eacc856afdec5979f6bf9e6b49a0140",
+      "0xf0126c75dc1600335fb406178e60d225fddd8aa0cd7484592be707eb3bc98d96",
+      "0xf0630dcec0b86a82d26c3d901a5c49f1e8491a5ddee9926c9d577ec7bfe05791",
+      "0xf08fdfa7f473dbe65d7ece6e2439f9035d731c3df4c5547ed5242832a580c75b",
+      "0xf0f6af54d51b91a842ea7ee4fd6723542e2b126090ee5ebc7dfe85a638fecdeb",
+      "0xf1116bcbabbc47a2f78ae78b82e533941892c2fb1a8e0b4cbab557db8047cb0e",
+      "0xf184180c4848706d0e38efbe91797d91d225aa813a0034592df23f10986684d1",
+      "0xf1acd340e8ed4a9815356b85b56f34e7a8ca6444ec50bc306812189ee043f8e4",
+      "0xf1be477c5a891bbcc1d561c5149bde7d13a17f67cc5acf7087c4cca6670d633b",
+      "0xf1d68269bc149264a1768125733cf15422164230bce10d5676be4147423b0945",
+      "0xf1faf218f243b9eb19bfa63da2a8eeee17f52c0407e4ce9797f6234abedc675e",
+      "0xf22082a69e8d8f55bba495a9bd0d15935cd4a769400eb109f29f895a327dcc6a",
+      "0xf2b9023b7e39303ecfad8b8c1f0fb0f89d41a8bfde1b343f6361ee8c1100e348",
+      "0xf2d5429a3dd6f7e799df6220b391ac6e9e93c6da2144700ec3995d5634b0ef74",
+      "0xf368130800d3f2b6083c03f41c3e6788a7afef2f916ff59b6d9e8edc811af168",
+      "0xf3912f7658068119d58aa56a3034057068034879e14411cc8b56c5c734010f37",
+      "0xf395e6bd5741278009b251a3d6a60bcc6c380081febed64034b5973f650abd00",
+      "0xf4451e8d6c5e1eb98c824a8fc29870235c78b8a52d9485e9f01ed2c24e39136d",
+      "0xf48e5c04b78e1d5ed700dd1c566f25b4f3a4b75bb645ba337ad5045b63915f55",
+      "0xf519f32ae457f77af4457521f9e233b6f7af9ba9c80ce250dd0df447d0b997f2",
+      "0xf5498c927781164ef303a35e9d0527013bf14a74aff01e913c4d62de19ab5e8f",
+      "0xf55ef5d738856b0ac8bd6389737cb38c601c1997b0da13e20829a661a55bf844",
+      "0xf5e3a51ee29ef5b838be3b9ffa03fd78690187e951c2d944a48b563cadc8ffe6",
+      "0xf63a97a5e0e9bc5797934061cfc9c4142028702b134d1abe0145df98d9b72205",
+      "0xf65557b92b70e4983cdf6e6cfc0c75322ebdcaed557e488a7da834a8abdc30c7",
+      "0xf6784a25f4ab9f5d608d310ba341fb017ce3d7a38fd3b462d74668e14e421f27",
+      "0xf6790baa5f35524ff585cae977c774d0cc0faae67befae4dee2f2aeffa789b52",
+      "0xf76bdaf0a2c42da8f159000c860d13aad8e045b1e0459200570f9b55c81a15fd",
+      "0xf7c1a54bab85aa2d3bdb7ac6f36ee0a04383c1c8f59b699b1ff49014289fc6de",
+      "0xf7c201afe8de1c9eca74a53cd20a586b4d7026357d96814183ccdf8864f03add",
+      "0xf7cf12595c7ae019ba16f075df895e1d845f341b11b40881143e24e0c0f964d3",
+      "0xf830fc40f001008fb6490ad8d3766cb1dcf0e2571c2689c6656fe9dd0b7c93d2",
+      "0xf8b677ae938e7c180669a5cfdffbb6d8d814a68212633aa5e045ae21ffc91f1b",
+      "0xf92a4eecf3e01168474b29ed56fb13b55c7abaded9c532525b1bdf7c0ff37787",
+      "0xfa4c7ef71f06bd9b6d31ae31772d2a0c373d3a4abf01168b82ced2a7df3b8c03",
+      "0xfbfda6526c525a2d2b98064b36bd87b810c9ae2ac92d57cad461d113d153243d",
+      "0xfca505c4c1ce60b06954be04b92503a500ec28fe8fb1a098188a3c8e548a7d2d",
+      "0xfceb5c616991185b4935741adcf197a36fbfdc0003b5ba14090e38a3e2cf4faf",
+      "0xfda608908b51d2db06279d1a8f1dc6a2f9c6c489f88a67411d155c7a36446fac",
+      "0xfddbb75f0bab32cf0e3928a5bfb1077bf9a83b49f73d15ff2fcfb7c45a756e2a",
+      "0xfe6ec2bdc53f0b3afdbaa8a09d2d66a9e7116600bb72ff14ef8a728eed1420fd",
+      "0xfe96461b26d687e3a68420e778ef3507a32279961f97c538783192d7f272a9a7",
+      "0xff198b16fbfa22aca25ba338cc50fda1983c6cdff2a5b23b682dfd2381445d42",
+      "0xff1afdef47475128b85467bd1a3a4a3182da0c27409d81c2dc6c7d55b5467dad",
+      "0xff6ac090c04867089f12624bb2223ae3647fd66ba9eeeeabe257130bc5a99d58",
+      "0xffcdd8fc86156b894bb68cdcd3b0435b54603262a116b305487c7af11b773ddd",
+      "0xffed6aa9391af6fefe63ba8666ed3ee474caff39349c45d28cd1f449be84bb66"
+    ],
+    "pnl": {
+      "realized_pnl_usdc": 6858.373585050305,
+      "resolved_markets": 80,
+      "markets_won": 54,
+      "markets_lost": 54
+    },
+    "intent_usdc": 1523920.710371,
+    "resolved_via_ds_uid": "cogni-candidate-a-poly-postgres"
+  },
+  "ab": {
+    "POLY_CANDIDATE_A_TENANT_GAP": [
+      {
+        "axis": "decisions",
+        "control": 8952,
+        "treatment": 0,
+        "delta": -8952,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placed",
+        "control": 64,
+        "treatment": 0,
+        "delta": -64,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0071492403932082215,
+        "treatment": null,
+        "delta": null,
+        "delta_pct": null
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 245.51128212021365,
+        "treatment": 0,
+        "delta": -245.51128212021365,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 87.4773580183,
+        "treatment": 0,
+        "delta": -87.4773580183,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 21,
+        "treatment": 0,
+        "delta": -21,
+        "delta_pct": -1
+      }
+    ],
+    "POLY_CANDIDATE_A_TENANT_VALIDATION": [
+      {
+        "axis": "decisions",
+        "control": 8952,
+        "treatment": 16241,
+        "delta": 7289,
+        "delta_pct": 0.8142314566577301
+      },
+      {
+        "axis": "placed",
+        "control": 64,
+        "treatment": 136,
+        "delta": 72,
+        "delta_pct": 1.125
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0071492403932082215,
+        "treatment": 0.00837386860414999,
+        "delta": 0.0012246282109417686,
+        "delta_pct": 0.17129487100547988
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 245.51128212021365,
+        "treatment": 517.8669162379225,
+        "delta": 272.35563411770886,
+        "delta_pct": 1.1093406044955236
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 87.4773580183,
+        "treatment": 218.13530592430007,
+        "delta": 130.65794790600006,
+        "delta_pct": 1.4936201877366577
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 21,
+        "treatment": 44,
+        "delta": 23,
+        "delta_pct": 1.0952380952380953
+      }
+    ],
+    "POLY_PREVIEW_TENANT_GAP": [
+      {
+        "axis": "decisions",
+        "control": 8952,
+        "treatment": 0,
+        "delta": -8952,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placed",
+        "control": 64,
+        "treatment": 0,
+        "delta": -64,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0071492403932082215,
+        "treatment": null,
+        "delta": null,
+        "delta_pct": null
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 245.51128212021365,
+        "treatment": 0,
+        "delta": -245.51128212021365,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 87.4773580183,
+        "treatment": 0,
+        "delta": -87.4773580183,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 21,
+        "treatment": 0,
+        "delta": -21,
+        "delta_pct": -1
+      }
+    ],
+    "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN": [
+      {
+        "axis": "decisions",
+        "control": 8952,
+        "treatment": 0,
+        "delta": -8952,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placed",
+        "control": 64,
+        "treatment": 0,
+        "delta": -64,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0071492403932082215,
+        "treatment": null,
+        "delta": null,
+        "delta_pct": null
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 245.51128212021365,
+        "treatment": 0,
+        "delta": -245.51128212021365,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 87.4773580183,
+        "treatment": 0,
+        "delta": -87.4773580183,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 21,
+        "treatment": 0,
+        "delta": -21,
+        "delta_pct": -1
+      }
+    ],
+    "POLY_PROD_TENANT_LIVE": [
+      {
+        "axis": "decisions",
+        "control": 8952,
+        "treatment": 0,
+        "delta": -8952,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placed",
+        "control": 64,
+        "treatment": 0,
+        "delta": -64,
+        "delta_pct": -1
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0071492403932082215,
+        "treatment": null,
+        "delta": null,
+        "delta_pct": null
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 245.51128212021365,
+        "treatment": 0,
+        "delta": -245.51128212021365,
+        "delta_pct": -1
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 87.4773580183,
+        "treatment": 0,
+        "delta": -87.4773580183,
+        "delta_pct": -1
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 21,
+        "treatment": 0,
+        "delta": -21,
+        "delta_pct": -1
+      }
+    ],
+    "DB_ONLY_CANDIDATE_A_20fdb57a": [
+      {
+        "axis": "decisions",
+        "control": 8952,
+        "treatment": 16240,
+        "delta": 7288,
+        "delta_pct": 0.8141197497765862
+      },
+      {
+        "axis": "placed",
+        "control": 64,
+        "treatment": 167,
+        "delta": 103,
+        "delta_pct": 1.609375
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0071492403932082215,
+        "treatment": 0.010283251231527093,
+        "delta": 0.0031340108383188714,
+        "delta_pct": 0.4383697660098521
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 245.51128212021365,
+        "treatment": 500.53617986096936,
+        "delta": 255.0248977407557,
+        "delta_pct": 1.0387502176616215
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 87.4773580183,
+        "treatment": 193.45817922709998,
+        "delta": 105.98082120879998,
+        "delta_pct": 1.2115228855749063
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 21,
+        "treatment": 59,
+        "delta": 38,
+        "delta_pct": 1.8095238095238095
+      }
+    ],
+    "DB_ONLY_CANDIDATE_A_acd63233": [
+      {
+        "axis": "decisions",
+        "control": 8952,
+        "treatment": 16240,
+        "delta": 7288,
+        "delta_pct": 0.8141197497765862
+      },
+      {
+        "axis": "placed",
+        "control": 64,
+        "treatment": 168,
+        "delta": 104,
+        "delta_pct": 1.625
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0071492403932082215,
+        "treatment": 0.010344827586206896,
+        "delta": 0.003195587192998675,
+        "delta_pct": 0.44698275862068965
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 245.51128212021365,
+        "treatment": 505.2980108273303,
+        "delta": 259.78672870711665,
+        "delta_pct": 1.0581457864731165
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 87.4773580183,
+        "treatment": 191.9762879144,
+        "delta": 104.4989298961,
+        "delta_pct": 1.1945826012971166
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 21,
+        "treatment": 58,
+        "delta": 37,
+        "delta_pct": 1.7619047619047619
+      }
+    ],
+    "DB_ONLY_CANDIDATE_A_809e37f7": [
+      {
+        "axis": "decisions",
+        "control": 8952,
+        "treatment": 16241,
+        "delta": 7289,
+        "delta_pct": 0.8142314566577301
+      },
+      {
+        "axis": "placed",
+        "control": 64,
+        "treatment": 166,
+        "delta": 102,
+        "delta_pct": 1.59375
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0071492403932082215,
+        "treatment": 0.010221045502124253,
+        "delta": 0.003071805108916032,
+        "delta_pct": 0.42966873960963
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 245.51128212021365,
+        "treatment": 499.56880893229425,
+        "delta": 254.0575268120806,
+        "delta_pct": 1.0348099876228185
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 87.4773580183,
+        "treatment": 188.11949977329996,
+        "delta": 100.64214175499997,
+        "delta_pct": 1.1504936138325752
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 21,
+        "treatment": 58,
+        "delta": 37,
+        "delta_pct": 1.7619047619047619
+      }
+    ],
+    "DB_ONLY_PREVIEW_fb8f65d5": [
+      {
+        "axis": "decisions",
+        "control": 8952,
+        "treatment": 8952,
+        "delta": 0,
+        "delta_pct": 0
+      },
+      {
+        "axis": "placed",
+        "control": 64,
+        "treatment": 157,
+        "delta": 93,
+        "delta_pct": 1.453125
+      },
+      {
+        "axis": "placement_rate",
+        "control": 0.0071492403932082215,
+        "treatment": 0.017537980339588918,
+        "delta": 0.010388739946380697,
+        "delta_pct": 1.453125
+      },
+      {
+        "axis": "intent_usdc",
+        "control": 245.51128212021365,
+        "treatment": 978.349128798941,
+        "delta": 732.8378466787274,
+        "delta_pct": 2.9849457033094557
+      },
+      {
+        "axis": "realized_size_usdc",
+        "control": 87.4773580183,
+        "treatment": 254.40107349910002,
+        "delta": 166.9237154808,
+        "delta_pct": 1.908193380118774
+      },
+      {
+        "axis": "markets_with_open_position",
+        "control": 21,
+        "treatment": 24,
+        "delta": 3,
+        "delta_pct": 0.14285714285714285
+      }
+    ]
+  },
+  "fidelity": {
+    "shared_fills": 0,
+    "exact_match": 0,
+    "outcome_match_reason_diff": 0,
+    "outcome_disagree": 0,
+    "twin_only_fills": 8952,
+    "live_only_fills": 0,
+    "top_mismatches": []
+  },
+  "prod_twin_fidelity": {
+    "twin_env_key_prefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+    "live_env_key_prefix": "POLY_PROD_TENANT_LIVE",
+    "shared_fills": 0,
+    "pnl_delta_usdc": 3.7148182723,
+    "pnl_delta_pct": null,
+    "classification": "no_data",
+    "markets_touched_delta": 25
+  },
+  "distances": [
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": null,
+      "intent_usdc_ratio_distance": 1,
+      "markets_touched_ratio_distance": 1,
+      "aggregate_distance": 1
+    },
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION",
+      "pnl_pct_distance": 1.982001589764432,
+      "placement_rate_distance": 0.99162613139585,
+      "intent_usdc_ratio_distance": 0.9996601746319782,
+      "markets_touched_ratio_distance": 0.9336801040312094,
+      "aggregate_distance": 1.2267419999558675
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": null,
+      "intent_usdc_ratio_distance": 1,
+      "markets_touched_ratio_distance": 1,
+      "aggregate_distance": 1
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+      "pnl_pct_distance": null,
+      "placement_rate_distance": null,
+      "intent_usdc_ratio_distance": 1,
+      "markets_touched_ratio_distance": 1,
+      "aggregate_distance": 1
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+      "pnl_pct_distance": 2.3620746490639677,
+      "placement_rate_distance": 0.9928507596067918,
+      "intent_usdc_ratio_distance": 0.9998388949763269,
+      "markets_touched_ratio_distance": 0.9674902470741222,
+      "aggregate_distance": 1.330563637680302
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_20fdb57a",
+      "pnl_pct_distance": 0.8002355185554154,
+      "placement_rate_distance": 0.9897167487684729,
+      "intent_usdc_ratio_distance": 0.99967154709792,
+      "markets_touched_ratio_distance": 0.8907672301690507,
+      "aggregate_distance": 0.9200977611477148
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_acd63233",
+      "pnl_pct_distance": 0.38517357658555385,
+      "placement_rate_distance": 0.9896551724137931,
+      "intent_usdc_ratio_distance": 0.9996684223743476,
+      "markets_touched_ratio_distance": 0.8907672301690507,
+      "aggregate_distance": 0.8163161003856864
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_809e37f7",
+      "pnl_pct_distance": 0.7253924057799868,
+      "placement_rate_distance": 0.9897789544978758,
+      "intent_usdc_ratio_distance": 0.9996721818887738,
+      "markets_touched_ratio_distance": 0.8907672301690507,
+      "aggregate_distance": 0.9014026930839217
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_PREVIEW_fb8f65d5",
+      "pnl_pct_distance": 1.1868026341450149,
+      "placement_rate_distance": 0.9824620196604111,
+      "intent_usdc_ratio_distance": 0.9993580052281323,
+      "markets_touched_ratio_distance": 0.9648894668400521,
+      "aggregate_distance": 1.0333780314684027
+    }
+  ],
+  "closest_to_target": {
+    "envKeyPrefix": "DB_ONLY_CANDIDATE_A_acd63233",
+    "pnl_pct_distance": 0.38517357658555385,
+    "placement_rate_distance": 0.9896551724137931,
+    "intent_usdc_ratio_distance": 0.9996684223743476,
+    "markets_touched_ratio_distance": 0.8907672301690507,
+    "aggregate_distance": 0.8163161003856864
+  },
+  "env_gap_warnings": [
+    {
+      "env": "candidate-a",
+      "billing_account_id": "20fdb57a-4db2-4669-8abc-20cf4d6b8862",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "20fdb57a"
+    },
+    {
+      "env": "candidate-a",
+      "billing_account_id": "acd63233-764b-46a6-8d91-b645cc3417bd",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "acd63233"
+    },
+    {
+      "env": "candidate-a",
+      "billing_account_id": "809e37f7-40b3-403d-a354-79a547bae48a",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "809e37f7"
+    },
+    {
+      "env": "preview",
+      "billing_account_id": "fb8f65d5-29e4-446a-8753-280d5328b2a2",
+      "target_wallet": "0x204f72f35326db932158cba6adff0b9a1da95e14",
+      "sizing_policy_kind": "auto",
+      "short_id": "fb8f65d5"
+    }
+  ],
+  "sample_floor_warning": [
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_GAP",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "POLY_CANDIDATE_A_TENANT_VALIDATION",
+      "resolved_markets": 3
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_GAP",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "POLY_PREVIEW_TENANT_TRUST_TWIN",
+      "resolved_markets": 9
+    },
+    {
+      "envKeyPrefix": "POLY_PROD_TENANT_LIVE",
+      "resolved_markets": 0
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_20fdb57a",
+      "resolved_markets": 3
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_acd63233",
+      "resolved_markets": 4
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_CANDIDATE_A_809e37f7",
+      "resolved_markets": 4
+    },
+    {
+      "envKeyPrefix": "DB_ONLY_PREVIEW_fb8f65d5",
+      "resolved_markets": 10
+    }
+  ],
+  "env_freshness": [
+    {
+      "dsUid": "cogni-candidate-a-poly-postgres",
+      "envSlug": "candidate-a",
+      "last_decision_at": "2026-05-28T21:07:09.805Z",
+      "staleness_seconds": 27.882,
+      "is_stale": false
+    },
+    {
+      "dsUid": "cogni-preview-poly-postgres",
+      "envSlug": "preview",
+      "last_decision_at": "2026-05-28T21:07:09.769Z",
+      "staleness_seconds": 27.918,
+      "is_stale": false
+    },
+    {
+      "dsUid": "cogni-production-poly-postgres",
+      "envSlug": "production",
+      "last_decision_at": "2026-05-12T01:45:47.133Z",
+      "staleness_seconds": 1452110.554,
+      "is_stale": true
+    }
+  ]
+}
