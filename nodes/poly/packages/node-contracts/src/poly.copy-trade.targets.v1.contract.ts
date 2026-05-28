@@ -195,6 +195,17 @@ export const polyCopyTradeTargetUpdateOperation = {
  * Tests pin the rule on inputs that look valid to the Zod schema but violate
  * the cross-field invariant.
  *
+ * **bug.5026 ratio guard.** Beyond presence, the planner formula
+ * `desired_usdc = mirror_max_alloc_per_condition_usdc × min(delta/target_range_max_usdc, 1)`
+ * silently under-sizes when `mirror_max_alloc_per_condition_usdc` is far
+ * smaller than `target_range_max_usdc`. At saturation (`delta ≥ range_max`)
+ * desired peaks at `max_alloc` — so a $15/$500k row places at most $15 per
+ * condition when the target has run $500k+ into one market. That isn't a
+ * cap, it's a 0.003%-scale mirror that produces sub-floor sizing on every
+ * fill (`below_market_min`) indistinguishable from "target hasn't moved."
+ * Reject ratios below {@link MIN_ALLOC_TO_RANGE_RATIO} at the API so the
+ * misconfig is loud at write-time instead of silent at runtime.
+ *
  * Returns `null` when the input is valid, or a stable string code when not.
  * No throwing — the caller wraps the code into its preferred HTTP error shape.
  *
@@ -204,7 +215,19 @@ export const polyCopyTradeTargetUpdateOperation = {
  */
 export type RangeKnobsRuleViolation =
   | "position_gap_requires_target_range_max_usdc"
-  | "position_gap_requires_mirror_max_alloc_per_condition_usdc";
+  | "position_gap_requires_mirror_max_alloc_per_condition_usdc"
+  | "position_gap_alloc_range_ratio_too_small";
+
+/**
+ * Minimum `mirror_max_alloc_per_condition_usdc / target_range_max_usdc` ratio
+ * accepted by {@link validatePositionGapRangeKnobs}. Anything below this is
+ * almost certainly a misconfig (bug.5026): a 5%-of-target-range mirror still
+ * places $250 on a $5k delta, well above the $5 CLOB floor. Operators who
+ * genuinely want sub-5% fractional mirroring should propose a code-level
+ * change rather than smuggle it through a knob the planner treats as a
+ * cap. @public
+ */
+export const MIN_ALLOC_TO_RANGE_RATIO = 0.05;
 
 export function validatePositionGapRangeKnobs(input: {
   sizing_policy_kind?: SizingPolicyKind | undefined;
@@ -219,6 +242,14 @@ export function validatePositionGapRangeKnobs(input: {
   }
   if (input.mirror_max_alloc_per_condition_usdc === undefined) {
     return "position_gap_requires_mirror_max_alloc_per_condition_usdc";
+  }
+  if (
+    input.target_range_max_usdc > 0 &&
+    input.mirror_max_alloc_per_condition_usdc /
+      input.target_range_max_usdc <
+      MIN_ALLOC_TO_RANGE_RATIO
+  ) {
+    return "position_gap_alloc_range_ratio_too_small";
   }
   return null;
 }

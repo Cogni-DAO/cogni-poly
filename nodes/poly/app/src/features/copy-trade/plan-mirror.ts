@@ -203,6 +203,17 @@ function sizeFromPolicy(
  * `applyMarketFloors` so only the market-floor LOWER bound applies. Wire-level
  * safety lives in `poly_wallet_grants` (`CAPS_LIVE_IN_GRANT`).
  *
+ * **Knob ratio invariant (bug.5026).** `mirror_max_alloc_per_condition_usdc`
+ * is BOTH the saturation $ value AND the per-condition ceiling — at saturation
+ * (`delta ≥ target_range_max_usdc`) `desired_usdc` peaks at exactly
+ * `max_alloc_per_condition_usdc`. Setting `max_alloc << range_max` does NOT
+ * "track at full scale capped at max_alloc"; it produces a `max_alloc/range_max`-
+ * scale mirror whose every fill falls under the CLOB floor. The contract guard
+ * `validatePositionGapRangeKnobs` rejects ratios below `MIN_ALLOC_TO_RANGE_RATIO`
+ * (`packages/node-contracts/src/poly.copy-trade.targets.v1.contract.ts`) so the
+ * misconfig is loud at write-time instead of silent at runtime. For a 1:1
+ * proportional mirror, set `max_alloc_per_condition_usdc = target_range_max_usdc`.
+ *
  * **Multi-outcome and neg-risk.** No special case. Per-condition-sum scale
  * (in `target_position_usdc_on_condition`) handles binary, true multi-outcome
  * (>2 tokens), and neg-risk parent-event sub-conditions identically — each
