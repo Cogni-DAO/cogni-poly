@@ -181,6 +181,36 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
       })
     ).toThrow(/target_range_max_usdc/);
   });
+
+  it("mirror_fill_exact builds the verbatim policy with no conviction gates", () => {
+    const config = buildMirrorTargetConfig({
+      targetWallet: SWISSTONY,
+      billingAccountId: BILLING_ACCOUNT_ID,
+      createdByUserId: CREATED_BY_USER_ID,
+      sizingPolicyKind: "mirror_fill_exact",
+    });
+    expect(config.sizing).toEqual({ kind: "mirror_fill_exact" });
+    // MIRROR_FILL_EXACT_IS_VERBATIM: bootstrap MUST NOT inject the conviction
+    // gates this policy exists to evaluate without. Curated wallet → no
+    // position_followup either.
+    expect(config.min_target_side_fraction).toBeUndefined();
+    expect(config.vwap_tolerance).toBeUndefined();
+    expect(config.position_followup).toBeUndefined();
+  });
+
+  it("mirror_fill_exact resolves identically on uncurated wallets (no snapshot dependency)", () => {
+    expect(sizingPolicyKindForTargetWallet(UNKNOWN, "mirror_fill_exact")).toBe(
+      "mirror_fill_exact"
+    );
+    const config = buildMirrorTargetConfig({
+      targetWallet: UNKNOWN,
+      billingAccountId: BILLING_ACCOUNT_ID,
+      createdByUserId: CREATED_BY_USER_ID,
+      sizingPolicyKind: "mirror_fill_exact",
+    });
+    expect(config.sizing).toEqual({ kind: "mirror_fill_exact" });
+    expect(config.position_followup).toBeUndefined();
+  });
 });
 
 describe("targetConditionPositionFromDataApiPositions()", () => {

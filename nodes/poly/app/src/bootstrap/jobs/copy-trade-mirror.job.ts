@@ -104,7 +104,8 @@ type SizingPolicyKindInput =
   | "auto"
   | "min_bet"
   | "target_percentile_scaled"
-  | "position_gap";
+  | "position_gap"
+  | "mirror_fill_exact";
 
 function minBetPolicy(maxUsdcPerCondition: number): SizingPolicy {
   return {
@@ -169,6 +170,9 @@ function buildSizingPolicy(params: {
         params.mirrorMaxAllocPerConditionUsdc,
     };
   }
+  if (resolvedKind === "mirror_fill_exact") {
+    return { kind: "mirror_fill_exact" };
+  }
   // `target_percentile_scaled` requires a snapshot. If the user explicitly
   // pinned this kind on an uncurated wallet, fall back to `min_bet` — same
   // shape as `'auto'` on uncurated wallets, preserves DEFAULT-no-crash.
@@ -192,7 +196,11 @@ function buildSizingPolicy(params: {
 export function sizingPolicyKindForTargetWallet(
   targetWallet: `0x${string}`,
   configuredKind: SizingPolicyKindInput = "auto"
-): "min_bet" | "target_percentile_scaled" | "position_gap" {
+):
+  | "min_bet"
+  | "target_percentile_scaled"
+  | "position_gap"
+  | "mirror_fill_exact" {
   const snapshot = snapshotForTargetWallet(targetWallet);
   if (configuredKind === "auto") {
     return snapshot ? "target_percentile_scaled" : "min_bet";
@@ -242,34 +250,46 @@ export function buildMirrorTargetConfig(params: {
     params.mirrorFilterPercentile ?? DEFAULT_CONVICTION_FILTER_PERCENTILE;
   const mirrorMaxUsdcPerTrade =
     params.mirrorMaxUsdcPerTrade ?? DEFAULT_MIRROR_MAX_USDC_PER_TRADE;
+  const sizing = buildSizingPolicy({
+    targetWallet: params.targetWallet,
+    mirrorFilterPercentile,
+    mirrorMaxUsdcPerTrade,
+    sizingPolicyKind: params.sizingPolicyKind ?? "auto",
+    ...(params.targetRangeMaxUsdc !== undefined
+      ? { targetRangeMaxUsdc: params.targetRangeMaxUsdc }
+      : {}),
+    ...(params.mirrorMaxAllocPerConditionUsdc !== undefined
+      ? {
+          mirrorMaxAllocPerConditionUsdc: params.mirrorMaxAllocPerConditionUsdc,
+        }
+      : {}),
+  });
+  // MIRROR_FILL_EXACT_IS_VERBATIM: this policy strips every conviction gate
+  // by construction. Don't set `min_target_side_fraction` / `vwap_tolerance`
+  // / `position_followup` — they would re-introduce the filtering this
+  // policy exists to evaluate without. (Optional fields are fail-open when
+  // unset; see `planMirrorFromFill`'s applyVwapGate + analyzeTargetDominance.)
+  const isVerbatim = sizing.kind === "mirror_fill_exact";
   return {
     target_id: targetIdFromWallet(params.targetWallet),
     target_wallet: params.targetWallet,
     billing_account_id: params.billingAccountId,
     created_by_user_id: params.createdByUserId,
-    sizing: buildSizingPolicy({
-      targetWallet: params.targetWallet,
-      mirrorFilterPercentile,
-      mirrorMaxUsdcPerTrade,
-      sizingPolicyKind: params.sizingPolicyKind ?? "auto",
-      ...(params.targetRangeMaxUsdc !== undefined
-        ? { targetRangeMaxUsdc: params.targetRangeMaxUsdc }
-        : {}),
-      ...(params.mirrorMaxAllocPerConditionUsdc !== undefined
-        ? {
-            mirrorMaxAllocPerConditionUsdc:
-              params.mirrorMaxAllocPerConditionUsdc,
-          }
-        : {}),
-    }),
+    sizing,
     // task.5001 — default to mirror_limit (resting GTC at target's entry).
     // Persistence to a per-target column is deferred to task.0347.
     placement: { kind: "mirror_limit" },
     // bug.5048 — gate new_entry + layer routing against target's per-side
     // cost asymmetry, and refuse to place above target's per-token VWAP.
-    min_target_side_fraction: DEFAULT_MIN_TARGET_SIDE_FRACTION,
-    vwap_tolerance: DEFAULT_VWAP_TOLERANCE,
-    ...(snapshotForTargetWallet(params.targetWallet) !== undefined
+    // Skipped under verbatim mirror.
+    ...(isVerbatim
+      ? {}
+      : {
+          min_target_side_fraction: DEFAULT_MIN_TARGET_SIDE_FRACTION,
+          vwap_tolerance: DEFAULT_VWAP_TOLERANCE,
+        }),
+    ...(!isVerbatim &&
+    snapshotForTargetWallet(params.targetWallet) !== undefined
       ? { position_followup: DEFAULT_POSITION_FOLLOWUP_POLICY }
       : {}),
   };

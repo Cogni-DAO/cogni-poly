@@ -279,12 +279,18 @@ export const PATCH = wrapRouteHandlerWithLogging<{
  */
 function coercePatchedSizingPolicyKind(
   value: string
-): "auto" | "min_bet" | "target_percentile_scaled" | "position_gap" {
+):
+  | "auto"
+  | "min_bet"
+  | "target_percentile_scaled"
+  | "position_gap"
+  | "mirror_fill_exact" {
   if (
     value === "auto" ||
     value === "min_bet" ||
     value === "target_percentile_scaled" ||
-    value === "position_gap"
+    value === "position_gap" ||
+    value === "mirror_fill_exact"
   ) {
     return value;
   }

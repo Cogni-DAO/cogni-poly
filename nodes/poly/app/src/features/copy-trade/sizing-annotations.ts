@@ -56,9 +56,11 @@ export function annotationsForSizingPolicy(
   switch (policy.kind) {
     case "min_bet":
     case "position_gap":
+    case "mirror_fill_exact":
       // position_gap's decision surface is `target_shares × target_scale`,
-      // not a static cost-basis ladder. The renderer reads the actual desired
-      // and actual share counts off the timeline series instead.
+      // not a static cost-basis ladder. mirror_fill_exact has no decision
+      // surface — every fill is its own size. The renderer reads the actual
+      // desired and actual share counts off the timeline series instead.
       return [];
     case "target_percentile":
     case "target_percentile_scaled":
