@@ -946,6 +946,187 @@ async function fetchTargetRealizedPnl(
   };
 }
 
+// ─── bug.5029 — STATE METRICS: current open positions vs target ─────────────
+// The leaderboard's existing axes (placed, filled, intent$) are FLOW metrics
+// over a time window. They answer "did we mirror activity recently?" — not
+// "do we currently hold the same positions as target?" The latter is what
+// fidelity actually means and is what an algorithmic mirror is evaluated on.
+//
+// Source of truth for target's current positions: `poly_trader_current_positions`,
+// populated by wallet-analysis-service from Polymarket's Data API. Its
+// `cost_basis_usdc` column matches Polymarket UI's "Positions Value" within
+// mark-to-market noise. For paper tenants: cumulative net (BUY − SELL) cost
+// basis on `poly_copy_trade_fills`, filtered to fills in still-OPEN markets
+// (LEFT JOIN poly_market_outcomes; reject WHERE outcome IN winner/loser).
+// Without that filter, the sum double-counts capital that has already paid
+// out via market resolution — bit hard on the 2026-05-29 analysis (claimed
+// BUDGET_MODELER deployed 250% of target; was actually ~40%).
+export type PositionDeltaRow = {
+  billingAccountId: string;
+  label: string; // tenant role
+  envSlug: Tenant["envSlug"];
+  matched: number; // tokens where both tenant and target hold
+  missed: number; // tokens target holds, we don't
+  extras: number; // tokens we hold, target doesn't
+  our_open_cost_usdc: number;
+  total_delta_usdc: number;
+  pct_target_captured: number; // SUM(LEAST(ours,target)) / SUM(target)
+};
+
+export type PositionDeltaSummary = {
+  target_open_positions: number;
+  target_open_cost_usdc: number;
+  target_mark_value_usdc: number;
+  rows: PositionDeltaRow[];
+};
+
+async function fetchPositionDeltaSummary(
+  grafana: { url: string; saToken: string },
+  targetDsUid: string,
+  targetWallet: string,
+  tenants: Tenant[]
+): Promise<PositionDeltaSummary> {
+  if (tenants.length === 0) {
+    return {
+      target_open_positions: 0,
+      target_open_cost_usdc: 0,
+      target_mark_value_usdc: 0,
+      rows: [],
+    };
+  }
+  // Resolve target's wallet UUID once. poly_trader_current_positions is
+  // keyed by trader_wallet_id (UUID), not the wallet_address text.
+  const walletSql = `
+    SELECT id::text AS id FROM poly_trader_wallets
+    WHERE LOWER(wallet_address) = LOWER('${targetWallet}')
+    LIMIT 1
+  `;
+  const walletRows = await grafanaPgQuery(
+    grafana.url,
+    grafana.saToken,
+    targetDsUid,
+    walletSql
+  );
+  const targetWalletId =
+    typeof walletRows[0]?.id === "string" ? (walletRows[0]!.id as string) : null;
+  if (targetWalletId === null) {
+    return {
+      target_open_positions: 0,
+      target_open_cost_usdc: 0,
+      target_mark_value_usdc: 0,
+      rows: [],
+    };
+  }
+  const targetSummarySql = `
+    SELECT
+      COUNT(*)::int AS open_positions,
+      COALESCE(SUM(cost_basis_usdc), 0)::float8 AS open_cost_basis,
+      COALESCE(SUM(current_value_usdc), 0)::float8 AS open_mark_value
+    FROM poly_trader_current_positions
+    WHERE trader_wallet_id = '${targetWalletId}'
+      AND active = true AND shares > 0
+  `;
+  const targetRows = await grafanaPgQuery(
+    grafana.url,
+    grafana.saToken,
+    targetDsUid,
+    targetSummarySql
+  );
+  const target = targetRows[0] ?? {};
+  const tenantValuesSql = tenants
+    .map(
+      (t) =>
+        `('${t.billingAccountId.replace(/'/g, "''")}'::text, '${t.role.replace(/'/g, "''")}'::text, '${t.envSlug}'::text)`
+    )
+    .join(",\n  ");
+  const deltaSql = `
+    WITH tenants(billing_account_id, label, env_slug) AS (VALUES
+      ${tenantValuesSql}
+    ),
+    target_open AS (
+      SELECT token_id, cost_basis_usdc::numeric AS target_cost
+      FROM poly_trader_current_positions
+      WHERE trader_wallet_id = '${targetWalletId}'
+        AND active = true AND shares > 0
+    ),
+    our_open AS (
+      SELECT
+        cf.billing_account_id,
+        (cf.attributes->>'token_id') AS token_id,
+        SUM(CASE WHEN cf.attributes->>'side'='BUY'
+                 THEN cf.shares*cf.price
+                 ELSE -(cf.shares*cf.price) END)::numeric AS our_cost
+      FROM poly_copy_trade_fills cf
+      LEFT JOIN poly_market_outcomes o
+        ON LOWER(o.condition_id) = LOWER(cf.attributes->>'condition_id')
+       AND o.token_id = cf.attributes->>'token_id'
+      WHERE cf.billing_account_id IN (SELECT billing_account_id FROM tenants)
+        AND cf.status IN ('filled','partial')
+        AND cf.price IS NOT NULL AND cf.shares IS NOT NULL
+        AND (o.outcome IS NULL OR o.outcome NOT IN ('winner','loser'))
+      GROUP BY 1, 2
+      HAVING SUM(CASE WHEN cf.attributes->>'side'='BUY'
+                      THEN cf.shares*cf.price
+                      ELSE -(cf.shares*cf.price) END) > 0
+    ),
+    pairs_a AS (
+      SELECT t.billing_account_id, t.label, t.env_slug, tp.token_id, tp.target_cost
+      FROM tenants t CROSS JOIN target_open tp
+    ),
+    pairs_b AS (
+      SELECT t.billing_account_id, t.label, t.env_slug, op.token_id, 0::numeric AS target_cost
+      FROM tenants t
+      JOIN our_open op ON op.billing_account_id = t.billing_account_id
+      WHERE NOT EXISTS (SELECT 1 FROM target_open tp WHERE tp.token_id = op.token_id)
+    ),
+    universe AS (SELECT * FROM pairs_a UNION ALL SELECT * FROM pairs_b),
+    joined AS (
+      SELECT u.billing_account_id, u.label, u.env_slug, u.token_id,
+        COALESCE(op.our_cost, 0) AS our_cost, u.target_cost
+      FROM universe u
+      LEFT JOIN our_open op
+        ON op.billing_account_id = u.billing_account_id
+       AND op.token_id = u.token_id
+    )
+    SELECT
+      billing_account_id, label, env_slug,
+      COUNT(*) FILTER (WHERE our_cost > 0 AND target_cost > 0)::int AS matched,
+      COUNT(*) FILTER (WHERE target_cost > 0 AND our_cost = 0)::int AS missed,
+      COUNT(*) FILTER (WHERE our_cost > 0 AND target_cost = 0)::int AS extras,
+      COALESCE(SUM(our_cost), 0)::float8 AS our_open_cost_usdc,
+      COALESCE(SUM(ABS(our_cost - target_cost)), 0)::float8 AS total_delta_usdc,
+      COALESCE(
+        SUM(LEAST(our_cost, target_cost)) / NULLIF(SUM(target_cost), 0) * 100,
+        0
+      )::float8 AS pct_target_captured
+    FROM joined
+    GROUP BY billing_account_id, label, env_slug
+    ORDER BY pct_target_captured DESC, total_delta_usdc ASC
+  `;
+  const deltaRows = await grafanaPgQuery(
+    grafana.url,
+    grafana.saToken,
+    targetDsUid,
+    deltaSql
+  );
+  return {
+    target_open_positions: Number(target.open_positions) || 0,
+    target_open_cost_usdc: Number(target.open_cost_basis) || 0,
+    target_mark_value_usdc: Number(target.open_mark_value) || 0,
+    rows: deltaRows.map((r) => ({
+      billingAccountId: String(r.billing_account_id ?? ""),
+      label: String(r.label ?? ""),
+      envSlug: String(r.env_slug ?? "") as Tenant["envSlug"],
+      matched: Number(r.matched) || 0,
+      missed: Number(r.missed) || 0,
+      extras: Number(r.extras) || 0,
+      our_open_cost_usdc: Number(r.our_open_cost_usdc) || 0,
+      total_delta_usdc: Number(r.total_delta_usdc) || 0,
+      pct_target_captured: Number(r.pct_target_captured) || 0,
+    })),
+  };
+}
+
 // Per-env freshness — max(decided_at) on poly_copy_trade_decisions, env-wide.
 // Promoted to first-class metric after the 2026-05-26 incident where the
 // preview mirror coordinator silently stopped firing for 48 hours but
@@ -1530,6 +1711,7 @@ function renderReportHtml(args: {
   envGapWarnings: EnvGapWarning[];
   sampleFloorWarning: Array<{ envKeyPrefix: string; resolved_markets: number }>;
   envFreshness: EnvFreshness[];
+  positionDelta: PositionDeltaSummary;
 }): string {
   const {
     capturedAt,
@@ -1548,6 +1730,7 @@ function renderReportHtml(args: {
     envGapWarnings,
     sampleFloorWarning,
     envFreshness,
+    positionDelta,
   } = args;
 
   const since = new Date(window.since);
@@ -2087,7 +2270,30 @@ ${completenessBanner}
   </div>
 </details>
 
-<details open>
+${(() => {
+  const fmtUsd = (n: number): string =>
+    "$" + Math.round(n).toLocaleString();
+  const targetOpenCost = positionDelta.target_open_cost_usdc;
+  const targetRowHtml = `<tr class="target"><td class="role">🎯 swisstony · target (live)</td><td class="num">${positionDelta.target_open_positions.toLocaleString()}</td><td class="num">—</td><td class="num">—</td><td class="num"><strong>${fmtUsd(targetOpenCost)}</strong></td><td class="num">—</td><td class="num"><strong>100%</strong></td></tr>`;
+  const tenantRowsHtml = positionDelta.rows
+    .map((r) => {
+      const pct = r.pct_target_captured;
+      const pctCls =
+        pct >= 50 ? "fill-rate-ok" : pct >= 10 ? "fill-rate-amber" : "fill-rate-red";
+      return `<tr><td class="role">${escapeHtml(r.label)} · ${escapeHtml(r.envSlug)}</td><td class="num">${r.matched.toLocaleString()}</td><td class="num">${r.missed.toLocaleString()}</td><td class="num">${r.extras.toLocaleString()}</td><td class="num">${fmtUsd(r.our_open_cost_usdc)}</td><td class="num">${fmtUsd(r.total_delta_usdc)}</td><td class="num"><span class="${pctCls}">${pct.toFixed(2)}%</span></td></tr>`;
+    })
+    .join("");
+  return `<details open>
+  <summary>🪞 Position-state fidelity — current open positions vs target (bug.5029)</summary>
+  <div class="details-body">
+    <p class="muted">Apples-to-apples snapshot of CURRENT OPEN positions (not windowed flow). Target sourced from <code>poly_trader_current_positions</code> (Polymarket Data API → wallet-analysis-service; matches the UI's "Positions Value"). Paper tenants computed as cumulative net (BUY − SELL) <strong>filtered to fills in still-OPEN markets</strong> (LEFT JOIN <code>poly_market_outcomes</code>; reject WHERE outcome IN winner/loser) so resolved positions that already paid out are NOT counted as deployed capital. The flow leaderboard below (placed/filled/intent$) is a different question.</p>
+    <table class="ab algo"><thead><tr><th>tenant</th><th class="num" title="tokens both we and target currently hold">matched</th><th class="num" title="tokens target holds, we do not">missed</th><th class="num" title="tokens we hold, target does not currently hold">extras</th><th class="num">OUR open cost basis</th><th class="num" title="sum of |ours − target| across all tokens">total Δ</th><th class="num" title="SUM(LEAST(ours,target)) / SUM(target) — fraction of target's open dollar weight we capture">% target captured</th></tr></thead><tbody>${targetRowHtml}${tenantRowsHtml}</tbody></table>
+    <p class="muted" style="margin-top:10px">Target mark value: <code>${fmtUsd(positionDelta.target_mark_value_usdc)}</code> (matches Polymarket UI's "Positions Value" within mark-to-market noise vs cost basis ${fmtUsd(targetOpenCost)}). Sort: % captured descending. <strong>Coverage (matched / target open) is the bottleneck</strong>, not per-position sizing — paper tenants enter a fraction of target's markets and miss the rest.</p>
+  </div>
+</details>
+
+`;
+})()}<details open>
   <summary>📊 Q2 detail — full ranking (swisstony 🎯 → paper variants → prod ref)</summary>
   <div class="details-body">
     <p class="muted">Sorted by aggregate distance to target ascending. <code>realized $ (resolved)</code> and <code>realized %</code> exclude unrealized mark-to-market on open positions and BUY/SELL net-out — they will <strong>not</strong> match Polymarket's 1D P/L card on the target wallet. Apples-to-apples across paper variants, not apples-to-apples vs the UI. <code>gap to 🎯</code> = mean of fractional gaps across realized %, placement rate, intent ratio, markets-touched ratio. 🟡 = resolved markets &lt; 50.</p>
@@ -2773,6 +2979,32 @@ async function main(): Promise<void> {
       resolved_markets: m.pnl.resolved_markets,
     }));
 
+  // bug.5029 — current-open-position fidelity panel. State, not flow.
+  let positionDelta: PositionDeltaSummary = {
+    target_open_positions: 0,
+    target_open_cost_usdc: 0,
+    target_mark_value_usdc: 0,
+    rows: [],
+  };
+  try {
+    positionDelta = await fetchPositionDeltaSummary(
+      grafana,
+      targetDsUid,
+      args.targetWallet,
+      tenants
+    );
+    logEvent("evaluator.position_delta.complete", {
+      target_open_positions: positionDelta.target_open_positions,
+      target_open_cost_usdc: positionDelta.target_open_cost_usdc,
+      target_mark_value_usdc: positionDelta.target_mark_value_usdc,
+      rows: positionDelta.rows.length,
+    });
+  } catch (e) {
+    console.error(
+      `position_delta_query_failed: ${e instanceof Error ? e.message : String(e)}`
+    );
+  }
+
   const html = renderReportHtml({
     capturedAt,
     targetWallet: args.targetWallet,
@@ -2791,6 +3023,7 @@ async function main(): Promise<void> {
     envGapWarnings,
     sampleFloorWarning,
     envFreshness,
+    positionDelta,
   });
   writeFileSync(join(outDir, "report.html"), html);
   logEvent("evaluator.report.written", { path: join(outDir, "report.html") });
@@ -2827,6 +3060,7 @@ async function main(): Promise<void> {
         env_gap_warnings: envGapWarnings,
         sample_floor_warning: sampleFloorWarning,
         env_freshness: envFreshness,
+        position_delta: positionDelta,
       },
       null,
       2
