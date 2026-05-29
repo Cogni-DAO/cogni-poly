@@ -328,6 +328,7 @@ export type TargetSeries = {
   market_set: string[]; // bare conditionIds the target traded in window
   pnl: PnlAgg;
   intent_usdc: number; // total filled USDC volume across all markets (sum of size_usdc)
+  fills_count: number; // count of fill rows for the target in poly_trader_fills
   resolved_via_ds_uid: string | null;
 };
 
@@ -879,9 +880,11 @@ async function fetchTargetIntentUsdc(
   targetDsUid: string,
   targetWallet: string,
   window: { since: string; until: string }
-): Promise<number> {
+): Promise<{ intent_usdc: number; fills_count: number }> {
   const sql = `
-    SELECT COALESCE(SUM(f.size_usdc), 0)::float8 AS total_usdc
+    SELECT
+      COALESCE(SUM(f.size_usdc), 0)::float8 AS total_usdc,
+      COUNT(*)::int AS fills_count
     FROM poly_trader_fills f
     JOIN poly_trader_wallets w ON w.id = f.trader_wallet_id
     WHERE LOWER(w.wallet_address) = LOWER('${targetWallet}')
@@ -889,7 +892,10 @@ async function fetchTargetIntentUsdc(
       AND f.observed_at <  '${window.until}'::timestamptz
   `;
   const rows = await grafanaPgQuery(grafana.url, grafana.saToken, targetDsUid, sql);
-  return Number(rows[0]?.total_usdc) || 0;
+  return {
+    intent_usdc: Number(rows[0]?.total_usdc) || 0,
+    fills_count: Number(rows[0]?.fills_count) || 0,
+  };
 }
 
 // Target wallet's realized PnL via outcome join — mirrors
@@ -1757,7 +1763,14 @@ function renderReportHtml(args: {
       .map((r) => `<code title="${escapeHtml(r.reason)}">${escapeHtml(r.reason.slice(0, 22))}=${r.count}</code>`)
       .join(" ");
   };
-  const targetRow = `<tr class="target"><td class="role">🎯 swisstony · target</td><td class="policy"><em>real on-chain</em></td><td class="num"><em>—</em></td><td class="num"><em>—</em></td><td class="num"><em>—</em></td><td class="cancel-reasons"><em>n/a (real CLOB)</em></td><td class="num pos"><strong>${fmtPnl(target.pnl.realized_pnl_usdc)}</strong></td><td class="num">${target.pnl.resolved_markets}</td><td class="num">${target.pnl.markets_won}/${target.pnl.markets_lost}</td><td class="num">${fmtPct(targetPctOverallEarly, 2)}</td><td class="num">—</td><td class="num">$${target.intent_usdc.toLocaleString()}</td><td class="num">${target.market_set.length}</td></tr>`;
+  // Target row — populated from poly_trader_fills (the in-DB record of his
+  // real Polymarket fills, ingested by wallet-watch). The "placed" /
+  // "filled" / "fill rate" columns are paper-sidecar concepts that don't
+  // apply to a real trader: every row in poly_trader_fills IS a fill that
+  // landed, so placed == filled == fills_count and fill rate is 100% by
+  // construction. We surface these so the row isn't dashes — the human
+  // wants the data we have, not a "n/a" sign.
+  const targetRow = `<tr class="target"><td class="role">🎯 swisstony · target</td><td class="policy"><em>real CLOB</em></td><td class="num">${target.fills_count.toLocaleString()}</td><td class="num">${target.fills_count.toLocaleString()}</td><td class="num">100%</td><td class="cancel-reasons"><em>n/a (real CLOB)</em></td><td class="num pos"><strong>${fmtPnl(target.pnl.realized_pnl_usdc)}</strong></td><td class="num">${target.pnl.resolved_markets}</td><td class="num">${target.pnl.markets_won}/${target.pnl.markets_lost}</td><td class="num">${fmtPct(targetPctOverallEarly, 2)}</td><td class="num">—</td><td class="num">$${target.intent_usdc.toLocaleString()}</td><td class="num">${target.market_set.length}</td></tr>`;
   const paperTableRows = paperRowsSorted
     .map((row, idx) => {
       const m = row.m;
@@ -2420,6 +2433,7 @@ async function main(): Promise<void> {
   let targetBuckets: Array<{ ts: string; value: number }> = [];
   let targetMarketSet: string[] = [];
   let targetIntentUsdc = 0;
+  let targetFillsCount = 0;
   let targetPnl: PnlAgg = {
     realized_pnl_usdc: 0,
     resolved_markets: 0,
@@ -2451,10 +2465,14 @@ async function main(): Promise<void> {
     );
   }
   try {
-    targetIntentUsdc = await fetchTargetIntentUsdc(grafana, targetDsUid, args.targetWallet, {
-      since: args.since,
-      until: args.until,
-    });
+    const intent = await fetchTargetIntentUsdc(
+      grafana,
+      targetDsUid,
+      args.targetWallet,
+      { since: args.since, until: args.until }
+    );
+    targetIntentUsdc = intent.intent_usdc;
+    targetFillsCount = intent.fills_count;
   } catch (e) {
     console.error(
       `target_intent_usdc_failed: ${e instanceof Error ? e.message : String(e)}`
@@ -2485,6 +2503,7 @@ async function main(): Promise<void> {
     market_set: targetMarketSet,
     pnl: targetPnl,
     intent_usdc: targetIntentUsdc,
+    fills_count: targetFillsCount,
     resolved_via_ds_uid: targetDsUid,
   };
   logEvent("evaluator.target.complete", {
@@ -2495,6 +2514,7 @@ async function main(): Promise<void> {
       target.cumulative_usdc[target.cumulative_usdc.length - 1]?.value ?? 0,
     target_markets: targetMarketSet.length,
     target_intent_usdc: targetIntentUsdc,
+    target_fills_count: targetFillsCount,
     target_realized_pnl_usdc: targetPnl.realized_pnl_usdc,
     target_resolved_markets: targetPnl.resolved_markets,
   });
