@@ -264,12 +264,16 @@ export function buildMirrorTargetConfig(params: {
         }
       : {}),
   });
-  // MIRROR_FILL_EXACT_IS_VERBATIM: this policy strips every conviction gate
-  // by construction. Don't set `min_target_side_fraction` / `vwap_tolerance`
-  // / `position_followup` — they would re-introduce the filtering this
-  // policy exists to evaluate without. (Optional fields are fail-open when
-  // unset; see `planMirrorFromFill`'s applyVwapGate + analyzeTargetDominance.)
-  const isVerbatim = sizing.kind === "mirror_fill_exact";
+  // SELF_CONTAINED_SIZING_POLICIES: `mirror_fill_exact` and `position_gap`
+  // each encode their own conviction (verbatim per-fill mirror, range-relative
+  // gap math). Attaching the bug.5048 per-fill gates — `min_target_side_fraction`,
+  // `vwap_tolerance` — or the `position_followup` dispatcher would re-introduce
+  // filtering these policies exist to evaluate without (and worse, fire as
+  // spurious skips: bug.5027). Optional fields are fail-open when unset; see
+  // `planMirrorFromFill`'s applyVwapGate + analyzeTargetDominance + the
+  // `skipFollowupDispatch` short-circuit in `decideMirrorBranch`.
+  const isSelfContainedPolicy =
+    sizing.kind === "mirror_fill_exact" || sizing.kind === "position_gap";
   return {
     target_id: targetIdFromWallet(params.targetWallet),
     target_wallet: params.targetWallet,
@@ -281,14 +285,14 @@ export function buildMirrorTargetConfig(params: {
     placement: { kind: "mirror_limit" },
     // bug.5048 — gate new_entry + layer routing against target's per-side
     // cost asymmetry, and refuse to place above target's per-token VWAP.
-    // Skipped under verbatim mirror.
-    ...(isVerbatim
+    // Skipped under self-contained policies.
+    ...(isSelfContainedPolicy
       ? {}
       : {
           min_target_side_fraction: DEFAULT_MIN_TARGET_SIDE_FRACTION,
           vwap_tolerance: DEFAULT_VWAP_TOLERANCE,
         }),
-    ...(!isVerbatim &&
+    ...(!isSelfContainedPolicy &&
     snapshotForTargetWallet(params.targetWallet) !== undefined
       ? { position_followup: DEFAULT_POSITION_FOLLOWUP_POLICY }
       : {}),

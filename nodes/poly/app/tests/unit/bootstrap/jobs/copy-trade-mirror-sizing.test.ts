@@ -143,6 +143,14 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
       target_range_max_usdc: 10_000,
       mirror_max_alloc_per_condition_usdc: 20,
     });
+    // bug.5027 — position_gap is self-contained on conviction (gap math
+    // replaces per-fill gates). Bootstrap MUST NOT attach the bug.5048 gates
+    // or the `position_followup` dispatcher; doing so produced spurious
+    // `vwap_floor_breach` / `target_dominant_other_side` skips on live preview
+    // tenants (GAP, SWISSTONY_BUDGET_MODELER).
+    expect(config.min_target_side_fraction).toBeUndefined();
+    expect(config.vwap_tolerance).toBeUndefined();
+    expect(config.position_followup).toBeUndefined();
   });
 
   it("position_gap missing target_range_max_usdc throws (CHECK mirror, no fallback)", () => {
