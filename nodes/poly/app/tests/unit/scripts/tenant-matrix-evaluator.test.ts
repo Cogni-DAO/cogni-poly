@@ -14,10 +14,13 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregateDecisions,
+  classifyFreshness,
   compareTenants,
   cumulativeFromBuckets,
   discoverTenants,
+  FRESHNESS_TOLERANCE_SEC,
   isLowSample,
+  MIRROR_LAG_TOLERANCE_SEC,
   marketCoverage,
   placementRate,
   type TenantMetrics,
@@ -283,5 +286,82 @@ describe("compareTenants", () => {
     const rateDelta = ab.find((d) => d.axis === "placement_rate");
     expect(rateDelta?.delta).toBeNull();
     expect(rateDelta?.delta_pct).toBeNull();
+  });
+});
+
+// bug.5028 — fresh vs target_quiet vs mirror_down classifier.
+describe("classifyFreshness", () => {
+  const UNTIL = "2026-05-29T05:00:00Z";
+
+  it("fresh: last decision within tolerance", () => {
+    const out = classifyFreshness({
+      last_decision_at: "2026-05-29T04:55:00Z", // 5 min ago
+      last_target_fill_at: "2026-05-29T04:55:00Z",
+      window_until_iso: UNTIL,
+    });
+    expect(out.freshness_class).toBe("fresh");
+    expect(out.staleness_seconds).toBe(300);
+  });
+
+  it("target_quiet: decisions stale, target also stale (matched timestamps — the 2026-05-29 swisstony case)", () => {
+    const out = classifyFreshness({
+      last_decision_at: "2026-05-29T02:37:10Z",
+      last_target_fill_at: "2026-05-29T02:37:10Z",
+      window_until_iso: UNTIL,
+    });
+    expect(out.freshness_class).toBe("target_quiet");
+    expect(out.staleness_seconds).toBeGreaterThan(FRESHNESS_TOLERANCE_SEC);
+  });
+
+  it("target_quiet: decisions stale, target slightly fresher but within mirror SLA", () => {
+    // target_fill 4 min after our last decision (< 5 min SLA) → still target_quiet
+    const out = classifyFreshness({
+      last_decision_at: "2026-05-29T02:00:00Z",
+      last_target_fill_at: "2026-05-29T02:04:00Z",
+      window_until_iso: UNTIL,
+    });
+    expect(out.freshness_class).toBe("target_quiet");
+  });
+
+  it("mirror_down: target fired AFTER our last decision by > SLA", () => {
+    // target last fill 10 min after our last decision → coordinator is missing fills
+    const out = classifyFreshness({
+      last_decision_at: "2026-05-29T02:00:00Z",
+      last_target_fill_at: "2026-05-29T02:10:00Z",
+      window_until_iso: UNTIL,
+    });
+    expect(out.freshness_class).toBe("mirror_down");
+  });
+
+  it("mirror_down: target has traded but we've never written a decision", () => {
+    const out = classifyFreshness({
+      last_decision_at: null,
+      last_target_fill_at: "2026-05-29T04:00:00Z",
+      window_until_iso: UNTIL,
+    });
+    expect(out.freshness_class).toBe("mirror_down");
+  });
+
+  it("target_quiet: no target activity ever, no decisions either", () => {
+    const out = classifyFreshness({
+      last_decision_at: "2026-05-12T01:45:47Z", // prod — old decisions
+      last_target_fill_at: null, // no target fills observed in this env
+      window_until_iso: UNTIL,
+    });
+    expect(out.freshness_class).toBe("target_quiet");
+  });
+
+  it("no_data: empty env (never any decisions or target fills)", () => {
+    const out = classifyFreshness({
+      last_decision_at: null,
+      last_target_fill_at: null,
+      window_until_iso: UNTIL,
+    });
+    expect(out.freshness_class).toBe("no_data");
+    expect(out.staleness_seconds).toBeNull();
+  });
+
+  it("SLA constant is 5 min — covers 30s tick + 60s poll + retry headroom", () => {
+    expect(MIRROR_LAG_TOLERANCE_SEC).toBe(300);
   });
 });
