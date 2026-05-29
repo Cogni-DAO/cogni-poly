@@ -23,7 +23,7 @@ Stand up and maintain a deliberate set of paper-trading tenants across `candidat
 These two terms are persistently conflated in older code/env-var names. The matrix tool aliases display labels to enforce the correct usage:
 
 - **Trust twin** — a paper tenant whose `(sizing_policy_kind, mirror_max_usdc_per_trade, target_range_max_usdc, mirror_max_alloc_per_condition_usdc, mirror_filter_percentile)` is a 1-to-1 match with a prod LIVE row. Single purpose: hold the algorithm constant and test whether the **paper sidecar produces the same fills as the real CLOB** when fed identical decisions. Currently **none exists** because prod has 0 active target rows (see Production table below). Provision one only when prod resumes trading.
-- **Budget modeler** — a paper tenant whose sizing knobs are tuned to model the **target wallet's book scale** under a chosen policy (e.g. `position_gap` with `target_range_max_usdc` matching swisstony's typical position size). Tells you whether the policy is correctly sized for that wallet; does NOT test paper-vs-live fidelity. The env block `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN_*` is historically a budget modeler — its env-var name is a misnomer that propagated. Tool aliases the display role to `SWISSTONY_BUDGET_MODELER`; env-block rename is a follow-up.
+- **Budget modeler** — a paper tenant whose sizing knobs are tuned to model the **target wallet's book scale** under a chosen policy (e.g. `position_gap` with `target_range_max_usdc` matching swisstony's typical position size). Tells you whether the policy is correctly sized for that wallet; does NOT test paper-vs-live fidelity. The env block is `POLY_PREVIEW_TENANT_SWISSTONY_BUDGET_MODELER_*` (renamed 2026-05-29 from the misnamed `_SWISSTONY_TRUST_TWIN_*`).
 - **Policy variant** — every other paper tenant. Different policy or knobs vs the control; useful for ranking ("which policy comes closest to the target's behavior?") but never a fidelity test.
 
 ## How to use this charter
@@ -81,12 +81,12 @@ Matrix below is built from `poly_copy_trade_targets` joined to a `poly_copy_trad
 
 **Preview disabled rows (force-disabled 2026-05-27 17:59 UTC by migration 0057):**
 
-| TENANT (short) | OLD POLICY                          | OLD KNOBS   | OWNER ENV-KEY                                | REVIVAL PATH                                                                               |
-| -------------- | ----------------------------------- | ----------- | -------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `0e16cf1a`     | `position_gap` (no task.5014 knobs) | p80 / max15 | `POLY_PREVIEW_TENANT_GAP_*`                  | POST new row with `target_range_max_usdc` + `mirror_max_alloc_per_condition_usdc` set.     |
-| `b0ca1bce`     | `position_gap` (no task.5014 knobs) | p75 / max5  | `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN_*` | Same. **This is the budget modeler**, not a trust twin — see definitions.                  |
-| `376c594c`     | `position_gap` (no task.5014 knobs) | p80 / max15 | **orphan (no env block)**                    | Same, but no agent API key available from `.env.cogni` — needs env-block wire-up first.    |
-| `13c81ec7`     | `position_gap` (no task.5014 knobs) | p75 / max5  | none                                         | Ancient (disabled 2026-05-19), pre-task.5014. Do not revive — replaced by `b0ca1bce` slot. |
+| TENANT (short) | OLD POLICY                          | OLD KNOBS   | OWNER ENV-KEY                                    | REVIVAL PATH                                                                               |
+| -------------- | ----------------------------------- | ----------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `0e16cf1a`     | `position_gap` (no task.5014 knobs) | p80 / max15 | `POLY_PREVIEW_TENANT_GAP_*`                      | POST new row with `target_range_max_usdc` + `mirror_max_alloc_per_condition_usdc` set.     |
+| `b0ca1bce`     | `position_gap` (no task.5014 knobs) | p75 / max5  | `POLY_PREVIEW_TENANT_SWISSTONY_BUDGET_MODELER_*` | Same. **This is the budget modeler**, not a trust twin — see definitions.                  |
+| `376c594c`     | `position_gap` (no task.5014 knobs) | p80 / max15 | **orphan (no env block)**                        | Same, but no agent API key available from `.env.cogni` — needs env-block wire-up first.    |
+| `13c81ec7`     | `position_gap` (no task.5014 knobs) | p75 / max5  | none                                             | Ancient (disabled 2026-05-19), pre-task.5014. Do not revive — replaced by `b0ca1bce` slot. |
 
 The `disabled_at IS NULL` WHERE clause on the PATCH endpoint means revival is via **POST a fresh row** (preserves attribution history). Per the task.5014 server validator, position_gap POSTs require both new knobs or 400.
 
@@ -94,11 +94,11 @@ The `disabled_at IS NULL` WHERE clause on the PATCH endpoint means revival is vi
 
 Three preview rows on swisstony, identical `mirror_max_alloc_per_condition_usdc=15` cap so the variable is the saturation range. Diff across rows = sensitivity to the new task.5014 range knob.
 
-| ROLE                        | TENANT (POST-new)                                   | POLICY         | KNOBS                                                             | PURPOSE                                                                                                                |
-| --------------------------- | --------------------------------------------------- | -------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `swiss-tps-control`         | reuse `eae447b1`                                    | `auto` (= tps) | p80 / max15                                                       | baseline — what the surviving preview tenant runs today.                                                               |
-| `swiss-gap-tight`           | new on `POLY_PREVIEW_TENANT_GAP_*`                  | `position_gap` | `target_range_max_usdc=10000`, `max_alloc_per_condition_usdc=15`  | tight saturation — relative=1.0 once swisstony's position in a market crosses $10k.                                    |
-| `swiss-budget-modeler-500k` | new on `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN_*` | `position_gap` | `target_range_max_usdc=500000`, `max_alloc_per_condition_usdc=15` | loose saturation — matches swisstony's book-scale (positions can run into hundreds of $k); the budget-modeler concept. |
+| ROLE                        | TENANT (POST-new)                                       | POLICY         | KNOBS                                                             | PURPOSE                                                                                                                |
+| --------------------------- | ------------------------------------------------------- | -------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `swiss-tps-control`         | reuse `eae447b1`                                        | `auto` (= tps) | p80 / max15                                                       | baseline — what the surviving preview tenant runs today.                                                               |
+| `swiss-gap-tight`           | new on `POLY_PREVIEW_TENANT_GAP_*`                      | `position_gap` | `target_range_max_usdc=10000`, `max_alloc_per_condition_usdc=15`  | tight saturation — relative=1.0 once swisstony's position in a market crosses $10k.                                    |
+| `swiss-budget-modeler-500k` | new on `POLY_PREVIEW_TENANT_SWISSTONY_BUDGET_MODELER_*` | `position_gap` | `target_range_max_usdc=500000`, `max_alloc_per_condition_usdc=15` | loose saturation — matches swisstony's book-scale (positions can run into hundreds of $k); the budget-modeler concept. |
 
 `376c594c` slot omitted from the new matrix unless someone wires an env block for it.
 
@@ -161,8 +161,10 @@ A tenant is a **consolidation candidate** when ALL of:
 
 ## Open items
 
-- **2026-05-28 (open):** Wire the proposed preview matrix (`swiss-gap-tight` + `swiss-budget-modeler-500k`) via POST + the task.5014 knobs. Pending user go-ahead on values.
-- **2026-05-28 (open):** Rename env block `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN_*` → `POLY_PREVIEW_TENANT_SWISSTONY_BUDGET_MODELER_*` in `.env.cogni`. Touches: matrix tool's alias map, this charter, the handoff doc. Independent of the POSTs above (the new row inherits whatever billing_account_id the env block carries, regardless of the var name).
+- **2026-05-28 (done 2026-05-29):** Wired `swiss-gap-tight` (5k/5k) and `swiss-budget-modeler-500k` (500k/500k, true 1:1 mirror) on preview via POST + PATCH. Both active.
+- **2026-05-28 (done 2026-05-29):** Env block renamed `POLY_PREVIEW_TENANT_SWISSTONY_TRUST_TWIN_*` → `POLY_PREVIEW_TENANT_SWISSTONY_BUDGET_MODELER_*` in `.env.cogni`. Tool's alias map removed (dead code purged). Matrix tool now discovers the row as `SWISSTONY_BUDGET_MODELER` directly.
+- **2026-05-29 (open):** Wire a new preview tenant for `mirror_fill_exact` (task.5016 / PR #144, merged 2026-05-29). Verbatim per-fill mirror — strips all algorithmic layers. Register a new agent `POLY_PREVIEW_TENANT_EXACT_*` once #144 deploys to preview, POST a swisstony target with `sizing_policy_kind: mirror_fill_exact`. Sibling to BUDGET_MODELER in the matrix.
+- **2026-05-29 (done):** bug.5028 — env_freshness now classifies `target_quiet` vs `mirror_down` vs `fresh` vs `no_data` by comparing decisions' last write against target fills' last write per env. Stops mis-labeling target-quiet periods as outages.
 - **2026-05-28 (open):** Sidecar instrumentation PR per `preview-data-health-handoff-2026-05-28.md` §2 — `sqlite_pending_count` in heartbeat, `_maker_fill_last_scan` cursor lag log, unconditional cursor bound. Three small additions to `nodes/poly/sidecars/paper-trader/server.py` + `vendor/pm_trader/.../engine.py`. Defensive obs for the next cliff; not a blocker.
 - **2026-05-17 → 2026-05-28 (still open):** Consolidate the 3 duplicate swisstony p75/$5 candidate-a rows. Hold pending the position_gap experiment producing useful diff.
 - **2026-05-17:** Draft `.env.cogni.example`. Stability gate #2.

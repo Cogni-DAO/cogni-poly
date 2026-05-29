@@ -947,42 +947,122 @@ async function fetchTargetRealizedPnl(
 // mid-chart and we initially read it as a visualization bug; it was actually
 // a dead-env condition the report had no way to surface. This check makes
 // it loud.
+// bug.5028 — split "stale env" into target_quiet vs mirror_down. The original
+// is_stale boolean conflated "coordinator stopped writing" with "target stopped
+// trading"; on 2026-05-29 we mis-labeled a 3h target quiet period as a mirror
+// outage. Comparing decisions' MAX(decided_at) against target_fills'
+// MAX(observed_at) per env tells us which is which.
+export type FreshnessClass =
+  | "fresh" // decisions up-to-date
+  | "target_quiet" // decisions stale because target stopped firing fills — expected
+  | "mirror_down" // target firing fills but our coordinator isn't writing decisions — bug
+  | "no_data"; // never any data in this env (e.g. unprovisioned)
+
 export type EnvFreshness = {
   dsUid: string;
   envSlug: Tenant["envSlug"];
-  last_decision_at: string | null; // null = no rows ever in this env
-  staleness_seconds: number | null; // seconds between window.until and last_decision_at
-  is_stale: boolean; // staleness > FRESHNESS_TOLERANCE_SEC
+  last_decision_at: string | null; // null = no decisions ever in this env
+  last_target_fill_at: string | null; // null = target has never traded in this env
+  staleness_seconds: number | null; // window.until − last_decision_at
+  freshness_class: FreshnessClass;
 };
 
-// Anything more than 1 hour behind the window's `until` is "stale". The
+// Anything more than 1 hour behind the window's `until` is decision-stale. The
 // mirror coordinator on candidate-a + preview fires every ~30s normally;
 // 1h gives ample headroom for transient deploys / restart blips.
 export const FRESHNESS_TOLERANCE_SEC = 3600;
+
+// SLA for the time between a target fill landing in `poly_trader_fills` and
+// the mirror coordinator emitting a decision for it. 5 minutes covers the
+// 30s coordinator tick + 60s wallet-watch poll + retry headroom. If target
+// fills are fresher than our latest decision by MORE than this, the
+// coordinator is failing to mirror — that's mirror_down, not target_quiet.
+export const MIRROR_LAG_TOLERANCE_SEC = 300;
+
+// Pure classifier — no IO. Extracted so it can be unit-tested without a DB.
+export function classifyFreshness(input: {
+  last_decision_at: string | null;
+  last_target_fill_at: string | null;
+  window_until_iso: string;
+}): { freshness_class: FreshnessClass; staleness_seconds: number | null } {
+  const { last_decision_at, last_target_fill_at, window_until_iso } = input;
+  if (last_decision_at === null && last_target_fill_at === null) {
+    return { freshness_class: "no_data", staleness_seconds: null };
+  }
+  const untilMs = new Date(window_until_iso).getTime();
+  const decisionStaleness =
+    last_decision_at === null
+      ? null
+      : (untilMs - new Date(last_decision_at).getTime()) / 1000;
+  if (
+    decisionStaleness !== null &&
+    decisionStaleness <= FRESHNESS_TOLERANCE_SEC
+  ) {
+    return { freshness_class: "fresh", staleness_seconds: decisionStaleness };
+  }
+  // Decisions are stale (or absent). Distinguish target_quiet vs mirror_down.
+  if (last_target_fill_at === null) {
+    // No target activity to mirror against — target_quiet by definition.
+    return {
+      freshness_class: "target_quiet",
+      staleness_seconds: decisionStaleness,
+    };
+  }
+  if (last_decision_at === null) {
+    // Target has traded, we've written nothing ever — mirror is silent.
+    return {
+      freshness_class: "mirror_down",
+      staleness_seconds: decisionStaleness,
+    };
+  }
+  const targetVsDecisionGapSec =
+    (new Date(last_target_fill_at).getTime() -
+      new Date(last_decision_at).getTime()) /
+    1000;
+  if (targetVsDecisionGapSec > MIRROR_LAG_TOLERANCE_SEC) {
+    return {
+      freshness_class: "mirror_down",
+      staleness_seconds: decisionStaleness,
+    };
+  }
+  return {
+    freshness_class: "target_quiet",
+    staleness_seconds: decisionStaleness,
+  };
+}
 
 async function fetchEnvFreshness(
   grafana: { url: string; saToken: string },
   dsUid: string,
   envSlug: Tenant["envSlug"],
+  targetWallet: string,
   windowUntilIso: string
 ): Promise<EnvFreshness> {
-  const sql = `SELECT MAX(decided_at) AS last_decision FROM poly_copy_trade_decisions`;
-  const rows = await grafanaPgQuery(grafana.url, grafana.saToken, dsUid, sql);
-  const r = rows[0] ?? {};
-  const lastIso = toIsoMaybe(r.last_decision);
-  let staleness: number | null = null;
-  if (lastIso !== null) {
-    staleness =
-      (new Date(windowUntilIso).getTime() - new Date(lastIso).getTime()) /
-      1000;
-  }
+  const decisionSql = `SELECT MAX(decided_at) AS last_decision FROM poly_copy_trade_decisions`;
+  const targetFillSql = `
+    SELECT MAX(f.observed_at) AS last_fill
+    FROM poly_trader_fills f
+    JOIN poly_trader_wallets w ON w.id = f.trader_wallet_id
+    WHERE LOWER(w.wallet_address) = LOWER('${targetWallet}')
+  `;
+  const [decisionRows, fillRows] = await Promise.all([
+    grafanaPgQuery(grafana.url, grafana.saToken, dsUid, decisionSql),
+    grafanaPgQuery(grafana.url, grafana.saToken, dsUid, targetFillSql),
+  ]);
+  const lastDecisionIso = toIsoMaybe(decisionRows[0]?.last_decision);
+  const lastTargetFillIso = toIsoMaybe(fillRows[0]?.last_fill);
+  const { freshness_class, staleness_seconds } = classifyFreshness({
+    last_decision_at: lastDecisionIso,
+    last_target_fill_at: lastTargetFillIso,
+    window_until_iso: windowUntilIso,
+  });
   return {
     dsUid,
     envSlug,
-    last_decision_at: lastIso,
-    staleness_seconds: staleness,
-    is_stale:
-      staleness !== null && staleness > FRESHNESS_TOLERANCE_SEC,
+    last_decision_at: lastDecisionIso,
+    last_target_fill_at: lastTargetFillIso,
+    staleness_seconds,
+    freshness_class,
   };
 }
 
@@ -1467,17 +1547,8 @@ function renderReportHtml(args: {
   const since = new Date(window.since);
   const until = new Date(window.until);
 
-  // Display alias: SWISSTONY_TRUST_TWIN is misnamed. A *trust twin* is a
-  // paper tenant whose sizing policy + config exactly match prod LIVE, run
-  // to test paper-vs-live result parity. The env block actually carries a
-  // position_gap policy variant modeling swisstony's BUDGET — different
-  // policy than prod, no parity test possible. Display it as
-  // SWISSTONY_BUDGET_MODELER so the report doesn't propagate the misnomer.
-  // Env-block rename is a follow-up (touches .env.cogni).
-  const aliasRole = (role: string): string =>
-    role === "SWISSTONY_TRUST_TWIN" ? "SWISSTONY_BUDGET_MODELER" : role;
   const tenantLabel = (m: TenantMetrics): string =>
-    `${aliasRole(m.tenant.role)} · ${m.tenant.envSlug}`;
+    `${m.tenant.role} · ${m.tenant.envSlug}`;
   const colorFor = (m: TenantMetrics): string => {
     if (m.tenant.envKeyPrefix === control.tenant.envKeyPrefix) return SERIES_COLORS[0]!;
     const idx = metrics
@@ -1502,9 +1573,9 @@ function renderReportHtml(args: {
   // algorithm constant; the only variable left is "paper sidecar vs real
   // CLOB", which is what a trustworthiness claim hinges on.
   //
-  // Misnamed tenants (e.g. SWISSTONY_TRUST_TWIN that runs position_gap @
-  // $500k while live runs auto p80/$15) are NOT trust twins; they're budget
-  // mirrors or other policy variants. They are excluded from Q1.
+  // Policy variants like SWISSTONY_BUDGET_MODELER (position_gap @ range/cap=500k
+  // modeling swisstony's book scale) are NOT trust twins — different policy
+  // than prod LIVE. They are excluded from Q1.
   //
   // Q1 is intentionally tri-state: ✅ MATCHES · ⚠ DRIFTS · ❌ NO MATCH only
   // when both sides have data; otherwise ⚪ NOT TESTABLE with the exact
@@ -1704,11 +1775,15 @@ function renderReportHtml(args: {
           ? " (fidelity twin)"
           : "";
       const dbOnlyTag = m.tenant.sourceFromEnv === false ? " (DB-only)" : "";
-      const staleEnvTag = envFreshness.some(
-        (f) => f.envSlug === m.tenant.envSlug && f.is_stale
-      )
-        ? ' <span class="env-stale-tag" title="mirror coordinator on this env stopped writing decisions">🔻 stale env</span>'
-        : "";
+      const envFreshnessForRow = envFreshness.find(
+        (f) => f.envSlug === m.tenant.envSlug
+      );
+      const staleEnvTag =
+        envFreshnessForRow?.freshness_class === "mirror_down"
+          ? ' <span class="env-stale-tag" title="coordinator stopped writing decisions while target kept firing fills — real outage">🔴 mirror down</span>'
+          : envFreshnessForRow?.freshness_class === "target_quiet"
+            ? ' <span class="env-quiet-tag" title="coordinator healthy, target just stopped firing fills">🔵 target quiet</span>'
+            : "";
       const trophy = idx === 0 ? " 🏆" : "";
       const placedN = m.fills.filled_count + m.fills.canceled_count + m.fills.error_count;
       const fillRateCell = fmtFillRate(m.fills.fill_rate, placedN);
@@ -1803,11 +1878,14 @@ function renderReportHtml(args: {
   const freshnessLine = envFreshness
     .sort((a, b) => a.envSlug.localeCompare(b.envSlug))
     .map((f) => {
-      const tag = f.is_stale
-        ? `<span class="env-stale">🔻 ${escapeHtml(f.envSlug)} STALE</span>`
-        : f.last_decision_at === null
-          ? `<span class="env-empty">⚪ ${escapeHtml(f.envSlug)} no data</span>`
-          : `<span class="env-fresh">🟢 ${escapeHtml(f.envSlug)}</span>`;
+      const tag =
+        f.freshness_class === "mirror_down"
+          ? `<span class="env-stale">🔴 ${escapeHtml(f.envSlug)} MIRROR DOWN</span>`
+          : f.freshness_class === "target_quiet"
+            ? `<span class="env-quiet">🔵 ${escapeHtml(f.envSlug)} target quiet</span>`
+            : f.freshness_class === "no_data"
+              ? `<span class="env-empty">⚪ ${escapeHtml(f.envSlug)} no data</span>`
+              : `<span class="env-fresh">🟢 ${escapeHtml(f.envSlug)}</span>`;
       const ago =
         f.last_decision_at === null
           ? "never"
@@ -1815,15 +1893,23 @@ function renderReportHtml(args: {
       return `${tag} <code>${ago}</code>`;
     })
     .join(" · ");
-  const staleEnvs = envFreshness.filter((f) => f.is_stale);
-  const bannerClass = staleEnvs.length > 0 ? "completeness stale" : "completeness";
+  const mirrorDownEnvs = envFreshness.filter(
+    (f) => f.freshness_class === "mirror_down"
+  );
+  const targetQuietEnvsBanner = envFreshness.filter(
+    (f) => f.freshness_class === "target_quiet"
+  );
+  const bannerClass =
+    mirrorDownEnvs.length > 0 ? "completeness stale" : "completeness";
   const completenessBanner = `<div class="${bannerClass}">
   <div><strong>Data scope</strong> · ${totalActive} active paper tenant${totalActive === 1 ? "" : "s"} on this target (${envBlockCount} env-discovered + ${dbOnlyCount} DB-only via Grafana SA) · prod LIVE: <code>${prodLiveActive ? `${prodLive!.fills.fills_count} fills` : "0 decisions in window (copy-trade disabled)"}</code></div>
   <div style="margin-top: 4px"><strong>Env freshness</strong> · last decision: ${freshnessLine}</div>
   ${
-    staleEnvs.length > 0
-      ? `<div style="margin-top: 6px; color: #fbbf24; font-size: 11px;">⚠ <strong>${staleEnvs.map((f) => f.envSlug.toUpperCase()).join(", ")} mirror coordinator stopped writing decisions</strong> ${Math.round((staleEnvs[0]!.staleness_seconds ?? 0) / 3600)}h ago — every tenant in ${staleEnvs.length > 1 ? "those envs" : "that env"} has cumulative data that ends at <code>${escapeHtml(staleEnvs[0]!.last_decision_at ?? "?")}</code>. The chart lines stop there because the data does. Wallet-watch (target observation) is unaffected.</div>`
-      : ""
+    mirrorDownEnvs.length > 0
+      ? `<div style="margin-top: 6px; color: #ef4444; font-size: 11px;">🔴 <strong>${mirrorDownEnvs.map((f) => f.envSlug.toUpperCase()).join(", ")} coordinator failing to mirror</strong> — target's latest fill is fresher than our latest decision by &gt; ${MIRROR_LAG_TOLERANCE_SEC}s. Last decision: <code>${escapeHtml(mirrorDownEnvs[0]!.last_decision_at ?? "?")}</code> · Last target fill: <code>${escapeHtml(mirrorDownEnvs[0]!.last_target_fill_at ?? "?")}</code>. Wallet-watch fine; copy-trade pipeline broken.</div>`
+      : targetQuietEnvsBanner.length > 0
+        ? `<div style="margin-top: 6px; color: #60a5fa; font-size: 11px;">🔵 <strong>${targetQuietEnvsBanner.map((f) => f.envSlug.toUpperCase()).join(", ")} target quiet</strong> — coordinator is healthy; target wallet just stopped firing fills. Chart lines stop because target stopped trading, not because anything broke. Last target fill: <code>${escapeHtml(targetQuietEnvsBanner[0]!.last_target_fill_at ?? "?")}</code>.</div>`
+        : ""
   }
 </div>`;
 
@@ -1918,8 +2004,10 @@ table.ab.algo tr.ref td.role { color: #94a3b8 !important; font-style: italic; }
 .completeness code { background: #131826; padding: 1px 5px; border-radius: 3px; color: #fbbf24; font-size: 10px; }
 .completeness .env-fresh { color: #22c55e; font-weight: 600; }
 .completeness .env-stale { color: #ef4444; font-weight: 700; }
+.completeness .env-quiet { color: #60a5fa; font-weight: 600; }
 .completeness .env-empty { color: #94a3b8; font-weight: 600; }
 .env-stale-tag { color: #ef4444; font-size: 10px; font-weight: 700; margin-left: 4px; }
+.env-quiet-tag { color: #60a5fa; font-size: 10px; font-weight: 600; margin-left: 4px; }
 .fill-rate-red { color: #ef4444; font-weight: 700; }
 .fill-rate-amber { color: #f59e0b; font-weight: 600; }
 .fill-rate-ok { color: #22c55e; }
@@ -2421,14 +2509,21 @@ async function main(): Promise<void> {
   for (const t of tenants) envSlugByDs.set(t.dsUid, t.envSlug);
   for (const [dsUid, envSlug] of envSlugByDs.entries()) {
     try {
-      const f = await fetchEnvFreshness(grafana, dsUid, envSlug, args.until);
+      const f = await fetchEnvFreshness(
+        grafana,
+        dsUid,
+        envSlug,
+        args.targetWallet,
+        args.until
+      );
       envFreshness.push(f);
       logEvent("evaluator.env_freshness", {
         ds_uid: dsUid,
         env: envSlug,
         last_decision_at: f.last_decision_at,
+        last_target_fill_at: f.last_target_fill_at,
         staleness_seconds: f.staleness_seconds,
-        is_stale: f.is_stale,
+        freshness_class: f.freshness_class,
       });
     } catch (e) {
       logEvent("evaluator.env_freshness_failed", {
@@ -2437,11 +2532,23 @@ async function main(): Promise<void> {
       });
     }
   }
-  const staleEnvs = envFreshness.filter((f) => f.is_stale);
-  if (staleEnvs.length > 0) {
-    for (const f of staleEnvs) {
+  const mirrorDownEnvs = envFreshness.filter(
+    (f) => f.freshness_class === "mirror_down"
+  );
+  const targetQuietEnvs = envFreshness.filter(
+    (f) => f.freshness_class === "target_quiet"
+  );
+  if (mirrorDownEnvs.length > 0) {
+    for (const f of mirrorDownEnvs) {
       console.error(
-        `::warning::env stale: ${f.envSlug} mirror coordinator last wrote ${f.last_decision_at} (${Math.round((f.staleness_seconds ?? 0) / 3600)}h ago) — every paper tenant in this env will show cumulative lines that stop at that timestamp`
+        `::warning::mirror_down: ${f.envSlug} coordinator last wrote ${f.last_decision_at} (${Math.round((f.staleness_seconds ?? 0) / 3600)}h ago) but target last fill was ${f.last_target_fill_at} — coordinator is failing to mirror fresh target fills, this is a real outage`
+      );
+    }
+  }
+  if (targetQuietEnvs.length > 0) {
+    for (const f of targetQuietEnvs) {
+      console.error(
+        `::notice::target_quiet: ${f.envSlug} target last traded ${f.last_target_fill_at} (${Math.round((f.staleness_seconds ?? 0) / 3600)}h ago); our last decision matches — coordinator healthy, target just stopped firing fills`
       );
     }
   }
@@ -2733,11 +2840,28 @@ async function main(): Promise<void> {
         sample_floor_warnings: sampleFloorWarning,
         env_gap_warnings: envGapWarnings,
         env_freshness: envFreshness,
-        env_stale: envFreshness.filter((f) => f.is_stale).map((f) => ({
-          env: f.envSlug,
-          last_decision_at: f.last_decision_at,
-          staleness_hours: f.staleness_seconds === null ? null : Math.round(f.staleness_seconds / 3600),
-        })),
+        mirror_down: envFreshness
+          .filter((f) => f.freshness_class === "mirror_down")
+          .map((f) => ({
+            env: f.envSlug,
+            last_decision_at: f.last_decision_at,
+            last_target_fill_at: f.last_target_fill_at,
+            staleness_hours:
+              f.staleness_seconds === null
+                ? null
+                : Math.round(f.staleness_seconds / 3600),
+          })),
+        target_quiet: envFreshness
+          .filter((f) => f.freshness_class === "target_quiet")
+          .map((f) => ({
+            env: f.envSlug,
+            last_decision_at: f.last_decision_at,
+            last_target_fill_at: f.last_target_fill_at,
+            staleness_hours:
+              f.staleness_seconds === null
+                ? null
+                : Math.round(f.staleness_seconds / 3600),
+          })),
         target_ds_uid: targetDsUid,
         authored_at: null,
       },
