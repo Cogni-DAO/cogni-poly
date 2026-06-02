@@ -1319,38 +1319,47 @@ function createContainer(): Container {
   // appears in `poly_trader_current_positions WHERE active=true` UNION recent
   // fills, two fidelities per asset, every 5 minutes. Closes the
   // PAGE_LOAD_DB_ONLY_EXCEPT_PRICE_HISTORY carve-out from CP5.
-  void (async () => {
-    try {
-      const { startPriceHistoryJob } = await import(
-        "@/bootstrap/jobs/price-history.job"
-      );
-      const { PolymarketClobPublicClient } = await import(
-        "@cogni/poly-market-provider/adapters/polymarket"
-      );
-      const { noopMetrics: noopMetricsForPriceHistory } = await import(
-        "@cogni/poly-market-provider"
-      );
-      const priceHistoryLogger =
-        log as unknown as import("@cogni/poly-market-provider").LoggerPort;
-      _priceHistoryStop = startPriceHistoryJob({
-        db: serviceDb as unknown as import("drizzle-orm/node-postgres").NodePgDatabase<
-          Record<string, unknown>
-        >,
-        clobClient: new PolymarketClobPublicClient(),
-        logger: priceHistoryLogger,
-        metrics: noopMetricsForPriceHistory,
-      });
-    } catch (err: unknown) {
-      log.error(
-        {
-          event: "poly.market-price-history.error",
-          phase: "boot_failed",
-          err: err instanceof Error ? err.message : String(err),
-        },
-        "price-history job boot failed — continuing without price-history read model"
-      );
-    }
-  })();
+  // bug.5172 — price-history writer is gated OFF by default. It ran ungated on
+  // every env and OOM-crashlooped prod + preview (full `interval=max` refetch
+  // per asset every 5 min). Only boot it where explicitly enabled.
+  if (!env.POLY_PRICE_HISTORY_WRITER_ENABLED) {
+    log.info(
+      { event: "poly.market-price-history.disabled" },
+      "price-history writer disabled (POLY_PRICE_HISTORY_WRITER_ENABLED!=true) — page-load reads serve existing rows"
+    );
+  } else
+    void (async () => {
+      try {
+        const { startPriceHistoryJob } = await import(
+          "@/bootstrap/jobs/price-history.job"
+        );
+        const { PolymarketClobPublicClient } = await import(
+          "@cogni/poly-market-provider/adapters/polymarket"
+        );
+        const { noopMetrics: noopMetricsForPriceHistory } = await import(
+          "@cogni/poly-market-provider"
+        );
+        const priceHistoryLogger =
+          log as unknown as import("@cogni/poly-market-provider").LoggerPort;
+        _priceHistoryStop = startPriceHistoryJob({
+          db: serviceDb as unknown as import("drizzle-orm/node-postgres").NodePgDatabase<
+            Record<string, unknown>
+          >,
+          clobClient: new PolymarketClobPublicClient(),
+          logger: priceHistoryLogger,
+          metrics: noopMetricsForPriceHistory,
+        });
+      } catch (err: unknown) {
+        log.error(
+          {
+            event: "poly.market-price-history.error",
+            phase: "boot_failed",
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "price-history job boot failed — continuing without price-history read model"
+        );
+      }
+    })();
 
   // task.0388 + task.0412 — event-driven redeem pipeline. Replaces the
   // deleted `runRedeemSweep` polling loop. One pipeline per active

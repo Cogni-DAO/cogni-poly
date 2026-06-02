@@ -138,6 +138,18 @@ export const serverSchema = z.object({
     .default("true")
     .transform((v) => v === "true"),
 
+  // Price-history mirror writer (task.5018 CP7) — per-asset CLOB price-history
+  // poll, every 5 min, two fidelities per asset over the full active-position
+  // asset set. bug.5172 (2026-06-01): ran UNGATED on every env's bootstrap and
+  // OOM-crashlooped prod + preview node-app pods (full `interval=max` refetch
+  // each tick exceeded the heap), taking down request-serving AND the fills
+  // writer. Gated OFF by default; enable only where the read-model is needed
+  // AND the asset set is small enough, until the tick is made incremental.
+  POLY_PRICE_HISTORY_WRITER_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+
   // GitHub webhook secret - HMAC-SHA256 verification for incoming GitHub webhook payloads.
   // Required when GitHub webhook ingestion is enabled. Per WEBHOOK_SECRET_NOT_IN_CODE.
   GH_WEBHOOK_SECRET: optionalString,
