@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cogni-production
+
+resources:
+  - ../../../base/poly-test-worker
+
+# Image digest — overwritten by promote-k8s-image.sh on first promote.
+images:
+  - name: ghcr.io/cogni-dao/poly-test-worker
+    newName: ghcr.io/cogni-dao/poly-test-worker
+    digest: "sha256:ef01d71e229f2128dacf02ffdb1fc0cc9e8ccc4c1fa64693c71cec168d6bc85f"
