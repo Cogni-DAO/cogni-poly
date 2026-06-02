@@ -12,7 +12,7 @@ resources:
 images:
   - name: ghcr.io/cogni-dao/cogni-poly
     newName: ghcr.io/cogni-dao/cogni-poly
-    digest: "sha256:b55bcc47af15ea94681c606f7d3ef10dc6873e740b6e31c1e6b621a53a93d3e9"
+    digest: "sha256:c6b78d3418424060d82ce3e0994cab5a7c8c1a0312f4d65c7f2621fd49c8e3d4"
 
 patches:
   - target:
@@ -26,90 +26,7 @@ patches:
         path: /data/IMAGE_DIGEST
         value: "production-placeholder-scheduler-worker"
 
-  # bug.0295: VM discovery via DNS (poly.vm.cognidao.org).
-  # Convert base headless Services → ExternalName; delete EndpointSlices.
-  - target: { kind: Service, name: temporal }
-    patch: |
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: temporal
-      spec:
-        type: ExternalName
-        externalName: poly.vm.cognidao.org
-        clusterIP: null
-  - target: { kind: Service, name: postgres }
-    patch: |
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: postgres
-      spec:
-        type: ExternalName
-        externalName: poly.vm.cognidao.org
-        clusterIP: null
-  - target: { kind: Service, name: app }
-    patch: |
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: app
-      spec:
-        type: ExternalName
-        externalName: poly.vm.cognidao.org
-        clusterIP: null
-  - target: { kind: Service, name: poly-app }
-    patch: |
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: poly-app
-      spec:
-        type: ExternalName
-        externalName: poly.vm.cognidao.org
-        clusterIP: null
-  - target: { kind: Service, name: resy-app }
-    patch: |
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: resy-app
-      spec:
-        type: ExternalName
-        externalName: poly.vm.cognidao.org
-        clusterIP: null
-  - target: { kind: EndpointSlice, name: temporal-1 }
-    patch: |
-      $patch: delete
-      apiVersion: discovery.k8s.io/v1
-      kind: EndpointSlice
-      metadata:
-        name: temporal-1
-  - target: { kind: EndpointSlice, name: postgres-1 }
-    patch: |
-      $patch: delete
-      apiVersion: discovery.k8s.io/v1
-      kind: EndpointSlice
-      metadata:
-        name: postgres-1
-  - target: { kind: EndpointSlice, name: app-1 }
-    patch: |
-      $patch: delete
-      apiVersion: discovery.k8s.io/v1
-      kind: EndpointSlice
-      metadata:
-        name: app-1
-  - target: { kind: EndpointSlice, name: poly-app-1 }
-    patch: |
-      $patch: delete
-      apiVersion: discovery.k8s.io/v1
-      kind: EndpointSlice
-      metadata:
-        name: poly-app-1
-  - target: { kind: EndpointSlice, name: resy-app-1 }
-    patch: |
-      $patch: delete
-      apiVersion: discovery.k8s.io/v1
-      kind: EndpointSlice
-      metadata:
-        name: resy-app-1
+  # bug.5025 (2026-05-22): no env-specific external-services overrides.
+  # The base manifest (`infra/k8s/base/scheduler-worker/external-services.yaml`)
+  # provides selectorless Services + EndpointSlices pointing at 10.42.0.1
+  # (k3s cni0 gateway). Read the base file header for the full rationale.

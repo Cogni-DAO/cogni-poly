@@ -1,13 +1,29 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
-# Selectorless Services + EndpointSlices for cross-VM connectivity.
+# Selectorless Services + EndpointSlices for k3s → host-Compose connectivity.
 # During the k3s transition, scheduler-worker runs in k3s while Temporal,
 # Postgres, and App remain on the Compose VM. These resources let the pod
 # reach them via standard K8s DNS (e.g., "temporal", "postgres", "app").
 #
-# Overlay patches replace placeholder IPs with real Compose VM addresses.
-# Remove these resources when each dependency migrates to k3s.
+# Address `10.42.0.1` is the k3s flannel default cni0 bridge — the host's
+# gateway address from any pod's perspective. Same on every default-flannel
+# k3s VM regardless of public IP or cloud provider, because it's a k3s
+# convention, not a host-specific IP. Compose containers binding `0.0.0.0:<port>`
+# on the host are reachable from the pod CIDR at `10.42.0.1:<port>`.
+#
+# bug.5025 (2026-05-22): a prior shape OVERRODE each Service to ExternalName
+# pointing at `<env>.vm.cognidao.org` per-overlay. When the DNS record for
+# `preview.vm.cognidao.org` went stale (84.32.110.92 vs. the actual live VM
+# at 5.199.173.196), all new scheduler-worker pods CrashLoopBackOff'd at
+# Temporal connect. Public-hostname DNS is out-of-repo state that drifts
+# silently. Switching to a k3s-internal convention keeps the addressing
+# in git and survives VM reprovisions automatically.
+#
+# Overlays MUST NOT override these resources unless a future env genuinely
+# routes through a separate host (e.g., Compose on a different machine).
+# Reprovisioning a fresh VM via `scripts/setup/provision-test-vm.sh` makes
+# `10.42.0.1` correct out-of-the-box.
 #
 # Pattern: Selectorless Service + EndpointSlice (K8s v1.33+ recommended).
 # See: https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/
@@ -33,7 +49,7 @@ metadata:
 addressType: IPv4
 endpoints:
   - addresses:
-      - "10.0.0.1"
+      - "10.42.0.1"
 ports:
   - port: 7233
     protocol: TCP
@@ -61,7 +77,7 @@ metadata:
 addressType: IPv4
 endpoints:
   - addresses:
-      - "10.0.0.1"
+      - "10.42.0.1"
 ports:
   - port: 5432
     protocol: TCP
@@ -89,7 +105,7 @@ metadata:
 addressType: IPv4
 endpoints:
   - addresses:
-      - "10.0.0.1"
+      - "10.42.0.1"
 ports:
   - port: 3000
     protocol: TCP
@@ -117,7 +133,7 @@ metadata:
 addressType: IPv4
 endpoints:
   - addresses:
-      - "10.0.0.1"
+      - "10.42.0.1"
 ports:
   - port: 3000
     protocol: TCP
@@ -145,7 +161,7 @@ metadata:
 addressType: IPv4
 endpoints:
   - addresses:
-      - "10.0.0.1"
+      - "10.42.0.1"
 ports:
   - port: 3000
     protocol: TCP
