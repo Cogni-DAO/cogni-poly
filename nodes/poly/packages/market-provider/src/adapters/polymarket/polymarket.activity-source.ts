@@ -170,22 +170,29 @@ export function createPolymarketActivitySource(
 
       deps.metrics.incr(POLYMARKET_ACTIVITY_SOURCE_METRICS.fillsTotal, {});
 
-      log.info(
-        {
-          ...baseFields,
-          phase: "ok",
-          duration_ms,
-          raw: trades.length,
-          fills: fills.length,
-          skipped,
-          skips_by_reason: skipsByReason,
-          new_since: newSince,
-          max_pages: maxPages,
-          page_limit: pageLimit,
-          reached_since: reachedSince,
-        },
-        "wallet-watch fetch: ok"
-      );
+      // Per-poll liveness — fires every tick per tracked wallet. Most ticks
+      // observe no new activity (>95% empty); those are debug. Ticks with
+      // fills or normalize-skips contain operator-relevant signal and stay
+      // info-level (named in .claude/skills/poly-copy-trading/SKILL.md as
+      // the operational `wallet-watch is draining` proof).
+      const fetchPayload = {
+        ...baseFields,
+        phase: "ok" as const,
+        duration_ms,
+        raw: trades.length,
+        fills: fills.length,
+        skipped,
+        skips_by_reason: skipsByReason,
+        new_since: newSince,
+        max_pages: maxPages,
+        page_limit: pageLimit,
+        reached_since: reachedSince,
+      };
+      if (fills.length > 0 || skipped > 0) {
+        log.info(fetchPayload, "wallet-watch fetch: ok");
+      } else {
+        log.debug(fetchPayload, "wallet-watch fetch: ok");
+      }
 
       return { fills, newSince };
     },

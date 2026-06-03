@@ -104,6 +104,8 @@ export async function refreshMarketMetadata(deps: {
     );
     return { scanned: 0, written: 0 };
   }
+  // Once-per-tick summary — same shape as poly.market-outcome.tick_ok,
+  // stays info. Per-item emission lives in the projection_error warn path.
   deps.logger.info(
     {
       event: "poly.market_metadata.refresh",

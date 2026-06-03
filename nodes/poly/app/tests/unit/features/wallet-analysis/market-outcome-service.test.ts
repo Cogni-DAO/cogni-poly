@@ -18,7 +18,7 @@ import { describe, expect, it, vi } from "vitest";
 import { runMarketOutcomeTick } from "@/features/wallet-analysis/server/market-outcome-service";
 
 type LogEntry = {
-  level: "info" | "warn" | "error";
+  level: "info" | "warn" | "error" | "debug";
   payload: Record<string, unknown>;
   msg: string;
 };
@@ -43,7 +43,9 @@ function recordingLogger() {
     error(p, m = "") {
       entries.push({ level: "error", payload: { ...base, ...p }, msg: m });
     },
-    debug() {},
+    debug(p, m = "") {
+      entries.push({ level: "debug", payload: { ...base, ...p }, msg: m });
+    },
     child(extra) {
       return make({ ...base, ...extra });
     },
