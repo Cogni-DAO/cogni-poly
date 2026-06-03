@@ -16,6 +16,10 @@
  *   - PIVOTED_PARTICIPANT_ROW: each participant row already carries primary +
  *     optional hedge legs + net (server-side pivot per
  *     market-exposure-service). The client never groups token legs itself.
+ *   - VISUAL_EXPANSION: the expanded row body is a visualization (one shared
+ *     price-axis chart per condition, one lane per participant), not a
+ *     numeric table — the parent row's columns already carry the rollups.
+ *     See `MarketLineVisualization.tsx`.
  * Side-effects: none
  * @internal
  */
@@ -24,9 +28,7 @@
 
 import type {
   WalletExecutionMarketGroup,
-  WalletExecutionMarketLeg,
   WalletExecutionMarketLine,
-  WalletExecutionMarketParticipantRow,
 } from "@cogni/poly-node-contracts";
 import { type ColumnDef, createColumnHelper } from "@tanstack/react-table";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -35,32 +37,14 @@ import type { ReactElement, ReactNode } from "react";
 import { Skeleton } from "@/components";
 import { Badge } from "@/components/reui/badge";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
-// eslint-disable-next-line no-restricted-imports -- pre-existing vendor import in app/, predates the kit-wrapper rule; tracked as follow-up
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/vendor/shadcn/table";
 import { cn } from "@/shared/util/cn";
+
+import { MarketLineVisualization } from "./MarketLineVisualization";
 
 // biome-ignore lint/suspicious/noExplicitAny: heterogeneous TanStack column array
 type AnyCol = ColumnDef<WalletExecutionMarketGroup, any>;
 
 const col = createColumnHelper<WalletExecutionMarketGroup>();
-
-// Inner-table sub-header cells. Extracted to module-level consts so biome's
-// `useSortedClasses` lint doesn't reorder them — biome only sorts inside
-// `className=` attribute literals and `cn`/`clsx`/`cva` calls. Two variants
-// (with and without the leading `border-l`) keep the leg-group boundary
-// crisp through both header rows + body rows.
-const SUB_HEAD_BASE =
-  "h-7 px-2 text-right font-normal text-[11px] text-muted-foreground";
-const SUB_HEAD_GROUP_LEAD = `border-l ${SUB_HEAD_BASE}`;
-const GROUP_HEAD_BASE =
-  "h-8 border-l px-2 text-center font-medium text-foreground";
 
 const rightHeader = (node: ReactNode) => (
   <div className="flex w-full justify-end">{node}</div>
@@ -76,15 +60,6 @@ function formatUsd(value: number): string {
 function formatSignedUsd(value: number): string {
   const sign = value > 0 ? "+" : value < 0 ? "-" : "";
   return `${sign}${formatUsd(Math.abs(value))}`;
-}
-
-function formatPrice(value: number | null): string {
-  if (value === null) return "—";
-  return value.toFixed(3);
-}
-
-function formatShares(value: number): string {
-  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function pnlClass(value: number): string {
@@ -490,160 +465,7 @@ function MarketLineBlock({
           {traderCount} trader{traderCount === 1 ? "" : "s"}
         </span>
       </div>
-      <ParticipantsTable line={line} />
+      <MarketLineVisualization line={line} />
     </div>
-  );
-}
-
-function ParticipantsTable({
-  line,
-}: {
-  line: WalletExecutionMarketLine;
-}): ReactElement {
-  // Two-row thead: row 1 carries leg-group spans (Primary/Hedge/Net), row 2
-  // carries the real per-column labels (Value/VWAP/P/L). `border-l`/`border-r`
-  // on group cells visually delimit the leg sections; row 2 inherits them via
-  // adjacent `border-l` to keep group boundaries crisp through both rows.
-  return (
-    <div className="overflow-hidden rounded-md border bg-background">
-      <Table className="text-xs">
-        <TableHeader>
-          <TableRow className="bg-muted/40">
-            <TableHead className="h-8 px-2 align-middle" rowSpan={2}>
-              Trader
-            </TableHead>
-            <TableHead
-              className={GROUP_HEAD_BASE}
-              colSpan={3}
-              aria-label="Primary leg"
-            >
-              Primary
-            </TableHead>
-            <TableHead
-              className={GROUP_HEAD_BASE}
-              colSpan={3}
-              aria-label="Hedge leg"
-            >
-              Hedge
-            </TableHead>
-            <TableHead
-              className={GROUP_HEAD_BASE}
-              colSpan={2}
-              aria-label="Net across legs"
-            >
-              Net
-            </TableHead>
-          </TableRow>
-          <TableRow className="bg-muted/40">
-            <TableHead className={SUB_HEAD_GROUP_LEAD}>Value</TableHead>
-            <TableHead className={SUB_HEAD_BASE}>VWAP</TableHead>
-            <TableHead className={SUB_HEAD_BASE}>P/L</TableHead>
-            <TableHead className={SUB_HEAD_GROUP_LEAD}>Value</TableHead>
-            <TableHead className={SUB_HEAD_BASE}>VWAP</TableHead>
-            <TableHead className={SUB_HEAD_BASE}>P/L</TableHead>
-            <TableHead className={SUB_HEAD_GROUP_LEAD}>Value</TableHead>
-            <TableHead className={SUB_HEAD_BASE}>P/L</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {line.participants.map((participant) => (
-            <ParticipantRow
-              key={`${participant.walletAddress}:${participant.conditionId}`}
-              participant={participant}
-            />
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function ParticipantRow({
-  participant,
-}: {
-  participant: WalletExecutionMarketParticipantRow;
-}): ReactElement {
-  return (
-    <TableRow>
-      <TableCell className="py-1.5 align-top">
-        <div className="flex flex-col gap-0.5">
-          <span className="font-medium text-sm">
-            {participant.side === "our_wallet"
-              ? "Our wallet"
-              : participant.label}
-          </span>
-          {participant.primary ? (
-            // eslint-disable-next-line ui-governance/no-arbitrary-non-token-values -- pre-existing arbitrary tailwind value; tracked as follow-up
-            <span className="text-[11px] text-muted-foreground">
-              {participant.primary.outcome}
-              {" · "}
-              {formatShares(participant.primary.shares)} sh
-            </span>
-          ) : null}
-        </div>
-      </TableCell>
-      <LegTriple leg={participant.primary} />
-      <LegTriple leg={participant.hedge} />
-      <NetPair net={participant.net} />
-    </TableRow>
-  );
-}
-
-function LegTriple({
-  leg,
-}: {
-  leg: WalletExecutionMarketLeg | null;
-}): ReactElement {
-  if (leg === null) {
-    return (
-      <>
-        <TableCell className="border-l py-1.5 text-right text-muted-foreground tabular-nums">
-          —
-        </TableCell>
-        <TableCell className="py-1.5 text-right text-muted-foreground tabular-nums">
-          —
-        </TableCell>
-        <TableCell className="py-1.5 text-right text-muted-foreground tabular-nums">
-          —
-        </TableCell>
-      </>
-    );
-  }
-  return (
-    <>
-      <TableCell className="border-l py-1.5 text-right tabular-nums">
-        {formatUsd(leg.currentValueUsdc)}
-      </TableCell>
-      <TableCell className="py-1.5 text-right text-muted-foreground tabular-nums">
-        {formatPrice(leg.vwap)}
-      </TableCell>
-      <TableCell
-        className={cn("py-1.5 text-right tabular-nums", pnlClass(leg.pnlUsdc))}
-      >
-        {formatSignedUsd(leg.pnlUsdc)}
-      </TableCell>
-    </>
-  );
-}
-
-function NetPair({
-  net,
-}: {
-  net: WalletExecutionMarketParticipantRow["net"];
-}): ReactElement {
-  return (
-    <>
-      <TableCell className="border-l py-1.5 text-right font-medium tabular-nums">
-        {formatUsd(net.currentValueUsdc)}
-      </TableCell>
-      <TableCell
-        className={cn(
-          "py-1.5 text-right font-medium tabular-nums",
-          pnlClass(net.pnlUsdc)
-        )}
-      >
-        {formatSignedUsd(net.pnlUsdc)}
-      </TableCell>
-    </>
   );
 }
