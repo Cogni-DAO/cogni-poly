@@ -42,12 +42,12 @@ discovery.relabel "docker_logs" {
 
   rule {
     target_label = "env"
-    replacement  = sys.env("DEPLOY_ENVIRONMENT")
+    replacement  = "poly-" + sys.env("DEPLOY_ENVIRONMENT")
   }
 
   rule {
     source_labels = ["env"]
-    regex         = "^(local|candidate-a|preview|production)$"
+    regex         = "^poly-(local|candidate-a|preview|production)$"
     action        = "keep"
   }
 }
@@ -205,7 +205,7 @@ loki.process "k8s_pod_logs" {
     values = {
       app    = "cogni-poly",
       source = "k8s",
-      env    = sys.env("DEPLOY_ENVIRONMENT"),
+      env    = "poly-" + sys.env("DEPLOY_ENVIRONMENT"),
     }
   }
 
@@ -235,7 +235,7 @@ prometheus.relabel "app_metrics" {
   // Add env label so deadman alerts can scope to preview|production
   rule {
     target_label = "env"
-    replacement  = sys.env("DEPLOY_ENVIRONMENT")
+    replacement  = "poly-" + sys.env("DEPLOY_ENVIRONMENT")
   }
 
   // Add service label for consistent querying across app + infra metrics
@@ -264,7 +264,7 @@ prometheus.relabel "worker_metrics" {
 
   rule {
     target_label = "env"
-    replacement  = sys.env("DEPLOY_ENVIRONMENT")
+    replacement  = "poly-" + sys.env("DEPLOY_ENVIRONMENT")
   }
 
   rule {
@@ -341,7 +341,7 @@ prometheus.relabel "infra_metrics" {
   // Add env label for alert scoping
   rule {
     target_label = "env"
-    replacement  = sys.env("DEPLOY_ENVIRONMENT")
+    replacement  = "poly-" + sys.env("DEPLOY_ENVIRONMENT")
   }
 
   // Drop high-cardinality labels to keep series count low
