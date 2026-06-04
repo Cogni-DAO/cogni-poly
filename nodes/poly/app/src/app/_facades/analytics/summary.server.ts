@@ -34,7 +34,10 @@ export async function getAnalyticsSummaryFacade(
   // Call service with port and env config
   const result = await getAnalyticsSummary(container.metricsQuery, {
     window: params.window,
-    env: env.DEPLOY_ENVIRONMENT ?? "local",
+    // Matches the poly-prefixed `env` label Alloy attaches to logs/metrics
+    // (see infra/compose/runtime/configs/alloy-config*.alloy) so this read path
+    // queries the same series the write path produces.
+    env: `poly-${env.DEPLOY_ENVIRONMENT ?? "local"}`,
     kThreshold: env.ANALYTICS_K_THRESHOLD,
   });
 

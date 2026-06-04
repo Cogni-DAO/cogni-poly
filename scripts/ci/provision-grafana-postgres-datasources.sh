@@ -98,7 +98,11 @@ grafana_base="${GRAFANA_URL%/}"
 datasource_host="${GRAFANA_POSTGRES_HOST:-postgres:5432}"
 readonly_user="${APP_DB_READONLY_USER:-app_readonly}"
 readonly_password="${APP_DB_READONLY_PASSWORD:-$(derive_secret postgres-readonly)}"
-dbs="${COGNI_NODE_DBS:-cogni_operator,cogni_poly,cogni_resy}"
+# Grafana datasources expose only this node's own service data — intentionally
+# decoupled from COGNI_NODE_DBS (which provisions the VM's databases). Defaults
+# to the poly trading DB so poly's Grafana footprint stays self-contained and
+# does not shadow other nodes' datasource identities.
+dbs="${GRAFANA_DATASOURCE_DBS:-cogni_poly}"
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
@@ -114,8 +118,12 @@ for db_name in "${grafana_dbs[@]}"; do
   [[ -n "$db_name" ]] || continue
 
   node="${db_name#cogni_}"
+  # uid is the stable cross-tool key (tenant-matrix-evaluator, grafana-postgres-query,
+  # research docs) — keep it. The display name is poly-led so poly's datasources
+  # read as a self-contained project in the shared Grafana, distinct from the
+  # monorepo's cogni-<env>-<node> naming.
   uid="cogni-${DEPLOY_ENVIRONMENT}-${node}-postgres"
-  name="Postgres - ${DEPLOY_ENVIRONMENT} ${node}"
+  name="Postgres · poly-${DEPLOY_ENVIRONMENT} · ${node}"
   payload_file="${tmpdir}/${uid}.json"
   response_file="${tmpdir}/${uid}.response.json"
   query_file="${tmpdir}/${uid}.query.json"

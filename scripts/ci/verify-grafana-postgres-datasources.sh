@@ -36,7 +36,9 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 grafana_base="${GRAFANA_URL%/}"
-dbs="${COGNI_NODE_DBS:-cogni_operator,cogni_poly,cogni_resy}"
+# Mirror provision-grafana-postgres-datasources.sh: verify only the node's own
+# datasources, not COGNI_NODE_DBS (which is the VM database set).
+dbs="${GRAFANA_DATASOURCE_DBS:-cogni_poly}"
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
