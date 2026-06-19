@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+#
+# One-shot DB export for env decommission.
+# SSHes into the target env's Compose VM with that environment's SSH_DEPLOY_KEY /
+# VM_HOST secrets, streams a custom-format pg_dump of every app + temporal database
+# (plus role/globals SQL) back to the runner, and uploads it as an artifact.
+# Postgres :5432 is firewalled off the public internet, so SSH is the only path.
+#
+# Usage: gh workflow run db-dump-export.yml -R Cogni-DAO/cogni-poly -f environment=candidate-a
+#        (then: gh run download <run-id> -R Cogni-DAO/cogni-poly -D ~/cogni-poly-db-backups)
+
+name: db-dump-export
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which env's VM to dump
+        required: true
+        type: choice
+        options:
+          - candidate-a
+          - preview
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      VM_HOST: ${{ secrets.VM_HOST }}
+      PGUSER: ${{ secrets.POSTGRES_ROOT_USER }}
+      PGPW: ${{ secrets.POSTGRES_ROOT_PASSWORD }}
+      TEMPORAL_DB_USER: ${{ secrets.TEMPORAL_DB_USER }}
+      TEMPORAL_DB_PASSWORD: ${{ secrets.TEMPORAL_DB_PASSWORD }}
+    steps:
+      - name: Setup SSH
+        run: |
+          if [ -z "$VM_HOST" ]; then
+            echo "❌ No VM_HOST secret for ${{ inputs.environment }}"
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.SSH_DEPLOY_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 10 -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 \
+            root@"$VM_HOST" "echo SSH ok on \$(hostname)"
+
+      - name: Dump all databases
+        run: |
+          set -euo pipefail
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15 -o ServerAliveCountMax=8"
+          COMPOSE="docker compose --project-name cogni-runtime --env-file /opt/cogni-poly-runtime/.env -f /opt/cogni-poly-runtime/docker-compose.yml"
+          OUT="dump/${{ inputs.environment }}"
+          mkdir -p "$OUT/app" "$OUT/temporal"
+
+          # Resolve container ids on the VM
+          PG=$($SSH root@"$VM_HOST" "$COMPOSE ps -q postgres")
+          TPG=$($SSH root@"$VM_HOST" "$COMPOSE ps -q temporal-postgres" || true)
+          echo "postgres container: $PG"
+          echo "temporal-postgres container: ${TPG:-<none>}"
+
+          dump_cluster() {
+            local label="$1" cid="$2" user="$3" pw="$4" dir="$5"
+            [ -n "$cid" ] || { echo "skip $label — no container"; return 0; }
+            echo "=== $label: globals ==="
+            $SSH root@"$VM_HOST" "docker exec -e PGPASSWORD='$pw' $cid pg_dumpall -U '$user' --globals-only" > "$dir/globals.sql"
+            local dbs
+            dbs=$($SSH root@"$VM_HOST" "docker exec -e PGPASSWORD='$pw' $cid psql -U '$user' -d postgres -At -c \"select datname from pg_database where datallowconn and not datistemplate order by datname\"")
+            echo "$label databases:"; echo "$dbs"
+            while IFS= read -r db; do
+              [ -n "$db" ] || continue
+              local safe; safe=$(printf '%s' "$db" | tr -c 'A-Za-z0-9_.-' '_')
+              echo "  dumping $db -> $dir/$safe.dump"
+              $SSH root@"$VM_HOST" "docker exec -e PGPASSWORD='$pw' $cid pg_dump -U '$user' -d '$db' --format=custom" > "$dir/$safe.dump"
+            done <<< "$dbs"
+          }
+
+          dump_cluster app "$PG" "$PGUSER" "$PGPW" "$OUT/app"
+          dump_cluster temporal "$TPG" "${TEMPORAL_DB_USER:-temporal}" "${TEMPORAL_DB_PASSWORD:-temporal}" "$OUT/temporal"
+
+          ( cd "$OUT" && find . -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 shasum -a 256 > MANIFEST.sha256 )
+          echo "=== manifest ==="; cat "$OUT/MANIFEST.sha256"
+          echo "=== sizes ==="; du -ah "$OUT"
+
+      - name: Upload dump artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-dump-${{ inputs.environment }}
+          path: dump/${{ inputs.environment }}
+          retention-days: 5
+          if-no-files-found: error
