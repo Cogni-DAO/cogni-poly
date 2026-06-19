@@ -53,7 +53,8 @@ jobs:
       - name: Dump all databases
         run: |
           set -euo pipefail
-          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15 -o ServerAliveCountMax=8"
+          # -n: redirect ssh stdin from /dev/null so in-loop ssh can't swallow the DB-list heredoc
+          SSH="ssh -n -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15 -o ServerAliveCountMax=8"
           COMPOSE="docker compose --project-name cogni-runtime --env-file /opt/cogni-poly-runtime/.env -f /opt/cogni-poly-runtime/docker-compose.yml"
           OUT="dump/${{ matrix.environment }}"
           mkdir -p "$OUT/app" "$OUT/temporal"
