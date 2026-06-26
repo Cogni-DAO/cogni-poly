@@ -97,6 +97,7 @@ export {
   type WithdrawalSubmitInput,
   type WithdrawalSubmitResult,
 } from "./kit/wallet";
+export { Markdown } from "./markdown";
 export {
   type ChartConfig,
   ChartContainer,
