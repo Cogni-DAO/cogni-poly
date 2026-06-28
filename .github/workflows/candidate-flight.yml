@@ -108,7 +108,7 @@ jobs:
 
       - name: Login to GHCR
         if: steps.detect.outputs.has_targets == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -430,7 +430,7 @@ jobs:
       # before crane runs; setup-crane installs the binary on PATH.
       - name: Login to GHCR (for crane label reads)
         if: steps.ssh-setup.outputs.has_vm == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
